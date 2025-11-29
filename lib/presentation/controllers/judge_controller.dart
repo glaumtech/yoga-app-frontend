@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../data/models/judge_model.dart';
 import '../../data/repositories/judge_repository.dart';
+import 'auth_controller.dart';
 
 class JudgeController extends GetxController {
   final JudgeRepository _judgeRepository = JudgeRepository();
+  final AuthController _authController = Get.find<AuthController>();
   final RxList<JudgeModel> judges = <JudgeModel>[].obs;
   final Rx<JudgeModel?> selectedJudge = Rx<JudgeModel?>(null);
+  final Rx<JudgeModel?> currentJudge = Rx<JudgeModel?>(null);
+  final RxString currentUserId =
+      ''.obs; // Track current user ID to detect changes
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
 
@@ -297,5 +302,53 @@ class JudgeController extends GetxController {
           judge.address.toLowerCase().contains(query) ||
           (judge.email != null && judge.email!.toLowerCase().contains(query));
     }).toList();
+  }
+
+  /// Get judge by user ID
+  Future<JudgeModel?> getJudgeByUserId(String userId) async {
+    try {
+      final response = await _judgeRepository.getJudgeByUserId(userId);
+      if (response.success && response.data != null) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting judge by user ID: $e');
+      return null;
+    }
+  }
+
+  /// Load current judge for the logged-in user
+  Future<void> loadCurrentJudge() async {
+    final user = _authController.currentUser.value;
+    if (user != null) {
+      final userId = user.id.toString();
+      // Always reload if user has changed or judge is null
+      if (currentUserId.value != userId || currentJudge.value == null) {
+        currentUserId.value = userId;
+        final judge = await getJudgeByUserId(userId);
+        currentJudge.value = judge;
+      }
+    } else {
+      currentJudge.value = null;
+      currentUserId.value = '';
+    }
+  }
+
+  /// Clear current judge
+  void clearCurrentJudge() {
+    currentJudge.value = null;
+    currentUserId.value = '';
+  }
+
+  void reset() {
+    judges.clear();
+    selectedJudge.value = null;
+    currentJudge.value = null;
+    currentUserId.value = '';
+    isLoading.value = false;
+    errorMessage.value = '';
+    searchQuery.value = '';
+    resetForm();
   }
 }

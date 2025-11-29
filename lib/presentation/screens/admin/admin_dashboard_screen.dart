@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/admin_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../controllers/event_controller.dart';
 import '../../widgets/section_header.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
@@ -215,6 +216,13 @@ class AdminDashboardScreen extends StatelessWidget {
                                       AppRoutes.scheduleManagement,
                                     ),
                                   ),
+                                  _buildActionCard(
+                                    context,
+                                    'View Scores',
+                                    Icons.score,
+                                    Colors.purple,
+                                    () => _showEventSelectionDialog(context),
+                                  ),
                                 ],
                               );
                             },
@@ -350,6 +358,59 @@ class AdminDashboardScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showEventSelectionDialog(BuildContext context) {
+    final eventController = Get.find<EventController>();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Event'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Obx(() {
+            if (eventController.isLoading.value) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (eventController.events.isEmpty) {
+              return const Text('No events available');
+            }
+
+            return ListView.builder(
+              shrinkWrap: true,
+              itemCount: eventController.events.length,
+              itemBuilder: (context, index) {
+                final event = eventController.events[index];
+                return ListTile(
+                  leading: Icon(Icons.event, color: AppTheme.primaryColor),
+                  title: Text(event.title),
+                  subtitle: Text(
+                    '${event.startDate.day}/${event.startDate.month}/${event.startDate.year}',
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push(
+                      AppRoutes.participantScoresList.replaceAll(
+                        ':eventId',
+                        event.id ?? '',
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          }),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
     );
   }

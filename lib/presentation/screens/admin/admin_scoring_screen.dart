@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import '../../controllers/scoring_controller.dart';
-import '../../controllers/judge_controller.dart';
 import '../../controllers/participant_controller.dart';
-import '../../controllers/auth_controller.dart';
 import '../../../data/models/participant_model.dart';
 import '../../../data/models/judge_model.dart';
 import '../../../core/constants/app_constants.dart';
@@ -22,34 +20,40 @@ class AdminScoringScreen extends StatelessWidget {
     } catch (e) {
       scoringController = Get.put(ScoringController());
     }
-
     // Initialize participant(s) from route extra if available
     final args = GoRouterState.of(context).extra;
     if (args != null) {
       if (args is Map<String, dynamic>) {
-        // Map with participants and eventId
+        // Map with participants, eventId, assignedId, and optionally category
         final participantsList = args['participants'];
         final eventId = args['eventId']?.toString() ?? '';
+        final assignedId = args['assignedId'];
+        final category = args['category']?.toString();
         if (participantsList is List<ParticipantModel> &&
             participantsList.isNotEmpty) {
-          if (scoringController.participants.isEmpty) {
-            scoringController.initializeWithParticipants(
-              participantsList,
-              eventId: eventId,
-            );
-          }
+          // Always reset and reinitialize to prevent showing previous data
+          scoringController.reset();
+          scoringController.initializeWithParticipants(
+            participantsList,
+            eventId: eventId,
+            assignedId: assignedId is int
+                ? assignedId
+                : (assignedId is String ? int.tryParse(assignedId) : null),
+            category: category,
+          );
         }
       } else if (args is List<ParticipantModel> && args.isNotEmpty) {
         // Multiple participants (backward compatibility)
-        if (scoringController.participants.isEmpty) {
-          scoringController.initializeWithParticipants(args);
-        }
+        scoringController.reset();
+        scoringController.initializeWithParticipants(args);
       } else if (args is ParticipantModel) {
         // Single participant
-        if (scoringController.participant.value == null) {
-          scoringController.initializeWithParticipant(args);
-        }
+        scoringController.reset();
+        scoringController.initializeWithParticipant(args);
       }
+    } else {
+      // No args provided, reset to clear any previous data
+      scoringController.reset();
     }
 
     return Scaffold(
@@ -316,135 +320,6 @@ class AdminScoringScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildJurySelectionSection(
-    BuildContext context,
-    ScoringController controller,
-  ) {
-    final judgeController = Get.find<JudgeController>();
-    return Obx(() {
-      if (judgeController.isLoading.value) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.gavel, color: AppTheme.primaryColor, size: 24),
-                const SizedBox(width: 8),
-                const Text(
-                  'Jury Assignment',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller.searchController,
-              decoration: InputDecoration(
-                hintText: 'Search judges...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                filled: true,
-                fillColor: Colors.grey[50],
-              ),
-              onChanged: controller.updateSearchQuery,
-            ),
-            const SizedBox(height: 16),
-            ...List.generate(AppConstants.juryCount, (index) {
-              final juryPosition = index + 1;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildJurySelector(context, controller, juryPosition),
-              );
-            }),
-          ],
-        ),
-      );
-    });
-  }
-
-  Widget _buildJurySelector(
-    BuildContext context,
-    ScoringController controller,
-    int juryPosition,
-  ) {
-    return Obx(() {
-      final selectedJudge = controller.juryJudgeMap[juryPosition];
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey[50],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  'J$juryPosition',
-                  style: TextStyle(
-                    color: AppTheme.primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: selectedJudge == null
-                  ? Text(
-                      'Select Judge',
-                      style: TextStyle(color: Colors.grey[600]),
-                    )
-                  : Text(
-                      '${selectedJudge.name} (${selectedJudge.designation})',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-            ),
-            PopupMenuButton<JudgeModel?>(
-              icon: const Icon(Icons.arrow_drop_down),
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: null, child: Text('None')),
-                ...controller.filteredJudges.map((judge) {
-                  return PopupMenuItem(
-                    value: judge,
-                    child: Text('${judge.name} (${judge.designation})'),
-                  );
-                }),
-              ],
-              onSelected: (judge) =>
-                  controller.selectJuryJudge(juryPosition, judge),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
   Widget _buildScoringSection(
     BuildContext context,
     ScoringController controller,
@@ -498,10 +373,8 @@ class AdminScoringScreen extends StatelessWidget {
               // Show judge name for judges only
               Obx(() {
                 if (controller.isJudge) {
-                  final currentUser = controller.currentJudgeId != null
-                      ? Get.find<AuthController>().currentUser.value
-                      : null;
-                  if (currentUser != null) {
+                  final judge = controller.currentJudge.value;
+                  if (judge != null) {
                     return Container(
                       padding: EdgeInsets.symmetric(
                         horizontal: isMobile ? 10 : 12,
@@ -521,7 +394,7 @@ class AdminScoringScreen extends StatelessWidget {
                           ),
                           SizedBox(width: isMobile ? 4 : 6),
                           Text(
-                            currentUser.username,
+                            judge.name,
                             style: TextStyle(
                               fontSize: isMobile ? 14 : 16,
                               fontWeight: FontWeight.w600,

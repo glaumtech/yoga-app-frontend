@@ -192,4 +192,64 @@ class JudgeRepository {
       );
     }
   }
+
+  Future<ApiResponse<JudgeModel?>> getJudgeByUserId(String userId) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.judgeByUserId(userId),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        // Handle response format: {"data": {"jury": {"id": 7, "name": "John Doe", ...}}}
+        if (response.data is Map<String, dynamic>) {
+          final dataMap = response.data as Map<String, dynamic>;
+          Map<String, dynamic>? juryData;
+
+          // Check if data contains jury object
+          if (dataMap.containsKey('data') &&
+              dataMap['data'] is Map<String, dynamic>) {
+            final innerData = dataMap['data'] as Map<String, dynamic>;
+            if (innerData.containsKey('jury') &&
+                innerData['jury'] is Map<String, dynamic>) {
+              juryData = innerData['jury'] as Map<String, dynamic>;
+            }
+          }
+
+          // Fallback: check if jury is directly in data
+          if (juryData == null &&
+              dataMap.containsKey('jury') &&
+              dataMap['jury'] is Map<String, dynamic>) {
+            juryData = dataMap['jury'] as Map<String, dynamic>;
+          }
+
+          // Parse jury data into JudgeModel
+          if (juryData != null) {
+            try {
+              final judge = JudgeModel.fromJson(juryData);
+              return ApiResponse(success: true, data: judge);
+            } catch (e) {
+              print('Error parsing judge data: $e');
+              print('Jury data: $juryData');
+            }
+          }
+        }
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Judge not found',
+        data: null,
+      );
+    } catch (e, stackTrace) {
+      print('Error in getJudgeByUserId: $e');
+      print('Stack trace: $stackTrace');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching judge: ${e.toString()}',
+        data: null,
+      );
+    }
+  }
 }

@@ -26,6 +26,9 @@ class AppRoutes {
   static const String scheduleManagement = '/admin/schedule';
   static const String adminScoring = '/admin-scoring';
   static const String judgeManagement = '/admin/judges';
+  static const String participantScoresList = '/admin/scores/:eventId';
+  static const String participantScoreDetail =
+      '/admin/scores/:eventId/:participantId';
 
   // Judge
   static const String assignedParticipants = '/assigned-participants/:eventId';

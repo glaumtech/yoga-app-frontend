@@ -5,6 +5,7 @@ import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/participant_model.dart';
 import '../models/api_response.dart';
+import '../models/score_response_model.dart';
 
 class ParticipantRepository {
   final APIService _apiService = APIService();
@@ -366,6 +367,37 @@ class ParticipantRepository {
       return ApiResponse(
         success: false,
         message: 'Error saving scores: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<ApiResponse<ScoreResponseModel>> getParticipantScoresByEventId(
+    String eventId,
+  ) async {
+    try {
+      final response = await _apiService.getResponse<Map<String, dynamic>>(
+        url: EndPoints.participantScoresByEventId(eventId),
+        apiType: APIType.aGet,
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        // Parse the nested structure
+        final data = response.data!;
+        final scoreResponse = ScoreResponseModel.fromJson(data);
+        return ApiResponse(success: true, data: scoreResponse);
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to fetch scores',
+      );
+    } catch (e, stackTrace) {
+      print('Error in getParticipantScoresByEventId: $e');
+      print('Stack trace: $stackTrace');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching scores: ${e.toString()}',
       );
     }
   }

@@ -22,6 +22,13 @@ class HomeScreen extends StatelessWidget {
       final authController = Get.find<AuthController>();
       final eventController = Get.find<EventController>();
 
+      // Reload events if list is empty (e.g., after logout/login)
+      if (eventController.events.isEmpty && !eventController.isLoading.value) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          eventController.loadEvents();
+        });
+      }
+
       return Scaffold(
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(70),
@@ -158,12 +165,26 @@ class HomeScreen extends StatelessWidget {
                                     context.push(AppRoutes.adminDashboard),
                               ),
                             PopupMenuButton<String>(
-                              icon: const Icon(
-                                Icons.account_circle,
-                                color: Colors.white,
+                              icon: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.account_circle,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
                               ),
                               tooltip: 'User Menu',
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 8,
                               color: Colors.white,
+                              offset: const Offset(0, 10),
+                              position: PopupMenuPosition.under,
                               onSelected: (value) {
                                 switch (value) {
                                   case 'profile':
@@ -178,41 +199,77 @@ class HomeScreen extends StatelessWidget {
                               itemBuilder: (context) => [
                                 PopupMenuItem(
                                   value: 'profile',
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
                                   child: Row(
                                     children: [
-                                      const Icon(
-                                        Icons.person,
-                                        size: 20,
-                                        color: AppTheme.primaryColor,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        authController
-                                                .currentUser
-                                                .value
-                                                ?.name ??
-                                            'Profile',
-                                        style: const TextStyle(
+                                      Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.primaryColor
+                                              .withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.person,
+                                          size: 18,
                                           color: AppTheme.primaryColor,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          authController
+                                                  .currentUser
+                                                  .value
+                                                  ?.name ??
+                                              'Profile',
+                                          style: const TextStyle(
+                                            color: AppTheme.primaryColor,
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 14,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                const PopupMenuDivider(),
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'logout',
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
                                   child: Row(
                                     children: [
-                                      Icon(
-                                        Icons.logout,
-                                        size: 20,
-                                        color: Colors.red,
+                                      Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.logout,
+                                          size: 18,
+                                          color: Colors.red,
+                                        ),
                                       ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Logout',
-                                        style: TextStyle(color: Colors.red),
+                                      const SizedBox(width: 12),
+                                      const Expanded(
+                                        child: Text(
+                                          'Logout',
+                                          style: TextStyle(
+                                            color: Colors.red,
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 14,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),

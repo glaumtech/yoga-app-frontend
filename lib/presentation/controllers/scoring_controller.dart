@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/judge_model.dart';
+import '../../data/models/score_response_model.dart';
 import '../../core/constants/app_constants.dart';
 import 'participant_controller.dart';
 import 'judge_controller.dart';
@@ -16,16 +17,19 @@ class ScoringController extends GetxController {
 
   // Map to store jury position to judge mapping: {1: JudgeModel, 2: JudgeModel, ...}
   final RxMap<int, JudgeModel?> juryJudgeMap = <int, JudgeModel?>{}.obs;
-  final Rx<int?> selectedJuryPosition = Rx<int?>(
-    null,
-  ); // For judges, which jury position they are
   final Rx<ParticipantModel?> participant = Rx<ParticipantModel?>(null);
   final RxList<ParticipantModel> participants = <ParticipantModel>[].obs;
   final RxInt currentParticipantIndex = 0.obs;
   final RxString eventId = ''.obs;
   final RxDouble grandTotal = 0.0.obs;
-  final TextEditingController searchController = TextEditingController();
-  final RxString searchQuery = ''.obs;
+  final Rx<JudgeModel?> currentJudge = Rx<JudgeModel?>(null);
+  final RxInt assignedId = 0.obs; // Store assignedId for score saving
+  final RxString category = ''.obs; // Store category for score saving
+
+  // Score viewing
+  final Rx<ScoreResponseModel?> scoreResponse = Rx<ScoreResponseModel?>(null);
+  final RxBool isLoadingScores = false.obs;
+  final RxString scoreErrorMessage = ''.obs;
 
   // Controllers for each jury position
   final Map<int, TextEditingController> juryScoreControllers = {};
@@ -62,6 +66,20 @@ class ScoringController extends GetxController {
     if (_judgeController.judges.isEmpty) {
       _judgeController.loadJudges();
     }
+
+    // Load current judge if user is a judge
+    if (isJudge) {
+      _loadCurrentJudge();
+    }
+  }
+
+  /// Load current judge details from JudgeController
+  Future<void> _loadCurrentJudge() async {
+    // Load from JudgeController if not already loaded
+    if (_judgeController.currentJudge.value == null) {
+      await _judgeController.loadCurrentJudge();
+    }
+    currentJudge.value = _judgeController.currentJudge.value;
   }
 
   void initializeWithParticipant(ParticipantModel? participantModel) {
@@ -78,6 +96,8 @@ class ScoringController extends GetxController {
   void initializeWithParticipants(
     List<ParticipantModel> participantsList, {
     String? eventId,
+    int? assignedId,
+    String? category,
   }) {
     if (participantsList.isNotEmpty) {
       participants.value = participantsList;
@@ -85,6 +105,12 @@ class ScoringController extends GetxController {
       participant.value = participantsList[0];
       if (eventId != null) {
         this.eventId.value = eventId;
+      }
+      if (assignedId != null) {
+        this.assignedId.value = assignedId;
+      }
+      if (category != null && category.isNotEmpty) {
+        this.category.value = category;
       }
       // Initialize yoga poses for all participants
       for (final p in participantsList) {
@@ -280,9 +306,13 @@ class ScoringController extends GetxController {
       return;
     }
 
-    // Get current judge ID
-    final judgeIdStr = currentJudgeId;
-    if (judgeIdStr == null) {
+    // Get current judge from JudgeController
+    if (_judgeController.currentJudge.value == null) {
+      await _judgeController.loadCurrentJudge();
+    }
+    final judgeData = _judgeController.currentJudge.value;
+
+    if (judgeData == null || judgeData.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Judge ID not found'),
@@ -291,7 +321,16 @@ class ScoringController extends GetxController {
       );
       return;
     }
-    final judgeId = int.tryParse(judgeIdStr) ?? 0;
+    final judgeId = int.tryParse(judgeData.id!) ?? 0;
+    if (judgeId == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid judge ID'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     // Build scoreOfParticipants array
     final scoreOfParticipants = <Map<String, dynamic>>[];
@@ -323,12 +362,24 @@ class ScoringController extends GetxController {
 
       // Only add participant if they have at least one asana with score
       if (asanas.isNotEmpty) {
-        scoreOfParticipants.add({
+        final participantScore = {
           'participantId': participantId,
           'grandTotal': grandTotal,
           'juryId': judgeId,
           'asanas': asanas,
-        });
+        };
+
+        // Add assignId if available
+        if (assignedId.value > 0) {
+          participantScore['assignId'] = assignedId.value;
+        }
+
+        // Add category if available
+        if (category.value.isNotEmpty) {
+          participantScore['category'] = category.value;
+        }
+
+        scoreOfParticipants.add(participantScore);
       }
     }
 
@@ -355,6 +406,9 @@ class ScoringController extends GetxController {
       _participantController.isLoading.value = false;
 
       if (response.success) {
+        // Reset all scoring data after successful save
+        resetAllScoringData();
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('All scores saved successfully!'),
@@ -388,28 +442,96 @@ class ScoringController extends GetxController {
     loadExistingScores();
   }
 
-  void selectJuryJudge(int juryPosition, JudgeModel? judge) {
-    juryJudgeMap[juryPosition] = judge;
-  }
-
-  void updateSearchQuery(String value) {
-    searchQuery.value = value;
-  }
-
   void clearParticipant() {
     participant.value = null;
   }
 
-  List<JudgeModel> get filteredJudges {
-    if (searchQuery.value.isEmpty) {
-      return _judgeController.judges;
+  /// Reset all scoring data (yoga poses, scores, grand total)
+  void resetAllScoringData() {
+    // Dispose all yoga pose controllers
+    for (var poses in participantYogaPoses.values) {
+      for (var pose in poses) {
+        pose.scoreController.dispose();
+      }
     }
-    final query = searchQuery.value.toLowerCase();
-    return _judgeController.judges.where((judge) {
-      return judge.name.toLowerCase().contains(query) ||
-          judge.username.toLowerCase().contains(query) ||
-          judge.designation.toLowerCase().contains(query);
-    }).toList();
+    participantYogaPoses.clear();
+
+    // Clear jury score controllers
+    for (var controller in juryScoreControllers.values) {
+      controller.clear();
+    }
+
+    // Reset grand total
+    grandTotal.value = 0.0;
+
+    // Reset participant index
+    currentParticipantIndex.value = 0;
+
+    // Reinitialize yoga poses for all participants (fresh start with one empty task)
+    for (final p in participants) {
+      initializeYogaPosesForParticipant(p.id ?? '');
+    }
+
+    // Reload existing scores if any
+    if (participant.value != null) {
+      loadExistingScores();
+    }
+  }
+
+  void reset() {
+    // Clear participants
+    participant.value = null;
+    participants.clear();
+    currentParticipantIndex.value = 0;
+    eventId.value = '';
+    grandTotal.value = 0.0;
+    currentJudge.value = null;
+    assignedId.value = 0;
+    category.value = '';
+    juryJudgeMap.clear();
+
+    // Clear jury score controllers
+    for (var controller in juryScoreControllers.values) {
+      controller.clear();
+    }
+
+    // Dispose and clear yoga pose controllers
+    for (var poses in participantYogaPoses.values) {
+      for (var pose in poses) {
+        pose.scoreController.dispose();
+      }
+    }
+    participantYogaPoses.clear();
+  }
+
+  /// Load scores by event ID for viewing
+  Future<void> loadScoresByEventId(String eventId) async {
+    this.eventId.value = eventId;
+    isLoadingScores.value = true;
+    scoreErrorMessage.value = '';
+
+    try {
+      final response = await _participantController
+          .getParticipantScoresByEventId(eventId);
+
+      isLoadingScores.value = false;
+
+      if (response.success && response.data != null) {
+        scoreResponse.value = response.data;
+      } else {
+        scoreErrorMessage.value = response.message ?? 'Failed to load scores';
+        scoreResponse.value = null;
+      }
+    } catch (e) {
+      isLoadingScores.value = false;
+      scoreErrorMessage.value = 'Error loading scores: ${e.toString()}';
+      scoreResponse.value = null;
+    }
+  }
+
+  void resetScoreView() {
+    scoreResponse.value = null;
+    scoreErrorMessage.value = '';
   }
 
   @override
@@ -423,7 +545,6 @@ class ScoringController extends GetxController {
         pose.scoreController.dispose();
       }
     }
-    searchController.dispose();
     super.onClose();
   }
 }

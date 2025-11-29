@@ -19,6 +19,8 @@ import '../presentation/screens/admin/event_management_screen.dart';
 import '../presentation/screens/admin/judge_management_screen.dart';
 import '../presentation/screens/admin/schedule_management_screen.dart';
 import '../presentation/screens/admin/admin_scoring_screen.dart';
+import '../presentation/screens/admin/participant_scores_list_screen.dart';
+import '../presentation/screens/admin/participant_score_detail_screen.dart';
 import '../presentation/screens/judge/judge_assigned_participants_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/storage_service.dart';
@@ -57,6 +59,7 @@ class AppRouter {
       final isAssignedParticipants = location.startsWith(
         '/assigned-participants/',
       );
+      final isParticipantScores = location.startsWith('/admin/scores/');
 
       // If not logged in and trying to access protected routes
       if (token == null &&
@@ -64,7 +67,8 @@ class AppRouter {
           !isEventDetails &&
           !isAssignParticipant &&
           !isRegister &&
-          !isAssignedParticipants) {
+          !isAssignedParticipants &&
+          !isParticipantScores) {
         return AppRoutes.login;
       }
 
@@ -85,7 +89,14 @@ class AppRouter {
             AppRoutes.eventManagement,
             AppRoutes.judgeManagement,
             AppRoutes.scheduleManagement,
+            AppRoutes.participantScoresList,
+            AppRoutes.participantScoreDetail,
           ];
+
+          // Check if route is participant scores (admin only)
+          final isParticipantScoresRoute = location.startsWith(
+            '/admin/scores/',
+          );
 
           // Routes accessible to both admin and judges
           final adminAndJudgeRoutes = [
@@ -98,9 +109,11 @@ class AppRouter {
             '/assigned-participants/',
           );
 
-          final isAdminOnlyRoute = adminOnlyRoutes.any(
-            (route) => location == route || location.startsWith(route),
-          );
+          final isAdminOnlyRoute =
+              adminOnlyRoutes.any(
+                (route) => location == route || location.startsWith(route),
+              ) ||
+              isParticipantScoresRoute;
 
           final isAdminOrJudgeRoute = adminAndJudgeRoutes.any(
             (route) => location == route || location.startsWith(route),
@@ -256,6 +269,32 @@ class AppRouter {
         path: AppRoutes.adminScoring,
         name: 'admin-scoring',
         builder: (context, state) => const AdminScoringScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.participantScoresList,
+        name: 'participant-scores-list',
+        builder: (context, state) {
+          final eventId = state.pathParameters['eventId'] ?? '';
+          if (eventId.isEmpty) {
+            return const AdminDashboardScreen();
+          }
+          return ParticipantScoresListScreen(eventId: eventId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.participantScoreDetail,
+        name: 'participant-score-detail',
+        builder: (context, state) {
+          final eventId = state.pathParameters['eventId'] ?? '';
+          final participantId = state.pathParameters['participantId'] ?? '';
+          if (eventId.isEmpty || participantId.isEmpty) {
+            return const AdminDashboardScreen();
+          }
+          return ParticipantScoreDetailScreen(
+            eventId: eventId,
+            participantId: participantId,
+          );
+        },
       ),
 
       // Judge

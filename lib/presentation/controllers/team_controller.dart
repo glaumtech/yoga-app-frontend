@@ -227,4 +227,14 @@ class TeamController extends GetxController {
     AppConstants.categoryCommon,
     AppConstants.categorySpecial,
   ];
+
+  void reset() {
+    teams.clear();
+    isLoading.value = false;
+    errorMessage.value = '';
+    teamName.value = '';
+    selectedJuryIds.clear();
+    selectedCategory.value = '';
+    teamToEdit.value = null;
+  }
 }

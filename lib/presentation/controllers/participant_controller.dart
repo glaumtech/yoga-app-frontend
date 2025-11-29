@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../data/repositories/participant_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/api_response.dart';
+import '../../data/models/score_response_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/constants/app_constants.dart';
 
@@ -293,6 +294,28 @@ class ParticipantController extends GetxController {
       errorMessage.value = 'An error occurred: ${e.toString()}';
       isLoading.value = false;
       return false;
+    }
+  }
+
+  Future<ApiResponse<ScoreResponseModel>> getParticipantScoresByEventId(
+    String eventId,
+  ) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      final response = await _participantRepository
+          .getParticipantScoresByEventId(eventId);
+
+      isLoading.value = false;
+      return response;
+    } catch (e) {
+      errorMessage.value = 'An error occurred: ${e.toString()}';
+      isLoading.value = false;
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching scores: ${e.toString()}',
+      );
     }
   }
 
@@ -666,5 +689,20 @@ class ParticipantController extends GetxController {
     }
 
     return success;
+  }
+
+  void reset() {
+    participants.clear();
+    myRegistrations.clear();
+    selectedParticipant.value = null;
+    participantToEdit.value = null;
+    isLoading.value = false;
+    errorMessage.value = '';
+    currentFilter.value = ParticipantFilterRequest();
+    currentPage.value = 1;
+    totalPages.value = 0;
+    totalItems.value = 0;
+    hasMorePages.value = false;
+    resetForm();
   }
 }

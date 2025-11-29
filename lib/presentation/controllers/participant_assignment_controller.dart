@@ -360,6 +360,27 @@ class ParticipantAssignmentController extends GetxController {
     currentPage.value = 1;
   }
 
+  void reset() {
+    eventId.value = '';
+    selectedTeamId.value = '';
+    selectedTeam.value = null;
+    teams.clear();
+    participants.clear();
+    assignedParticipants.clear();
+    assignmentGroups.clear();
+    selectedParticipantIds.clear();
+    isLoading.value = false;
+    isLoadingParticipants.value = false;
+    isLoadingAssigned.value = false;
+    errorMessage.value = '';
+    currentFilter.value = ParticipantFilterRequest();
+    currentPage.value = 1;
+    totalPages.value = 0;
+    totalItems.value = 0;
+    hasMorePages.value = false;
+    selectedSection.value = '';
+  }
+
   @override
   void onClose() {
     selectedParticipantIds.clear();

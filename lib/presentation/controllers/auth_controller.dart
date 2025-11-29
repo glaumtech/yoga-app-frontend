@@ -6,6 +6,14 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/models/user_model.dart';
 import '../../core/constants/app_constants.dart';
 import '../../routes/app_routes.dart';
+import 'admin_controller.dart';
+import 'participant_controller.dart';
+import 'event_controller.dart';
+import 'judge_controller.dart';
+import 'scoring_controller.dart';
+import 'team_controller.dart';
+import 'participant_assignment_controller.dart';
+import 'judge_assigned_participants_controller.dart';
 
 class AuthController extends GetxController {
   final AuthRepository _authRepository = AuthRepository();
@@ -58,6 +66,18 @@ class AuthController extends GetxController {
     final user = await _authRepository.getCurrentUser();
     if (user != null) {
       currentUser.value = user;
+
+      // Reload events if user is authenticated
+      try {
+        if (Get.isRegistered<EventController>()) {
+          final eventController = Get.find<EventController>();
+          if (eventController.events.isEmpty) {
+            eventController.loadEvents();
+          }
+        }
+      } catch (e) {
+        // EventController might not be registered, ignore
+      }
     }
   }
 
@@ -111,6 +131,16 @@ class AuthController extends GetxController {
       if (response.success && response.data != null) {
         currentUser.value = response.data;
         isLoading.value = false;
+
+        // Reload events after successful login
+        try {
+          if (Get.isRegistered<EventController>()) {
+            Get.find<EventController>().loadEvents();
+          }
+        } catch (e) {
+          // EventController might not be registered, ignore
+        }
+
         return true;
       } else {
         errorMessage.value = response.message ?? 'Sign in failed';
@@ -286,6 +316,79 @@ class AuthController extends GetxController {
     currentUser.value = null;
     isLoading.value = false;
     errorMessage.value = '';
+
+    // Reset all controllers to clear app data
+    try {
+      // Reset Admin Controller
+      if (Get.isRegistered<AdminController>()) {
+        Get.find<AdminController>().reset();
+      }
+    } catch (e) {
+      // Controller might not be registered, ignore
+    }
+
+    try {
+      // Reset Participant Controller
+      if (Get.isRegistered<ParticipantController>()) {
+        Get.find<ParticipantController>().reset();
+      }
+    } catch (e) {
+      // Controller might not be registered, ignore
+    }
+
+    // try {
+    //   // Reset Event Controller
+    //   if (Get.isRegistered<EventController>()) {
+    //     Get.find<EventController>().reset();
+    //   }
+    // } catch (e) {
+    //   // Controller might not be registered, ignore
+    // }
+
+    try {
+      // Reset Judge Controller
+      if (Get.isRegistered<JudgeController>()) {
+        Get.find<JudgeController>().reset();
+      }
+    } catch (e) {
+      // Controller might not be registered, ignore
+    }
+
+    try {
+      // Reset Scoring Controller
+      if (Get.isRegistered<ScoringController>()) {
+        Get.find<ScoringController>().reset();
+      }
+    } catch (e) {
+      // Controller might not be registered, ignore
+    }
+
+    try {
+      // Reset Team Controller
+      if (Get.isRegistered<TeamController>()) {
+        Get.find<TeamController>().reset();
+      }
+    } catch (e) {
+      // Controller might not be registered, ignore
+    }
+
+    try {
+      // Reset Participant Assignment Controller (temporary, but reset if exists)
+      if (Get.isRegistered<ParticipantAssignmentController>()) {
+        Get.find<ParticipantAssignmentController>().reset();
+      }
+    } catch (e) {
+      // Controller might not be registered, ignore
+    }
+
+    try {
+      // Reset Judge Assigned Participants Controller (temporary, but reset if exists)
+      if (Get.isRegistered<JudgeAssignedParticipantsController>()) {
+        Get.find<JudgeAssignedParticipantsController>().reset();
+      }
+    } catch (e) {
+      // Controller might not be registered, ignore
+    }
 
     // Call repository signOut (calls API and clears storage)
     await _authRepository.signOut();

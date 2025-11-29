@@ -35,6 +35,7 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
         widget.eventId,
         resetPage: true,
         assignedStatus: 'Not Assigned',
+        status: 'Accepted',
       );
     });
   }
@@ -1199,15 +1200,11 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
                           child: Text('All'),
                         ),
                         DropdownMenuItem<String?>(
-                          value: 'accepted',
+                          value: 'Accepted',
                           child: Text('Accepted'),
                         ),
                         DropdownMenuItem<String?>(
-                          value: 'pending',
-                          child: Text('Pending'),
-                        ),
-                        DropdownMenuItem<String?>(
-                          value: 'rejected',
+                          value: 'Rejected',
                           child: Text('Rejected'),
                         ),
                       ],

@@ -2,11 +2,11 @@ import 'package:get/get.dart';
 import '../../data/repositories/team_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/assignment_group_model.dart';
-import '../controllers/auth_controller.dart';
+import '../controllers/judge_controller.dart';
 
 class JudgeAssignedParticipantsController extends GetxController {
   final TeamRepository _teamRepository = TeamRepository();
-  final AuthController _authController = Get.find<AuthController>();
+  final JudgeController _judgeController = Get.find<JudgeController>();
 
   // State
   final RxString eventId = ''.obs;
@@ -16,7 +16,6 @@ class JudgeAssignedParticipantsController extends GetxController {
       <ParticipantModel>[].obs;
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
-
   @override
   void onInit() {
     super.onInit();
@@ -31,20 +30,19 @@ class JudgeAssignedParticipantsController extends GetxController {
       assignmentGroups.clear();
       assignedParticipants.clear();
 
-      // Get current judge ID
-      final currentUser = _authController.currentUser.value;
-      if (currentUser == null) {
-        errorMessage.value = 'User not logged in';
+      // Always reload current judge to ensure we have the latest data for current user
+      await _judgeController.loadCurrentJudge();
+      final judgeData = _judgeController.currentJudge.value;
+      if (judgeData == null) {
+        errorMessage.value = 'Judge not found';
         isLoading.value = false;
         return;
       }
 
-      final judgeId = currentUser.id.toString();
-
       // Call assignedParticipantsByJudgeId API
       final response = await _teamRepository.getAssignedParticipantsByJudgeId(
         eventId,
-        judgeId,
+        judgeData.id.toString(),
         page: 0,
         size: 100,
       );
@@ -78,5 +76,13 @@ class JudgeAssignedParticipantsController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void reset() {
+    eventId.value = '';
+    assignmentGroups.clear();
+    assignedParticipants.clear();
+    isLoading.value = false;
+    errorMessage.value = '';
   }
 }

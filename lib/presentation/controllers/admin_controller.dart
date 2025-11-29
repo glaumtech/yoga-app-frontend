@@ -65,4 +65,13 @@ class AdminController extends GetxController {
   Future<void> refreshDashboard() async {
     await loadDashboardData();
   }
+
+  void reset() {
+    totalRegistrations.value = 0;
+    totalEvents.value = 0;
+    activeEvents.value = 0;
+    pendingRegistrations.value = 0;
+    recentRegistrations.clear();
+    isLoading.value = false;
+  }
 }

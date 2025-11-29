@@ -1729,35 +1729,78 @@ Widget _buildEventTitleCard(BuildContext context, event) {
                     Obx(() {
                       final authController = Get.find<AuthController>();
                       if (authController.isAdmin) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              if (event.id != null) {
-                                context.push('/assign-participant/${event.id}');
-                              }
-                            },
-                            icon: const Icon(Icons.assignment_ind, size: 18),
-                            label: const Text(
-                              'Assign Participant',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  if (event.id != null) {
+                                    context.push(
+                                      '/assign-participant/${event.id}',
+                                    );
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.assignment_ind,
+                                  size: 18,
+                                ),
+                                label: const Text(
+                                  'Assign Participant',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: AppTheme.primaryColor,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 2,
+                                ),
                               ),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: AppTheme.primaryColor,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  if (event.id != null) {
+                                    context.pushNamed(
+                                      'participant-scores-list',
+                                      pathParameters: {'eventId': event.id!},
+                                    );
+                                  }
+                                },
+                                icon: const Icon(Icons.score, size: 18),
+                                label: const Text(
+                                  'View Scores',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: AppTheme.primaryColor,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 2,
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 2,
                             ),
-                          ),
+                          ],
                         );
                       }
                       return const SizedBox.shrink();

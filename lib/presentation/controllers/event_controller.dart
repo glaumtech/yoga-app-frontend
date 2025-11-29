@@ -217,4 +217,15 @@ class EventController extends GetxController {
       isLoading.value = false;
     }
   }
+
+  void reset() {
+    events.clear();
+    selectedEvent.value = null;
+    isLoading.value = false;
+    errorMessage.value = '';
+    selectedCategory.value = '';
+    selectedAgeGroup.value = '';
+    searchQuery.value = '';
+    selectedBannerImage.value = null;
+  }
 }

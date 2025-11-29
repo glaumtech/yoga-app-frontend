@@ -120,6 +120,7 @@ class EndPoints {
   static String judgeRegister = '/api/judge/register';
   static String judgeUpdate(String id) => '/api/judge/update/$id';
   static String judgeById(String id) => '/api/judge/$id';
+  static String judgeByUserId(String userId) => '/api/judge/judge-id/$userId';
 
   /// TEAMS
   static String teamList = '/api/team/all';
@@ -134,8 +135,12 @@ class EndPoints {
   static String assignedParticipants(String eventId) =>
       '/api/assign-participants/$eventId/assignments';
   static String assignedParticipantsByJudgeId(String eventId, String judgeId) =>
-      '/api/assign-participants/event/$eventId?judgeId=$judgeId';
+      '/api/assign-participants/event/$eventId?juryId=$judgeId';
 
   /// SCORING
   static String scoringSave = '/api/scoring/save';
+  static String scoringByEventId(String eventId) =>
+      '/api/scoring/event/$eventId';
+  static String participantScoresByEventId(String eventId) =>
+      '/api/scoring/event/$eventId';
 }

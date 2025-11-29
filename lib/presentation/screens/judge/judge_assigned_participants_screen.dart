@@ -20,13 +20,8 @@ class JudgeAssignedParticipantsScreen extends StatelessWidget {
 
     // Load assigned participants on first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Always reload if eventId is different, or if not currently loading and no data
-      if (controller.eventId.value != eventId) {
-        controller.loadAssignedParticipants(eventId);
-      } else if (!controller.isLoading.value &&
-          controller.assignedParticipants.isEmpty) {
-        controller.loadAssignedParticipants(eventId);
-      }
+      // Always reload to ensure fresh data (especially after login/logout)
+      controller.loadAssignedParticipants(eventId);
     });
 
     return Scaffold(
@@ -219,12 +214,14 @@ class JudgeAssignedParticipantsScreen extends StatelessWidget {
                 // Add Score Button
                 ElevatedButton.icon(
                   onPressed: () {
-                    // Navigate to scoring screen with list of participants and eventId
+                    // Navigate to scoring screen with list of participants, eventId, assignedId, and category
                     context.push(
                       AppRoutes.adminScoring,
                       extra: {
                         'participants': group.participants,
                         'eventId': eventId,
+                        'assignedId': group.assignedId,
+                        'category': group.category,
                       },
                     );
                   },
