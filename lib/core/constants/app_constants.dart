@@ -107,6 +107,8 @@ class EndPoints {
       '/api/participants/status_verify/$id/$status';
 
   static String participantImage(String id) => '/api/participants/image/$id';
+  static String participantCertificate(String id) =>
+      '/api/participants/$id/certificate';
 
   /// EVENTS
   static String eventRegister = '/api/event/register';

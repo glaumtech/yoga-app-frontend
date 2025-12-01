@@ -185,14 +185,18 @@ class HomeScreen extends StatelessWidget {
                               color: Colors.white,
                               offset: const Offset(0, 10),
                               position: PopupMenuPosition.under,
-                              onSelected: (value) {
+                              onSelected: (value) async {
                                 switch (value) {
                                   case 'profile':
                                     // TODO: Navigate to profile
                                     break;
                                   case 'logout':
-                                    authController.signOut();
-                                    context.go(AppRoutes.login);
+                                    // Sign out first
+                                    await authController.signOut();
+                                    // Then navigate if the context is still valid
+                                    if (context.mounted) {
+                                      context.go(AppRoutes.login);
+                                    }
                                     break;
                                 }
                               },

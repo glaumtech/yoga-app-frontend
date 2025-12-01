@@ -34,7 +34,7 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
       controller.loadParticipants(
         widget.eventId,
         resetPage: true,
-        assignedStatus: 'Not Assigned',
+        assignedStatus: 'Un Assigned',
         status: 'Accepted',
       );
     });
@@ -374,7 +374,7 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
                                         status: 'Accepted',
                                         section: _filterSection,
                                         category: category,
-                                        assignedStatus: 'Not Assigned',
+                                        assignedStatus: 'Un Assigned',
                                       );
 
                                       // Reload assigned participants
@@ -446,7 +446,7 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
                           status: 'Accepted',
                           section: _filterSection,
                           category: category,
-                          assignedStatus: 'Not Assigned',
+                          assignedStatus: 'Un Assigned',
                         );
                       },
                       tooltip: 'Refresh',
@@ -480,7 +480,7 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
                             status: _filterStatus,
                             section: _filterSection,
                             category: category,
-                            assignedStatus: 'Not Assigned',
+                            assignedStatus: 'Un Assigned',
                           );
                         });
                       },
@@ -501,7 +501,7 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
                             participantName: _filterName,
                             section: _filterSection,
                             category: category,
-                            assignedStatus: 'Not Assigned',
+                            assignedStatus: 'Un Assigned',
                           );
                         });
                       },
@@ -522,7 +522,7 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
                             participantName: _filterName,
                             status: _filterStatus,
                             category: category,
-                            assignedStatus: 'Not Assigned',
+                            assignedStatus: 'Un Assigned',
                           );
                         });
                       },
@@ -1280,7 +1280,7 @@ class _AssignParticipantScreenState extends State<AssignParticipantScreen> {
                       status: _filterStatus,
                       section: _filterSection,
                       category: category,
-                      assignedStatus: 'Not Assigned',
+                      assignedStatus: 'Un Assigned',
                     );
                   },
                   child: const Text('Apply'),
