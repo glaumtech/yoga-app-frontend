@@ -401,4 +401,39 @@ class ParticipantRepository {
       );
     }
   }
+
+  Future<ApiResponse<SingleParticipantScoreResponseModel>>
+  getParticipantScoresByParticipantId(
+    String eventId,
+    String participantId,
+  ) async {
+    try {
+      final response = await _apiService.getResponse<Map<String, dynamic>>(
+        url: EndPoints.participantScoresByParticipantId(eventId, participantId),
+        apiType: APIType.aGet,
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        // Parse the nested structure
+        final data = response.data!;
+        final scoreResponse = SingleParticipantScoreResponseModel.fromJson(
+          data,
+        );
+        return ApiResponse(success: true, data: scoreResponse);
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to fetch participant score',
+      );
+    } catch (e, stackTrace) {
+      print('Error in getParticipantScoresByParticipantId: $e');
+      print('Stack trace: $stackTrace');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching participant score: ${e.toString()}',
+      );
+    }
+  }
 }

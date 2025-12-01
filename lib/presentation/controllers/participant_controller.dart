@@ -319,6 +319,30 @@ class ParticipantController extends GetxController {
     }
   }
 
+  Future<ApiResponse<SingleParticipantScoreResponseModel>>
+  getParticipantScoresByParticipantId(
+    String eventId,
+    String participantId,
+  ) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      final response = await _participantRepository
+          .getParticipantScoresByParticipantId(eventId, participantId);
+
+      isLoading.value = false;
+      return response;
+    } catch (e) {
+      errorMessage.value = 'An error occurred: ${e.toString()}';
+      isLoading.value = false;
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching participant score: ${e.toString()}',
+      );
+    }
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> saveScores({
     required String eventId,
     required List<Map<String, dynamic>> scoreOfParticipants,

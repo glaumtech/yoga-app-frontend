@@ -28,6 +28,10 @@ class ScoringController extends GetxController {
 
   // Score viewing
   final Rx<ScoreResponseModel?> scoreResponse = Rx<ScoreResponseModel?>(null);
+  final Rx<SingleParticipantScoreResponseModel?>
+  singleParticipantScoreResponse = Rx<SingleParticipantScoreResponseModel?>(
+    null,
+  );
   final RxBool isLoadingScores = false.obs;
   final RxString scoreErrorMessage = ''.obs;
 
@@ -531,7 +535,37 @@ class ScoringController extends GetxController {
 
   void resetScoreView() {
     scoreResponse.value = null;
+    singleParticipantScoreResponse.value = null;
     scoreErrorMessage.value = '';
+  }
+
+  /// Load single participant score by participant ID
+  Future<void> loadParticipantScoreDetail(
+    String eventId,
+    String participantId,
+  ) async {
+    isLoadingScores.value = true;
+    scoreErrorMessage.value = '';
+
+    try {
+      final response = await _participantController
+          .getParticipantScoresByParticipantId(eventId, participantId);
+
+      isLoadingScores.value = false;
+
+      if (response.success && response.data != null) {
+        singleParticipantScoreResponse.value = response.data;
+      } else {
+        scoreErrorMessage.value =
+            response.message ?? 'Failed to load participant score';
+        singleParticipantScoreResponse.value = null;
+      }
+    } catch (e) {
+      isLoadingScores.value = false;
+      scoreErrorMessage.value =
+          'Error loading participant score: ${e.toString()}';
+      singleParticipantScoreResponse.value = null;
+    }
   }
 
   @override

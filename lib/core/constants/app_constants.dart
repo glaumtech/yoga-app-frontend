@@ -143,4 +143,8 @@ class EndPoints {
       '/api/scoring/event/$eventId';
   static String participantScoresByEventId(String eventId) =>
       '/api/scoring/event/$eventId';
+  static String participantScoresByParticipantId(
+    String eventId,
+    String participantId,
+  ) => '/api/scoring/event/$eventId/participant/$participantId';
 }

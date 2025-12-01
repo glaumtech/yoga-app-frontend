@@ -143,12 +143,16 @@ class ParticipantScoresListScreen extends StatelessWidget {
     ParticipantScoreModel participantScore,
     int index,
   ) {
-    // Calculate total score
+    // Calculate total score across all categories
     double totalScore = 0.0;
-    for (final asana in participantScore.asanas) {
-      for (final juryMark in asana.juryMarks) {
-        totalScore += double.tryParse(juryMark.mark) ?? 0.0;
-      }
+    for (final category in participantScore.categories) {
+      totalScore += category.grandTotal;
+    }
+
+    // Count total asanas across all categories
+    int totalAsanas = 0;
+    for (final category in participantScore.categories) {
+      totalAsanas += category.asanas.length;
     }
 
     return Card(
@@ -157,8 +161,12 @@ class ParticipantScoresListScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: () {
-          context.push(
-            '${AppRoutes.participantScoreDetail}/$eventId/${participantScore.participantId}',
+          context.pushNamed(
+            'participant-score-detail',
+            pathParameters: {
+              'eventId': eventId,
+              'participantId': participantScore.participantId.toString(),
+            },
           );
         },
         borderRadius: BorderRadius.circular(12),
@@ -192,7 +200,7 @@ class ParticipantScoresListScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Participant ID: ${participantScore.participantId}',
+                      participantScore.participantName,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -201,27 +209,40 @@ class ParticipantScoresListScreen extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.secondaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            participantScore.category,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.secondaryColor,
-                            ),
+                        Text(
+                          participantScore.participantCode ?? 'N/A',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '${participantScore.asanas.length} Asanas',
+                          '•',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${participantScore.categories.length} Categories',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '•',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$totalAsanas Asanas',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
