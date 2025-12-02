@@ -444,9 +444,14 @@ class ParticipantController extends GetxController {
   }
 
   Future<void> selectDateOfBirth(BuildContext context) async {
+    // Use existing dateOfBirth if available, otherwise default to 10 years ago
+    final DateTime initialDate =
+        dateOfBirth.value ??
+        DateTime.now().subtract(const Duration(days: 365 * 10));
+
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().subtract(const Duration(days: 365 * 10)),
+      initialDate: initialDate,
       firstDate: DateTime(1990),
       lastDate: DateTime.now(),
       helpText: 'Select Date of Birth',
@@ -492,7 +497,55 @@ class ParticipantController extends GetxController {
     errorMessage.value = '';
     participantToEdit.value = null;
     existingPhotoUrl.value = '';
+    isLoadingParticipant.value = false;
+    // Reset form state
     formKey.currentState?.reset();
+  }
+
+  /// Initialize form for registration screen
+  /// Handles reset logic for both new registration and edit mode
+  void initializeRegistrationForm(String? participantId) {
+    if (participantId != null && participantId.isNotEmpty) {
+      // For edit mode: only reset if this is a different participant
+      final currentEditId = participantToEdit.value?.id;
+      if (currentEditId != participantId) {
+        // Clear all form data first
+        _clearFormData();
+
+        // Fetch participant data after first frame
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          formKey.currentState?.reset();
+          fetchParticipantById(participantId);
+        });
+      }
+    } else {
+      // For new registration: always reset form
+      _clearFormData();
+
+      // Reset form state after first frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        formKey.currentState?.reset();
+      });
+    }
+  }
+
+  /// Clear all form controllers and reactive values
+  void _clearFormData() {
+    nameController.clear();
+    schoolNameController.clear();
+    addressController.clear();
+    yogaMasterNameController.clear();
+    yogaMasterContactController.clear();
+    dateOfBirth.value = null;
+    gender.value = '';
+    selectedCategories.clear();
+    standard.value = '';
+    photoFile.value = null;
+    selectedImage.value = null;
+    errorMessage.value = '';
+    existingPhotoUrl.value = '';
+    isLoadingParticipant.value = false;
+    participantToEdit.value = null;
   }
 
   /// Fetch participant details by ID from API

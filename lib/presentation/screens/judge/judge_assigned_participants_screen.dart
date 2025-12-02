@@ -156,6 +156,7 @@ class JudgeAssignedParticipantsScreen extends StatelessWidget {
             // Team Name and Category Header with Add Score Button
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Row(
                   children: [
@@ -212,7 +213,7 @@ class JudgeAssignedParticipantsScreen extends StatelessWidget {
                   ],
                 ),
                 // Add Score Button
-                ElevatedButton.icon(
+                IconButton(
                   onPressed: () {
                     // Navigate to scoring screen with list of participants, eventId, assignedId, and category
                     context.push(
@@ -225,19 +226,17 @@ class JudgeAssignedParticipantsScreen extends StatelessWidget {
                       },
                     );
                   },
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Score'),
-                  style: ElevatedButton.styleFrom(
+                  icon: const Icon(Icons.check, size: 20),
+                  style: IconButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
+                    padding: const EdgeInsets.all(10),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
+                  tooltip: 'Add Score',
+                  alignment: Alignment.center,
                 ),
               ],
             ),

@@ -92,7 +92,7 @@ class ParticipantAssignmentController extends GetxController {
           eventId.value,
           resetPage: true,
           category: category,
-          assignedStatus: 'Not Assigned',
+          assignedStatus: 'Un Assigned',
           status: 'Accepted',
         );
         // Load assigned participants for the selected team

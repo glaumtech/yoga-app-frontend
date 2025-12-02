@@ -180,7 +180,7 @@ class AdminDashboardScreen extends StatelessWidget {
                                   ? 1
                                   : isTablet
                                   ? 2
-                                  : 3;
+                                  : 4;
                               final padding = isMobile ? 8.0 : 12.0;
 
                               return GridView.count(

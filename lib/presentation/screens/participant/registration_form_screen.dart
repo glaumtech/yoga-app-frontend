@@ -20,26 +20,8 @@ class RegistrationFormScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Get.find<ParticipantController>();
 
-    // Fetch participant details from API if participantId is provided
-    if (participantId != null && participantId!.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Always fetch if participantId is different from current edit participant
-        final currentEditId = controller.participantToEdit.value?.id;
-        if (currentEditId != participantId) {
-          // Reset form first to clear any previous data
-          controller.resetForm();
-          // Then fetch and populate
-          controller.fetchParticipantById(participantId!);
-        }
-      });
-    } else {
-      // If no participantId, ensure form is reset for new registration
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (controller.isEditMode) {
-          controller.resetForm();
-        }
-      });
-    }
+    // Initialize/reset form based on participantId
+    controller.initializeRegistrationForm(participantId);
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
