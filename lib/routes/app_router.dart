@@ -61,6 +61,11 @@ class AppRouter {
       );
       final isParticipantScores = location.startsWith('/admin/scores/');
 
+      // Always allow navigation to auth routes (login/signup)
+      if (location == AppRoutes.login || location == AppRoutes.signUp) {
+        return null;
+      }
+
       // If not logged in and trying to access protected routes
       if (token == null &&
           !isPublicRoute &&
@@ -136,12 +141,6 @@ class AppRouter {
         } catch (e) {
           // Controller not initialized, allow navigation
         }
-      }
-
-      // If logged in and trying to access auth routes, redirect to home
-      if (token != null &&
-          (location == AppRoutes.login || location == AppRoutes.signUp)) {
-        return AppRoutes.home;
       }
 
       return null;

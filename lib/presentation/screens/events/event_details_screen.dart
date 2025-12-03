@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:http/http.dart' as http;
 import 'package:yoga_champ/data/models/judge_model.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/utils/storage_service.dart';
 import '../../controllers/event_controller.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/team_controller.dart';
@@ -16,9 +11,6 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/judge_controller.dart';
 import '../../widgets/event_banner_image.dart';
 import '../../../data/models/participant_model.dart';
-
-// Web-specific imports
-import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class EventDetailsScreen extends StatefulWidget {
   final String eventId;
@@ -777,8 +769,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                       if (isAdmin &&
                                           participant.id != null) ...[
                                         // Accept Button (show if not already accepted)
-                                        if (currentStatus != 'accepted' &&
-                                            currentStatus != 'approved')
+                                        if (currentStatus?.toLowerCase() ==
+                                            'requested')
                                           IconButton(
                                             icon: Icon(
                                               Icons.check_circle,
@@ -843,14 +835,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                                       }
                                                     }
                                                   },
-                                            tooltip: 'Accept Participant',
+                                            tooltip: 'Paid',
                                             padding: EdgeInsets.zero,
                                             constraints: const BoxConstraints(),
                                           ),
                                         // Reject Button (show if not already rejected or accepted)
-                                        if (currentStatus != 'rejected' &&
-                                            currentStatus != 'accepted' &&
-                                            currentStatus != 'approved')
+                                        if (currentStatus?.toLowerCase() ==
+                                            'requested')
                                           IconButton(
                                             icon: Icon(
                                               Icons.cancel,
@@ -915,7 +906,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                                       }
                                                     }
                                                   },
-                                            tooltip: 'Reject Participant',
+                                            tooltip: 'Not Paid',
                                             padding: EdgeInsets.zero,
                                             constraints: const BoxConstraints(),
                                           ),
@@ -923,8 +914,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                       ],
                                       // Certificate Download Button (for accepted participants)
                                       if (participant.id != null &&
-                                          (currentStatus == 'accepted' ||
-                                              currentStatus == 'approved')) ...[
+                                          (currentStatus?.toLowerCase() ==
+                                              'scored')) ...[
                                         IconButton(
                                           icon: Icon(
                                             Icons.download,
@@ -932,9 +923,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                             color: AppTheme.primaryColor,
                                           ),
                                           onPressed: () {
-                                            _downloadParticipantCertificate(
-                                              participant.id!.toString(),
-                                            );
+                                            final participantController =
+                                                Get.find<
+                                                  ParticipantController
+                                                >();
+                                            participantController
+                                                .downloadParticipantCertificate(
+                                                  participant.id!.toString(),
+                                                );
                                           },
                                           tooltip: 'Download Certificate',
                                           padding: EdgeInsets.zero,
@@ -1026,92 +1022,10 @@ Color _getStatusColor(String status) {
     case 'pending':
     case 'requested':
       return Colors.orange;
+    case 'scored':
+      return Colors.blue;
     default:
       return Colors.grey;
-  }
-}
-
-Future<void> _downloadParticipantCertificate(String participantId) async {
-  try {
-    Get.snackbar(
-      'Downloading',
-      'Preparing certificate download...',
-      backgroundColor: Colors.blue,
-      colorText: Colors.white,
-      duration: const Duration(seconds: 1),
-    );
-
-    final url =
-        '${BaseUrl.baseUrl}${EndPoints.participantCertificate(participantId)}';
-    final uri = Uri.parse(url);
-
-    // Include auth token if available
-    final token = StorageService.getString(AppConstants.tokenKey);
-    final headers = <String, String>{
-      'Accept': 'application/pdf',
-      'Content-Type': 'application/pdf',
-    };
-    if (token != null && token.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $token';
-    }
-
-    final response = await http.get(uri, headers: headers);
-
-    if (response.statusCode == 200) {
-      if (kIsWeb) {
-        // Web: Create blob and trigger download
-        final blob = html.Blob([response.bodyBytes]);
-        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-        html.AnchorElement(href: blobUrl)
-          ..setAttribute('download', 'certificate_$participantId.pdf')
-          ..click();
-        html.Url.revokeObjectUrl(blobUrl);
-
-        Get.snackbar(
-          'Success',
-          'Certificate download started',
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-        );
-      } else {
-        // Mobile: Save file and open it
-        // For mobile, we'll use the data URI approach which should work
-        final dataUri = Uri.dataFromBytes(
-          response.bodyBytes,
-          mimeType: 'application/pdf',
-        );
-        if (await canLaunchUrl(dataUri)) {
-          await launchUrl(dataUri, mode: LaunchMode.externalApplication);
-          Get.snackbar(
-            'Success',
-            'Certificate opened',
-            backgroundColor: Colors.green,
-            colorText: Colors.white,
-          );
-        } else {
-          Get.snackbar(
-            'Error',
-            'Could not open certificate',
-            backgroundColor: Colors.red,
-            colorText: Colors.white,
-          );
-        }
-      }
-    } else {
-      Get.snackbar(
-        'Error',
-        'Failed to download certificate (status ${response.statusCode})',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-    }
-  } catch (e) {
-    Get.snackbar(
-      'Error',
-      'Failed to download certificate: ${e.toString()}',
-      backgroundColor: Colors.red,
-      colorText: Colors.white,
-    );
   }
 }
 

@@ -1,14 +1,21 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 import '../../data/repositories/participant_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/api_response.dart';
 import '../../data/models/score_response_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
+import '../../core/utils/storage_service.dart';
 import '../../core/constants/app_constants.dart';
+
+// Web-specific imports
+import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class ParticipantController extends GetxController {
   final ParticipantRepository _participantRepository = ParticipantRepository();
@@ -781,5 +788,90 @@ class ParticipantController extends GetxController {
     totalItems.value = 0;
     hasMorePages.value = false;
     resetForm();
+  }
+
+  /// Download participant certificate
+  Future<void> downloadParticipantCertificate(String participantId) async {
+    try {
+      Get.snackbar(
+        'Downloading',
+        'Preparing certificate download...',
+        backgroundColor: Colors.blue,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 1),
+      );
+
+      final url =
+          '${BaseUrl.baseUrl}${EndPoints.participantCertificate(participantId)}';
+      final uri = Uri.parse(url);
+
+      // Include auth token if available
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept': 'application/pdf',
+        'Content-Type': 'application/pdf',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        if (kIsWeb) {
+          // Web: Create blob and trigger download
+          final blob = html.Blob([response.bodyBytes]);
+          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+          html.AnchorElement(href: blobUrl)
+            ..setAttribute('download', 'certificate_$participantId.pdf')
+            ..click();
+          html.Url.revokeObjectUrl(blobUrl);
+
+          Get.snackbar(
+            'Success',
+            'Certificate download started',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+        } else {
+          // Mobile: Save file and open it
+          // For mobile, we'll use the data URI approach which should work
+          final dataUri = Uri.dataFromBytes(
+            response.bodyBytes,
+            mimeType: 'application/pdf',
+          );
+          if (await canLaunchUrl(dataUri)) {
+            await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+            Get.snackbar(
+              'Success',
+              'Certificate opened',
+              backgroundColor: Colors.green,
+              colorText: Colors.white,
+            );
+          } else {
+            Get.snackbar(
+              'Error',
+              'Could not open certificate',
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+            );
+          }
+        }
+      } else {
+        Get.snackbar(
+          'Error',
+          'Failed to download certificate (status ${response.statusCode})',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to download certificate: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 }

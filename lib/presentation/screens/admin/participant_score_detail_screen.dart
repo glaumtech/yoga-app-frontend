@@ -178,31 +178,32 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
             ),
           ],
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Participant Info Card
-              Card(
-                elevation: 2,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWidePage = constraints.maxWidth >= 900;
+
+            Widget buildParticipantCard() {
+              return Card(
+                elevation: 3,
+                margin: const EdgeInsets.only(bottom: 24),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        width: 56,
-                        height: 56,
+                        width: 64,
+                        height: 64,
                         decoration: BoxDecoration(
-                          color: AppTheme.primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          color: AppTheme.primaryColor.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         child: Icon(
                           Icons.person,
-                          size: 32,
+                          size: 36,
                           color: AppTheme.primaryColor,
                         ),
                       ),
@@ -213,31 +214,41 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
                           children: [
                             Text(
                               participantScore.participantName,
-                              style: const TextStyle(
-                                fontSize: 18,
+                              style: TextStyle(
+                                fontSize: isWidePage ? 20 : 18,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.grey[900],
                               ),
                             ),
                             const SizedBox(height: 4),
-                            if (participantScore.participantCode != null) ...[
-                              Text(
-                                'Code: ${participantScore.participantCode}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                            if (participantScore.schoolName != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                'School: ${participantScore.schoolName}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                if (participantScore.participantCode != null)
+                                  _buildInfoChip(
+                                    label: 'Code',
+                                    value:
+                                        participantScore.participantCode ?? '',
+                                  ),
+                                if (participantScore.schoolName != null &&
+                                    participantScore.schoolName!.isNotEmpty)
+                                  _buildInfoChip(
+                                    label: 'School',
+                                    value: participantScore.schoolName!,
+                                  ),
+                                if (participantScore.age > 0)
+                                  _buildInfoChip(
+                                    label: 'Age',
+                                    value: participantScore.age.toString(),
+                                  ),
+                                if (participantScore.gender.isNotEmpty)
+                                  _buildInfoChip(
+                                    label: 'Gender',
+                                    value: participantScore.gender,
+                                  ),
+                              ],
+                            ),
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
@@ -247,14 +258,14 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
                               ) {
                                 return Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
+                                    horizontal: 10,
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
                                     color: AppTheme.secondaryColor.withOpacity(
-                                      0.1,
+                                      0.08,
                                     ),
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
                                     category.category,
@@ -270,6 +281,7 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 16),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -284,7 +296,7 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
                           Text(
                             totalScore.toStringAsFixed(1),
                             style: TextStyle(
-                              fontSize: 24,
+                              fontSize: isWidePage ? 26 : 24,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.primaryColor,
                             ),
@@ -294,117 +306,166 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              // Categories header row
-              Row(
+              );
+            }
+
+            Widget buildCategoriesSection() {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (commonCategories.isNotEmpty)
-                    Expanded(
-                      child: Text(
-                        'Common Category',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                    ),
-                  if (specialCategories.isNotEmpty)
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          'Special Category',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
+                  Row(
+                    children: [
+                      if (commonCategories.isNotEmpty)
+                        Expanded(
+                          child: Text(
+                            'Common Category',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[800],
+                            ),
                           ),
                         ),
-                      ),
+                      if (specialCategories.isNotEmpty)
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              'Special Category',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (commonCategories.isNotEmpty ||
+                      specialCategories.isNotEmpty)
+                    LayoutBuilder(
+                      builder: (context, innerConstraints) {
+                        final isWide = innerConstraints.maxWidth > 700;
+                        if (isWide) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (commonCategories.isNotEmpty)
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: commonCategories
+                                        .asMap()
+                                        .entries
+                                        .map(
+                                          (entry) => _buildCategoryCard(
+                                            context,
+                                            entry.value,
+                                            entry.key,
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ),
+                              if (commonCategories.isNotEmpty &&
+                                  specialCategories.isNotEmpty)
+                                const SizedBox(width: 16),
+                              if (specialCategories.isNotEmpty)
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: specialCategories
+                                        .asMap()
+                                        .entries
+                                        .map(
+                                          (entry) => _buildCategoryCard(
+                                            context,
+                                            entry.value,
+                                            entry.key,
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ),
+                            ],
+                          );
+                        }
+
+                        // Stacked layout for narrow screens
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ...commonCategories.asMap().entries.map(
+                              (entry) => _buildCategoryCard(
+                                context,
+                                entry.value,
+                                entry.key,
+                              ),
+                            ),
+                            ...specialCategories.asMap().entries.map(
+                              (entry) => _buildCategoryCard(
+                                context,
+                                entry.value,
+                                entry.key,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              // Categories Section laid out with Common on left and Special on right
-              if (commonCategories.isNotEmpty || specialCategories.isNotEmpty)
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Two-column layout for wider screens, stacked for narrow
-                    final isWide = constraints.maxWidth > 700;
-                    if (isWide) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (commonCategories.isNotEmpty)
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: commonCategories
-                                    .asMap()
-                                    .entries
-                                    .map(
-                                      (entry) => _buildCategoryCard(
-                                        context,
-                                        entry.value,
-                                        entry.key,
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                          if (commonCategories.isNotEmpty &&
-                              specialCategories.isNotEmpty)
-                            const SizedBox(width: 16),
-                          if (specialCategories.isNotEmpty)
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: specialCategories
-                                    .asMap()
-                                    .entries
-                                    .map(
-                                      (entry) => _buildCategoryCard(
-                                        context,
-                                        entry.value,
-                                        entry.key,
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                        ],
-                      );
-                    }
+              );
+            }
 
-                    // Fallback stacked layout for narrow screens
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ...commonCategories.asMap().entries.map(
-                          (entry) => _buildCategoryCard(
-                            context,
-                            entry.value,
-                            entry.key,
-                          ),
-                        ),
-                        ...specialCategories.asMap().entries.map(
-                          (entry) => _buildCategoryCard(
-                            context,
-                            entry.value,
-                            entry.key,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-            ],
-          ),
+            // Single-column layout for all screen sizes:
+            // Participant card on top, categories section below.
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  buildParticipantCard(),
+                  const SizedBox(height: 8),
+                  buildCategoriesSection(),
+                ],
+              ),
+            );
+          },
         ),
       );
     });
+  }
+
+  /// Small helper chip for participant info (age, gender, etc.)
+  Widget _buildInfoChip({required String label, required String value}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCategoryCard(
@@ -412,36 +473,53 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
     CategoryScoreModel category,
     int categoryIndex,
   ) {
+    // Slightly different accent color for special vs common
+    final bool isSpecial =
+        category.category.toLowerCase() ==
+        AppConstants.categorySpecial.toLowerCase();
+    final Color accentColor = isSpecial
+        ? AppTheme.secondaryColor
+        : AppTheme.primaryColor;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
+                // Category pill
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    color: accentColor.withOpacity(0.09),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    category.category,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryColor,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.category, size: 16, color: accentColor),
+                      const SizedBox(width: 6),
+                      Text(
+                        category.category,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: accentColor,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const Spacer(),
+                // Category total
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -450,12 +528,22 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      category.grandTotal.toStringAsFixed(1),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accentColor.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        category.grandTotal.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: accentColor,
+                        ),
                       ),
                     ),
                   ],
@@ -463,21 +551,26 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 16),
+            Divider(color: Colors.grey[200]),
+            const SizedBox(height: 8),
             Text(
               'Yoga Poses (Asanas)',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
+                color: Colors.grey[800],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             ...category.asanas.asMap().entries.map((entry) {
               final index = entry.key;
               final asana = entry.value;
-              return _buildAsanaCard(context, asana, index + 1);
+              return _buildAsanaCard(
+                context,
+                asana,
+                index + 1,
+                accentColor: accentColor,
+              );
             }),
           ],
         ),
@@ -485,6 +578,140 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildAsanaCard(
+    BuildContext context,
+    AsanaScoreModel asana,
+    int index, {
+    Color? accentColor,
+  }) {
+    final Color color = accentColor ?? AppTheme.primaryColor;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Asana chip
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.09),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    'Asana $index',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    asana.asanaName,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: color.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    'Subtotal: ${asana.subtotal.toStringAsFixed(1)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Jury Marks
+            Text(
+              'Jury Marks',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...asana.juryMarks.map((juryMark) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.gavel, size: 18, color: color),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        juryMark.juryName != null &&
+                                juryMark.juryName!.trim().isNotEmpty
+                            ? '${juryMark.juryName} (Jury ${juryMark.juryId})'
+                            : 'Jury ${juryMark.juryId}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      juryMark.score.toStringAsFixed(1),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Old implementation kept for reference (not used anymore)
+  /*
   Widget _buildAsanaCard(
     BuildContext context,
     AsanaScoreModel asana,
@@ -593,4 +820,5 @@ class ParticipantScoreDetailScreen extends StatelessWidget {
       ),
     );
   }
+  */
 }
