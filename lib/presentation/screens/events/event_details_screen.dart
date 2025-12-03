@@ -651,6 +651,78 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                           ),
                                         ],
                                       ),
+                                      // Category Status Map (if available)
+                                      if (participant.categoryStatusMap !=
+                                              null &&
+                                          participant
+                                              .categoryStatusMap!
+                                              .isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          children: participant
+                                              .categoryStatusMap!
+                                              .entries
+                                              .map((entry) {
+                                                final categoryName = entry.key;
+                                                final status = entry.value;
+                                                return Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        _getCategoryStatusColor(
+                                                          status,
+                                                        ).withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    border: Border.all(
+                                                      color:
+                                                          _getCategoryStatusColor(
+                                                            status,
+                                                          ).withOpacity(0.3),
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        '${categoryName.toUpperCase()}: ',
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color:
+                                                              Colors.grey[700],
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        status,
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color:
+                                                              _getCategoryStatusColor(
+                                                                status,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              })
+                                              .toList(),
+                                        ),
+                                      ],
                                       const SizedBox(height: 4),
                                       // Standard
                                       Row(
@@ -912,10 +984,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                           ),
                                         const SizedBox(width: 4),
                                       ],
-                                      // Certificate Download Button (for accepted participants)
+                                      // Certificate Download Button (show if any category is "Scored")
                                       if (participant.id != null &&
-                                          (currentStatus?.toLowerCase() ==
-                                              'scored')) ...[
+                                          participant.categoryStatusMap !=
+                                              null &&
+                                          participant
+                                              .categoryStatusMap!
+                                              .isNotEmpty &&
+                                          participant.categoryStatusMap!.values
+                                              .any(
+                                                (status) =>
+                                                    status.toLowerCase() ==
+                                                    'scored',
+                                              )) ...[
                                         IconButton(
                                           icon: Icon(
                                             Icons.download,
@@ -1024,6 +1105,20 @@ Color _getStatusColor(String status) {
       return Colors.orange;
     case 'scored':
       return Colors.blue;
+    default:
+      return Colors.grey;
+  }
+}
+
+Color _getCategoryStatusColor(String status) {
+  switch (status.toLowerCase()) {
+    case 'scored':
+      return Colors.blue;
+    case 'un assigned':
+    case 'unassigned':
+      return Colors.orange;
+    case 'assigned':
+      return Colors.purple;
     default:
       return Colors.grey;
   }

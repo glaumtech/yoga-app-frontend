@@ -18,6 +18,10 @@ class ParticipantModel {
   juryScores; // {'jury1': score, 'jury2': score, ...}
   final double? grandTotal;
   final String? status; // 'accepted', 'pending', 'rejected'
+  final String? group; // Group/Standard value
+  final Map<String, String>?
+  categoryStatusMap; // {'common': 'Un Assigned', 'special': 'Scored'}
+  final String? eventId; // Event ID
 
   ParticipantModel({
     this.id,
@@ -38,6 +42,9 @@ class ParticipantModel {
     this.juryScores,
     this.grandTotal,
     this.status,
+    this.group,
+    this.categoryStatusMap,
+    this.eventId,
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory ParticipantModel.fromJson(Map<String, dynamic> json) {
@@ -76,7 +83,8 @@ class ParticipantModel {
           (json['yogaMasterContact'] ?? json['yoga_master_contact'])
               ?.toString() ??
           '',
-      photoUrl: (json['photoUrl'] ?? json['photo_url'])?.toString(),
+      photoUrl: (json['photoUrl'] ?? json['photo_url'] ?? json['photo'])
+          ?.toString(),
       participantCode: (json['participantCode'] ?? json['participant_code'])
           ?.toString(),
       createdAt: json['createdAt'] != null
@@ -113,6 +121,16 @@ class ParticipantModel {
                 : double.tryParse(json['grandTotal'].toString()) ?? 0.0)
           : null,
       status: json['status']?.toString(),
+      group: json['group']?.toString(),
+      categoryStatusMap: json['categoryStatusMap'] != null
+          ? Map<String, String>.from(
+              (json['categoryStatusMap'] as Map).map(
+                (key, value) =>
+                    MapEntry(key.toString(), value?.toString() ?? ''),
+              ),
+            )
+          : null,
+      eventId: json['eventId']?.toString(),
     );
   }
 
@@ -136,6 +154,9 @@ class ParticipantModel {
       if (juryScores != null) 'juryScores': juryScores,
       if (grandTotal != null) 'grandTotal': grandTotal,
       if (status != null) 'status': status,
+      if (group != null) 'group': group,
+      if (categoryStatusMap != null) 'categoryStatusMap': categoryStatusMap,
+      if (eventId != null) 'eventId': eventId,
     };
   }
 
@@ -158,6 +179,9 @@ class ParticipantModel {
     Map<String, double>? juryScores,
     double? grandTotal,
     String? status,
+    String? group,
+    Map<String, String>? categoryStatusMap,
+    String? eventId,
   }) {
     return ParticipantModel(
       id: id ?? this.id,
@@ -178,6 +202,9 @@ class ParticipantModel {
       juryScores: juryScores ?? this.juryScores,
       grandTotal: grandTotal ?? this.grandTotal,
       status: status ?? this.status,
+      group: group ?? this.group,
+      categoryStatusMap: categoryStatusMap ?? this.categoryStatusMap,
+      eventId: eventId ?? this.eventId,
     );
   }
 
@@ -286,10 +313,10 @@ class ParticipantFilterData {
   });
 
   factory ParticipantFilterData.fromJson(Map<String, dynamic> json) {
-    // Handle different response formats
+    // Handle new response structure: data contains users, totalItems, totalPages, currentPage
     List<ParticipantModel> participantsList = [];
 
-    // Check for 'users' field
+    // Check for 'users' field (new structure)
     if (json['users'] != null && json['users'] is List) {
       participantsList = (json['users'] as List)
           .map(
@@ -297,7 +324,7 @@ class ParticipantFilterData {
           )
           .toList();
     }
-    // Check for 'data' field
+    // Check for 'data' field (if data is a list directly)
     else if (json['data'] != null && json['data'] is List) {
       participantsList = (json['data'] as List)
           .map(
@@ -305,7 +332,7 @@ class ParticipantFilterData {
           )
           .toList();
     }
-    // Check for 'participants' field
+    // Check for 'participants' field (legacy structure)
     else if (json['participants'] != null && json['participants'] is List) {
       participantsList = (json['participants'] as List)
           .map(
@@ -316,7 +343,7 @@ class ParticipantFilterData {
 
     return ParticipantFilterData(
       participants: participantsList,
-      currentPage: json['currentPage'] ?? json['page'] ?? 1,
+      currentPage: json['currentPage'] ?? json['page'] ?? 0,
       totalItems: json['totalItems'] ?? json['total'] ?? 0,
       totalPages: json['totalPages'] ?? 0,
     );
