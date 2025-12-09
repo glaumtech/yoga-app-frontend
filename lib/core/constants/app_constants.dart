@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../config/app_config.dart';
 
 class AppConstants {
   // App Info
@@ -38,50 +39,12 @@ class AppConstants {
 }
 
 class BaseUrl {
-  // API Configuration
-  // ============================================
-  // IMPORTANT: Configure your server URL here
-  // ============================================
-  //
-  // If your server is running on a different URL, you can:
-  // 1. Change the return values below to match your server
-  // 2. Or set a custom URL by uncommenting and modifying the line below:
-  // static const String customBaseUrl = 'http://YOUR_SERVER_IP:8083';
-  //
-  // Platform-aware base URL
   static String get baseUrl {
-    // Uncomment the line below to use a custom URL for all platforms:
-    // return customBaseUrl;
-
-    if (kIsWeb) {
-      // For web, use localhost or your server's IP address
-      // If running on web and server is on same machine: 'http://localhost:8083'
-      // If server is on different machine: 'http://YOUR_SERVER_IP:8083'
-      return 'http://localhost:8083';
-    } else if (Platform.isAndroid) {
-      // For Android emulator, use 10.0.2.2 to access host machine's localhost
-      // For physical Android device, use your machine's IP address
-      // Example for physical device: 'http://192.168.1.100:8083'
-      return 'http://10.0.2.2:8083';
-    } else if (Platform.isIOS) {
-      // For iOS simulator, use localhost
-      // For physical iOS device, use your machine's IP address
-      // Example for physical device: 'http://192.168.1.100:8083'
-      return 'http://localhost:8083';
-    } else {
-      // Default fallback
-      return 'http://localhost:8083';
-    }
+    // Get base URL from environment configuration
+    return AppConfig.baseUrl;
   }
 
   static const Duration apiTimeout = Duration(seconds: 30);
-
-  // Helper method to get base URL for physical devices
-  // Replace 'YOUR_MACHINE_IP' with your actual machine's IP address
-  // Example: 'http://192.168.1.100:8083'
-  static String getBaseUrlForPhysicalDevice(String machineIp) {
-    return 'http://$machineIp:8083';
-  }
 }
 
 class EndPoints {
