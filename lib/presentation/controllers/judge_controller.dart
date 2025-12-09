@@ -35,11 +35,11 @@ class JudgeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // Clear any existing data before loading
+    // Clear any existing data
     judges.clear();
     searchQuery.value = '';
     errorMessage.value = '';
-    loadJudges();
+    // Don't load judges automatically - only load when needed
   }
 
   @override

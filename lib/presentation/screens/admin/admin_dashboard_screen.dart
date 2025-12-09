@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
-import '../../controllers/admin_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/event_controller.dart';
 import '../../widgets/section_header.dart';
@@ -13,8 +12,8 @@ class AdminDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final adminController = Get.find<AdminController>();
     final authController = Get.find<AuthController>();
+    final eventController = Get.find<EventController>();
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
@@ -82,7 +81,7 @@ class AdminDashboardScreen extends StatelessWidget {
                     ),
                     IconButton(
                       icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
-                      onPressed: () => adminController.refreshDashboard(),
+                      onPressed: () => eventController.loadEvents(),
                       tooltip: 'Refresh',
                     ),
                     IconButton(
@@ -99,12 +98,12 @@ class AdminDashboardScreen extends StatelessWidget {
               // Body Section
               Expanded(
                 child: Obx(() {
-                  if (adminController.isLoading.value) {
+                  if (eventController.isLoading.value) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
                   return RefreshIndicator(
-                    onRefresh: () => adminController.refreshDashboard(),
+                    onRefresh: () => eventController.loadEvents(),
                     child: SingleChildScrollView(
                       padding: EdgeInsets.all(isMobile ? 16 : 24),
                       child: Column(
@@ -113,59 +112,46 @@ class AdminDashboardScreen extends StatelessWidget {
                           // Overview Cards
                           SectionHeader(title: 'Overview', showDivider: false),
                           const SizedBox(height: 16),
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final crossAxisCount = isMobile
-                                  ? 1
-                                  : isTablet
-                                  ? 2
-                                  : 4;
-                              final padding = isMobile ? 8.0 : 12.0;
+                          Obx(() {
+                            // Calculate counts directly from EventController
+                            final eventsList = eventController.events;
+                            final totalEventsCount = eventsList.length;
+                            final activeEventsCount = eventsList
+                                .where((e) => e.active)
+                                .length;
 
-                              return GridView.count(
-                                crossAxisCount: crossAxisCount,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                crossAxisSpacing: padding,
-                                mainAxisSpacing: padding,
-                                childAspectRatio: isMobile ? 2.0 : 1.3,
-                                children: [
-                                  _buildStatCard(
-                                    context,
-                                    'Total Events',
-                                    adminController.totalEvents.value
-                                        .toString(),
-                                    Icons.event,
-                                    AppTheme.primaryColor,
-                                  ),
-                                  _buildStatCard(
-                                    context,
-                                    'Active Events',
-                                    adminController.activeEvents.value
-                                        .toString(),
-                                    Icons.event_available,
-                                    AppTheme.secondaryColor,
-                                  ),
-                                  _buildStatCard(
-                                    context,
-                                    'Total Registrations',
-                                    adminController.totalRegistrations.value
-                                        .toString(),
-                                    Icons.people,
-                                    Colors.blue,
-                                  ),
-                                  _buildStatCard(
-                                    context,
-                                    'Pending',
-                                    adminController.pendingRegistrations.value
-                                        .toString(),
-                                    Icons.pending,
-                                    Colors.orange,
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
+                            final crossAxisCount = isMobile
+                                ? 1
+                                : isTablet
+                                ? 2
+                                : 4;
+                            final padding = isMobile ? 8.0 : 12.0;
+
+                            return GridView.count(
+                              crossAxisCount: crossAxisCount,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              crossAxisSpacing: padding,
+                              mainAxisSpacing: padding,
+                              childAspectRatio: isMobile ? 2.0 : 1.3,
+                              children: [
+                                _buildStatCard(
+                                  context,
+                                  'Total Events',
+                                  totalEventsCount.toString(),
+                                  Icons.event,
+                                  AppTheme.primaryColor,
+                                ),
+                                _buildStatCard(
+                                  context,
+                                  'Active Events',
+                                  activeEventsCount.toString(),
+                                  Icons.event_available,
+                                  AppTheme.secondaryColor,
+                                ),
+                              ],
+                            );
+                          }),
                           const SizedBox(height: 24),
 
                           // Quick Actions

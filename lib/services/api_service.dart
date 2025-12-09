@@ -111,14 +111,7 @@ class APIService {
       final baseUrl = BaseUrl.baseUrl;
       return ApiResponse<T>(
         success: false,
-        message:
-            'Failed to connect to server at $baseUrl.\n\n'
-            'Please check:\n'
-            '• Server is running on port 8083\n'
-            '• Network connection is active\n'
-            '• For web/iOS: Use localhost or your machine IP\n'
-            '• For Android emulator: 10.0.2.2 should work\n'
-            '• For physical devices: Use your machine\'s IP address',
+        message: 'Failed to connect to server',
         statusCode: 0,
       );
     } catch (e) {

@@ -66,10 +66,7 @@ class ScoringController extends GetxController {
     }
 
     // Participants are now loaded by event ID only
-    // Load judges if not already loaded
-    if (_judgeController.judges.isEmpty) {
-      _judgeController.loadJudges();
-    }
+    // Don't load judges automatically - only load when needed
 
     // Load current judge if user is a judge
     if (isJudge) {

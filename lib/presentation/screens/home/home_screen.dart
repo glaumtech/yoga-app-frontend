@@ -22,13 +22,12 @@ class HomeScreen extends StatelessWidget {
       final authController = Get.find<AuthController>();
       final eventController = Get.find<EventController>();
 
-      // Reload events if list is empty (e.g., after logout/login)
+      // Events are already loaded by EventController.onInit()
+      // Only reload if explicitly needed (e.g., after logout/login)
+      // The check is handled by the controller's loadEvents method
       if (eventController.events.isEmpty && !eventController.isLoading.value) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          eventController.loadEvents();
-        });
+        eventController.loadEvents();
       }
-
       return Scaffold(
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(70),

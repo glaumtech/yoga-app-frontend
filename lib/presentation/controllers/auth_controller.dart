@@ -6,7 +6,6 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/models/user_model.dart';
 import '../../core/constants/app_constants.dart';
 import '../../routes/app_routes.dart';
-import 'admin_controller.dart';
 import 'participant_controller.dart';
 import 'event_controller.dart';
 import 'judge_controller.dart';
@@ -63,21 +62,23 @@ class AuthController extends GetxController {
   }
 
   Future<void> checkAuthStatus() async {
-    final user = await _authRepository.getCurrentUser();
-    if (user != null) {
-      currentUser.value = user;
+    try {
+      print('Checking auth status...');
+      final token = StorageService.getString(AppConstants.tokenKey);
+      print('Token from storage: ${token != null ? "exists" : "null"}');
 
-      // Reload events if user is authenticated
-      try {
-        if (Get.isRegistered<EventController>()) {
-          final eventController = Get.find<EventController>();
-          if (eventController.events.isEmpty) {
-            eventController.loadEvents();
-          }
-        }
-      } catch (e) {
-        // EventController might not be registered, ignore
+      final user = await _authRepository.getCurrentUser();
+      if (user != null) {
+        print('User found in storage: ${user.username}');
+        currentUser.value = user;
+
+        // Events are already loaded by EventController.onInit()
+        // No need to reload here to avoid duplicate calls
+      } else {
+        print('No user found in storage');
       }
+    } catch (e) {
+      print('Error checking auth status: $e');
     }
   }
 
@@ -318,14 +319,7 @@ class AuthController extends GetxController {
     errorMessage.value = '';
 
     // Reset all controllers to clear app data
-    try {
-      // Reset Admin Controller
-      if (Get.isRegistered<AdminController>()) {
-        Get.find<AdminController>().reset();
-      }
-    } catch (e) {
-      // Controller might not be registered, ignore
-    }
+    // AdminController removed - no longer needed
 
     try {
       // Reset Participant Controller

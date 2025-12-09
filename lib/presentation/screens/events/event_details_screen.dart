@@ -52,12 +52,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         _loadParticipants(resetPage: true);
         _hasLoadedParticipants = true;
       }
-      // Load teams for this event
+      // Load teams for this event (admin only)
       _loadTeams();
     });
   }
 
   void _loadTeams() {
+    // Only load teams if user is admin
+    final authController = Get.find<AuthController>();
+    if (!authController.isAdmin) {
+      return;
+    }
+
     // Ensure TeamController is available
     if (!Get.isRegistered<TeamController>()) {
       Get.put(TeamController(), permanent: true);

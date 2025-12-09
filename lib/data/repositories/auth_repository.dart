@@ -119,10 +119,24 @@ class AuthRepository {
   }
 
   Future<void> _saveAuthData(UserModel user, String? token) async {
-    if (token != null) {
-      await StorageService.setString(AppConstants.tokenKey, token);
+    try {
+      if (token != null && token.isNotEmpty) {
+        await StorageService.setString(AppConstants.tokenKey, token);
+        print('Token saved successfully');
+      }
+      await StorageService.setObject(AppConstants.userKey, user.toJson());
+      print('User data saved successfully');
+      await StorageService.setString(AppConstants.roleKey, user.roleName);
+      print('Role saved successfully: ${user.roleName}');
+
+      // Verify data was saved
+      final savedToken = StorageService.getString(AppConstants.tokenKey);
+      final savedUser = StorageService.getObject(AppConstants.userKey);
+      print('Verification - Token exists: ${savedToken != null}');
+      print('Verification - User exists: ${savedUser != null}');
+    } catch (e) {
+      print('Error saving auth data: $e');
+      rethrow;
     }
-    await StorageService.setObject(AppConstants.userKey, user.toJson());
-    await StorageService.setString(AppConstants.roleKey, user.roleName);
   }
 }
