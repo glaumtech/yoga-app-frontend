@@ -478,7 +478,7 @@ class APIService {
 
 class ImageStreamingService {
   String getEventBannerUrl(int eventId) {
-    return '${BaseUrl.baseUrl}/api/event/image/$eventId';
+    return '${BaseUrl.baseUrl}/event/image/$eventId';
   }
 
   Map<String, String> getHeaders() {

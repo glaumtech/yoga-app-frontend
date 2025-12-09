@@ -86,67 +86,65 @@ class BaseUrl {
 
 class EndPoints {
   /// AUTHENTICATION
-  static String register = '/api/auth/register';
-  static String logIn = '/api/auth/login';
-  static String logOut = '/api/auth/logout';
-  static String changePassword = '/api/auth/changePassword';
-  static String updateProfile = '/api/users/profile';
+  static String register = '/auth/register';
+  static String logIn = '/auth/login';
+  static String logOut = '/auth/logout';
+  static String changePassword = '/auth/changePassword';
+  static String updateProfile = '/users/profile';
 
   /// PARTICIPANTS
-  static String participantRegistration = '/api/participants/register';
+  static String participantRegistration = '/participants/register';
   static String participantsFilterByEventId(String eventId) =>
-      '/api/participants/$eventId/eventbased';
+      '/participants/$eventId/eventbased';
   static String participantRegistrationEventId(String eventId) =>
-      '/api/participants/$eventId/register';
-  static String participantDetailById(String id) =>
-      '/api/participants/getById/$id';
-  static String participantUpdate(String id) => '/api/participants/update/$id';
-  static String participantById(String id) => '/api/participants/$id';
-  static String participantScores(String id) => '/api/participants/$id/scores';
+      '/participants/$eventId/register';
+  static String participantDetailById(String id) => '/participants/getById/$id';
+  static String participantUpdate(String id) => '/participants/update/$id';
+  static String participantById(String id) => '/participants/$id';
+  static String participantScores(String id) => '/participants/$id/scores';
   static String participantStatusVerify(String id, String status) =>
-      '/api/participants/status_verify/$id/$status';
+      '/participants/status_verify/$id/$status';
 
-  static String participantImage(String id) => '/api/participants/image/$id';
+  static String participantImage(String id) => '/participants/image/$id';
   static String participantCertificate(String id) =>
-      '/api/participants/$id/certificate';
+      '/participants/$id/certificate';
 
   /// EVENTS
-  static String eventRegister = '/api/event/register';
-  static String eventList = '/api/event/list';
-  static String eventUpdate(String id) => '/api/event/update/$id';
-  static String eventById(String id) => '/api/event/$id';
-  static String eventImage(String id) => '/api/event/image/$id';
+  static String eventRegister = '/event/register';
+  static String eventList = '/event/list';
+  static String eventUpdate(String id) => '/event/update/$id';
+  static String eventById(String id) => '/event/$id';
+  static String eventImage(String id) => '/event/image/$id';
 
   /// JUDGES
-  static String judgeList = '/api/judge/list';
-  static String judgeRegister = '/api/judge/register';
-  static String judgeUpdate(String id) => '/api/judge/update/$id';
-  static String judgeById(String id) => '/api/judge/$id';
-  static String judgeByUserId(String userId) => '/api/judge/judge-id/$userId';
+  static String judgeList = '/judge/list';
+  static String judgeRegister = '/judge/register';
+  static String judgeUpdate(String id) => '/judge/update/$id';
+  static String judgeById(String id) => '/judge/$id';
+  static String judgeByUserId(String userId) => '/judge/judge-id/$userId';
 
   /// TEAMS
-  static String teamList = '/api/team/all';
-  static String teamCreate = '/api/team/register';
-  static String teamUpdate(String id) => '/api/team/update/$id';
-  static String teamById(String id) => '/api/team/$id';
-  static String teamDelete(String id) => '/api/team/delete/$id';
-  static String teamByEventId(String eventId) => '/api/team/$eventId/all';
+  static String teamList = '/team/all';
+  static String teamCreate = '/team/register';
+  static String teamUpdate(String id) => '/team/update/$id';
+  static String teamById(String id) => '/team/$id';
+  static String teamDelete(String id) => '/team/delete/$id';
+  static String teamByEventId(String eventId) => '/team/$eventId/all';
 
   /// PARTICIPANT ASSIGNMENTS
-  static String assignParticipants = '/api/assign-participants/assign';
+  static String assignParticipants = '/assign-participants/assign';
   static String assignedParticipants(String eventId) =>
-      '/api/assign-participants/$eventId/assignments';
+      '/assign-participants/$eventId/assignments';
   static String assignedParticipantsByJudgeId(String eventId, String judgeId) =>
-      '/api/assign-participants/event/$eventId?juryId=$judgeId';
+      '/assign-participants/event/$eventId?juryId=$judgeId';
 
   /// SCORING
-  static String scoringSave = '/api/scoring/save';
-  static String scoringByEventId(String eventId) =>
-      '/api/scoring/event/$eventId';
+  static String scoringSave = '/scoring/save';
+  static String scoringByEventId(String eventId) => '/scoring/event/$eventId';
   static String participantScoresByEventId(String eventId) =>
-      '/api/scoring/event/$eventId';
+      '/scoring/event/$eventId';
   static String participantScoresByParticipantId(
     String eventId,
     String participantId,
-  ) => '/api/scoring/event/$eventId/participant/$participantId';
+  ) => '/scoring/event/$eventId/participant/$participantId';
 }
