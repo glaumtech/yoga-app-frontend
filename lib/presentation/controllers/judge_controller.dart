@@ -56,6 +56,7 @@ class JudgeController extends GetxController {
 
   /// Initialize form for editing a judge
   void initializeFormForEdit(JudgeModel judge) {
+    print('initializeFormForEdit: $judge');
     judgeToEdit.value = judge;
     nameController.text = judge.name;
     addressController.text = judge.address;
@@ -91,6 +92,15 @@ class JudgeController extends GetxController {
     if (usernameController.text.trim().isEmpty) {
       return 'Username is required';
     }
+    // Email is mandatory
+    if (emailController.text.trim().isEmpty) {
+      return 'Email is required';
+    }
+    // Validate email format
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(emailController.text.trim())) {
+      return 'Please enter a valid email address';
+    }
     // Address is optional - no validation needed
 
     // Validate password for new judges
@@ -120,9 +130,7 @@ class JudgeController extends GetxController {
       address: addressController.text.trim(),
       designation: designationController.text.trim(),
       username: usernameController.text.trim(),
-      email: emailController.text.trim().isNotEmpty
-          ? emailController.text.trim()
-          : null,
+      email: emailController.text.trim(),
       password: passwordController.text.isNotEmpty
           ? passwordController.text
           : null,
@@ -194,7 +202,8 @@ class JudgeController extends GetxController {
       final response = await _judgeRepository.getJudgeById(id);
 
       if (response.success && response.data != null) {
-        selectedJudge.value = response.data!;
+        // selectedJudge.value = response.data!;
+        initializeFormForEdit(response.data!);
       } else {
         errorMessage.value = response.message ?? 'Failed to load judge';
         Get.snackbar('Error', errorMessage.value);

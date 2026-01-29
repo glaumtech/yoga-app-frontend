@@ -6,7 +6,7 @@ import '../../../data/models/judge_model.dart';
 import '../../controllers/judge_controller.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
-import '../../widgets/app_dialog.dart';
+// import '../../widgets/app_dialog.dart'; // Commented out - delete option hidden for now
 
 class JudgeManagementScreen extends StatelessWidget {
   const JudgeManagementScreen({super.key});
@@ -324,23 +324,24 @@ class JudgeManagementScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        PopupMenuItem(
-                          child: const Row(
-                            children: [
-                              Icon(Icons.delete, size: 20, color: Colors.red),
-                              SizedBox(width: 12),
-                              Text(
-                                'Delete',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ],
-                          ),
-                          onTap: () => Future.delayed(
-                            const Duration(milliseconds: 100),
-                            () =>
-                                _confirmDelete(context, controller, judge.id!),
-                          ),
-                        ),
+                        // Delete option hidden for now
+                        // PopupMenuItem(
+                        //   child: const Row(
+                        //     children: [
+                        //       Icon(Icons.delete, size: 20, color: Colors.red),
+                        //       SizedBox(width: 12),
+                        //       Text(
+                        //         'Delete',
+                        //         style: TextStyle(color: Colors.red),
+                        //       ),
+                        //     ],
+                        //   ),
+                        //   onTap: () => Future.delayed(
+                        //     const Duration(milliseconds: 100),
+                        //     () =>
+                        //         _confirmDelete(context, controller, judge.id!),
+                        //   ),
+                        // ),
                       ],
                     ),
                   ],
@@ -582,7 +583,7 @@ class JudgeManagementScreen extends StatelessWidget {
                         controller: controller.emailController,
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
-                          labelText: 'Email',
+                          labelText: 'Email *',
                           prefixIcon: const Icon(Icons.email),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -740,22 +741,23 @@ class JudgeManagementScreen extends StatelessWidget {
     );
   }
 
-  void _confirmDelete(
-    BuildContext context,
-    JudgeController controller,
-    String judgeId,
-  ) {
-    AppDialog.show(
-      context,
-      title: 'Delete Judge',
-      message: 'Are you sure you want to delete this judge?',
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-      isDestructive: true,
-      onConfirm: () {
-        controller.deleteJudge(judgeId);
-        Navigator.pop(context);
-      },
-    );
-  }
+  // Delete confirmation method - hidden for now
+  // void _confirmDelete(
+  //   BuildContext context,
+  //   JudgeController controller,
+  //   String judgeId,
+  // ) {
+  //   AppDialog.show(
+  //     context,
+  //     title: 'Delete Judge',
+  //     message: 'Are you sure you want to delete this judge?',
+  //     confirmText: 'Delete',
+  //     cancelText: 'Cancel',
+  //     isDestructive: true,
+  //     onConfirm: () {
+  //       controller.deleteJudge(judgeId);
+  //       Navigator.pop(context);
+  //     },
+  //   );
+  // }
 }
