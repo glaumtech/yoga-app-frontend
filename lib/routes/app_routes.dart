@@ -29,7 +29,17 @@ class AppRoutes {
   static const String participantScoresList = '/admin/scores/:eventId';
   static const String participantScoreDetail =
       '/admin/scores/:eventId/:participantId';
+  static const String schoolsList = '/admin/schools';
+  static const String reports = '/admin/reports';
+  static const String sponsors = '/admin/sponsors';
+  static const String userManagement = '/admin/users';
+  static const String usersList = '/admin/users/list';
+  static const String createCompetition = '/admin/competitions/create';
+  static const String participantManagement = '/admin/participants';
 
   // Judge
   static const String assignedParticipants = '/assigned-participants/:eventId';
+
+  // Scoring
+  static const String juryScoring = '/jury/scoring';
 }

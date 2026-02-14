@@ -21,7 +21,15 @@ import '../presentation/screens/admin/schedule_management_screen.dart';
 import '../presentation/screens/admin/admin_scoring_screen.dart';
 import '../presentation/screens/admin/participant_scores_list_screen.dart';
 import '../presentation/screens/admin/participant_score_detail_screen.dart';
+import '../presentation/screens/schools/schools_screen.dart';
+import '../presentation/screens/admin/reports_screen.dart';
+import '../presentation/screens/sponsors/sponsors_screen.dart';
+import '../presentation/screens/users/user_management_screen.dart';
+import '../presentation/screens/users/users_list_screen.dart';
+import '../presentation/screens/competitions/create_competition_screen.dart';
+import '../presentation/screens/participants/participant_management_screen.dart';
 import '../presentation/screens/judge/judge_assigned_participants_screen.dart';
+import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/storage_service.dart';
 import '../presentation/controllers/auth_controller.dart';
@@ -87,6 +95,11 @@ class AppRouter {
                 'JUDGE',
               ) ??
               false;
+          final isJury =
+              authController.currentUser.value?.roleName.toUpperCase().contains(
+                'JURY',
+              ) ??
+              false;
 
           // Admin-only routes (not accessible to judges)
           final adminOnlyRoutes = [
@@ -109,6 +122,9 @@ class AppRouter {
             AppRoutes.participantList,
           ];
 
+          // Routes accessible to admin, judges, and juries
+          final adminJudgeJuryRoutes = [AppRoutes.juryScoring];
+
           // Judge-only routes (check path patterns)
           final isJudgeOnlyRoute = location.startsWith(
             '/assigned-participants/',
@@ -124,6 +140,10 @@ class AppRouter {
             (route) => location == route || location.startsWith(route),
           );
 
+          final isAdminJudgeJuryRoute = adminJudgeJuryRoutes.any(
+            (route) => location == route || location.startsWith(route),
+          );
+
           // If trying to access admin-only route but not admin
           if (isAdminOnlyRoute && !isAdmin) {
             return AppRoutes.home;
@@ -131,6 +151,11 @@ class AppRouter {
 
           // If trying to access admin/judge route, allow if admin or judge
           if (isAdminOrJudgeRoute && !isAdmin && !isJudge) {
+            return AppRoutes.home;
+          }
+
+          // If trying to access admin/judge/jury route, allow if admin, judge, or jury
+          if (isAdminJudgeJuryRoute && !isAdmin && !isJudge && !isJury) {
             return AppRoutes.home;
           }
 
@@ -255,6 +280,26 @@ class AppRouter {
         builder: (context, state) => const JudgeManagementScreen(),
       ),
       GoRoute(
+        path: AppRoutes.userManagement,
+        name: 'user-management',
+        builder: (context, state) => const UserManagementScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.usersList,
+        name: 'users-list',
+        builder: (context, state) => const UsersListScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.createCompetition,
+        name: 'create-competition',
+        builder: (context, state) => const CreateCompetitionScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.participantManagement,
+        name: 'participant-management',
+        builder: (context, state) => const ParticipantManagementScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.participantList,
         name: 'participant-list',
         builder: (context, state) => const ParticipantListScreen(),
@@ -295,6 +340,21 @@ class AppRouter {
           );
         },
       ),
+      GoRoute(
+        path: AppRoutes.schoolsList,
+        name: 'schools-list',
+        builder: (context, state) => const SchoolsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.reports,
+        name: 'reports',
+        builder: (context, state) => const ReportsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sponsors,
+        name: 'sponsors',
+        builder: (context, state) => const SponsorsScreen(),
+      ),
 
       // Judge
       GoRoute(
@@ -308,6 +368,13 @@ class AppRouter {
           }
           return JudgeAssignedParticipantsScreen(eventId: eventId);
         },
+      ),
+
+      // Scoring
+      GoRoute(
+        path: AppRoutes.juryScoring,
+        name: 'jury-scoring',
+        builder: (context, state) => const JuryScoringScreen(),
       ),
     ],
   );

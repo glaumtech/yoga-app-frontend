@@ -147,11 +147,11 @@ class RegistrationFormScreen extends StatelessWidget {
                                       }
 
                                       return Obx(() {
-                                        final imageBytes = snapshot.data;
+                                      final imageBytes = snapshot.data;
                                         final hasNewImage =
-                                            imageBytes != null ||
-                                            (controller.selectedImage.value !=
-                                                null);
+                                          imageBytes != null ||
+                                          (controller.selectedImage.value !=
+                                              null);
 
                                         // Check for existing photo from API - reactive to existingPhotoUrl changes
                                         final hasExistingPhoto =
@@ -161,27 +161,27 @@ class RegistrationFormScreen extends StatelessWidget {
                                                 .value
                                                 .isNotEmpty;
 
-                                        return Container(
-                                          width: isMobile ? 150 : 180,
-                                          height: isMobile ? 180 : 220,
-                                          decoration: BoxDecoration(
-                                            border: Border.all(
-                                              color: Colors.grey,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
+                                      return Container(
+                                        width: isMobile ? 150 : 180,
+                                        height: isMobile ? 180 : 220,
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: Colors.grey,
                                           ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
                                           child:
                                               hasNewImage && imageBytes != null
-                                              ? ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  child: Image.memory(
-                                                    imageBytes,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                )
+                                            ? ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: Image.memory(
+                                                  imageBytes,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              )
                                               : hasExistingPhoto
                                               ? ClipRRect(
                                                   borderRadius:
@@ -235,11 +235,11 @@ class RegistrationFormScreen extends StatelessWidget {
                                                         },
                                                   ),
                                                 )
-                                              : const Icon(
-                                                  Icons.add_photo_alternate,
-                                                  size: 64,
-                                                ),
-                                        );
+                                            : const Icon(
+                                                Icons.add_photo_alternate,
+                                                size: 64,
+                                              ),
+                                      );
                                       });
                                     },
                                   ),
@@ -344,9 +344,9 @@ class RegistrationFormScreen extends StatelessWidget {
                                     labelText: 'Age',
                                   ),
                                   child: Text(
-                                    app_date_utils.AppDateUtils.calculateAge(
-                                      controller.dateOfBirth.value!,
-                                    ).toString(),
+                                      app_date_utils.AppDateUtils.calculateAge(
+                                        controller.dateOfBirth.value!,
+                                      ).toString(),
                                     style: const TextStyle(fontSize: 16),
                                   ),
                                 ),
@@ -605,8 +605,8 @@ class RegistrationFormScreen extends StatelessWidget {
                               validator: (value) {
                                 // Only validate format if a value is provided
                                 if (value != null && value.trim().isNotEmpty) {
-                                  if (!GetUtils.isPhoneNumber(value)) {
-                                    return 'Please enter a valid phone number';
+                                if (!GetUtils.isPhoneNumber(value)) {
+                                  return 'Please enter a valid phone number';
                                   }
                                 }
                                 return null;
@@ -645,8 +645,8 @@ class RegistrationFormScreen extends StatelessWidget {
                                   // Only validate format if a value is provided
                                   if (value != null &&
                                       value.trim().isNotEmpty) {
-                                    if (!GetUtils.isPhoneNumber(value)) {
-                                      return 'Please enter a valid phone number';
+                                  if (!GetUtils.isPhoneNumber(value)) {
+                                    return 'Please enter a valid phone number';
                                     }
                                   }
                                   return null;
@@ -802,29 +802,29 @@ class RegistrationFormScreen extends StatelessWidget {
                                 }
                               } else {
                                 // Create new participant
-                                final success = await controller
+                              final success = await controller
                                     .submitRegistrationForm(eventId: eventId);
-                                if (success && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Registration submitted successfully!',
-                                      ),
-                                      backgroundColor: Colors.green,
+                              if (success && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Registration submitted successfully!',
                                     ),
-                                  );
-                                  context.pop();
-                                } else if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                context.pop();
+                              } else if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
                                         controller.errorMessage.value.isNotEmpty
                                             ? controller.errorMessage.value
                                             : 'Failed to submit registration',
-                                      ),
-                                      backgroundColor: Colors.red,
                                     ),
-                                  );
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
                                 }
                               }
                             },

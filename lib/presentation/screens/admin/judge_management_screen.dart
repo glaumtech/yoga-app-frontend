@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/judge_model.dart';
 import '../../controllers/judge_controller.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/admin_sidebar_layout.dart';
 // import '../../widgets/app_dialog.dart'; // Commented out - delete option hidden for now
 
 class JudgeManagementScreen extends StatelessWidget {
@@ -22,8 +22,9 @@ class JudgeManagementScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    return Scaffold(
-      body: Container(
+    return AdminSidebarLayout(
+      title: 'Judge Management',
+      child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -57,30 +58,12 @@ class JudgeManagementScreen extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    // Back Button
-                    IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: AppTheme.primaryColor,
-                      ),
-                      onPressed: () => context.pop(),
-                      tooltip: 'Back',
-                    ),
-                    const SizedBox(width: 8),
                     Icon(Icons.gavel, color: AppTheme.primaryColor, size: 28),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Judge Management',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primaryColor,
-                                ),
-                          ),
                           Obx(
                             () => Text(
                               '${judgeController.judges.length} Judges',

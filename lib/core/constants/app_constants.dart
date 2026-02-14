@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../config/app_config.dart';
 
 class AppConstants {
@@ -110,4 +108,28 @@ class EndPoints {
     String eventId,
     String participantId,
   ) => '/scoring/event/$eventId/participant/$participantId';
+
+  /// USER MANAGEMENT
+  static String userList = '/users/list';
+  static String userCreate = '/users/create';
+  static String userCreateVolunteers = '/users/create-volunteers';
+  static String userUpdate(String id) => '/users/update/$id';
+  static String userById(String id) => '/users/$id';
+
+  /// COMPETITIONS
+  static String competitionCreate = '/competition';
+  static String competitionList = '/competition/list';
+  static String competitionUpdate(String id) => '/competition/$id';
+  static String competitionById(String id) => '/competition/$id';
+  static String competitionBrochure(String id) => '/competition/$id/brochure';
+
+  /// COMPETITION OPTIONS
+  static String categoryList = '/category';
+  static String categoryCreate = '/category';
+  static String prizeList = '/prize';
+  static String prizeCreate = '/prize';
+  static String stageList = '/stage';
+  static String stageCreate = '/stage';
+  static String groupList = '/group';
+  static String groupCreate = '/group';
 }

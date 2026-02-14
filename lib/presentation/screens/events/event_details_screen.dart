@@ -95,22 +95,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             final screenWidth = constraints.maxWidth;
             final isMobile = screenWidth < 600;
 
-            return SingleChildScrollView(
+        return SingleChildScrollView(
               child: isMobile
                   ? // Mobile: Stack vertically
                     Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Event Banner
-                          if (event.id != null)
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Event Banner
+              if (event.id != null)
                             ClipRRect(
                               borderRadius: BorderRadius.circular(16),
                               child: EventBannerImage(
-                                event: event,
-                                height: 200,
-                                fit: BoxFit.cover,
+                  event: event,
+                  height: 200,
+                  fit: BoxFit.cover,
                                 borderRadius: BorderRadius.zero,
                               ),
                             ),
@@ -158,7 +158,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 // Event Banner
                                 if (event.id != null)
                                   ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(16),
                                     child: EventBannerImage(
                                       event: event,
                                       height: 300,
@@ -183,7 +183,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                   if (authController.isAdmin) {
                                     return Column(
                                       children: [
-                                        const SizedBox(height: 24),
+              const SizedBox(height: 24),
                                         _buildTeamsSection(
                                           context,
                                           widget.eventId,
@@ -262,16 +262,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
+              Text(
                                     'Registered Participants',
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleLarge
                                         ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.primaryColor,
-                                        ),
-                                  ),
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
                                   const SizedBox(height: 4),
                                   Text(
                                     controller.totalItems.value > 0
@@ -663,7 +663,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                           participant
                                               .categoryStatusMap!
                                               .isNotEmpty) ...[
-                                        const SizedBox(height: 8),
+              const SizedBox(height: 8),
                                         Wrap(
                                           spacing: 6,
                                           runSpacing: 4,
@@ -810,12 +810,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                     children: [
                                       // Status Badge
                                       if (participant.status != null)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
+                Container(
+                  padding: const EdgeInsets.symmetric(
                                             horizontal: 10,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
                                             color: _getStatusColor(
                                               participant.status!,
                                             ),
@@ -831,17 +831,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                                 offset: const Offset(0, 2),
                                               ),
                                             ],
-                                          ),
-                                          child: Text(
+                  ),
+                  child: Text(
                                             participant.status!.toUpperCase(),
                                             style: const TextStyle(
-                                              color: Colors.white,
+                      color: Colors.white,
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
                                               letterSpacing: 0.5,
-                                            ),
-                                          ),
-                                        ),
+                    ),
+                  ),
+                ),
                                       const SizedBox(width: 8),
                                       // Accept/Reject Buttons (Admin Only)
                                       if (isAdmin &&
@@ -1178,7 +1178,7 @@ void _showEditTeamDialog(BuildContext context, String teamId, String eventId) {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
+              Text(
                         'Edit Team',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
@@ -1193,8 +1193,8 @@ void _showEditTeamDialog(BuildContext context, String teamId, String eventId) {
                         },
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 24),
+              ),
+              const SizedBox(height: 24),
                   // Team Name Field
                   TextFormField(
                     controller: teamNameController,
@@ -1480,7 +1480,7 @@ void _showCreateTeamDialog(BuildContext context, String eventId) {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 8),
+              const SizedBox(height: 8),
                   Container(
                     constraints: const BoxConstraints(maxHeight: 200),
                     decoration: BoxDecoration(
@@ -2016,7 +2016,7 @@ Widget _buildDateVenueCard(BuildContext context, event) {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  Icons.calendar_today,
+                Icons.calendar_today,
                   color: AppTheme.primaryColor,
                   size: 28,
                 ),
@@ -2036,17 +2036,17 @@ Widget _buildDateVenueCard(BuildContext context, event) {
           _buildInfoItem(
             context,
             Icons.event,
-            'Start Date',
+                'Start Date',
             DateFormat('EEEE, MMMM dd, yyyy').format(event.startDate),
-          ),
+              ),
           const SizedBox(height: 16),
           _buildInfoItem(
-            context,
+                context,
             Icons.event_busy,
-            'End Date',
+                'End Date',
             DateFormat('EEEE, MMMM dd, yyyy').format(event.endDate),
-          ),
-          const SizedBox(height: 24),
+              ),
+              const SizedBox(height: 24),
           Container(
             height: 1,
             decoration: BoxDecoration(
@@ -2095,7 +2095,7 @@ Widget _buildDateVenueCard(BuildContext context, event) {
               fontSize: 15,
             ),
           ),
-          const SizedBox(height: 24),
+              const SizedBox(height: 24),
           Container(
             height: 1,
             decoration: BoxDecoration(
@@ -2165,7 +2165,7 @@ Widget _buildCategoriesCard(BuildContext context, event) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (event.categories.isNotEmpty) ...[
+              if (event.categories.isNotEmpty) ...[
             Row(
               children: [
                 Container(
@@ -2192,10 +2192,10 @@ Widget _buildCategoriesCard(BuildContext context, event) {
               ],
             ),
             const SizedBox(height: 20),
-            Wrap(
+                Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: event.categories.map((category) {
+                  children: event.categories.map((category) {
                 return Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -2222,12 +2222,12 @@ Widget _buildCategoriesCard(BuildContext context, event) {
                       fontSize: 14,
                     ),
                   ),
-                );
-              }).toList(),
-            ),
+                    );
+                  }).toList(),
+                ),
             if (event.ageGroups.isNotEmpty) const SizedBox(height: 28),
-          ],
-          if (event.ageGroups.isNotEmpty) ...[
+              ],
+              if (event.ageGroups.isNotEmpty) ...[
             Row(
               children: [
                 Container(
@@ -2254,10 +2254,10 @@ Widget _buildCategoriesCard(BuildContext context, event) {
               ],
             ),
             const SizedBox(height: 20),
-            Wrap(
+                Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: event.ageGroups.map((ageGroup) {
+                  children: event.ageGroups.map((ageGroup) {
                 return Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -2284,9 +2284,9 @@ Widget _buildCategoriesCard(BuildContext context, event) {
                       fontSize: 14,
                     ),
                   ),
-                );
-              }).toList(),
-            ),
+                    );
+                  }).toList(),
+                ),
           ],
         ],
       ),
@@ -2334,7 +2334,7 @@ Widget _buildRulesCard(BuildContext context, event) {
             ],
           ),
           const SizedBox(height: 20),
-          ...event.rules!.entries.map((entry) {
+                ...event.rules!.entries.map((entry) {
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
@@ -2346,8 +2346,8 @@ Widget _buildRulesCard(BuildContext context, event) {
                 ),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                   Text(
                     entry.key,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -2363,12 +2363,12 @@ Widget _buildRulesCard(BuildContext context, event) {
                       height: 1.6,
                       color: Colors.grey[700],
                       fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                  );
+                }),
         ],
       ),
     ),
@@ -2376,11 +2376,11 @@ Widget _buildRulesCard(BuildContext context, event) {
 }
 
 Widget _buildInfoItem(
-  BuildContext context,
-  IconData icon,
-  String label,
-  String value,
-) {
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
   return Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
@@ -2708,8 +2708,8 @@ Widget _buildTeamsSection(BuildContext context, String eventId) {
                                     Flexible(
                                       child: Text(
                                         'Category: ${team.category}',
-                                        style: Theme.of(
-                                          context,
+                style: Theme.of(
+                  context,
                                         ).textTheme.bodySmall,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -2760,9 +2760,9 @@ Widget _buildTeamsSection(BuildContext context, String eventId) {
                                               ),
                                             );
                                           }).toList(),
-                                        ),
-                                      ),
-                                    ],
+          ),
+        ),
+      ],
                                   ),
                                 ],
                               ],

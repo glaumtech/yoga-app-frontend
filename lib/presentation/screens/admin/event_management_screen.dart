@@ -11,6 +11,7 @@ import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/event_banner_image.dart';
+import '../../widgets/admin_sidebar_layout.dart';
 
 class EventManagementScreen extends StatelessWidget {
   const EventManagementScreen({super.key});
@@ -22,8 +23,9 @@ class EventManagementScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    return Scaffold(
-      body: Container(
+    return AdminSidebarLayout(
+      title: 'Event Management',
+      child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -57,16 +59,6 @@ class EventManagementScreen extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    // Back Button
-                    IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: AppTheme.primaryColor,
-                      ),
-                      onPressed: () => context.pop(),
-                      tooltip: 'Back',
-                    ),
-                    const SizedBox(width: 8),
                     Icon(
                       Icons.event_note,
                       color: AppTheme.primaryColor,
@@ -77,14 +69,6 @@ class EventManagementScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Event Management',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primaryColor,
-                                ),
-                          ),
                           Obx(
                             () => Text(
                               '${eventController.events.length} Events',

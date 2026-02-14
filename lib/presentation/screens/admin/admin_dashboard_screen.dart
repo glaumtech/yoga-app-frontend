@@ -6,6 +6,7 @@ import '../../../routes/app_routes.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/event_controller.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/admin_sidebar_layout.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
@@ -18,8 +19,9 @@ class AdminDashboardScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    return Scaffold(
-      body: Container(
+    return AdminSidebarLayout(
+      title: 'Admin Dashboard',
+      child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -64,14 +66,6 @@ class AdminDashboardScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Admin Dashboard',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primaryColor,
-                                ),
-                          ),
-                          Text(
                             'Manage your championship',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: Colors.grey[600]),
@@ -83,14 +77,6 @@ class AdminDashboardScreen extends StatelessWidget {
                       icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
                       onPressed: () => eventController.loadEvents(),
                       tooltip: 'Refresh',
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.logout, color: AppTheme.primaryColor),
-                      onPressed: () async {
-                        await authController.signOut();
-                        context.go(AppRoutes.login);
-                      },
-                      tooltip: 'Logout',
                     ),
                   ],
                 ),

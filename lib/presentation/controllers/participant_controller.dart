@@ -13,6 +13,7 @@ import '../../data/models/score_response_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/constants/app_constants.dart';
+import '../models/bulk_registration_row.dart';
 
 // Web-specific imports
 import 'dart:html' as html show AnchorElement, Blob, Url;
@@ -28,6 +29,9 @@ class ParticipantController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
   final Rx<ParticipantModel?> selectedParticipant = Rx<ParticipantModel?>(null);
+  final RxBool isListView = false.obs; // Toggle between create and list view
+  final RxBool isBulkMode = false.obs; // Toggle between single and bulk registration
+  final RxString searchQuery = ''.obs; // Search query for filtering participants
 
   // Filter state
   final Rx<ParticipantFilterRequest> currentFilter =
@@ -52,9 +56,23 @@ class ParticipantController extends GetxController {
   final RxString standard = ''.obs;
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
+  final Rx<File?> bonafideFile = Rx<File?>(null);
+  final Rx<XFile?> bonafideImage = Rx<XFile?>(null);
   final Rx<ParticipantModel?> participantToEdit = Rx<ParticipantModel?>(null);
   final RxString existingPhotoUrl = ''.obs;
   final RxBool isLoadingParticipant = false.obs;
+  final RxString selectedEventId = ''.obs; // Selected competition/event ID
+
+  // Bulk registration state
+  final TextEditingController bulkYogaTeacherNameController =
+      TextEditingController();
+  final TextEditingController bulkYogaTeacherCellController =
+      TextEditingController();
+  final TextEditingController bulkInstitutionNameController =
+      TextEditingController();
+  final RxString bulkCategory = ''.obs;
+  final RxList<BulkRegistrationRow> bulkRegistrationRows =
+      <BulkRegistrationRow>[].obs;
 
   /// Get participant image URL using the participantImage API endpoint
   String? getParticipantImageUrl(String? participantId) {
@@ -69,6 +87,137 @@ class ParticipantController extends GetxController {
   void onInit() {
     super.onInit();
     // Participants are now loaded by event ID only
+    // Initialize bulk registration with 5 rows
+    resetBulkRegistrationForm();
+  }
+
+  // Bulk registration methods
+  void addBulkRegistrationRow() {
+    bulkRegistrationRows.add(BulkRegistrationRow());
+  }
+
+  void removeBulkRegistrationRow(int index) {
+    if (index >= 0 && index < bulkRegistrationRows.length) {
+      bulkRegistrationRows[index].dispose();
+      bulkRegistrationRows.removeAt(index);
+    }
+  }
+
+  void resetBulkRegistrationForm() {
+    bulkYogaTeacherNameController.clear();
+    bulkYogaTeacherCellController.clear();
+    bulkInstitutionNameController.clear();
+    bulkCategory.value = '';
+    for (final row in bulkRegistrationRows) {
+      row.dispose();
+    }
+    bulkRegistrationRows.clear();
+    // Initialize with 5 rows by default
+    for (int i = 0; i < 5; i++) {
+      addBulkRegistrationRow();
+    }
+  }
+
+  Future<void> submitBulkRegistration() async {
+    if (selectedEventId.value.isEmpty) {
+      errorMessage.value = 'Please select a competition';
+      return;
+    }
+
+    if (bulkYogaTeacherNameController.text.trim().isEmpty) {
+      errorMessage.value = 'Please enter yoga teacher name';
+      return;
+    }
+
+    if (bulkYogaTeacherCellController.text.trim().isEmpty) {
+      errorMessage.value = 'Please enter yoga teacher cell number';
+      return;
+    }
+
+    if (bulkInstitutionNameController.text.trim().isEmpty) {
+      errorMessage.value = 'Please enter institution name';
+      return;
+    }
+
+    if (bulkCategory.value.isEmpty) {
+      errorMessage.value = 'Please select a category';
+      return;
+    }
+
+    // Validate at least one row has data
+    final validRows = bulkRegistrationRows.where((row) => row.isValid).toList();
+    if (validRows.isEmpty) {
+      errorMessage.value = 'Please enter at least one participant';
+      return;
+    }
+
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      int successCount = 0;
+      int failureCount = 0;
+
+      for (final row in validRows) {
+        final age = app_date_utils.AppDateUtils.calculateAge(row.dateOfBirth.value!);
+
+        final participant = ParticipantModel(
+          participantName: row.nameController.text.trim().toUpperCase(),
+          dateOfBirth: row.dateOfBirth.value!,
+          age: age,
+          gender: row.gender.value,
+          category: bulkCategory.value,
+          standard: row.group.value,
+          schoolName: bulkInstitutionNameController.text.trim(),
+          address: '', // Not required in bulk registration
+          yogaMasterName: bulkYogaTeacherNameController.text.trim(),
+          yogaMasterContact: bulkYogaTeacherCellController.text.trim(),
+        );
+
+        final success = await createParticipant(
+          participant: participant,
+          photoFile: row.photoFile.value,
+          photoXFile: row.photoXFile.value,
+          eventId: selectedEventId.value,
+        );
+
+        if (success) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
+      }
+
+      isLoading.value = false;
+
+      if (successCount > 0) {
+        Get.snackbar(
+          'Success',
+          '$successCount participant(s) registered successfully${failureCount > 0 ? '. $failureCount failed.' : ''}',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        resetBulkRegistrationForm();
+        await loadParticipantsByEventId(selectedEventId.value, resetPage: true);
+      } else {
+        errorMessage.value = 'Failed to register participants';
+        Get.snackbar(
+          'Error',
+          errorMessage.value,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      isLoading.value = false;
+      errorMessage.value = 'Error registering participants: ${e.toString()}';
+      Get.snackbar(
+        'Error',
+        errorMessage.value,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 
   @override
@@ -78,6 +227,13 @@ class ParticipantController extends GetxController {
     addressController.dispose();
     yogaMasterNameController.dispose();
     yogaMasterContactController.dispose();
+    bulkYogaTeacherNameController.dispose();
+    bulkYogaTeacherCellController.dispose();
+    bulkInstitutionNameController.dispose();
+    for (final row in bulkRegistrationRows) {
+      row.dispose();
+    }
+    bulkRegistrationRows.clear();
     super.onClose();
   }
 
@@ -489,6 +645,10 @@ class ParticipantController extends GetxController {
     standard.value = value ?? '';
   }
 
+  void toggleViewMode(bool showList) {
+    isListView.value = showList;
+  }
+
   void resetForm() {
     nameController.clear();
     schoolNameController.clear();
@@ -773,6 +933,25 @@ class ParticipantController extends GetxController {
     }
 
     return success;
+  }
+
+  // Get filtered participants based on search query
+  List<ParticipantModel> get filteredParticipants {
+    List<ParticipantModel> filtered = List<ParticipantModel>.from(participants);
+
+    // Filter by search query
+    if (searchQuery.value.isNotEmpty) {
+      final query = searchQuery.value.toLowerCase();
+      filtered = filtered.where((participant) {
+        return participant.participantName.toLowerCase().contains(query) ||
+            participant.category.toLowerCase().contains(query) ||
+            participant.standard.toLowerCase().contains(query) ||
+            participant.schoolName.toLowerCase().contains(query) ||
+            participant.yogaMasterName.toLowerCase().contains(query);
+      }).toList();
+    }
+
+    return filtered;
   }
 
   void reset() {

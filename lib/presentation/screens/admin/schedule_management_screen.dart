@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../controllers/event_controller.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/admin_sidebar_layout.dart';
 
 class ScheduleManagementScreen extends StatelessWidget {
   const ScheduleManagementScreen({super.key});
@@ -13,9 +14,9 @@ class ScheduleManagementScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final eventController = Get.find<EventController>();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Schedule Management')),
-      body: Obx(() {
+    return AdminSidebarLayout(
+      title: 'Schedule Management',
+      child: Obx(() {
         if (eventController.isLoading.value) {
           return const CustomLoader(message: 'Loading schedule...');
         }

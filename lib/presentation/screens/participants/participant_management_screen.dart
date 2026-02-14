@@ -1,0 +1,107 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../controllers/participant_controller.dart';
+import '../../controllers/event_controller.dart';
+import '../../widgets/admin_sidebar_layout.dart';
+import '../../widgets/toggle_button_group.dart';
+import 'participants_list_screen.dart';
+import 'participant_registration_form_screen.dart';
+import 'bulk_registration_screen.dart';
+
+class ParticipantManagementScreen extends StatelessWidget {
+  const ParticipantManagementScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final participantController = Get.put(ParticipantController());
+    final eventController = Get.find<EventController>();
+
+    // Load events if empty
+    if (eventController.events.isEmpty && !eventController.isLoading.value) {
+      eventController.loadEvents();
+    }
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
+    return AdminSidebarLayout(
+      title: 'PARTICIPANTS',
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.primaryColor.withOpacity(0.05),
+              Colors.white,
+              AppTheme.secondaryColor.withOpacity(0.03),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  top: isMobile ? 8 : 10,
+                  bottom: 0,
+                  left: isMobile ? 16 : 24,
+                  right: isMobile ? 16 : 24,
+                ),
+                child: Obx(
+                  () => Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ToggleButtonGroup(
+                        options: const [
+                          ToggleButtonOption(label: '+ CREATE'),
+                          ToggleButtonOption(label: '≡ LIST'),
+                        ],
+                        selectedIndex: participantController.isListView.value
+                            ? 1
+                            : 0,
+                        onTap: (index) =>
+                            participantController.toggleViewMode(index == 1),
+                      ),
+                      // Single/Bulk Toggle Button
+                      if (!participantController.isListView.value)
+                        ToggleButtonGroup(
+                          options: const [
+                            ToggleButtonOption(label: 'SINGLE'),
+                            ToggleButtonOption(label: 'BULK'),
+                          ],
+                          selectedIndex: participantController.isBulkMode.value
+                              ? 1
+                              : 0,
+                          onTap: (index) =>
+                              participantController.isBulkMode.value =
+                                  index == 1,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Obx(
+                  () => participantController.isListView.value
+                      ? Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: const ParticipantsListScreen(),
+                        )
+                      : SingleChildScrollView(
+                          padding: EdgeInsets.all(isMobile ? 16 : 16),
+                          child: participantController.isBulkMode.value
+                              ? const BulkRegistrationScreen()
+                              : const ParticipantRegistrationFormScreen(),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
