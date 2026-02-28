@@ -13,6 +13,7 @@ import 'scoring_controller.dart';
 import 'team_controller.dart';
 import 'participant_assignment_controller.dart';
 import 'judge_assigned_participants_controller.dart';
+import 'user_management_controller.dart';
 
 class AuthController extends GetxController {
   final AuthRepository _authRepository = AuthRepository();
@@ -22,13 +23,15 @@ class AuthController extends GetxController {
   final RxString errorMessage = ''.obs;
 
   // Login form controllers
-  final emailController = TextEditingController();
+  final nameController =
+      TextEditingController(); // Changed from emailController
   final passwordController = TextEditingController();
   final formKey = GlobalKey<FormState>();
 
   // Login form state
   final selectedRole = AppConstants.roleUser.obs;
   final obscurePassword = true.obs;
+  final RxString selectedCompetitionId = ''.obs; // For competition dropdown
 
   // Signup form controllers
   final signUpNameController = TextEditingController();
@@ -51,7 +54,7 @@ class AuthController extends GetxController {
 
   @override
   void onClose() {
-    emailController.dispose();
+    nameController.dispose(); // Changed from emailController
     passwordController.dispose();
     signUpNameController.dispose();
     signUpEmailController.dispose();
@@ -156,12 +159,9 @@ class AuthController extends GetxController {
   }
 
   // Login form validation
-  String? validateEmail(String? value) {
+  String? validateName(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Please enter your email';
-    }
-    if (!GetUtils.isEmail(value)) {
-      return 'Please enter a valid email';
+      return 'Please enter your name';
     }
     return null;
   }
@@ -185,9 +185,19 @@ class AuthController extends GetxController {
   }
 
   // Signup form validation
-  String? validateName(String? value) {
+  String? validateSignUpName(String? value) {
     if (value == null || value.isEmpty) {
       return 'Please enter your name';
+    }
+    return null;
+  }
+
+  String? validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter your email';
+    }
+    if (!GetUtils.isEmail(value)) {
+      return 'Please enter a valid email';
     }
     return null;
   }
@@ -276,30 +286,79 @@ class AuthController extends GetxController {
     }
 
     if (formKey.currentState!.validate()) {
-      final success = await signIn(
-        email: emailController.text.trim(),
-        password: passwordController.text,
-      );
+      try {
+        isLoading.value = true;
+        errorMessage.value = '';
 
-      if (success && context.mounted) {
-        // Small delay to ensure token is saved
-        await Future.delayed(const Duration(milliseconds: 100));
+        // Get UserManagementController
+        final userController = Get.put(UserManagementController());
 
-        final token = StorageService.getString(AppConstants.tokenKey);
-        print('Token before navigation: ${token != null ? "exists" : "null"}');
-
-        // Navigate to home
-        if (context.mounted) {
-          context.go(AppRoutes.home);
+        // Get competition ID if selected
+        int? competitionId;
+        if (selectedCompetitionId.value.isNotEmpty) {
+          competitionId = int.tryParse(selectedCompetitionId.value);
         }
+
+        // Call login using UserManagementController
+        final success = await userController.login(
+          name: nameController.text.trim(),
+          password: passwordController.text,
+          competitionId: competitionId,
+        );
+
+        if (success && context.mounted) {
+          // Small delay to ensure token is saved
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          final token = StorageService.getString(AppConstants.tokenKey);
+          print(
+            'Token before navigation: ${token != null ? "exists" : "null"}',
+          );
+
+          // Check user type and redirect accordingly
+          if (context.mounted) {
+            try {
+              final currentUser = userController.currentUser.value;
+              if (currentUser != null) {
+                final userTypeName =
+                    currentUser.userTypeName ?? currentUser.type;
+                final userTypeUpper = userTypeName.toUpperCase();
+
+                // Redirect JURY users to jury scoring screen
+                if (userTypeUpper == 'JURY' || userTypeUpper.contains('JURY')) {
+                  context.go(AppRoutes.juryScoring);
+                } else {
+                  // Navigate to home for other user types
+                  context.go(AppRoutes.home);
+                }
+              } else {
+                // Fallback to home if user data not available
+                context.go(AppRoutes.home);
+              }
+            } catch (e) {
+              print('Error checking user type: $e');
+              // Fallback to home on error
+              context.go(AppRoutes.home);
+            }
+          }
+        } else {
+          // Set error message from user controller
+          errorMessage.value = userController.errorMessage.value.isNotEmpty
+              ? userController.errorMessage.value
+              : 'Login failed. Please check your credentials.';
+        }
+      } catch (e) {
+        errorMessage.value = 'An error occurred: ${e.toString()}';
+      } finally {
+        isLoading.value = false;
       }
-      // Error message is already set in signIn method and will be displayed in the UI
     }
   }
 
   Future<void> clearLoginData() async {
-    emailController.clear();
+    nameController.clear(); // Changed from emailController
     passwordController.clear();
+    selectedCompetitionId.value = '';
     formKey.currentState?.reset();
   }
 

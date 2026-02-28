@@ -42,8 +42,8 @@ class SchoolListScreen extends StatelessWidget {
             ),
             SizedBox(height: isMobile ? 24 : 32),
 
-            // Search Section
-            _buildSearchSection(context, controller, isMobile, isTablet),
+            // Search and Sort Section
+            _buildSearchAndSortSection(context, controller, isMobile, isTablet),
             SizedBox(height: isMobile ? 16 : 24),
 
             // Schools List
@@ -53,6 +53,9 @@ class SchoolListScreen extends StatelessWidget {
                     _buildSchoolsList(context, controller, isMobile, isTablet),
               ),
             ),
+
+            // Pagination Controls
+            _buildPaginationControls(context, controller, isMobile, isTablet),
           ],
         ),
       ),
@@ -86,7 +89,7 @@ class SchoolListScreen extends StatelessWidget {
                       context,
                       label: 'Select State :',
                       value: controller.reportState.value,
-                      items: SchoolController.states,
+                      items: controller.states.map((s) => s.stateName).toList(),
                       onChanged: (value) {
                         controller.reportState.value = value ?? '';
                         controller.reportDistrict.value = '';
@@ -116,7 +119,9 @@ class SchoolListScreen extends StatelessWidget {
                         context,
                         label: 'Select State :',
                         value: controller.reportState.value,
-                        items: SchoolController.states,
+                        items: controller.states
+                            .map((s) => s.stateName)
+                            .toList(),
                         onChanged: (value) {
                           controller.reportState.value = value ?? '';
                           controller.reportDistrict.value = '';
@@ -257,33 +262,66 @@ class SchoolListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSearchSection(
+  Widget _buildSearchAndSortSection(
     BuildContext context,
     SchoolController controller,
     bool isMobile,
     bool isTablet,
   ) {
-    return TextField(
-      onChanged: (value) => controller.searchQuery.value = value,
-      decoration: InputDecoration(
-        hintText: 'Search by name, address, district, or state...',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: Obx(() {
-          if (controller.searchQuery.value.isNotEmpty) {
-            return IconButton(
-              icon: const Icon(Icons.clear),
-              onPressed: () => controller.searchQuery.value = '',
-            );
-          }
-          return const SizedBox.shrink();
-        }),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+    return Column(
+      children: [
+        // Search Field with Refresh Icon
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                onChanged: (value) {
+                  controller.searchQuery.value = value;
+                  // Debounce search - reload after user stops typing
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (controller.searchQuery.value == value) {
+                      controller.loadSchools(resetPage: true);
+                    }
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search by name, address, district, or state...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: Obx(() {
+                    if (controller.searchQuery.value.isNotEmpty) {
+                      return IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          controller.searchQuery.value = '';
+                          controller.loadSchools(resetPage: true);
+                        },
+                        tooltip: 'Clear',
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                ),
+              ),
+            ),
+            SizedBox(width: isMobile ? 8 : 12),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () => controller.loadSchools(),
+              tooltip: 'Refresh',
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.grey[100],
+                padding: const EdgeInsets.all(12),
+              ),
+            ),
+          ],
         ),
-        filled: true,
-        fillColor: Colors.grey[50],
-      ),
+      ],
     );
   }
 
@@ -297,9 +335,10 @@ class SchoolListScreen extends StatelessWidget {
       return const Center(child: CustomLoader());
     }
 
-    final filteredSchools = controller.getFilteredSchools();
+    // Use schools directly from API (already filtered)
+    final schools = controller.schools;
 
-    if (filteredSchools.isEmpty) {
+    if (schools.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -318,9 +357,9 @@ class SchoolListScreen extends StatelessWidget {
     }
 
     if (isMobile) {
-      return _buildMobileList(context, filteredSchools, controller);
+      return _buildMobileList(context, schools, controller);
     } else {
-      return _buildDesktopTable(context, filteredSchools, controller, isTablet);
+      return _buildDesktopTable(context, schools, controller, isTablet);
     }
   }
 
@@ -371,14 +410,51 @@ class SchoolListScreen extends StatelessWidget {
                   ),
                   const Divider(height: 24),
                   _buildSchoolInfoRow('Address', school.address),
-                  _buildSchoolInfoRow('District', school.district),
-                  _buildSchoolInfoRow('State', school.state),
+                  _buildSchoolInfoRow(
+                    'District',
+                    school.district ?? school.cityName ?? '',
+                  ),
+                  _buildSchoolInfoRow(
+                    'State',
+                    school.stateName ?? school.state ?? '',
+                  ),
                   _buildSchoolInfoRow('Pincode', school.pincode),
                   if (school.createdAt != null)
                     _buildSchoolInfoRow(
                       'Created',
                       DateFormat('MMM dd, yyyy').format(school.createdAt!),
                     ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          if (school.id != null) {
+                            controller.loadSchoolForEdit(school.id!);
+                          }
+                        },
+                        icon: const Icon(Icons.edit, size: 18),
+                        label: const Text('Edit'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          if (school.id != null) {
+                            _showDeleteDialog(context, controller, school.id!);
+                          }
+                        },
+                        icon: const Icon(Icons.delete, size: 18),
+                        label: const Text('Delete'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -402,7 +478,7 @@ class SchoolListScreen extends StatelessWidget {
           return SingleChildScrollView(
             scrollDirection: Axis.vertical,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(0),
               child: SizedBox(
                 width: tableWidth,
                 child: Table(
@@ -415,6 +491,8 @@ class SchoolListScreen extends StatelessWidget {
                     4: FlexColumnWidth(1.5),
                     5: FlexColumnWidth(1.0),
                     6: FlexColumnWidth(2.0),
+                    7: FlexColumnWidth(1.2),
+                    8: FlexColumnWidth(1.0),
                   },
                   children: [
                     // Header Row
@@ -424,12 +502,42 @@ class SchoolListScreen extends StatelessWidget {
                       ),
                       children: [
                         _buildTableCell('ICON', isHeader: true),
-                        _buildTableCell('INSTITUTION NAME', isHeader: true),
-                        _buildTableCell('ADDRESS', isHeader: true),
-                        _buildTableCell('DISTRICT', isHeader: true),
-                        _buildTableCell('STATE', isHeader: true),
-                        _buildTableCell('PINCODE', isHeader: true),
-                        _buildTableCell('TYPE', isHeader: true),
+                        _buildSortableHeader(
+                          'INSTITUTION NAME',
+                          'institutionName',
+                          controller,
+                        ),
+                        _buildSortableHeader(
+                          'ADDRESS',
+                          'address',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'DISTRICT',
+                          'district',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader('STATE', 'stateName', controller),
+                        _buildSortableHeader(
+                          'PINCODE',
+                          'pincode',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'TYPE',
+                          'institutionType',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'CREATED',
+                          'createdAt',
+                          controller,
+                        ),
+                        _buildTableCell('ACTIONS', isHeader: true),
                       ],
                     ),
                     // Data Rows
@@ -446,8 +554,12 @@ class SchoolListScreen extends StatelessWidget {
                           ),
                           _buildTableCell(school.institutionName),
                           _buildTableCell(school.address),
-                          _buildTableCell(school.district),
-                          _buildTableCell(school.state),
+                          _buildTableCell(
+                            school.district ?? school.cityName ?? '',
+                          ),
+                          _buildTableCell(
+                            school.stateName ?? school.state ?? '',
+                          ),
                           _buildTableCell(school.pincode),
                           TableCell(
                             child: Padding(
@@ -456,6 +568,47 @@ class SchoolListScreen extends StatelessWidget {
                                 child: _buildInstitutionTypeChip(
                                   school.institutionType,
                                 ),
+                              ),
+                            ),
+                          ),
+                          _buildTableCell(
+                            school.createdAt != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy',
+                                  ).format(school.createdAt!)
+                                : '',
+                          ),
+                          TableCell(
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, size: 18),
+                                    color: Colors.blue,
+                                    onPressed: () {
+                                      if (school.id != null) {
+                                        controller.loadSchoolForEdit(
+                                          school.id!,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, size: 18),
+                                    color: Colors.red,
+                                    onPressed: () {
+                                      if (school.id != null) {
+                                        _showDeleteDialog(
+                                          context,
+                                          controller,
+                                          school.id!,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -485,6 +638,60 @@ class SchoolListScreen extends StatelessWidget {
         maxLines: null,
       ),
     );
+  }
+
+  Widget _buildSortableHeader(
+    String label,
+    String sortField,
+    SchoolController controller, {
+    bool isSortable = true,
+  }) {
+    return Obx(() {
+      final isActive = isSortable && controller.sortBy.value == sortField;
+      final isAscending = controller.sortOrder.value == 'asc';
+
+      return InkWell(
+        onTap: isSortable
+            ? () {
+                // Toggle sort order if same field, otherwise set to desc
+                final newOrder = isActive && !isAscending ? 'asc' : 'desc';
+                controller.setSorting(sortField, newOrder);
+              }
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isActive ? AppTheme.primaryColor : Colors.black87,
+                  ),
+                  softWrap: true,
+                  maxLines: null,
+                ),
+              ),
+              if (isSortable) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  isActive
+                      ? (isAscending
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward)
+                      : Icons.unfold_more,
+                  size: 16,
+                  color: isActive ? AppTheme.primaryColor : Colors.grey[600],
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   Widget _buildSchoolIcon(SchoolModel school, double size) {
@@ -576,5 +783,151 @@ class SchoolListScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showDeleteDialog(
+    BuildContext context,
+    SchoolController controller,
+    String id,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Institution'),
+        content: const Text(
+          'Are you sure you want to delete this institution? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              controller.deleteSchool(id);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls(
+    BuildContext context,
+    SchoolController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Obx(() {
+      // Only show pagination if there are pages
+      if (controller.totalPages.value <= 0) {
+        return const SizedBox.shrink();
+      }
+
+      return Container(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          border: Border(top: BorderSide(color: Colors.grey[300]!)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Page info and items per page
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Page ${controller.currentPage.value} of ${controller.totalPages.value}',
+                  style: TextStyle(
+                    fontSize: isMobile ? 13 : 14,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Total: ${controller.totalItems.value} institutions',
+                  style: TextStyle(
+                    fontSize: isMobile ? 11 : 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+            // Pagination buttons
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: controller.currentPage.value > 1
+                      ? () => controller.previousPage()
+                      : null,
+                  tooltip: 'Previous page',
+                ),
+                // Page numbers (show limited on mobile)
+                if (!isMobile) ...[
+                  ...List.generate(
+                    controller.totalPages.value > 5
+                        ? 5
+                        : controller.totalPages.value,
+                    (index) {
+                      int pageNum;
+                      if (controller.totalPages.value > 5) {
+                        // Show current page and 2 pages on each side
+                        final current = controller.currentPage.value;
+                        final total = controller.totalPages.value;
+                        if (current <= 3) {
+                          pageNum = index + 1;
+                        } else if (current >= total - 2) {
+                          pageNum = total - 4 + index;
+                        } else {
+                          pageNum = current - 2 + index;
+                        }
+                      } else {
+                        pageNum = index + 1;
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: TextButton(
+                          onPressed: () => controller.goToPage(pageNum),
+                          style: TextButton.styleFrom(
+                            backgroundColor:
+                                controller.currentPage.value == pageNum
+                                ? AppTheme.primaryColor
+                                : null,
+                            foregroundColor:
+                                controller.currentPage.value == pageNum
+                                ? Colors.white
+                                : Colors.grey[700],
+                            minimumSize: const Size(40, 40),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: Text('$pageNum'),
+                        ),
+                      );
+                    },
+                  ),
+                ] else
+                  Text(
+                    '${controller.currentPage.value} / ${controller.totalPages.value > 0 ? controller.totalPages.value : 1}',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed:
+                      controller.currentPage.value < controller.totalPages.value
+                      ? () => controller.nextPage()
+                      : null,
+                  tooltip: 'Next page',
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
   }
 }

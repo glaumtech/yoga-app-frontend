@@ -339,19 +339,11 @@ class CreateCompetitionScreen extends StatelessWidget {
                     ),
               SizedBox(height: isMobile ? 20 : 24),
 
-              // Participants Per Stage, Spot Registration, and Marks in same line (desktop)
+              // Participants Per Stage and Marks in same line (desktop)
               isMobile
                   ? Column(
                       children: [
                         _buildParticipantsPerStageField(
-                          context,
-                          controller,
-                          isMobile,
-                          isTablet,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-
-                        _buildSpotRegistrationField(
                           context,
                           controller,
                           isMobile,
@@ -371,6 +363,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
+                          flex: 1,
                           child: _buildParticipantsPerStageField(
                             context,
                             controller,
@@ -381,16 +374,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                         SizedBox(width: isTablet ? 12 : 16),
 
                         Expanded(
-                          child: _buildSpotRegistrationField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                        ),
-                        SizedBox(width: isTablet ? 12 : 16),
-
-                        Expanded(
+                          flex: 2,
                           child: _buildMarksField(
                             context,
                             controller,
@@ -1145,63 +1129,6 @@ class CreateCompetitionScreen extends StatelessWidget {
         controller.eventEndDate.value = picked;
       }
     }
-  }
-
-  Widget _buildSpotRegistrationField(
-    BuildContext context,
-    CompetitionController controller,
-    bool isMobile,
-    bool isTablet,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FormLabelWithHint(label: 'SPOT REGISTRATION :'),
-        Obx(
-          () => Wrap(
-            spacing: isMobile ? 12 : 16,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Radio<bool>(
-                    value: true,
-                    groupValue: controller.spotRegistration.value,
-                    onChanged: controller.isViewMode.value
-                        ? null
-                        : (value) => controller.spotRegistration.value =
-                              value ?? false,
-                    activeColor: AppTheme.primaryColor,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const Text('Yes'),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Radio<bool>(
-                    value: false,
-                    groupValue: controller.spotRegistration.value,
-                    onChanged: controller.isViewMode.value
-                        ? null
-                        : (value) => controller.spotRegistration.value =
-                              value ?? false,
-                    activeColor: AppTheme.primaryColor,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const Text('No'),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 
   Widget _buildMarksField(

@@ -1,29 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/jury_scoring_controller.dart';
-import '../../controllers/auth_controller.dart';
+import '../../controllers/user_management_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../../routes/app_routes.dart';
 
 class JuryScoringScreen extends StatelessWidget {
   const JuryScoringScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.put(JuryScoringController());
-    final authController = Get.find<AuthController>();
-    final roleName =
-        authController.currentUser.value?.roleName.toUpperCase() ?? '';
-    final isJury = roleName.contains('JURY');
-    final isJudge = roleName.contains('JUDGE');
-    final isJuryOrJudge = isJury || isJudge;
+    final controller = Get.put(JuryScoringController(), permanent: false);
+
+    // Always reset and load data when screen is built (ensures fresh data for new user)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.resetAndLoadData();
+    });
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    // Show without sidebar for jury and judge users
-    final content = Scaffold(
+    return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         elevation: 0,
@@ -37,6 +37,63 @@ class JuryScoringScreen extends StatelessWidget {
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            tooltip: 'Logout',
+            onPressed: () async {
+              // Show confirmation dialog
+              final shouldLogout = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Logout'),
+                  content: const Text('Are you sure you want to logout?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      child: const Text('Logout'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (shouldLogout == true && context.mounted) {
+                try {
+                  // Logout from user management controller
+                  try {
+                    if (Get.isRegistered<UserManagementController>()) {
+                      final userController =
+                          Get.find<UserManagementController>();
+                      await userController.logout();
+                    }
+                  } catch (e) {
+                    // UserManagementController might not be registered, ignore
+                  }
+
+                  // Navigate to login screen
+                  if (context.mounted) {
+                    context.go(AppRoutes.login);
+                  }
+                } catch (e) {
+                  // Show error if logout fails
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error during logout: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: Obx(
@@ -54,27 +111,28 @@ class JuryScoringScreen extends StatelessWidget {
                         isMobile,
                         isTablet,
                       ),
-                      SizedBox(height: isMobile ? 5 : 20),
-
-                      // Queue Status and Refresh Button
-                      _buildQueueAndRefreshSection(
-                        controller,
-                        isMobile,
-                        isTablet,
-                      ),
                       SizedBox(height: isMobile ? 5 : 24),
 
                       // Participants Display with Scoring Inputs
                       _buildParticipantsSection(controller, isMobile, isTablet),
-                      SizedBox(height: isMobile ? 10 : 24),
 
-                      // Submit Button
-                      _buildSubmitButton(
-                        context,
-                        controller,
-                        isMobile,
-                        isTablet,
-                      ),
+                      // Submit Button - Only show when participants are available
+                      Obx(() {
+                        if (controller.currentParticipants.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return Column(
+                          children: [
+                            SizedBox(height: isMobile ? 10 : 24),
+                            _buildSubmitButton(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ],
+                        );
+                      }),
 
                       // Pending Juries Note
                       if (controller.getPendingJuries().isNotEmpty) ...[
@@ -87,14 +145,6 @@ class JuryScoringScreen extends StatelessWidget {
         ),
       ),
     );
-
-    // If jury or judge, return content directly without sidebar
-    if (isJuryOrJudge) {
-      return content;
-    }
-
-    // If admin, wrap with sidebar layout (optional - can add AdminSidebarLayout if needed)
-    return content;
   }
 
   Widget _buildSelectionSection(
@@ -200,49 +250,13 @@ class JuryScoringScreen extends StatelessWidget {
             ),
             // Expanded Content - Dropdowns
             if (isExpanded)
-              Padding(
-                padding: EdgeInsets.all(isMobile ? 16 : 20),
-                child: isMobile
-                    ? Column(
-                        children: [
-                          _buildSelectionDropdown(
-                            context,
-                            label: 'STAGE',
-                            value: controller.selectedStage.value,
-                            items: controller.getAvailableStages(),
-                            onChanged: (value) =>
-                                controller.setSelectedStage(value ?? ''),
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildSelectionDropdown(
-                            context,
-                            label: 'CATEGORY',
-                            value: controller.selectedCategory.value,
-                            items: controller.getAvailableCategories(),
-                            onChanged: (value) =>
-                                controller.setSelectedCategory(value ?? ''),
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildSelectionDropdown(
-                            context,
-                            label: 'GROUPS',
-                            value: controller.selectedGroup.value,
-                            items: controller.getAvailableGroups(),
-                            onChanged: (value) =>
-                                controller.setSelectedGroup(value ?? ''),
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                          ),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: _buildSelectionDropdown(
+              Obx(
+                () => Padding(
+                  padding: EdgeInsets.all(isMobile ? 16 : 20),
+                  child: isMobile
+                      ? Column(
+                          children: [
+                            _buildSelectionDropdown(
                               context,
                               label: 'STAGE',
                               value: controller.selectedStage.value,
@@ -252,10 +266,8 @@ class JuryScoringScreen extends StatelessWidget {
                               isMobile: isMobile,
                               isTablet: isTablet,
                             ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 20),
-                          Expanded(
-                            child: _buildSelectionDropdown(
+                            const SizedBox(height: 12),
+                            _buildSelectionDropdown(
                               context,
                               label: 'CATEGORY',
                               value: controller.selectedCategory.value,
@@ -265,10 +277,8 @@ class JuryScoringScreen extends StatelessWidget {
                               isMobile: isMobile,
                               isTablet: isTablet,
                             ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 20),
-                          Expanded(
-                            child: _buildSelectionDropdown(
+                            const SizedBox(height: 12),
+                            _buildSelectionDropdown(
                               context,
                               label: 'GROUPS',
                               value: controller.selectedGroup.value,
@@ -278,9 +288,74 @@ class JuryScoringScreen extends StatelessWidget {
                               isMobile: isMobile,
                               isTablet: isTablet,
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(height: 12),
+                            // Search and Refresh buttons side by side
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildSearchButton(
+                                    controller,
+                                    isMobile,
+                                    isTablet,
+                                  ),
+                                ),
+                                SizedBox(width: isMobile ? 12 : 16),
+                                _buildRefreshButton(
+                                  controller,
+                                  isMobile,
+                                  isTablet,
+                                ),
+                              ],
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: _buildSelectionDropdown(
+                                context,
+                                label: 'STAGE',
+                                value: controller.selectedStage.value,
+                                items: controller.getAvailableStages(),
+                                onChanged: (value) =>
+                                    controller.setSelectedStage(value ?? ''),
+                                isMobile: isMobile,
+                                isTablet: isTablet,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildSelectionDropdown(
+                                context,
+                                label: 'CATEGORY',
+                                value: controller.selectedCategory.value,
+                                items: controller.getAvailableCategories(),
+                                onChanged: (value) =>
+                                    controller.setSelectedCategory(value ?? ''),
+                                isMobile: isMobile,
+                                isTablet: isTablet,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildSelectionDropdown(
+                                context,
+                                label: 'GROUPS',
+                                value: controller.selectedGroup.value,
+                                items: controller.getAvailableGroups(),
+                                onChanged: (value) =>
+                                    controller.setSelectedGroup(value ?? ''),
+                                isMobile: isMobile,
+                                isTablet: isTablet,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            _buildSearchButton(controller, isMobile, isTablet),
+                            SizedBox(width: isTablet ? 12 : 16),
+                            _buildRefreshButton(controller, isMobile, isTablet),
+                          ],
+                        ),
+                ),
               ),
           ],
         ),
@@ -319,201 +394,133 @@ class JuryScoringScreen extends StatelessWidget {
     required bool isMobile,
     required bool isTablet,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isMobile ? 13 : 14,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.primaryColor,
-            letterSpacing: 0.5,
+    return DropdownButtonFormField<String>(
+      value: value.isEmpty ? null : value,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          fontSize: isMobile ? 14 : 15,
+          color: Colors.grey[600],
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: value.isNotEmpty ? AppTheme.primaryColor : Colors.grey[300]!,
+            width: value.isNotEmpty ? 2 : 1,
           ),
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value.isEmpty ? null : value,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(
-                color: value.isNotEmpty
-                    ? AppTheme.primaryColor
-                    : Colors.grey[300]!,
-                width: value.isNotEmpty ? 2 : 1,
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-          items: items.map((item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(
-                item,
-                style: TextStyle(
-                  fontSize: isMobile ? 14 : 15,
-                  color: Colors.grey[800],
-                ),
-              ),
-            );
-          }).toList(),
-          onChanged: onChanged,
-          hint: Text(
-            'Select $label',
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+      items: items.map((item) {
+        return DropdownMenuItem<String>(
+          value: item,
+          child: Text(
+            item,
             style: TextStyle(
-              color: Colors.grey[500],
               fontSize: isMobile ? 14 : 15,
+              color: Colors.grey[800],
             ),
           ),
-          style: TextStyle(
-            fontSize: isMobile ? 14 : 15,
-            color: Colors.grey[800],
-          ),
-          icon: Icon(Icons.arrow_drop_down, color: AppTheme.primaryColor),
-        ),
-      ],
+        );
+      }).toList(),
+      onChanged: onChanged,
+      hint: Text(
+        'Select $label',
+        style: TextStyle(color: Colors.grey[500], fontSize: isMobile ? 14 : 15),
+      ),
+      style: TextStyle(fontSize: isMobile ? 14 : 15, color: Colors.grey[800]),
+      icon: Icon(Icons.arrow_drop_down, color: AppTheme.primaryColor),
     );
   }
 
-  Widget _buildQueueAndRefreshSection(
+  Widget _buildSearchButton(
     JuryScoringController controller,
     bool isMobile,
     bool isTablet,
   ) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Queue Status and Asana Number
-        Obx(
-          () => Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.blue[50]!, Colors.blue[100]!],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue[200]!, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue[100]!.withOpacity(0.3),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.queue, color: Colors.blue[800], size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'IN QUEUE : ${controller.queueCount.value}',
-                      style: TextStyle(
-                        fontSize: isMobile ? 14 : 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[900],
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (controller.currentParticipants.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppTheme.primaryColor.withOpacity(0.1),
-                        AppTheme.primaryColor.withOpacity(0.2),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: AppTheme.primaryColor.withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryColor.withOpacity(0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.fitness_center,
-                        color: AppTheme.primaryColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'ASANA ${controller.currentAsanaNumber.value}',
-                        style: TextStyle(
-                          fontSize: isMobile ? 14 : 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryColor,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
+    return Container(
+      height: isMobile ? 56 : 56,
+      width: isMobile ? double.infinity : 56,
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        ),
-        // Refresh Button
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.primaryColor,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryColor.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+        ],
+      ),
+      child: IconButton(
+        onPressed: controller.isLoading.value
+            ? null
+            : () => controller.searchParticipants(),
+        icon: controller.isLoading.value
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Icon(Icons.search, color: Colors.white, size: 24),
+        tooltip: 'Search Participants',
+        padding: const EdgeInsets.all(12),
+      ),
+    );
+  }
+
+  Widget _buildRefreshButton(
+    JuryScoringController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Container(
+      height: isMobile ? 56 : 56,
+      width: isMobile ? 56 : 56,
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: IconButton(
-            onPressed: () => controller.refreshAndReallocate(),
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 24),
-            tooltip: 'Refresh and Reallocate',
-            padding: const EdgeInsets.all(12),
-          ),
-        ),
-      ],
+        ],
+      ),
+      child: IconButton(
+        onPressed: controller.isLoading.value
+            ? null
+            : () => controller.refreshAndReallocate(),
+        icon: controller.isLoading.value
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Icon(Icons.refresh, color: Colors.white, size: 24),
+        tooltip: 'Refresh and Reallocate',
+        padding: const EdgeInsets.all(12),
+      ),
     );
   }
 
@@ -572,31 +579,33 @@ class JuryScoringScreen extends StatelessWidget {
                         border: Border.all(color: Colors.grey[300]!, width: 1),
                       ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // A, B, C Label - Above the gray box
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[200],
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              label,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey[800],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // Checkbox, Code, and Name
+                          // A, B, C Label with Checkbox, Registration Number, and Name in same row
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              // A, B, C Label
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[800],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Checkbox
                               Checkbox(
                                 value:
                                     controller
@@ -609,7 +618,8 @@ class JuryScoringScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
+                              // Registration Number
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
@@ -620,7 +630,9 @@ class JuryScoringScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  participant.participantCode ?? 'N/A',
+                                  participant.registrationNo ??
+                                      participant.participantCode ??
+                                      'N/A',
                                   style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
@@ -630,6 +642,7 @@ class JuryScoringScreen extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 12),
+                              // Participant Name on same line
                               Expanded(
                                 child: Text(
                                   participant.participantName,
@@ -639,53 +652,30 @@ class JuryScoringScreen extends StatelessWidget {
                                     fontWeight: FontWeight.w500,
                                   ),
                                   overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  textAlign: TextAlign.left,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 12),
-                          // Scoring Input
-                          TextFormField(
-                            controller:
-                                controller.scoreControllers[participantId],
-                            keyboardType: TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Score',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: Colors.grey[300]!,
-                                ),
+                          // Scoring Inputs for 5 Asanas
+                          ...List.generate(JuryScoringController.numberOfAsanas, (
+                            index,
+                          ) {
+                            final asanaNum = index + 1;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: _buildMarkSelectionWidget(
+                                controller: controller
+                                    .scoreControllers[participantId]?[asanaNum],
+                                label: 'ASANA $asanaNum',
+                                isMobile: isMobile,
+                                minMarks: controller.minimumMarks,
+                                maxMarks: controller.maximumMarks,
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: Colors.grey[300]!,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppTheme.primaryColor,
-                                  width: 2,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[800],
-                            ),
-                          ),
+                            );
+                          }),
                         ],
                       ),
                     );
@@ -713,34 +703,33 @@ class JuryScoringScreen extends StatelessWidget {
                           ),
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // A, B, C Label - Above the gray box
-                            Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  labels[entry.key],
-                                  style: TextStyle(
-                                    fontSize: isTablet ? 20 : 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey[800],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            // Checkbox, Code, and Name
+                            // A, B, C Label with Checkbox, Registration Number, and Name in same row
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
+                                // A, B, C Label
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    labels[entry.key],
+                                    style: TextStyle(
+                                      fontSize: isTablet ? 20 : 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                // Checkbox
                                 Checkbox(
                                   value:
                                       controller
@@ -757,6 +746,7 @@ class JuryScoringScreen extends StatelessWidget {
                                   visualDensity: VisualDensity.compact,
                                 ),
                                 const SizedBox(width: 8),
+                                // Registration Number
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 10,
@@ -767,7 +757,9 @@ class JuryScoringScreen extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
-                                    participant.participantCode ?? 'N/A',
+                                    participant.registrationNo ??
+                                        participant.participantCode ??
+                                        'N/A',
                                     style: TextStyle(
                                       fontSize: isTablet ? 12 : 13,
                                       fontWeight: FontWeight.bold,
@@ -776,8 +768,9 @@ class JuryScoringScreen extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Flexible(
+                                const SizedBox(width: 12),
+                                // Participant Name on same line
+                                Expanded(
                                   child: Text(
                                     participant.participantName,
                                     style: TextStyle(
@@ -785,54 +778,32 @@ class JuryScoringScreen extends StatelessWidget {
                                       color: Colors.grey[800],
                                       fontWeight: FontWeight.w500,
                                     ),
-                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    textAlign: TextAlign.left,
                                   ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 16),
-                            // Scoring Input
-                            TextFormField(
-                              controller:
-                                  controller.scoreControllers[participantId],
-                              keyboardType: TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              decoration: InputDecoration(
-                                labelText: 'Score',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey[300]!,
+                            // Scoring Inputs for 5 Asanas
+                            ...List.generate(
+                              JuryScoringController.numberOfAsanas,
+                              (index) {
+                                final asanaNum = index + 1;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: _buildMarkSelectionWidget(
+                                    controller: controller
+                                        .scoreControllers[participantId]?[asanaNum],
+                                    label: 'ASANA $asanaNum',
+                                    isMobile: isMobile,
+                                    isTablet: isTablet,
+                                    minMarks: controller.minimumMarks,
+                                    maxMarks: controller.maximumMarks,
                                   ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey[300]!,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: AppTheme.primaryColor,
-                                    width: 2,
-                                  ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 16,
-                                ),
-                                filled: true,
-                                fillColor: Colors.white,
-                              ),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: isTablet ? 16 : 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey[800],
-                              ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -852,48 +823,67 @@ class JuryScoringScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Center(
-      child: SizedBox(
-        width: isMobile ? double.infinity : (isTablet ? 320 : 420),
-        height: 56,
-        child: ElevatedButton(
-          onPressed: controller.isLoading.value
-              ? null
-              : () => controller.submitScores(),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.primaryColor,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+      child: Obx(() {
+        final isLoading = controller.isLoading.value;
+        return SizedBox(
+          width: isMobile ? double.infinity : (isTablet ? 320 : 420),
+          height: 56,
+          child: ElevatedButton(
+            onPressed: isLoading
+                ? null
+                : () async {
+                    try {
+                      // Prevent multiple simultaneous submissions
+                      if (!controller.isLoading.value) {
+                        await controller.submitScores();
+                      }
+                    } catch (e, stackTrace) {
+                      print('Error in submit button onPressed: $e');
+                      print('Stack trace: $stackTrace');
+                      // Error is already handled in submitScores, but ensure loading state is reset
+                      if (controller.isLoading.value) {
+                        controller.isLoading.value = false;
+                      }
+                    }
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: AppTheme.primaryColor.withOpacity(0.6),
+              disabledForegroundColor: Colors.white.withOpacity(0.7),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: isLoading ? 2 : 4,
+              shadowColor: AppTheme.primaryColor.withOpacity(0.4),
             ),
-            elevation: 4,
-            shadowColor: AppTheme.primaryColor.withOpacity(0.4),
-          ),
-          child: controller.isLoading.value
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.check_circle_outline, size: 22),
-                    const SizedBox(width: 8),
-                    Text(
-                      'SUBMIT',
-                      style: TextStyle(
-                        fontSize: isMobile ? 16 : 18,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
-                  ],
-                ),
-        ),
-      ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.check_circle_outline, size: 22),
+                      const SizedBox(width: 8),
+                      Text(
+                        'SUBMIT',
+                        style: TextStyle(
+                          fontSize: isMobile ? 16 : 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        );
+      }),
     );
   }
 
@@ -920,6 +910,89 @@ class JuryScoringScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMarkSelectionWidget({
+    required TextEditingController? controller,
+    required String label,
+    bool isMobile = false,
+    bool isTablet = false,
+    int minMarks = 0,
+    int maxMarks = 100,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          fontSize: isMobile ? 14 : (isTablet ? 15 : 16),
+          fontWeight: FontWeight.bold,
+          color: Colors.grey[700],
+        ),
+        hintText: 'Enter score ($minMarks - $maxMarks)',
+        hintStyle: TextStyle(
+          fontSize: isMobile ? 13 : 14,
+          color: Colors.grey[500],
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.red, width: 1),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+        ),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 16 : 20,
+          vertical: isMobile ? 14 : 16,
+        ),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+      style: TextStyle(fontSize: isMobile ? 14 : 15, color: Colors.grey[800]),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return null; // Allow empty (optional field)
+        }
+        final score = double.tryParse(value);
+        if (score == null) {
+          return 'Please enter a valid number';
+        }
+        if (score < minMarks) {
+          return 'Score must be at least $minMarks';
+        }
+        if (score > maxMarks) {
+          return 'Score must not exceed $maxMarks';
+        }
+        return null;
+      },
+      onChanged: (value) {
+        // Optional: Format the value as user types
+        if (value.isNotEmpty) {
+          final score = double.tryParse(value);
+          if (score != null && controller != null) {
+            // Validate and update if needed
+            if (score < minMarks || score > maxMarks) {
+              // Value is out of range, but let validator handle it
+              return;
+            }
+          }
+        }
+      },
     );
   }
 }

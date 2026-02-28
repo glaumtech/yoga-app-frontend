@@ -12,6 +12,7 @@ class ParticipantModel {
   final String yogaMasterContact;
   final String? photoUrl;
   final String? participantCode; // Participant code like 'MEM0006'
+  final String? registrationNo; // Registration number like 'CGA001'
   final DateTime createdAt;
   final DateTime? updatedAt;
   final Map<String, double>?
@@ -37,6 +38,7 @@ class ParticipantModel {
     required this.yogaMasterContact,
     this.photoUrl,
     this.participantCode,
+    this.registrationNo,
     DateTime? createdAt,
     this.updatedAt,
     this.juryScores,
@@ -87,6 +89,12 @@ class ParticipantModel {
           ?.toString(),
       participantCode: (json['participantCode'] ?? json['participant_code'])
           ?.toString(),
+      registrationNo:
+          (json['registrationNo'] ??
+                  json['registration_no'] ??
+                  json['registrationNumber'] ??
+                  json['registration_number'])
+              ?.toString(),
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])
@@ -149,6 +157,7 @@ class ParticipantModel {
       'yogaMasterContact': yogaMasterContact,
       if (photoUrl != null) 'photoUrl': photoUrl,
       if (participantCode != null) 'participantCode': participantCode,
+      if (registrationNo != null) 'registrationNo': registrationNo,
       if (includeCreatedAt) 'createdAt': createdAt.toIso8601String(),
       if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       if (juryScores != null) 'juryScores': juryScores,
@@ -174,6 +183,7 @@ class ParticipantModel {
     String? yogaMasterContact,
     String? photoUrl,
     String? participantCode,
+    String? registrationNo,
     DateTime? createdAt,
     DateTime? updatedAt,
     Map<String, double>? juryScores,
@@ -197,6 +207,7 @@ class ParticipantModel {
       yogaMasterContact: yogaMasterContact ?? this.yogaMasterContact,
       photoUrl: photoUrl ?? this.photoUrl,
       participantCode: participantCode ?? this.participantCode,
+      registrationNo: registrationNo ?? this.registrationNo,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       juryScores: juryScores ?? this.juryScores,

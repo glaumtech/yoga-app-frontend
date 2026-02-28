@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/event_controller.dart';
+import '../../controllers/competition_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../../data/models/user_management_model.dart';
 
@@ -13,15 +15,52 @@ class UsersListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final userController = Get.find<UserManagementController>();
     final eventController = Get.find<EventController>();
+    // Initialize CompetitionController if not already initialized
+    final competitionController = Get.put(CompetitionController());
 
-    // Load events if empty
-    if (eventController.events.isEmpty && !eventController.isLoading.value) {
-      eventController.loadEvents();
+    // Load competitions if empty
+    if (competitionController.competitions.isEmpty &&
+        !competitionController.isLoading.value) {
+      competitionController.loadCompetitions().then((_) {
+        // Set first competition as default if no competition is selected
+        if (competitionController.competitions.isNotEmpty &&
+            userController.selectedEventId.value.isEmpty) {
+          final firstCompetition = competitionController.competitions
+              .firstWhere(
+                (c) => c.id != null,
+                orElse: () => competitionController.competitions.first,
+              );
+          if (firstCompetition.id != null) {
+            final competitionId = int.tryParse(firstCompetition.id!);
+            if (competitionId != null) {
+              userController.selectedEventId.value = firstCompetition.id!;
+              userController.loadUsers(eventId: competitionId);
+            }
+          }
+        }
+      });
+    } else if (competitionController.competitions.isNotEmpty &&
+        userController.selectedEventId.value.isEmpty) {
+      // Set first competition as default if competitions are already loaded
+      final firstCompetition = competitionController.competitions.firstWhere(
+        (c) => c.id != null,
+        orElse: () => competitionController.competitions.first,
+      );
+      if (firstCompetition.id != null) {
+        final competitionId = int.tryParse(firstCompetition.id!);
+        if (competitionId != null) {
+          userController.selectedEventId.value = firstCompetition.id!;
+          userController.loadUsers(eventId: competitionId);
+        }
+      }
     }
 
-    // Load users on first build
-    if (userController.users.isEmpty && !userController.isLoading.value) {
-      userController.loadUsers();
+    // Load users on first build (only if a competition is selected)
+    if (userController.users.isEmpty &&
+        !userController.isLoading.value &&
+        userController.selectedEventId.value.isNotEmpty) {
+      final eventId = int.tryParse(userController.selectedEventId.value);
+      userController.loadUsers(eventId: eventId);
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -42,6 +81,7 @@ class UsersListScreen extends StatelessWidget {
               context,
               userController,
               eventController,
+              competitionController,
               isMobile,
               isTablet,
             ),
@@ -140,6 +180,7 @@ class UsersListScreen extends StatelessWidget {
     BuildContext context,
     UserManagementController controller,
     EventController eventController,
+    CompetitionController competitionController,
     bool isMobile,
     bool isTablet,
   ) {
@@ -177,13 +218,21 @@ class UsersListScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Obx(
-                  () => isMobile
+                Obx(() {
+                  final competitions = competitionController.competitions
+                      .where((competition) => competition.id != null)
+                      .toList();
+                  final currentValue =
+                      controller.selectedEventId.value.isNotEmpty
+                      ? int.tryParse(controller.selectedEventId.value)
+                      : (competitions.isNotEmpty
+                            ? int.tryParse(competitions.first.id!)
+                            : null);
+
+                  return isMobile
                       ? Expanded(
-                          child: DropdownButtonFormField<int?>(
-                            value: controller.selectedEventId.value.isNotEmpty
-                                ? int.tryParse(controller.selectedEventId.value)
-                                : null,
+                          child: DropdownButtonFormField<int>(
+                            value: currentValue,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -197,43 +246,28 @@ class UsersListScreen extends StatelessWidget {
                               isDense: true,
                             ),
                             isExpanded: true,
-                            items: [
-                              const DropdownMenuItem<int?>(
-                                value: null,
+                            items: competitions.map((competition) {
+                              return DropdownMenuItem<int>(
+                                value: int.tryParse(competition.id!),
                                 child: Text(
-                                  'All Competitions',
+                                  competition.competitionName,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              ...eventController.events
-                                  .where((event) => event.id != null)
-                                  .map((event) {
-                                    return DropdownMenuItem<int?>(
-                                      value: int.tryParse(event.id!),
-                                      child: Text(
-                                        event.title,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    );
-                                  }),
-                            ],
+                              );
+                            }).toList(),
                             onChanged: (value) {
                               if (value != null) {
                                 controller.selectedEventId.value = value
                                     .toString();
-                              } else {
-                                controller.selectedEventId.value = '';
+                                controller.loadUsers(eventId: value);
                               }
-                              controller.loadUsers(eventId: value);
                             },
                           ),
                         )
                       : SizedBox(
                           width: isTablet ? 320 : 360,
-                          child: DropdownButtonFormField<int?>(
-                            value: controller.selectedEventId.value.isNotEmpty
-                                ? int.tryParse(controller.selectedEventId.value)
-                                : null,
+                          child: DropdownButtonFormField<int>(
+                            value: currentValue,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -247,38 +281,25 @@ class UsersListScreen extends StatelessWidget {
                               isDense: true,
                             ),
                             isExpanded: true,
-                            items: [
-                              const DropdownMenuItem<int?>(
-                                value: null,
+                            items: competitions.map((competition) {
+                              return DropdownMenuItem<int>(
+                                value: int.tryParse(competition.id!),
                                 child: Text(
-                                  'All Competitions',
+                                  competition.competitionName,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              ...eventController.events
-                                  .where((event) => event.id != null)
-                                  .map((event) {
-                                    return DropdownMenuItem<int?>(
-                                      value: int.tryParse(event.id!),
-                                      child: Text(
-                                        event.title,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    );
-                                  }),
-                            ],
+                              );
+                            }).toList(),
                             onChanged: (value) {
                               if (value != null) {
                                 controller.selectedEventId.value = value
                                     .toString();
-                              } else {
-                                controller.selectedEventId.value = '';
+                                controller.loadUsers(eventId: value);
                               }
-                              controller.loadUsers(eventId: value);
                             },
                           ),
-                        ),
-                ),
+                        );
+                }),
                 SizedBox(width: isMobile ? 8 : 12),
                 // Refresh Button
                 IconButton(
@@ -366,11 +387,112 @@ class UsersListScreen extends StatelessWidget {
                     _buildUserInfoRow('Stages', user.stages.join(', ')),
                   if (user.categories.isNotEmpty)
                     _buildUserInfoRow('Categories', user.categories.join(', ')),
+                  const SizedBox(height: 12),
+                  // Action Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          controller.initializeFormForEdit(user);
+                          controller.toggleViewMode(false);
+                        },
+                        icon: Icon(
+                          Icons.edit,
+                          size: 18,
+                          color: AppTheme.primaryColor,
+                        ),
+                        label: const Text('Edit'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          if (user.id != null) {
+                            _showDeleteDialog(context, controller, user);
+                          }
+                        },
+                        icon: const Icon(
+                          Icons.delete,
+                          size: 18,
+                          color: Colors.red,
+                        ),
+                        label: const Text('Delete'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showDeleteDialog(
+    BuildContext context,
+    UserManagementController controller,
+    UserManagementModel user,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete User'),
+        content: Text(
+          'Are you sure you want to delete ${user.name}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              if (user.id != null) {
+                try {
+                  final success = await controller.deleteUser(user.id!);
+                  if (success && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('User deleted successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } else if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          controller.errorMessage.value.isNotEmpty
+                              ? controller.errorMessage.value
+                              : 'Failed to delete user',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to delete user: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
@@ -405,6 +527,7 @@ class UsersListScreen extends StatelessWidget {
                     2: FlexColumnWidth(1.5),
                     3: FlexColumnWidth(2.5),
                     4: FlexColumnWidth(1.5),
+                    5: const FixedColumnWidth(120),
                   },
                   children: [
                     // Header Row
@@ -418,6 +541,7 @@ class UsersListScreen extends StatelessWidget {
                         _buildTableCell('TYPE', isHeader: true),
                         _buildTableCell('COMPETITION', isHeader: true),
                         _buildTableCell('CELL', isHeader: true),
+                        _buildTableCell('ACTIONS', isHeader: true),
                       ],
                     ),
                     // Data Rows
@@ -439,6 +563,7 @@ class UsersListScreen extends StatelessWidget {
                           ),
                           _buildTableCell(user.eventName ?? 'N/A'),
                           _buildTableCell(user.cell ?? 'N/A'),
+                          _buildActionCell(context, user, controller),
                         ],
                       );
                     }).toList(),
@@ -468,12 +593,58 @@ class UsersListScreen extends StatelessWidget {
   }
 
   Widget _buildUserPhoto(UserManagementModel user, double size) {
+    final photoUrl = user.displayPhotoUrl;
     final firstLetter = (user.name.isNotEmpty ? user.name[0] : 'U')
         .toUpperCase();
+
+    // Construct full photo URL if we have a user ID and photo path
+    String? fullPhotoUrl;
+    if (user.id != null && photoUrl != null && photoUrl.isNotEmpty) {
+      // If photoUrl is already a full URL, use it; otherwise construct it
+      if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
+        fullPhotoUrl = photoUrl;
+      } else {
+        // Construct full URL using the user photo endpoint
+        fullPhotoUrl = '${BaseUrl.baseUrl}${EndPoints.userPhoto(user.id!)}';
+      }
+    }
 
     return Container(
       width: size,
       height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.grey[300],
+        border: Border.all(color: Colors.grey[400]!, width: 2),
+      ),
+      child: fullPhotoUrl != null && fullPhotoUrl.isNotEmpty
+          ? ClipOval(
+              child: Image.network(
+                fullPhotoUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildInitialsAvatar(firstLetter, size);
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                          : null,
+                      strokeWidth: 2,
+                    ),
+                  );
+                },
+              ),
+            )
+          : _buildInitialsAvatar(firstLetter, size),
+    );
+  }
+
+  Widget _buildInitialsAvatar(String firstLetter, double size) {
+    return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -559,6 +730,43 @@ class UsersListScreen extends StatelessWidget {
             ),
           ),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionCell(
+    BuildContext context,
+    UserManagementModel user,
+    UserManagementController controller,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
+            onPressed: () {
+              controller.initializeFormForEdit(user);
+              controller.toggleViewMode(false);
+            },
+            tooltip: 'Edit',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+            onPressed: () {
+              if (user.id != null) {
+                _showDeleteDialog(context, controller, user);
+              }
+            },
+            tooltip: 'Delete',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
         ],
       ),
     );

@@ -33,6 +33,7 @@ import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/storage_service.dart';
 import '../presentation/controllers/auth_controller.dart';
+import '../presentation/controllers/user_management_controller.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -46,7 +47,6 @@ class AppRouter {
         AppRoutes.splash,
         AppRoutes.login,
         AppRoutes.signUp,
-        AppRoutes.home,
         AppRoutes.events,
         AppRoutes.about,
         AppRoutes.contact,
@@ -75,8 +75,11 @@ class AppRouter {
       }
 
       // If not logged in and trying to access protected routes
+      // Note: home is treated as public for unauthenticated users
+      final isHomeRoute = location == AppRoutes.home;
       if (token == null &&
           !isPublicRoute &&
+          !isHomeRoute &&
           !isEventDetails &&
           !isAssignParticipant &&
           !isRegister &&
@@ -85,21 +88,73 @@ class AppRouter {
         return AppRoutes.login;
       }
 
-      // If logged in, check admin routes
+      // If logged in, check admin routes and redirect JURY users
       if (token != null) {
         try {
-          final authController = Get.find<AuthController>();
-          final isAdmin = authController.isAdmin;
-          final isJudge =
-              authController.currentUser.value?.roleName.toUpperCase().contains(
-                'JUDGE',
-              ) ??
-              false;
-          final isJury =
-              authController.currentUser.value?.roleName.toUpperCase().contains(
-                'JURY',
-              ) ??
-              false;
+          // Try to get user from UserManagementController first (new login system)
+          bool isAdmin = false;
+          bool isJudge = false;
+          bool isJury = false;
+
+          try {
+            final userController = Get.find<UserManagementController>();
+            final currentUser = userController.currentUser.value;
+            if (currentUser != null) {
+              final userTypeName = currentUser.userTypeName ?? currentUser.type;
+              final userTypeUpper = userTypeName.toUpperCase();
+
+              // Check specific user types from database
+              // SUB_ADMIN and SPOT_REG_ADMIN have admin access
+              isAdmin =
+                  userTypeUpper == 'SUB_ADMIN' ||
+                  userTypeUpper == 'SPOT_REG_ADMIN' ||
+                  userTypeUpper.contains('SUB ADMIN') ||
+                  userTypeUpper.contains('SPOT REG ADMIN');
+
+              // JURY has judge/jury access
+              isJudge =
+                  userTypeUpper == 'JURY' || userTypeUpper.contains('JURY');
+
+              isJury =
+                  userTypeUpper == 'JURY' || userTypeUpper.contains('JURY');
+
+              // Redirect JURY users to jury scoring screen FIRST
+              // Allow only: login, signup, splash, and the jury scoring route itself
+              if (isJury &&
+                  location != AppRoutes.juryScoring &&
+                  location != AppRoutes.login &&
+                  location != AppRoutes.signUp &&
+                  location != AppRoutes.splash) {
+                // Redirect from any route (including home) to jury scoring
+                print(
+                  'Redirecting JURY user from $location to ${AppRoutes.juryScoring}',
+                );
+                return AppRoutes.juryScoring;
+              }
+            }
+          } catch (e) {
+            print('Error getting user from UserManagementController: $e');
+            // Fallback to AuthController if UserManagementController not available
+            final authController = Get.find<AuthController>();
+            isAdmin = authController.isAdmin;
+            final roleName = authController.currentUser.value?.roleName ?? '';
+            isJudge = roleName.toUpperCase().contains('JUDGE');
+            isJury = roleName.toUpperCase().contains('JURY');
+
+            // Redirect JURY users to jury scoring screen FIRST
+            // Allow only: login, signup, splash, and the jury scoring route itself
+            if (isJury &&
+                location != AppRoutes.juryScoring &&
+                location != AppRoutes.login &&
+                location != AppRoutes.signUp &&
+                location != AppRoutes.splash) {
+              // Redirect from any route (including home) to jury scoring
+              print(
+                'Redirecting JURY user (fallback) from $location to ${AppRoutes.juryScoring}',
+              );
+              return AppRoutes.juryScoring;
+            }
+          }
 
           // Admin-only routes (not accessible to judges)
           final adminOnlyRoutes = [
@@ -146,12 +201,14 @@ class AppRouter {
 
           // If trying to access admin-only route but not admin
           if (isAdminOnlyRoute && !isAdmin) {
-            return AppRoutes.home;
+            // Redirect JURY users to jury scoring, others to home
+            return isJury ? AppRoutes.juryScoring : AppRoutes.home;
           }
 
           // If trying to access admin/judge route, allow if admin or judge
           if (isAdminOrJudgeRoute && !isAdmin && !isJudge) {
-            return AppRoutes.home;
+            // Redirect JURY users to jury scoring, others to home
+            return isJury ? AppRoutes.juryScoring : AppRoutes.home;
           }
 
           // If trying to access admin/judge/jury route, allow if admin, judge, or jury
@@ -161,7 +218,8 @@ class AppRouter {
 
           // If trying to access judge-only route but not judge
           if (isJudgeOnlyRoute && !isJudge && !isAdmin) {
-            return AppRoutes.home;
+            // Redirect JURY users to jury scoring, others to home
+            return isJury ? AppRoutes.juryScoring : AppRoutes.home;
           }
         } catch (e) {
           // Controller not initialized, allow navigation

@@ -4,11 +4,13 @@ import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/event_controller.dart';
+import '../../controllers/competition_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/toggle_button_group.dart';
+import '../../widgets/buttons.dart';
 import '../../../data/models/user_management_model.dart';
 import 'users_list_screen.dart';
 import 'dart:io';
@@ -21,10 +23,13 @@ class UserManagementScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final userController = Get.put(UserManagementController());
     final eventController = Get.find<EventController>();
+    // Initialize CompetitionController if not already initialized
+    final competitionController = Get.put(CompetitionController());
 
-    // Load events if empty
-    if (eventController.events.isEmpty && !eventController.isLoading.value) {
-      eventController.loadEvents();
+    // Load competitions if empty
+    if (competitionController.competitions.isEmpty &&
+        !competitionController.isLoading.value) {
+      competitionController.loadCompetitions();
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -58,12 +63,33 @@ class UserManagementScreen extends StatelessWidget {
                 ),
                 child: Obx(
                   () => ToggleButtonGroup(
-                    options: const [
-                      ToggleButtonOption(label: '+ CREATE'),
-                      ToggleButtonOption(label: '≡ LIST'),
+                    options: [
+                      ToggleButtonOption(
+                        label: userController.isEditMode ? 'EDIT' : '+ CREATE',
+                      ),
+                      const ToggleButtonOption(label: '≡ LIST'),
                     ],
                     selectedIndex: userController.isListView.value ? 1 : 0,
-                    onTap: (index) => userController.toggleViewMode(index == 1),
+                    onTap: (index) {
+                      if (index == 1) {
+                        // Switching to list view - reset form if in edit mode
+                        if (userController.isEditMode) {
+                          userController.resetForm();
+                        }
+                        userController.toggleViewMode(true);
+                      } else {
+                        // Switching to create/edit view
+                        if (userController.isEditMode) {
+                          // If already in edit mode and clicking edit button, reset and go to list
+                          userController.resetForm();
+                          userController.toggleViewMode(true);
+                        } else {
+                          // Switching to create view - reset form to ensure clean state
+                          userController.resetForm();
+                          userController.toggleViewMode(false);
+                        }
+                      }
+                    },
                   ),
                 ),
               ),
@@ -81,6 +107,7 @@ class UserManagementScreen extends StatelessWidget {
                               context,
                               userController,
                               eventController,
+                              competitionController,
                               isMobile,
                               isTablet,
                             ),
@@ -99,6 +126,7 @@ class UserManagementScreen extends StatelessWidget {
     BuildContext context,
     UserManagementController controller,
     EventController eventController,
+    CompetitionController competitionController,
     bool isMobile,
     bool isTablet,
   ) {
@@ -114,10 +142,12 @@ class UserManagementScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Title
-              FormTitle(
-                text: 'CREATE USER',
-                isMobile: isMobile,
-                isTablet: isTablet,
+              Obx(
+                () => FormTitle(
+                  text: controller.isEditMode ? 'EDIT USER' : 'CREATE USER',
+                  isMobile: isMobile,
+                  isTablet: isTablet,
+                ),
               ),
               // Competition and Type in same line (desktop)
               isMobile
@@ -126,7 +156,7 @@ class UserManagementScreen extends StatelessWidget {
                         _buildCompetitionField(
                           context,
                           controller,
-                          eventController,
+                          competitionController,
                           isMobile,
                           isTablet,
                         ),
@@ -147,7 +177,7 @@ class UserManagementScreen extends StatelessWidget {
                           child: _buildCompetitionField(
                             context,
                             controller,
-                            eventController,
+                            competitionController,
                             isMobile,
                             isTablet,
                           ),
@@ -205,37 +235,112 @@ class UserManagementScreen extends StatelessWidget {
                   ),
                 ),
 
-              // Submit Button
-              Center(
-                child: Obx(() {
-                  if (controller.isLoading.value) {
-                    return const CustomLoader(message: 'Creating user...');
-                  }
-                  return PrimaryButton(
-                    text: controller.selectedType.value == 'VOLUNTEERS'
-                        ? 'SAVE CHANGES'
-                        : 'SUBMIT',
-                    icon: Icons.save,
-                    onPressed: () async {
-                      final success =
-                          controller.selectedType.value == 'VOLUNTEERS'
-                          ? await controller.createVolunteers()
-                          : await controller.createUser();
-
-                      if (success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
-                            ),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      }
-                    },
+              // Submit and Cancel Buttons
+              Obx(() {
+                if (controller.isLoading.value) {
+                  return const Center(
+                    child: CustomLoader(message: 'Processing...'),
                   );
-                }),
-              ),
+                }
+                return isMobile
+                    ? Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: PrimaryButton(
+                              text: controller.isEditMode
+                                  ? 'UPDATE'
+                                  : (controller.selectedType.value ==
+                                            'VOLUNTEERS'
+                                        ? 'SAVE CHANGES'
+                                        : 'SUBMIT'),
+                              icon: Icons.save,
+                              onPressed: () async {
+                                final success =
+                                    controller.selectedType.value ==
+                                        'VOLUNTEERS'
+                                    ? await controller.createVolunteers()
+                                    : await controller.createUser();
+
+                                if (success && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        controller.isEditMode
+                                            ? 'User updated successfully'
+                                            : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                  // Reset form and switch to list view after successful update
+                                  if (controller.isEditMode) {
+                                    controller.resetForm();
+                                    controller.toggleViewMode(true);
+                                  }
+                                }
+                              },
+                            ),
+                          ),
+                          if (controller.isEditMode) ...[
+                            const SizedBox(height: 12),
+                            cancelButton(
+                              onPressed: () {
+                                controller.resetForm();
+                                controller.toggleViewMode(true);
+                              },
+                              isFullWidth: true,
+                            ),
+                          ],
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          PrimaryButton(
+                            text: controller.isEditMode
+                                ? 'UPDATE'
+                                : (controller.selectedType.value == 'VOLUNTEERS'
+                                      ? 'SAVE CHANGES'
+                                      : 'SUBMIT'),
+                            icon: Icons.save,
+                            onPressed: () async {
+                              final success =
+                                  controller.selectedType.value == 'VOLUNTEERS'
+                                  ? await controller.createVolunteers()
+                                  : await controller.createUser();
+
+                              if (success && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      controller.isEditMode
+                                          ? 'User updated successfully'
+                                          : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
+                                    ),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                // Reset form and switch to list view after successful update
+                                if (controller.isEditMode) {
+                                  controller.resetForm();
+                                  controller.toggleViewMode(true);
+                                }
+                              }
+                            },
+                          ),
+                          if (controller.isEditMode) ...[
+                            const SizedBox(width: 16),
+                            cancelButton(
+                              onPressed: () {
+                                controller.resetForm();
+                                controller.toggleViewMode(true);
+                              },
+                            ),
+                          ],
+                        ],
+                      );
+              }),
             ],
           ),
         ),
@@ -246,7 +351,7 @@ class UserManagementScreen extends StatelessWidget {
   Widget _buildCompetitionField(
     BuildContext context,
     UserManagementController controller,
-    EventController eventController,
+    CompetitionController competitionController,
     bool isMobile,
     bool isTablet,
   ) {
@@ -281,24 +386,28 @@ class UserManagementScreen extends StatelessWidget {
               style: TextStyle(fontSize: isMobile ? 14 : 16),
             ),
             style: TextStyle(fontSize: isMobile ? 14 : 16),
-            items: eventController.events.where((e) => e.id != null).map((
-              event,
-            ) {
-              return DropdownMenuItem<String>(
-                value: event.id,
-                child: Text(
-                  event.title,
-                  style: TextStyle(fontSize: isMobile ? 14 : 16),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
+            items: competitionController.competitions
+                .where((c) => c.id != null)
+                .map((competition) {
+                  return DropdownMenuItem<String>(
+                    value: competition.id,
+                    child: Text(
+                      competition.competitionName,
+                      style: TextStyle(fontSize: isMobile ? 14 : 16),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                })
+                .toList(),
             onChanged: (value) {
               if (value != null) {
-                final event = eventController.events.firstWhere(
-                  (e) => e.id == value,
-                );
-                controller.setSelectedEvent(event);
+                controller.selectedEventId.value = value;
+                // Load stages and categories for selected competition
+                controller.loadStagesAndCategoriesForCompetition(value);
+              } else {
+                // Clear stages and categories if no competition selected
+                controller.availableStages.clear();
+                controller.availableCategories.clear();
               }
             },
             validator: (value) {
@@ -331,10 +440,38 @@ class UserManagementScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Obx(
-          () => isMobile
+        Obx(() {
+          // Watch userTypesList to ensure reactivity
+          controller.userTypesList;
+          final userTypes = controller.userTypes;
+
+          // Show loading indicator if types are being loaded
+          if (controller.isLoadingUserTypes.value) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          // Show empty state if no types available
+          if (userTypes.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'No user types available',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: isMobile ? 13 : 14,
+                ),
+              ),
+            );
+          }
+
+          return isMobile
               ? Column(
-                  children: UserManagementController.userTypes.map((type) {
+                  children: userTypes.map((type) {
                     return InkWell(
                       onTap: () {
                         controller.selectedType.value = type;
@@ -384,7 +521,7 @@ class UserManagementScreen extends StatelessWidget {
                   }).toList(),
                 )
               : Row(
-                  children: UserManagementController.userTypes.map((type) {
+                  children: userTypes.map((type) {
                     return Expanded(
                       child: InkWell(
                         onTap: () {
@@ -432,8 +569,8 @@ class UserManagementScreen extends StatelessWidget {
                       ),
                     );
                   }).toList(),
-                ),
-        ),
+                );
+        }),
       ],
     );
   }
@@ -533,6 +670,9 @@ class UserManagementScreen extends StatelessWidget {
                           controller.photoBytes.value,
                           150,
                           150,
+                          photoUrl: controller.photoUrl.value.isNotEmpty
+                              ? controller.photoUrl.value
+                              : null,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -645,73 +785,73 @@ class UserManagementScreen extends StatelessWidget {
                             ),
                           ],
                         ),
-                        // Permissions (for SUB ADMIN and SPOT REG ADMIN)
-                        if (controller.selectedType.value == 'SUB ADMIN' ||
-                            controller.selectedType.value ==
-                                'SPOT REG ADMIN(S)') ...[
-                          const SizedBox(height: 24),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'PERMISSION :',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: isMobile
-                                          ? 14
-                                          : (isTablet ? 15 : 16),
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Obx(
-                                () => Row(
-                                  children: UserManagementController.permissions
-                                      .map((permission) {
-                                        return Expanded(
-                                          child: InkWell(
-                                            onTap: () => controller
-                                                .togglePermission(permission),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Checkbox(
-                                                  value: controller
-                                                      .selectedPermissions
-                                                      .contains(permission),
-                                                  onChanged: (value) =>
-                                                      controller
-                                                          .togglePermission(
-                                                            permission,
-                                                          ),
-                                                  materialTapTargetSize:
-                                                      MaterialTapTargetSize
-                                                          .shrinkWrap,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Flexible(
-                                                  child: Text(
-                                                    permission,
-                                                    style: TextStyle(
-                                                      fontSize: isTablet
-                                                          ? 12
-                                                          : 14,
-                                                    ),
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      })
-                                      .toList(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                        // Permissions (for SUB ADMIN and SPOT REG ADMIN) - HIDDEN FOR NOW
+                        // if (controller.selectedType.value == 'SUB ADMIN' ||
+                        //     controller.selectedType.value ==
+                        //         'SPOT REG ADMIN(S)') ...[
+                        //   const SizedBox(height: 24),
+                        //   Column(
+                        //     crossAxisAlignment: CrossAxisAlignment.start,
+                        //     children: [
+                        //       Text(
+                        //         'PERMISSION :',
+                        //         style: Theme.of(context).textTheme.titleMedium
+                        //             ?.copyWith(
+                        //               fontWeight: FontWeight.bold,
+                        //               fontSize: isMobile
+                        //                   ? 14
+                        //                   : (isTablet ? 15 : 16),
+                        //             ),
+                        //       ),
+                        //       const SizedBox(height: 8),
+                        //       Obx(
+                        //         () => Row(
+                        //           children: UserManagementController.permissions
+                        //               .map((permission) {
+                        //                 return Expanded(
+                        //                   child: InkWell(
+                        //                     onTap: () => controller
+                        //                         .togglePermission(permission),
+                        //                     child: Row(
+                        //                       mainAxisSize: MainAxisSize.min,
+                        //                       children: [
+                        //                         Checkbox(
+                        //                           value: controller
+                        //                               .selectedPermissions
+                        //                               .contains(permission),
+                        //                           onChanged: (value) =>
+                        //                               controller
+                        //                                   .togglePermission(
+                        //                                     permission,
+                        //                                   ),
+                        //                           materialTapTargetSize:
+                        //                               MaterialTapTargetSize
+                        //                                   .shrinkWrap,
+                        //                         ),
+                        //                         const SizedBox(width: 4),
+                        //                         Flexible(
+                        //                           child: Text(
+                        //                             permission,
+                        //                             style: TextStyle(
+                        //                               fontSize: isTablet
+                        //                                   ? 12
+                        //                                   : 14,
+                        //                             ),
+                        //                             overflow:
+                        //                                 TextOverflow.ellipsis,
+                        //                           ),
+                        //                         ),
+                        //                       ],
+                        //                     ),
+                        //                   ),
+                        //                 );
+                        //               })
+                        //               .toList(),
+                        //         ),
+                        //       ),
+                        //     ],
+                        //   ),
+                        // ],
                         // Allot Stages (for JURY(S)) - Desktop only
                         if (controller.selectedType.value == 'JURY(S)') ...[
                           const SizedBox(height: 24),
@@ -731,35 +871,33 @@ class UserManagementScreen extends StatelessWidget {
                                 () => Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: UserManagementController.stages.map(
-                                    (stage) {
-                                      return InkWell(
-                                        onTap: () =>
-                                            controller.toggleStage(stage),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Checkbox(
-                                              value: controller.selectedStages
-                                                  .contains(stage),
-                                              onChanged: (value) =>
-                                                  controller.toggleStage(stage),
-                                              materialTapTargetSize:
-                                                  MaterialTapTargetSize
-                                                      .shrinkWrap,
+                                  children: controller.stages.map((stage) {
+                                    return InkWell(
+                                      onTap: () =>
+                                          controller.toggleStage(stage),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Checkbox(
+                                            value: controller.selectedStages
+                                                .contains(stage),
+                                            onChanged: (value) =>
+                                                controller.toggleStage(stage),
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            stage,
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 12 : 14,
                                             ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              stage,
-                                              style: TextStyle(
-                                                fontSize: isTablet ? 12 : 14,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ).toList(),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
                               ),
                             ],
@@ -784,36 +922,35 @@ class UserManagementScreen extends StatelessWidget {
                                 () => Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: UserManagementController.categories
-                                      .map((category) {
-                                        return InkWell(
-                                          onTap: () => controller
-                                              .toggleCategory(category),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Checkbox(
-                                                value: controller
-                                                    .selectedCategories
-                                                    .contains(category),
-                                                onChanged: (value) => controller
-                                                    .toggleCategory(category),
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                category,
-                                                style: TextStyle(
-                                                  fontSize: isTablet ? 12 : 14,
-                                                ),
-                                              ),
-                                            ],
+                                  children: controller.categories.map((
+                                    category,
+                                  ) {
+                                    return InkWell(
+                                      onTap: () =>
+                                          controller.toggleCategory(category),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Checkbox(
+                                            value: controller.selectedCategories
+                                                .contains(category),
+                                            onChanged: (value) => controller
+                                                .toggleCategory(category),
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
                                           ),
-                                        );
-                                      })
-                                      .toList(),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            category,
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 12 : 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
                               ),
                             ],
@@ -844,6 +981,9 @@ class UserManagementScreen extends StatelessWidget {
                             controller.photoBytes.value,
                             200,
                             200,
+                            photoUrl: controller.photoUrl.value.isNotEmpty
+                                ? controller.photoUrl.value
+                                : null,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -869,60 +1009,60 @@ class UserManagementScreen extends StatelessWidget {
               ),
         const SizedBox(height: 24),
 
-        // Permissions (for SUB ADMIN and SPOT REG ADMIN) - Mobile only
-        if (isMobile &&
-            (controller.selectedType.value == 'SUB ADMIN' ||
-                controller.selectedType.value == 'SPOT REG ADMIN(S)')) ...[
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'PERMISSION :',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: isMobile ? 14 : (isTablet ? 15 : 16),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Obx(
-                () => Column(
-                  children: UserManagementController.permissions.map((
-                    permission,
-                  ) {
-                    return InkWell(
-                      onTap: () => controller.togglePermission(permission),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            Checkbox(
-                              value: controller.selectedPermissions.contains(
-                                permission,
-                              ),
-                              onChanged: (value) =>
-                                  controller.togglePermission(permission),
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                permission,
-                                style: const TextStyle(fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-        ],
+        // Permissions (for SUB ADMIN and SPOT REG ADMIN) - Mobile only - HIDDEN FOR NOW
+        // if (isMobile &&
+        //     (controller.selectedType.value == 'SUB ADMIN' ||
+        //         controller.selectedType.value == 'SPOT REG ADMIN(S)')) ...[
+        //   Column(
+        //     crossAxisAlignment: CrossAxisAlignment.start,
+        //     children: [
+        //       Text(
+        //         'PERMISSION :',
+        //         style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        //           fontWeight: FontWeight.bold,
+        //           fontSize: isMobile ? 14 : (isTablet ? 15 : 16),
+        //         ),
+        //       ),
+        //       const SizedBox(height: 8),
+        //       Obx(
+        //         () => Column(
+        //           children: UserManagementController.permissions.map((
+        //             permission,
+        //           ) {
+        //             return InkWell(
+        //               onTap: () => controller.togglePermission(permission),
+        //               child: Padding(
+        //                 padding: const EdgeInsets.symmetric(vertical: 4),
+        //                 child: Row(
+        //                   children: [
+        //                     Checkbox(
+        //                       value: controller.selectedPermissions.contains(
+        //                         permission,
+        //                       ),
+        //                       onChanged: (value) =>
+        //                           controller.togglePermission(permission),
+        //                       materialTapTargetSize:
+        //                           MaterialTapTargetSize.shrinkWrap,
+        //                     ),
+        //                     const SizedBox(width: 4),
+        //                     Expanded(
+        //                       child: Text(
+        //                         permission,
+        //                         style: const TextStyle(fontSize: 14),
+        //                         overflow: TextOverflow.ellipsis,
+        //                       ),
+        //                     ),
+        //                   ],
+        //                 ),
+        //               ),
+        //             );
+        //           }).toList(),
+        //         ),
+        //       ),
+        //     ],
+        //   ),
+        //   const SizedBox(height: 24),
+        // ],
 
         // Allot Stages (for JURY(S)) - Mobile only
         if (isMobile && controller.selectedType.value == 'JURY(S)') ...[
@@ -941,7 +1081,7 @@ class UserManagementScreen extends StatelessWidget {
                 () => Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: UserManagementController.stages.map((stage) {
+                  children: controller.stages.map((stage) {
                     return InkWell(
                       onTap: () => controller.toggleStage(stage),
                       child: Row(
@@ -981,7 +1121,7 @@ class UserManagementScreen extends StatelessWidget {
               const SizedBox(height: 8),
               Obx(
                 () => Column(
-                  children: UserManagementController.categories.map((category) {
+                  children: controller.categories.map((category) {
                     return InkWell(
                       onTap: () => controller.toggleCategory(category),
                       child: Padding(
@@ -1312,8 +1452,11 @@ class UserManagementScreen extends StatelessWidget {
     double width,
     double height, {
     double borderRadius = 8,
+    String? photoUrl,
   }) {
-    final hasImage = (bytes != null) || (file != null && file.existsSync());
+    final hasLocalImage =
+        (bytes != null) || (file != null && file.existsSync());
+    final hasNetworkImage = photoUrl != null && photoUrl.isNotEmpty;
 
     return Container(
       width: width,
@@ -1324,7 +1467,7 @@ class UserManagementScreen extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
-        child: hasImage
+        child: hasLocalImage
             ? (kIsWeb
                   ? (bytes != null
                         ? Image.memory(bytes, fit: BoxFit.cover)
@@ -1332,8 +1475,44 @@ class UserManagementScreen extends StatelessWidget {
                   : (file != null && file.existsSync()
                         ? Image.file(file, fit: BoxFit.cover)
                         : _buildDefaultPhotoPreview()))
+            : hasNetworkImage
+            ? _buildNetworkImage(photoUrl!, width, height)
             : _buildDefaultPhotoPreview(),
       ),
+    );
+  }
+
+  Widget _buildNetworkImage(String imageUrl, double width, double height) {
+    // Construct full URL if needed
+    String fullUrl = imageUrl;
+    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+      // If it's a relative path, we need to construct the full URL
+      // For now, assume the photoUrl from the model is already a full URL or relative path
+      // If it's just a path like '/user/1/photo', we need to add base URL
+      if (imageUrl.startsWith('/')) {
+        // This is handled in the controller when setting photoUrl
+        fullUrl = imageUrl;
+      }
+    }
+
+    return Image.network(
+      fullUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return _buildDefaultPhotoPreview();
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                : null,
+            strokeWidth: 2,
+          ),
+        );
+      },
     );
   }
 

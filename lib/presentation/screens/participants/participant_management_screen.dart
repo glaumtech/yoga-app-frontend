@@ -54,16 +54,35 @@ class ParticipantManagementScreen extends StatelessWidget {
                   () => Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ToggleButtonGroup(
-                        options: const [
-                          ToggleButtonOption(label: '+ CREATE'),
-                          ToggleButtonOption(label: '≡ LIST'),
-                        ],
-                        selectedIndex: participantController.isListView.value
-                            ? 1
-                            : 0,
-                        onTap: (index) =>
-                            participantController.toggleViewMode(index == 1),
+                      Obx(
+                        () => ToggleButtonGroup(
+                          options: [
+                            ToggleButtonOption(
+                              label: participantController.isViewMode.value
+                                  ? '+ VIEW'
+                                  : participantController.isEditMode
+                                  ? '+ EDIT'
+                                  : '+ CREATE',
+                            ),
+                            const ToggleButtonOption(label: '≡ LIST'),
+                          ],
+                          selectedIndex: participantController.isListView.value
+                              ? 1
+                              : 0,
+                          onTap: (index) {
+                            if (index == 1) {
+                              // Switching to list view - reset form if in edit/view mode
+                              if (participantController.isEditMode ||
+                                  participantController.isViewMode.value) {
+                                participantController.resetForm();
+                              }
+                            } else {
+                              // Switching to create view - always reset form to ensure clean state
+                              participantController.resetForm();
+                            }
+                            participantController.toggleViewMode(index == 1);
+                          },
+                        ),
                       ),
                       // Single/Bulk Toggle Button
                       if (!participantController.isListView.value)

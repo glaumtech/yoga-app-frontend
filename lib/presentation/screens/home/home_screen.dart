@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../controllers/auth_controller.dart';
+import '../../controllers/user_management_controller.dart';
 import '../../controllers/event_controller.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
@@ -20,6 +21,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     try {
       final authController = Get.find<AuthController>();
+      final userController = Get.put(UserManagementController());
       final eventController = Get.find<EventController>();
 
       // Events are already loaded by EventController.onInit()
@@ -103,17 +105,27 @@ class HomeScreen extends StatelessWidget {
                     ),
                     // Action Buttons
                     Obx(() {
-                      final isAuthenticated = authController.isAuthenticated;
-                      final userIsAdmin = authController.isAdmin;
-                      final currentUser = authController.currentUser.value;
+                      final currentUser = userController.currentUser.value;
+                      final isAuthenticated = userController.isAuthenticated;
+                      final userTypeName =
+                          currentUser?.userTypeName ?? currentUser?.type ?? '';
+                      final userTypeUpper = userTypeName.toUpperCase();
+
+                      // Check specific user types: SUB_ADMIN and SPOT_REG_ADMIN have admin access
+                      final userIsAdmin =
+                          userTypeUpper == 'SUB_ADMIN' ||
+                          userTypeUpper == 'SPOT_REG_ADMIN' ||
+                          userTypeUpper.contains('SUB ADMIN') ||
+                          userTypeUpper.contains('SPOT REG ADMIN');
+
+                      // JURY has judge/jury access
                       final userIsJudge =
-                          currentUser?.roleName.toUpperCase().contains(
-                            'JUDGE',
-                          ) ??
-                          false;
+                          userTypeUpper == 'JURY' ||
+                          userTypeUpper.contains('JURY') ||
+                          userTypeUpper.contains('JUDGE');
 
                       // Debug logging
-                      debugPrint('User role: ${currentUser?.roleName}');
+                      debugPrint('User type: $userTypeName');
                       debugPrint('Is Judge: $userIsJudge');
                       debugPrint('Is Admin: $userIsAdmin');
 
@@ -225,17 +237,40 @@ class HomeScreen extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
-                                        child: Text(
-                                          authController
-                                                  .currentUser
-                                                  .value
-                                                  ?.name ??
-                                              'Profile',
-                                          style: const TextStyle(
-                                            color: AppTheme.primaryColor,
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 14,
-                                          ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              userController
+                                                      .currentUser
+                                                      .value
+                                                      ?.name ??
+                                                  'Profile',
+                                              style: const TextStyle(
+                                                color: AppTheme.primaryColor,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            if (userController
+                                                    .currentUser
+                                                    .value
+                                                    ?.userTypeName !=
+                                                null)
+                                              Text(
+                                                userController
+                                                    .currentUser
+                                                    .value!
+                                                    .userTypeName!,
+                                                style: TextStyle(
+                                                  color: AppTheme.primaryColor
+                                                      .withOpacity(0.7),
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                       ),
                                     ],
@@ -655,13 +690,18 @@ class HomeScreen extends StatelessWidget {
                         LayoutBuilder(
                           builder: (context, constraints) {
                             final isMobile = constraints.maxWidth < 600;
-                            final currentUser =
-                                authController.currentUser.value;
+                            final userCtrl =
+                                Get.find<UserManagementController>();
+                            final currentUser = userCtrl.currentUser.value;
+                            final userTypeName =
+                                currentUser?.userTypeName ??
+                                currentUser?.type ??
+                                '';
+                            final userTypeUpper = userTypeName.toUpperCase();
                             final userIsJudge =
-                                currentUser?.roleName.toUpperCase().contains(
-                                  'JUDGE',
-                                ) ??
-                                false;
+                                userTypeUpper == 'JURY' ||
+                                userTypeUpper.contains('JURY') ||
+                                userTypeUpper.contains('JUDGE');
 
                             if (isMobile) {
                               // Mobile: Stack vertically

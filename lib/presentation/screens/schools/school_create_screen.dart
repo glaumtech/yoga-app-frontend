@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/school_controller.dart';
-import '../../widgets/primary_button.dart';
-import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
+import '../../widgets/buttons.dart';
+import '../../../data/models/city_model.dart';
 
 class SchoolCreateScreen extends StatelessWidget {
   const SchoolCreateScreen({super.key});
@@ -49,6 +49,12 @@ class SchoolCreateScreen extends StatelessWidget {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter institution name';
                               }
+                              if (value.trim().length < 3) {
+                                return 'Institution name must be at least 3 characters';
+                              }
+                              if (value.trim().length > 255) {
+                                return 'Institution name must not exceed 255 characters';
+                              }
                               return null;
                             },
                           ),
@@ -62,6 +68,12 @@ class SchoolCreateScreen extends StatelessWidget {
                             validator: (value) {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter address';
+                              }
+                              if (value.trim().length < 10) {
+                                return 'Address must be at least 10 characters';
+                              }
+                              if (value.trim().length > 2000) {
+                                return 'Address must not exceed 2000 characters';
                               }
                               return null;
                             },
@@ -81,6 +93,12 @@ class SchoolCreateScreen extends StatelessWidget {
                                 if (value == null || value.isEmpty) {
                                   return 'Please enter institution name';
                                 }
+                                if (value.trim().length < 3) {
+                                  return 'Institution name must be at least 3 characters';
+                                }
+                                if (value.trim().length > 255) {
+                                  return 'Institution name must not exceed 255 characters';
+                                }
                                 return null;
                               },
                             ),
@@ -97,6 +115,12 @@ class SchoolCreateScreen extends StatelessWidget {
                                 if (value == null || value.isEmpty) {
                                   return 'Please enter address';
                                 }
+                                if (value.trim().length < 10) {
+                                  return 'Address must be at least 10 characters';
+                                }
+                                if (value.trim().length > 2000) {
+                                  return 'Address must not exceed 2000 characters';
+                                }
                                 return null;
                               },
                             ),
@@ -105,7 +129,7 @@ class SchoolCreateScreen extends StatelessWidget {
                       ),
                 SizedBox(height: isMobile ? 20 : 24),
 
-                // District, State, Pincode in row (desktop) or column (mobile)
+                // State, City, Pincode in row (desktop) or column (mobile)
                 isMobile
                     ? Column(
                         children: [
@@ -116,7 +140,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             isTablet,
                           ),
                           SizedBox(height: isMobile ? 20 : 24),
-                          _buildDistrictField(
+                          _buildCityField(
                             context,
                             controller,
                             isMobile,
@@ -143,7 +167,7 @@ class SchoolCreateScreen extends StatelessWidget {
                           ),
                           SizedBox(width: isTablet ? 16 : 20),
                           Expanded(
-                            child: _buildDistrictField(
+                            child: _buildCityField(
                               context,
                               controller,
                               isMobile,
@@ -185,22 +209,57 @@ class SchoolCreateScreen extends StatelessWidget {
                       : const SizedBox.shrink(),
                 ),
 
-                // Submit Button
-                Center(
-                  child: Obx(
-                    () => controller.isLoading.value
-                        ? const CustomLoader(message: 'Submitting...')
-                        : PrimaryButton(
-                            text: 'SUBMIT',
-                            icon: Icons.check_circle,
-                            onPressed: () => controller.submitSchool(),
-                          ),
-                  ),
+                // Action Buttons (Save/Update and Cancel)
+                Obx(
+                  () => isMobile
+                      ? Column(
+                          children: [
+                            saveButton(
+                              onPressed: () => controller.submitSchool(),
+                              isLoading: controller.isLoading,
+                              text: controller.isEditMode.value
+                                  ? 'UPDATE'
+                                  : 'SAVE',
+                              isFullWidth: true,
+                            ),
+                            const SizedBox(height: 12),
+                            cancelButton(
+                              onPressed: () {
+                                controller.resetForm();
+                                // Redirect to list view if in edit mode
+                                if (controller.isEditMode.value) {
+                                  controller.toggleViewMode(true);
+                                }
+                              },
+                              isFullWidth: true,
+                            ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            saveButton(
+                              onPressed: () => controller.submitSchool(),
+                              isLoading: controller.isLoading,
+                              text: controller.isEditMode.value
+                                  ? 'UPDATE'
+                                  : 'SAVE',
+                              width: 200,
+                            ),
+                            const SizedBox(width: 16),
+                            cancelButton(
+                              onPressed: () {
+                                controller.resetForm();
+                                // Redirect to list view if in edit mode
+                                if (controller.isEditMode.value) {
+                                  controller.toggleViewMode(true);
+                                }
+                              },
+                              width: 200,
+                            ),
+                          ],
+                        ),
                 ),
-
-                // Developer Notes
-                SizedBox(height: isMobile ? 24 : 32),
-                _buildDeveloperNotes(context, isMobile),
               ],
             ),
           ),
@@ -247,74 +306,6 @@ class SchoolCreateScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDistrictField(
-    BuildContext context,
-    SchoolController controller,
-    bool isMobile,
-    bool isTablet,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'District :',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: isMobile ? 14 : 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Obx(
-          () => DropdownButtonFormField<String>(
-            value: controller.selectedDistrict.value.isNotEmpty
-                ? controller.selectedDistrict.value
-                : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 12,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            hint: Text(
-              'Select District',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
-            items: controller.selectedState.value.isNotEmpty
-                ? controller
-                      .getDistrictsForState(controller.selectedState.value)
-                      .map((district) {
-                        return DropdownMenuItem<String>(
-                          value: district,
-                          child: Text(
-                            district,
-                            style: TextStyle(fontSize: isMobile ? 14 : 16),
-                          ),
-                        );
-                      })
-                      .toList()
-                : [],
-            onChanged: (value) {
-              controller.selectedDistrict.value = value ?? '';
-              controller.selectedPincode.value = '';
-            },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please select district';
-              }
-              return null;
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildStateField(
     BuildContext context,
     SchoolController controller,
@@ -332,8 +323,39 @@ class SchoolCreateScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Obx(
-          () => DropdownButtonFormField<String>(
+        Obx(() {
+          if (controller.isLoadingStates.value) {
+            return DropdownButtonFormField<String>(
+              value: null,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 12 : 16,
+                  vertical: 12,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                suffixIcon: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+              hint: Text(
+                'Loading states...',
+                style: TextStyle(fontSize: isMobile ? 14 : 16),
+              ),
+              items: [],
+              onChanged: null,
+            );
+          }
+
+          return DropdownButtonFormField<String>(
             value: controller.selectedState.value.isNotEmpty
                 ? controller.selectedState.value
                 : null,
@@ -353,19 +375,29 @@ class SchoolCreateScreen extends StatelessWidget {
               style: TextStyle(fontSize: isMobile ? 14 : 16),
             ),
             style: TextStyle(fontSize: isMobile ? 14 : 16),
-            items: SchoolController.states.map((state) {
+            items: controller.states.map((state) {
               return DropdownMenuItem<String>(
-                value: state,
+                value: state.stateName,
                 child: Text(
-                  state,
+                  state.stateName,
                   style: TextStyle(fontSize: isMobile ? 14 : 16),
                 ),
               );
             }).toList(),
-            onChanged: (value) {
-              controller.selectedState.value = value ?? '';
-              controller.selectedDistrict.value = '';
-              controller.selectedPincode.value = '';
+            onChanged: (value) async {
+              if (value != null) {
+                final selectedState = controller.states.firstWhere(
+                  (s) => s.stateName == value,
+                );
+                controller.selectedState.value = value;
+                controller.selectedStateId.value = selectedState.id;
+                controller.selectedCity.value = '';
+                controller.pincodeController.clear();
+                controller.cities.clear();
+
+                // Load cities for selected state
+                await controller.loadCitiesByStateId(selectedState.id);
+              }
             },
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -373,8 +405,129 @@ class SchoolCreateScreen extends StatelessWidget {
               }
               return null;
             },
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildCityField(
+    BuildContext context,
+    SchoolController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'City :',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: isMobile ? 14 : 16,
           ),
         ),
+        const SizedBox(height: 8),
+        Obx(() {
+          if (controller.isLoadingCities.value) {
+            return DropdownButtonFormField<String>(
+              value: null,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 12 : 16,
+                  vertical: 12,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                suffixIcon: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+              hint: Text(
+                'Loading cities...',
+                style: TextStyle(fontSize: isMobile ? 14 : 16),
+              ),
+              items: [],
+              onChanged: null,
+            );
+          }
+
+          // Get all cities for the selected state
+          List<CityModel> availableCities = [];
+          if (controller.selectedStateId.value > 0) {
+            availableCities = controller.cities
+                .where(
+                  (city) => city.stateId == controller.selectedStateId.value,
+                )
+                .toList();
+            availableCities.sort((a, b) => a.cityName.compareTo(b.cityName));
+          }
+
+          return DropdownButtonFormField<String>(
+            value: controller.selectedCity.value.isNotEmpty
+                ? controller.selectedCity.value
+                : null,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 12 : 16,
+                vertical: 12,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            hint: Text(
+              controller.selectedState.value.isEmpty
+                  ? 'Select State first'
+                  : 'Select City',
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+            ),
+            style: TextStyle(fontSize: isMobile ? 14 : 16),
+            items: availableCities.map((city) {
+              return DropdownMenuItem<String>(
+                value: city.cityName,
+                child: Text(
+                  city.cityName,
+                  style: TextStyle(fontSize: isMobile ? 14 : 16),
+                ),
+              );
+            }).toList(),
+            onChanged: controller.selectedState.value.isEmpty
+                ? null
+                : (value) {
+                    if (value != null) {
+                      final selectedCity = availableCities.firstWhereOrNull(
+                        (city) => city.cityName == value,
+                      );
+                      if (selectedCity != null) {
+                        controller.selectedCity.value = value;
+                        // Auto-populate pincode
+                        controller.pincodeController.text =
+                            selectedCity.pincode;
+                      }
+                    }
+                  },
+            validator: (value) {
+              if (controller.selectedState.value.isEmpty) {
+                return 'Please select state first';
+              }
+              if (value == null || value.isEmpty) {
+                return 'Please select city';
+              }
+              return null;
+            },
+          );
+        }),
       ],
     );
   }
@@ -396,51 +549,34 @@ class SchoolCreateScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Obx(
-          () => DropdownButtonFormField<String>(
-            value: controller.selectedPincode.value.isNotEmpty
-                ? controller.selectedPincode.value
-                : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 12,
-              ),
-              filled: true,
-              fillColor: Colors.white,
+        TextFormField(
+          controller: controller.pincodeController,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 16,
+              vertical: 12,
             ),
-            hint: Text(
-              'Select Pincode',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
-            items: controller.selectedDistrict.value.isNotEmpty
-                ? controller
-                      .getPincodesForDistrict(controller.selectedDistrict.value)
-                      .map((pincode) {
-                        return DropdownMenuItem<String>(
-                          value: pincode,
-                          child: Text(
-                            pincode,
-                            style: TextStyle(fontSize: isMobile ? 14 : 16),
-                          ),
-                        );
-                      })
-                      .toList()
-                : [],
-            onChanged: (value) {
-              controller.selectedPincode.value = value ?? '';
-            },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please select pincode';
-              }
-              return null;
-            },
+            filled: true,
+            fillColor: Colors.white,
+            hintText: 'Enter Pincode',
+            counterText: '',
           ),
+          style: TextStyle(fontSize: isMobile ? 14 : 16),
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter pincode';
+            }
+            if (value.length != 6) {
+              return 'Pincode must be 6 digits';
+            }
+            if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
+              return 'Pincode must contain only numbers';
+            }
+            return null;
+          },
         ),
       ],
     );
@@ -486,57 +622,6 @@ class SchoolCreateScreen extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildDeveloperNotes(BuildContext context, bool isMobile) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '//If the Admin/Sub-Admin wants to add an address, we need this manual adding option.',
-            style: TextStyle(
-              fontSize: isMobile ? 11 : 12,
-              color: Colors.grey[700],
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '//The above given reports has to be auto-populated by our bots or web crawlers or any latest efficient techniques',
-            style: TextStyle(
-              fontSize: isMobile ? 11 : 12,
-              color: Colors.grey[700],
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '//The reports will be populated based on the District and State selected.',
-            style: TextStyle(
-              fontSize: isMobile ? 11 : 12,
-              color: Colors.grey[700],
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '//The printable pdf format will be in A4 size page displaying the address in two halves',
-            style: TextStyle(
-              fontSize: isMobile ? 11 : 12,
-              color: Colors.grey[700],
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

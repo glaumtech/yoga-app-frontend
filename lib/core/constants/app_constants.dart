@@ -70,6 +70,25 @@ class EndPoints {
   static String participantCertificate(String id) =>
       '/participants/$id/certificate';
 
+  /// PARTICIPANT REGISTRATION
+  static String participantRegistrationPhoto(String id) =>
+      '/participant-registration/$id/photo';
+  static String participantRegistrationBonafiedCertificate(String id) =>
+      '/participant-registration/$id/bonafied-certificate';
+
+  /// PARTICIPANT REGISTRATIONS (New API)
+  static String participantRegistrationCreate = '/participant-registration';
+  static String participantRegistrationList = '/participant-registration/list';
+  static String participantRegistrationById(String id) =>
+      '/participant-registration/$id';
+  static String participantRegistrationUpdate(String id) =>
+      '/participant-registration/$id';
+  static String participantRegistrationDelete(String id) =>
+      '/participant-registration/$id';
+  static String participantRegistrationForScoring =
+      '/participant-registration/for-scoring';
+  static String juryScoring = '/jury-scoring';
+
   /// EVENTS
   static String eventRegister = '/event/register';
   static String eventList = '/event/list';
@@ -110,11 +129,16 @@ class EndPoints {
   ) => '/scoring/event/$eventId/participant/$participantId';
 
   /// USER MANAGEMENT
-  static String userList = '/users/list';
-  static String userCreate = '/users/create';
-  static String userCreateVolunteers = '/users/create-volunteers';
-  static String userUpdate(String id) => '/users/update/$id';
-  static String userById(String id) => '/users/$id';
+  static String userList = '/user/list';
+  static String userCreate = '/user';
+  static String userUpdate(String id) => '/user/$id';
+  static String userById(String id) => '/user/$id';
+  static String userPhoto(String id) => '/user/$id/photo';
+  static String userLogin = '/user/login';
+  static String userLogout = '/user/logout';
+  static String userTypes = '/user-type';
+  static String juryAssignments(String userId) =>
+      '/juries/user/$userId/assignments';
 
   /// COMPETITIONS
   static String competitionCreate = '/competition';
@@ -126,10 +150,26 @@ class EndPoints {
   /// COMPETITION OPTIONS
   static String categoryList = '/category';
   static String categoryCreate = '/category';
+  static String categoryByCompetition(int competitionId) =>
+      '/category/competition/$competitionId';
   static String prizeList = '/prize';
   static String prizeCreate = '/prize';
   static String stageList = '/stage';
   static String stageCreate = '/stage';
+  static String stageByCompetition(int competitionId) =>
+      '/stage/competition/$competitionId';
   static String groupList = '/group';
   static String groupCreate = '/group';
+
+  /// LOCATIONS
+  static String stateList = '/state';
+  static String cityListByState(int stateId) => '/city/state/$stateId';
+
+  /// INSTITUTIONS
+  static String institutionCreate = '/institution';
+  static String institutionList = '/institution/list';
+  static String institutionById(String id) => '/institution/$id';
+  static String institutionUpdate(String id) => '/institution/$id';
+  static String institutionDelete(String id) => '/institution/$id';
+  static String institutionSearch = '/institution/search';
 }

@@ -429,10 +429,6 @@ class CompetitionsListScreen extends StatelessWidget {
                         'yyyy-MM-dd',
                       ).format(competition.displayAdFrom!),
                     ),
-                  _buildInfoRow(
-                    'Spot Registration',
-                    competition.spotRegistration ? 'Yes' : 'No',
-                  ),
                   if (competition.participantsPerStage != null)
                     _buildInfoRow(
                       'Participants Per Stage',
@@ -484,11 +480,10 @@ class CompetitionsListScreen extends StatelessWidget {
                     2: FlexColumnWidth(2.0),
                     3: FlexColumnWidth(1.2),
                     4: FlexColumnWidth(1.2),
-                    5: FlexColumnWidth(1.4),
+                    5: FlexColumnWidth(1.5),
                     6: FlexColumnWidth(1.5),
                     7: FlexColumnWidth(1.5),
-                    8: FlexColumnWidth(1.5),
-                    9: FlexColumnWidth(0.8), // Action column
+                    8: FlexColumnWidth(0.8), // Action column
                   },
                   children: [
                     // Header Row
@@ -524,12 +519,6 @@ class CompetitionsListScreen extends StatelessWidget {
                           'END DATE',
                           'eventEndDate',
                           controller,
-                        ),
-                        _buildSortableHeader(
-                          'SPOT REGISTRATION',
-                          'createdAt',
-                          controller,
-                          isSortable: false,
                         ),
                         _buildSortableHeader(
                           'PRIZES',
@@ -573,9 +562,6 @@ class CompetitionsListScreen extends StatelessWidget {
                             DateFormat(
                               'yyyy-MM-dd',
                             ).format(competition.eventEndDate),
-                          ),
-                          _buildTableCell(
-                            competition.spotRegistration ? 'Yes' : 'No',
                           ),
                           _buildTableCell(
                             _getPrizeNames(competition, controller),

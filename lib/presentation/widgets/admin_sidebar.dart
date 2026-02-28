@@ -152,22 +152,22 @@ class AdminSidebar extends StatelessWidget {
                 children: [
                   _buildMenuItem(
                     context,
+                    title: 'COMPETITIONS',
+                    icon: Icons.event,
+                    route: AppRoutes.createCompetition,
+                    currentLocation: currentLocation,
+                    onTap: () {
+                      context.push(AppRoutes.createCompetition);
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
                     title: 'USERS',
                     icon: Icons.person_add,
                     route: AppRoutes.userManagement,
                     currentLocation: currentLocation,
                     onTap: () {
                       context.push(AppRoutes.userManagement);
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'CREATE COMPETITION',
-                    icon: Icons.event,
-                    route: AppRoutes.createCompetition,
-                    currentLocation: currentLocation,
-                    onTap: () {
-                      context.push(AppRoutes.createCompetition);
                     },
                   ),
                   _buildMenuItem(

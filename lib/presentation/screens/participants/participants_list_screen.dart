@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
@@ -18,7 +19,34 @@ class ParticipantsListScreen extends StatelessWidget {
     // Load competitions if empty
     if (competitionController.competitions.isEmpty &&
         !competitionController.isLoading.value) {
-      competitionController.loadCompetitions();
+      competitionController.loadCompetitions().then((_) {
+        // Set first competition as default if no competition is selected
+        if (competitionController.competitions.isNotEmpty &&
+            participantController.selectedEventId.value.isEmpty) {
+          final firstCompetition = competitionController.competitions
+              .firstWhere(
+                (c) => c.id != null,
+                orElse: () => competitionController.competitions.first,
+              );
+          if (firstCompetition.id != null) {
+            participantController.selectedEventId.value = firstCompetition.id!;
+            participantController.loadParticipantsByEventId(
+              firstCompetition.id!,
+            );
+          }
+        }
+      });
+    } else if (competitionController.competitions.isNotEmpty &&
+        participantController.selectedEventId.value.isEmpty) {
+      // Set first competition as default if competitions are already loaded
+      final firstCompetition = competitionController.competitions.firstWhere(
+        (c) => c.id != null,
+        orElse: () => competitionController.competitions.first,
+      );
+      if (firstCompetition.id != null) {
+        participantController.selectedEventId.value = firstCompetition.id!;
+        participantController.loadParticipantsByEventId(firstCompetition.id!);
+      }
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -118,11 +146,24 @@ class ParticipantsListScreen extends StatelessWidget {
                     participantController,
                   );
                 } else {
-                  return _buildDesktopTable(
-                    context,
-                    participants,
-                    participantController,
-                    isTablet,
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: _buildDesktopTable(
+                          context,
+                          participants,
+                          participantController,
+                          isTablet,
+                        ),
+                      ),
+                      // Pagination Controls
+                      _buildPaginationControls(
+                        context,
+                        participantController,
+                        isMobile,
+                        isTablet,
+                      ),
+                    ],
                   );
                 }
               }),
@@ -140,153 +181,258 @@ class ParticipantsListScreen extends StatelessWidget {
     bool isMobile,
     bool isTablet,
   ) {
-    return Column(
+    if (isMobile) {
+      return Column(
+        children: [
+          // Search Bar
+          TextField(
+            onChanged: (value) {
+              controller.searchQuery.value = value;
+              // Debounce search - reload after user stops typing
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (controller.searchQuery.value == value) {
+                  final eventId = controller.selectedEventId.value;
+                  if (eventId.isNotEmpty) {
+                    controller.loadParticipantsByEventId(
+                      eventId,
+                      resetPage: true,
+                    );
+                  }
+                }
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Search by name, category, or group...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: Obx(() {
+                if (controller.searchQuery.value.isNotEmpty) {
+                  return IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      controller.searchQuery.value = '';
+                      final eventId = controller.selectedEventId.value;
+                      if (eventId.isNotEmpty) {
+                        controller.loadParticipantsByEventId(
+                          eventId,
+                          resetPage: true,
+                        );
+                      }
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
+              }),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              filled: true,
+              fillColor: Colors.grey[50],
+            ),
+          ),
+          SizedBox(height: isMobile ? 12 : 16),
+          // Competition Dropdown and Refresh
+          Row(
+            children: [
+              Expanded(
+                child: Obx(() {
+                  // Get the first competition ID as default if none selected
+                  final defaultCompetitionId =
+                      competitionController.competitions
+                          .where((c) => c.id != null)
+                          .isNotEmpty
+                      ? competitionController.competitions
+                            .where((c) => c.id != null)
+                            .first
+                            .id
+                      : null;
+
+                  final selectedValue =
+                      controller.selectedEventId.value.isNotEmpty
+                      ? controller.selectedEventId.value
+                      : defaultCompetitionId;
+
+                  return DropdownButtonFormField<String>(
+                    key: const ValueKey('mobile-competition-dropdown'),
+                    value: selectedValue,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 16,
+                      ),
+                      isDense: true,
+                    ),
+                    isExpanded: true,
+                    items: competitionController.competitions
+                        .where((competition) => competition.id != null)
+                        .map((competition) {
+                          return DropdownMenuItem<String>(
+                            value: competition.id,
+                            child: Text(
+                              competition.competitionName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        })
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        controller.selectedEventId.value = value;
+                        controller.loadParticipantsByEventId(value);
+                      }
+                    },
+                  );
+                }),
+              ),
+              SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  final eventId = controller.selectedEventId.value;
+                  if (eventId.isNotEmpty) {
+                    controller.loadParticipantsByEventId(eventId);
+                  }
+                },
+                tooltip: 'Refresh',
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.grey[100],
+                  padding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // Desktop/Tablet: All in one row
+    return Row(
       children: [
         // Search Bar
-        TextField(
-          onChanged: (value) => controller.searchQuery.value = value,
-          decoration: InputDecoration(
-            hintText: 'Search by name, category, or group...',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: Obx(() {
-              if (controller.searchQuery.value.isNotEmpty) {
-                return IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () => controller.searchQuery.value = '',
-                );
-              }
-              return const SizedBox.shrink();
-            }),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+        Expanded(
+          child: TextField(
+            onChanged: (value) {
+              controller.searchQuery.value = value;
+              // Debounce search - reload after user stops typing
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (controller.searchQuery.value == value) {
+                  final eventId = controller.selectedEventId.value;
+                  if (eventId.isNotEmpty) {
+                    controller.loadParticipantsByEventId(
+                      eventId,
+                      resetPage: true,
+                    );
+                  }
+                }
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Search by name, category, or group...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: Obx(() {
+                if (controller.searchQuery.value.isNotEmpty) {
+                  return IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      controller.searchQuery.value = '';
+                      final eventId = controller.selectedEventId.value;
+                      if (eventId.isNotEmpty) {
+                        controller.loadParticipantsByEventId(
+                          eventId,
+                          resetPage: true,
+                        );
+                      }
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
+              }),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              filled: true,
+              fillColor: Colors.grey[50],
             ),
-            filled: true,
-            fillColor: Colors.grey[50],
           ),
         ),
-        SizedBox(height: isMobile ? 12 : 16),
-        // Filter by Competition
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Obx(
-              () => isMobile
-                  ? Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: controller.selectedEventId.value.isNotEmpty
-                            ? controller.selectedEventId.value
-                            : null,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey[50],
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 16,
-                          ),
-                          isDense: true,
-                        ),
-                        isExpanded: true,
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text(
-                              'All Competitions',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          ...competitionController.competitions
-                              .where((competition) => competition.id != null)
-                              .map((competition) {
-                                return DropdownMenuItem<String>(
-                                  value: competition.id,
-                                  child: Text(
-                                    competition.competitionName,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            controller.selectedEventId.value = value;
-                            controller.loadParticipantsByEventId(value);
-                          } else {
-                            controller.selectedEventId.value = '';
-                            controller.participants.clear();
-                          }
-                        },
+        SizedBox(width: isTablet ? 12 : 16),
+        // Competition Dropdown
+        Obx(() {
+          // Get the first competition ID as default if none selected
+          final defaultCompetitionId =
+              competitionController.competitions
+                  .where((c) => c.id != null)
+                  .isNotEmpty
+              ? competitionController.competitions
+                    .where((c) => c.id != null)
+                    .first
+                    .id
+              : null;
+
+          final selectedValue = controller.selectedEventId.value.isNotEmpty
+              ? controller.selectedEventId.value
+              : defaultCompetitionId;
+
+          return SizedBox(
+            width: isTablet ? 240 : 280,
+            child: DropdownButtonFormField<String>(
+              key: const ValueKey('desktop-competition-dropdown'),
+              value: selectedValue,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                filled: true,
+                fillColor: Colors.grey[50],
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 16,
+                ),
+                isDense: true,
+              ),
+              isExpanded: true,
+              items: competitionController.competitions
+                  .where((competition) => competition.id != null)
+                  .map((competition) {
+                    return DropdownMenuItem<String>(
+                      value: competition.id,
+                      child: Text(
+                        competition.competitionName,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    )
-                  : SizedBox(
-                      width: isTablet ? 320 : 360,
-                      child: DropdownButtonFormField<String>(
-                        value: controller.selectedEventId.value.isNotEmpty
-                            ? controller.selectedEventId.value
-                            : null,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey[50],
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 16,
-                          ),
-                          isDense: true,
-                        ),
-                        isExpanded: true,
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text(
-                              'All Competitions',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          ...competitionController.competitions
-                              .where((competition) => competition.id != null)
-                              .map((competition) {
-                                return DropdownMenuItem<String>(
-                                  value: competition.id,
-                                  child: Text(
-                                    competition.competitionName,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            controller.selectedEventId.value = value;
-                            controller.loadParticipantsByEventId(value);
-                          } else {
-                            controller.selectedEventId.value = '';
-                            controller.participants.clear();
-                          }
-                        },
-                      ),
-                    ),
-            ),
-            SizedBox(width: isMobile ? 8 : 12),
-            // Refresh Button
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                final eventId = controller.selectedEventId.value;
-                if (eventId.isNotEmpty) {
-                  controller.loadParticipantsByEventId(eventId);
+                    );
+                  })
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  controller.selectedEventId.value = value;
+                  controller.loadParticipantsByEventId(value);
                 }
               },
-              tooltip: 'Refresh',
-              constraints: const BoxConstraints(),
-              padding: const EdgeInsets.all(8),
             ),
-          ],
+          );
+        }),
+        SizedBox(width: isTablet ? 8 : 12),
+        // Refresh Button
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: () {
+            final eventId = controller.selectedEventId.value;
+            if (eventId.isNotEmpty) {
+              controller.loadParticipantsByEventId(eventId);
+            }
+          },
+          tooltip: 'Refresh',
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.grey[100],
+            padding: const EdgeInsets.all(12),
+          ),
         ),
       ],
     );
@@ -344,6 +490,18 @@ class ParticipantsListScreen extends StatelessWidget {
                                 color: Colors.grey[600],
                               ),
                             ),
+                            if (participant.registrationNo != null &&
+                                participant.registrationNo!.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Reg. No: ${participant.registrationNo}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.primaryColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -402,6 +560,8 @@ class ParticipantsListScreen extends StatelessWidget {
                     5: FlexColumnWidth(1.5),
                     6: FlexColumnWidth(2.0),
                     7: FlexColumnWidth(1.5),
+                    8: FlexColumnWidth(1.2),
+                    9: const FixedColumnWidth(100),
                   },
                   children: [
                     // Header Row
@@ -411,13 +571,48 @@ class ParticipantsListScreen extends StatelessWidget {
                       ),
                       children: [
                         _buildTableCell('PHOTO', isHeader: true),
-                        _buildTableCell('NAME', isHeader: true),
-                        _buildTableCell('AGE', isHeader: true),
-                        _buildTableCell('GENDER', isHeader: true),
-                        _buildTableCell('CATEGORY', isHeader: true),
-                        _buildTableCell('GROUP', isHeader: true),
-                        _buildTableCell('INSTITUTION', isHeader: true),
-                        _buildTableCell('YOGA TEACHER', isHeader: true),
+                        _buildSortableHeader(
+                          'NAME',
+                          'participantName',
+                          controller,
+                        ),
+                        _buildSortableHeader('AGE', 'age', controller),
+                        _buildSortableHeader(
+                          'GENDER',
+                          'sex',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'CATEGORY',
+                          'categoryName',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'GROUP',
+                          'groupName',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'INSTITUTION',
+                          'institutionName',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'YOGA TEACHER',
+                          'yogaTeacherName',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'CREATED',
+                          'createdAt',
+                          controller,
+                        ),
+                        _buildTableCell('ACTIONS', isHeader: true),
                       ],
                     ),
                     // Data Rows
@@ -432,13 +627,24 @@ class ParticipantsListScreen extends StatelessWidget {
                               ),
                             ),
                           ),
-                          _buildTableCell(participant.participantName),
+                          _buildClickableNameCell(
+                            context,
+                            participant.participantName,
+                            participant,
+                            controller,
+                          ),
                           _buildTableCell(participant.age.toString()),
                           _buildTableCell(participant.gender),
                           _buildTableCell(participant.category),
                           _buildTableCell(participant.standard),
                           _buildTableCell(participant.schoolName),
                           _buildTableCell(participant.yogaMasterName),
+                          _buildTableCell(
+                            DateFormat(
+                              'MMM dd, yyyy',
+                            ).format(participant.createdAt),
+                          ),
+                          _buildActionCell(context, participant, controller),
                         ],
                       );
                     }).toList(),
@@ -526,5 +732,330 @@ class ParticipantsListScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildClickableNameCell(
+    BuildContext context,
+    String name,
+    ParticipantModel participant,
+    ParticipantController controller,
+  ) {
+    return InkWell(
+      onTap: () {
+        // Navigate to participant registration form in view mode (non-editable)
+        // Use existing participant data without API call
+        controller.initializeFormForView(participant);
+        // Switch to registration form view
+        controller.toggleViewMode(false);
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              name,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.primaryColor,
+                decoration: TextDecoration.underline,
+                decorationColor: AppTheme.primaryColor,
+              ),
+              softWrap: true,
+              maxLines: null,
+            ),
+            if (participant.registrationNo != null &&
+                participant.registrationNo!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Reg. No: ${participant.registrationNo}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionCell(
+    BuildContext context,
+    ParticipantModel participant,
+    ParticipantController controller,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
+            onPressed: () {
+              // Use existing participant data without API call
+              controller.initializeFormFromModel(participant);
+              // Switch to registration form view
+              controller.toggleViewMode(false);
+            },
+            tooltip: 'Edit',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+            onPressed: () {
+              if (participant.id != null) {
+                _showDeleteDialog(context, controller, participant);
+              }
+            },
+            tooltip: 'Delete',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(
+    BuildContext context,
+    ParticipantController controller,
+    ParticipantModel participant,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Participant'),
+        content: Text(
+          'Are you sure you want to delete ${participant.participantName}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              if (participant.id != null) {
+                try {
+                  final success = await controller.deleteParticipant(
+                    participant.id!,
+                  );
+                  if (success) {
+                    // Reload participants list
+                    final eventId = controller.selectedEventId.value;
+                    if (eventId.isNotEmpty) {
+                      controller.loadParticipantsByEventId(
+                        eventId,
+                        resetPage: true,
+                      );
+                    }
+                    Get.snackbar(
+                      'Success',
+                      'Participant deleted successfully',
+                      backgroundColor: Colors.green,
+                      colorText: Colors.white,
+                    );
+                  } else {
+                    Get.snackbar(
+                      'Error',
+                      controller.errorMessage.value.isNotEmpty
+                          ? controller.errorMessage.value
+                          : 'Failed to delete participant',
+                      backgroundColor: Colors.red,
+                      colorText: Colors.white,
+                    );
+                  }
+                } catch (e) {
+                  Get.snackbar(
+                    'Error',
+                    'Failed to delete participant: ${e.toString()}',
+                    backgroundColor: Colors.red,
+                    colorText: Colors.white,
+                  );
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSortableHeader(
+    String label,
+    String sortField,
+    ParticipantController controller, {
+    bool isSortable = true,
+  }) {
+    return Obx(() {
+      final isActive = isSortable && controller.sortBy.value == sortField;
+      final isAscending = controller.sortOrder.value == 'asc';
+
+      return InkWell(
+        onTap: isSortable
+            ? () {
+                // Toggle sort order if same field, otherwise set to desc
+                final newOrder = isActive && !isAscending ? 'asc' : 'desc';
+                controller.setSorting(sortField, newOrder);
+              }
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isActive ? AppTheme.primaryColor : Colors.black87,
+                  ),
+                  softWrap: true,
+                  maxLines: null,
+                ),
+              ),
+              if (isSortable) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  isActive
+                      ? (isAscending
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward)
+                      : Icons.unfold_more,
+                  size: 16,
+                  color: isActive ? AppTheme.primaryColor : Colors.grey[600],
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildPaginationControls(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Obx(() {
+      // Only show pagination if there are pages
+      if (controller.totalPages.value <= 0) {
+        return const SizedBox.shrink();
+      }
+
+      return Container(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          border: Border(top: BorderSide(color: Colors.grey[300]!)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Page info and items per page
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Page ${controller.currentPage.value} of ${controller.totalPages.value}',
+                  style: TextStyle(
+                    fontSize: isMobile ? 13 : 14,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Total: ${controller.totalItems.value} participants',
+                  style: TextStyle(
+                    fontSize: isMobile ? 11 : 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+            // Pagination buttons
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: controller.currentPage.value > 1
+                      ? () => controller.previousPage()
+                      : null,
+                  tooltip: 'Previous page',
+                ),
+                // Page numbers (show limited on mobile)
+                if (!isMobile) ...[
+                  ...List.generate(
+                    controller.totalPages.value > 5
+                        ? 5
+                        : controller.totalPages.value,
+                    (index) {
+                      int pageNum;
+                      if (controller.totalPages.value > 5) {
+                        // Show current page and 2 pages on each side
+                        final current = controller.currentPage.value;
+                        final total = controller.totalPages.value;
+                        if (current <= 3) {
+                          pageNum = index + 1;
+                        } else if (current >= total - 2) {
+                          pageNum = total - 4 + index;
+                        } else {
+                          pageNum = current - 2 + index;
+                        }
+                      } else {
+                        pageNum = index + 1;
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: TextButton(
+                          onPressed: () => controller.goToPage(pageNum),
+                          style: TextButton.styleFrom(
+                            backgroundColor:
+                                controller.currentPage.value == pageNum
+                                ? AppTheme.primaryColor
+                                : null,
+                            foregroundColor:
+                                controller.currentPage.value == pageNum
+                                ? Colors.white
+                                : Colors.grey[700],
+                            minimumSize: const Size(40, 40),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: Text('$pageNum'),
+                        ),
+                      );
+                    },
+                  ),
+                ] else
+                  Text(
+                    '${controller.currentPage.value} / ${controller.totalPages.value > 0 ? controller.totalPages.value : 1}',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed:
+                      controller.currentPage.value < controller.totalPages.value
+                      ? () => controller.nextPage()
+                      : null,
+                  tooltip: 'Next page',
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
   }
 }

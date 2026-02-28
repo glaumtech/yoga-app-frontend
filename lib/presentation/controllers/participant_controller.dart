@@ -7,19 +7,23 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import '../../data/repositories/participant_repository.dart';
+import '../../data/repositories/school_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/api_response.dart';
 import '../../data/models/score_response_model.dart';
+import '../../data/models/school_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
+import 'competition_controller.dart';
 
 // Web-specific imports
 import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class ParticipantController extends GetxController {
   final ParticipantRepository _participantRepository = ParticipantRepository();
+  final SchoolRepository _schoolRepository = SchoolRepository();
   final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
@@ -30,8 +34,12 @@ class ParticipantController extends GetxController {
   final RxString errorMessage = ''.obs;
   final Rx<ParticipantModel?> selectedParticipant = Rx<ParticipantModel?>(null);
   final RxBool isListView = false.obs; // Toggle between create and list view
-  final RxBool isBulkMode = false.obs; // Toggle between single and bulk registration
-  final RxString searchQuery = ''.obs; // Search query for filtering participants
+  final RxBool isBulkMode =
+      false.obs; // Toggle between single and bulk registration
+  final RxBool isViewMode =
+      false.obs; // Toggle for view-only mode (non-editable)
+  final RxString searchQuery =
+      ''.obs; // Search query for filtering participants
 
   // Filter state
   final Rx<ParticipantFilterRequest> currentFilter =
@@ -40,6 +48,11 @@ class ParticipantController extends GetxController {
   final RxInt totalPages = 0.obs;
   final RxInt totalItems = 0.obs;
   final RxBool hasMorePages = false.obs;
+
+  // Sorting state
+  final RxString sortBy =
+      'createdAt'.obs; // createdAt, participantName, age, category, groupName
+  final RxString sortOrder = 'desc'.obs; // asc, desc
 
   // Form state
   final TextEditingController nameController = TextEditingController();
@@ -53,15 +66,27 @@ class ParticipantController extends GetxController {
   final Rx<DateTime?> dateOfBirth = Rx<DateTime?>(null);
   final RxString gender = ''.obs;
   final RxList<String> selectedCategories = <String>[].obs;
+  final RxString selectedStage = ''.obs; // Selected stage name
   final RxString standard = ''.obs;
+  final RxInt formResetTrigger =
+      0.obs; // Trigger to force widget rebuilds on form reset
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
   final Rx<File?> bonafideFile = Rx<File?>(null);
   final Rx<XFile?> bonafideImage = Rx<XFile?>(null);
   final Rx<ParticipantModel?> participantToEdit = Rx<ParticipantModel?>(null);
   final RxString existingPhotoUrl = ''.obs;
+  final RxString existingCertificateUrl = ''.obs;
   final RxBool isLoadingParticipant = false.obs;
   final RxString selectedEventId = ''.obs; // Selected competition/event ID
+
+  // Institution search state
+  final RxList<SchoolModel> institutionSuggestions = <SchoolModel>[].obs;
+  final RxBool isLoadingInstitutions = false.obs;
+  final RxnString selectedInstitutionId = RxnString();
+
+  // Store institutionId from API response for edit mode
+  final RxnString participantInstitutionId = RxnString();
 
   // Bulk registration state
   final TextEditingController bulkYogaTeacherNameController =
@@ -81,6 +106,72 @@ class ParticipantController extends GetxController {
     }
     // Use the participantImage API endpoint from app_constants
     return '${BaseUrl.baseUrl}${EndPoints.participantImage(participantId)}';
+  }
+
+  /// Get participant registration photo URL using the new API endpoint
+  String? getParticipantRegistrationPhotoUrl(
+    String? registrationId, {
+    String? cacheBuster,
+  }) {
+    if (registrationId == null || registrationId.isEmpty) {
+      return null;
+    }
+    // Use the participant registration photo API endpoint
+    final baseUrl =
+        '${BaseUrl.baseUrl}${EndPoints.participantRegistrationPhoto(registrationId)}';
+    return cacheBuster != null ? '$baseUrl?t=$cacheBuster' : baseUrl;
+  }
+
+  /// Get participant registration bonafied certificate URL using the new API endpoint
+  String? getParticipantRegistrationCertificateUrl(
+    String? registrationId, {
+    String? cacheBuster,
+  }) {
+    if (registrationId == null || registrationId.isEmpty) {
+      return null;
+    }
+    // Use the participant registration bonafied certificate API endpoint
+    final baseUrl =
+        '${BaseUrl.baseUrl}${EndPoints.participantRegistrationBonafiedCertificate(registrationId)}';
+    return cacheBuster != null ? '$baseUrl?t=$cacheBuster' : baseUrl;
+  }
+
+  // Search institutions
+  Future<void> searchInstitutions(String query) async {
+    if (query.trim().isEmpty) {
+      institutionSuggestions.clear();
+      return;
+    }
+
+    if (query.trim().length < 2) {
+      // Don't search if query is too short
+      return;
+    }
+
+    try {
+      isLoadingInstitutions.value = true;
+      final response = await _schoolRepository.searchInstitutions(
+        query: query.trim(),
+      );
+
+      if (response.success && response.data != null) {
+        institutionSuggestions.value = response.data!.institutions;
+      } else {
+        institutionSuggestions.clear();
+      }
+    } catch (e) {
+      print('Error searching institutions: $e');
+      institutionSuggestions.clear();
+    } finally {
+      isLoadingInstitutions.value = false;
+    }
+  }
+
+  // Select institution
+  void selectInstitution(SchoolModel institution) {
+    schoolNameController.text = institution.institutionName;
+    selectedInstitutionId.value = institution.id;
+    institutionSuggestions.clear();
   }
 
   @override
@@ -159,7 +250,9 @@ class ParticipantController extends GetxController {
       int failureCount = 0;
 
       for (final row in validRows) {
-        final age = app_date_utils.AppDateUtils.calculateAge(row.dateOfBirth.value!);
+        final age = app_date_utils.AppDateUtils.calculateAge(
+          row.dateOfBirth.value!,
+        );
 
         final participant = ParticipantModel(
           participantName: row.nameController.text.trim().toUpperCase(),
@@ -271,41 +364,79 @@ class ParticipantController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      // Update filter if provided
-      if (filter != null) {
-        currentFilter.value = filter;
-      }
-
       // Reset page if needed
       if (resetPage) {
         currentPage.value = 1;
-        currentFilter.value = currentFilter.value.copyWith(page: 0);
       }
 
-      ParticipantFilterRequest filterToUse;
       // Convert 1-indexed currentPage to 0-indexed API page
       final apiPage = currentPage.value > 0 ? currentPage.value - 1 : 0;
-      filterToUse = currentFilter.value.copyWith(page: apiPage);
+      final competitionId = int.tryParse(eventId);
 
-      final response = await _participantRepository.getParticipantsByEventId(
-        eventId: eventId,
-        filter: filterToUse,
-      );
+      if (competitionId == null) {
+        errorMessage.value = 'Invalid competition ID';
+        isLoading.value = false;
+        return;
+      }
+
+      // Use search query if available
+      final searchTerm = searchQuery.value.isNotEmpty
+          ? searchQuery.value
+          : null;
+
+      final response = await _participantRepository
+          .listParticipantRegistrations(
+            search: searchTerm,
+            competitionId: competitionId,
+            page: apiPage,
+            limit: 20,
+            sortBy: sortBy.value,
+            order: sortOrder.value,
+          );
 
       if (response.success && response.data != null) {
-        final filterData = response.data!;
+        final data = response.data!;
 
-        if (resetPage || currentPage.value == 1) {
-          participants.value = filterData.participants;
+        // The API response structure: { "data": { "registrations": [...], "pagination": {...} } }
+        // But APIService already extracts the "data" field, so we get { "registrations": [...], "pagination": {...} }
+        final registrations = data['registrations'] as List<dynamic>?;
+        final pagination = data['pagination'] as Map<String, dynamic>?;
+
+        if (registrations != null) {
+          // Convert registration data to ParticipantModel
+          final participantList = registrations.map((reg) {
+            return _mapRegistrationToParticipant(reg as Map<String, dynamic>);
+          }).toList();
+
+          if (resetPage || currentPage.value == 1) {
+            participants.value = participantList;
+          } else {
+            // Append for pagination
+            participants.addAll(participantList);
+          }
         } else {
-          // Append for pagination
-          participants.addAll(filterData.participants);
+          if (resetPage || currentPage.value == 1) {
+            participants.clear();
+          }
         }
 
-        currentPage.value = filterData.currentPage + 1;
-        totalPages.value = filterData.totalPages;
-        totalItems.value = filterData.totalItems;
-        hasMorePages.value = currentPage.value < filterData.totalPages;
+        // Update pagination info
+        if (pagination != null) {
+          currentPage.value = (pagination['page'] as int? ?? 0) + 1;
+          totalPages.value = pagination['totalPages'] as int? ?? 0;
+          totalItems.value = pagination['total'] as int? ?? 0;
+          hasMorePages.value = currentPage.value < totalPages.value;
+        } else {
+          // Fallback pagination if not provided
+          if (registrations != null) {
+            if (registrations.length < 20) {
+              totalPages.value = currentPage.value;
+            } else {
+              totalPages.value = currentPage.value + 1;
+            }
+            totalItems.value = registrations.length;
+          }
+        }
       } else {
         errorMessage.value = response.message ?? 'Failed to load participants';
         if (resetPage || currentPage.value == 1) {
@@ -317,6 +448,137 @@ class ParticipantController extends GetxController {
     } catch (e) {
       errorMessage.value = 'An error occurred: ${e.toString()}';
       isLoading.value = false;
+    }
+  }
+
+  // Map registration response to ParticipantModel
+  // Also stores institutionId for edit mode
+  ParticipantModel _mapRegistrationToParticipant(Map<String, dynamic> reg) {
+    // Store institutionId for edit mode (will be used when initializing form for edit)
+    // Check multiple possible field names
+    if (reg['institutionId'] != null) {
+      participantInstitutionId.value = reg['institutionId']?.toString();
+    } else if (reg['institution_id'] != null) {
+      participantInstitutionId.value = reg['institution_id']?.toString();
+    } else if (reg['institution'] != null && reg['institution'] is Map) {
+      // If institution is an object, try to get the ID
+      final institution = reg['institution'] as Map<String, dynamic>;
+      if (institution['id'] != null) {
+        participantInstitutionId.value = institution['id']?.toString();
+      }
+    }
+
+    // Parse date of birth
+    DateTime dob;
+    if (reg['dateOfBirth'] != null) {
+      try {
+        dob = DateTime.parse(reg['dateOfBirth'] as String);
+      } catch (e) {
+        print('Error parsing dateOfBirth: $e');
+        dob = DateTime.now(); // Fallback
+      }
+    } else {
+      dob = DateTime.now(); // Fallback
+    }
+
+    // Parse createdAt
+    DateTime createdAt;
+    if (reg['createdAt'] != null) {
+      try {
+        createdAt = DateTime.parse(reg['createdAt'] as String);
+      } catch (e) {
+        createdAt = DateTime.now();
+      }
+    } else {
+      createdAt = DateTime.now();
+    }
+
+    // Parse updatedAt
+    DateTime? updatedAt;
+    if (reg['updatedAt'] != null) {
+      try {
+        updatedAt = DateTime.parse(reg['updatedAt'] as String);
+      } catch (e) {
+        updatedAt = null;
+      }
+    }
+
+    return ParticipantModel(
+      id: reg['id']?.toString(),
+      participantName: reg['participantName'] as String? ?? '',
+      dateOfBirth: dob,
+      age: reg['age'] as int? ?? 0,
+      gender: reg['sex'] as String? ?? reg['gender'] as String? ?? '',
+      category:
+          reg['categoryName'] as String? ?? reg['category'] as String? ?? '',
+      standard: reg['groupName'] as String? ?? reg['standard'] as String? ?? '',
+      schoolName:
+          reg['institutionName'] as String? ??
+          reg['schoolName'] as String? ??
+          '',
+      address: reg['address'] as String? ?? '',
+      yogaMasterName:
+          reg['yogaTeacherName'] as String? ??
+          reg['yogaMasterName'] as String? ??
+          '',
+      yogaMasterContact:
+          reg['yogaTeacherCell'] as String? ??
+          reg['yogaMasterContact'] as String? ??
+          '',
+      photoUrl: reg['photo'] as String?,
+      participantCode:
+          reg['participantCode'] as String? ??
+          reg['participant_code'] as String?,
+      registrationNo:
+          reg['registrationNo'] as String? ??
+          reg['registration_no'] as String? ??
+          reg['registrationNumber'] as String? ??
+          reg['registration_number'] as String?,
+      status: reg['status'] as String?,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      eventId: reg['competitionId']?.toString(),
+    );
+  }
+
+  // Sorting methods
+  void setSorting(String newSortBy, String newOrder) {
+    sortBy.value = newSortBy;
+    sortOrder.value = newOrder;
+    final eventId = selectedEventId.value;
+    if (eventId.isNotEmpty) {
+      loadParticipantsByEventId(eventId, resetPage: true);
+    }
+  }
+
+  // Pagination methods
+  void nextPage() {
+    if (currentPage.value < totalPages.value) {
+      currentPage.value++;
+      final eventId = selectedEventId.value;
+      if (eventId.isNotEmpty) {
+        loadParticipantsByEventId(eventId, resetPage: false);
+      }
+    }
+  }
+
+  void previousPage() {
+    if (currentPage.value > 1) {
+      currentPage.value--;
+      final eventId = selectedEventId.value;
+      if (eventId.isNotEmpty) {
+        loadParticipantsByEventId(eventId, resetPage: false);
+      }
+    }
+  }
+
+  void goToPage(int page) {
+    if (page >= 1 && page <= totalPages.value) {
+      currentPage.value = page;
+      final eventId = selectedEventId.value;
+      if (eventId.isNotEmpty) {
+        loadParticipantsByEventId(eventId, resetPage: false);
+      }
     }
   }
 
@@ -410,7 +672,9 @@ class ParticipantController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      final response = await _participantRepository.deleteParticipant(id);
+      // Use the new registration API for deletion
+      final response = await _participantRepository
+          .deleteParticipantRegistration(id);
 
       if (response.success) {
         participants.removeWhere((p) => p.id == id);
@@ -650,23 +914,63 @@ class ParticipantController extends GetxController {
   }
 
   void resetForm() {
-    nameController.clear();
-    schoolNameController.clear();
-    addressController.clear();
-    yogaMasterNameController.clear();
-    yogaMasterContactController.clear();
+    // Clear all reactive values first - this will trigger Obx rebuilds
     dateOfBirth.value = null;
     gender.value = '';
     selectedCategories.clear();
+    selectedStage.value = '';
     standard.value = '';
     photoFile.value = null;
     selectedImage.value = null;
+    bonafideFile.value = null;
+    bonafideImage.value = null;
+    existingPhotoUrl.value = '';
+    existingCertificateUrl.value = '';
+    selectedInstitutionId.value = null;
+    participantInstitutionId.value = null;
+    institutionSuggestions.clear(); // Clear institution suggestions
+
+    // Clear all text controllers - set to empty string explicitly
+    nameController.text = '';
+    schoolNameController.text = '';
+    addressController.text = '';
+    yogaMasterNameController.text = '';
+    yogaMasterContactController.text = '';
+
+    // Clear other state
     errorMessage.value = '';
     participantToEdit.value = null;
-    existingPhotoUrl.value = '';
     isLoadingParticipant.value = false;
-    // Reset form state
-    formKey.currentState?.reset();
+    isViewMode.value = false;
+
+    // Increment reset trigger to force widget rebuilds (especially for Autocomplete)
+    formResetTrigger.value = formResetTrigger.value + 1;
+
+    // Don't clear selectedEventId - keep the competition selected for convenience
+    // selectedEventId.value = '';
+
+    // Reset form state - this must happen after clearing values
+    // Use a safe callback that checks if the form key is still valid
+    if (formKey.currentContext != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (formKey.currentState != null && formKey.currentContext != null) {
+          formKey.currentState?.reset();
+          // Force clear text controllers again after form reset to ensure they're empty
+          nameController.text = '';
+          schoolNameController.text = '';
+          addressController.text = '';
+          yogaMasterNameController.text = '';
+          yogaMasterContactController.text = '';
+        }
+      });
+    } else {
+      // If context is not available, still clear the controllers
+      nameController.text = '';
+      schoolNameController.text = '';
+      addressController.text = '';
+      yogaMasterNameController.text = '';
+      yogaMasterContactController.text = '';
+    }
   }
 
   /// Initialize form for registration screen
@@ -681,8 +985,10 @@ class ParticipantController extends GetxController {
 
         // Fetch participant data after first frame
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          formKey.currentState?.reset();
-          fetchParticipantById(participantId);
+          if (formKey.currentState != null && formKey.currentContext != null) {
+            formKey.currentState?.reset();
+            fetchParticipantById(participantId);
+          }
         });
       }
     } else {
@@ -691,9 +997,26 @@ class ParticipantController extends GetxController {
 
       // Reset form state after first frame
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        formKey.currentState?.reset();
+        if (formKey.currentState != null && formKey.currentContext != null) {
+          formKey.currentState?.reset();
+        }
       });
     }
+  }
+
+  /// Initialize form directly from ParticipantModel without API call
+  /// Used when participant data is already available (e.g., from list)
+  void initializeFormFromModel(ParticipantModel participant) {
+    // Clear all form data first
+    _clearFormData();
+
+    // Initialize form with participant data directly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (formKey.currentState != null && formKey.currentContext != null) {
+        formKey.currentState?.reset();
+        initializeFormForEdit(participant);
+      }
+    });
   }
 
   /// Clear all form controllers and reactive values
@@ -706,13 +1029,16 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     selectedCategories.clear();
+    selectedStage.value = '';
     standard.value = '';
     photoFile.value = null;
     selectedImage.value = null;
     errorMessage.value = '';
     existingPhotoUrl.value = '';
+    existingCertificateUrl.value = '';
     isLoadingParticipant.value = false;
     participantToEdit.value = null;
+    isViewMode.value = false;
   }
 
   /// Fetch participant details by ID from API
@@ -742,50 +1068,314 @@ class ParticipantController extends GetxController {
     }
   }
 
+  /// Initialize form with participant data for viewing (non-editable)
+  void initializeFormForView(ParticipantModel participant) {
+    // Clear all form data first
+    _clearFormData();
+
+    // Set view mode flag
+    isViewMode.value = true;
+
+    // Initialize form with participant data directly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (formKey.currentState != null && formKey.currentContext != null) {
+        formKey.currentState?.reset();
+      }
+
+      print('Initializing form for view: ${participant.participantName}');
+      print('Participant ID: ${participant.id}');
+
+      // DO NOT set participantToEdit - this keeps isEditMode as false
+      // This ensures all fields remain non-editable
+
+      // Set competition/event ID first (needed for category dropdown)
+      if (participant.eventId != null && participant.eventId!.isNotEmpty) {
+        selectedEventId.value = participant.eventId!;
+      }
+
+      // Use participant registration photo API endpoint to get image URL
+      if (participant.id != null && participant.id!.isNotEmpty) {
+        // Use the new participant registration photo API with cache-busting
+        final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+        final imageUrl = getParticipantRegistrationPhotoUrl(
+          participant.id,
+          cacheBuster: timestamp,
+        );
+        existingPhotoUrl.value = imageUrl ?? '';
+
+        // Get bonafied certificate URL with cache-busting
+        final certificateUrl = getParticipantRegistrationCertificateUrl(
+          participant.id,
+          cacheBuster: timestamp,
+        );
+        existingCertificateUrl.value = certificateUrl ?? '';
+
+        print('Photo URL from API: ${existingPhotoUrl.value}');
+        print('Certificate URL from API: ${existingCertificateUrl.value}');
+        print('Participant ID: ${participant.id}');
+        print('Is Edit Mode: ${isEditMode}');
+      } else {
+        // Fallback to photoUrl if ID is not available
+        existingPhotoUrl.value = participant.photoUrl ?? '';
+        existingCertificateUrl.value = '';
+        print('Photo URL from model: ${existingPhotoUrl.value}');
+      }
+
+      // Set form fields
+      nameController.text = participant.participantName;
+      // Set institution name - use a small delay to ensure Autocomplete widget is ready
+      Future.microtask(() {
+        schoolNameController.text = participant.schoolName;
+      });
+      // Set institution ID from participantInstitutionId (stored from API response)
+      if (participantInstitutionId.value != null &&
+          participantInstitutionId.value!.isNotEmpty) {
+        selectedInstitutionId.value = participantInstitutionId.value;
+      }
+      addressController.text = participant.address;
+      standard.value = participant.standard;
+      gender.value = participant.gender;
+      dateOfBirth.value = participant.dateOfBirth;
+
+      // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
+      // Otherwise, try to find the stage from competition data
+      if (participant.standard.isNotEmpty) {
+        final standardValue = participant.standard;
+
+        // Check if standard contains stage info in format "II (GROUP A)"
+        if (standardValue.contains('(GROUP')) {
+          // Extract stage name (between "GROUP " and ")")
+          final stagePart = standardValue
+              .split('GROUP ')
+              .last
+              .replaceAll(')', '')
+              .trim();
+          selectedStage.value = stagePart;
+
+          // Extract just the group name (before " (GROUP")
+          final groupName = standardValue.split(' (GROUP').first.trim();
+          standard.value = groupName;
+        } else {
+          // Standard is just the group name, need to find which stage contains this group
+          // Get CompetitionController to find the stage
+          try {
+            final compController = Get.find<CompetitionController>();
+            final selectedCompetition = compController.competitions
+                .firstWhereOrNull((c) => c.id == selectedEventId.value);
+
+            if (selectedCompetition != null &&
+                selectedCompetition.stageGroups != null) {
+              // Find which stage contains this group
+              String? foundStageName;
+              selectedCompetition.stageGroups!.forEach((stageIdStr, groupIds) {
+                final stageId = int.tryParse(stageIdStr);
+                if (stageId != null) {
+                  final stageName = compController.getStageNameById(stageId);
+                  if (stageName != null && stageName.isNotEmpty) {
+                    // Check if any group in this stage matches
+                    for (final groupId in groupIds) {
+                      final groupName = compController.getGroupNameById(
+                        groupId,
+                      );
+                      if (groupName != null && groupName == standardValue) {
+                        foundStageName = stageName;
+                        break;
+                      }
+                    }
+                  }
+                }
+              });
+
+              if (foundStageName != null && foundStageName!.isNotEmpty) {
+                selectedStage.value = foundStageName!;
+              }
+            }
+          } catch (e) {
+            print('Error finding stage for group: $e');
+            // If we can't find the stage, leave it empty - user will need to select it
+          }
+        }
+      }
+
+      // Set category - use the category name directly from participant
+      selectedCategories.clear();
+      if (participant.category.isNotEmpty) {
+        // Use the category name as-is (it should match competition categories)
+        selectedCategories.add(participant.category.trim());
+      }
+
+      // Set yoga master info
+      yogaMasterNameController.text = participant.yogaMasterName;
+      yogaMasterContactController.text = participant.yogaMasterContact;
+
+      print(
+        'Form initialized for view - Name: ${nameController.text}, Category: ${selectedCategories.join(", ")}, Institution: ${schoolNameController.text}, Institution ID: ${selectedInstitutionId.value}, Stage: ${selectedStage.value}, Group: ${standard.value}, Photo URL: ${existingPhotoUrl.value}',
+      );
+    });
+  }
+
   /// Initialize form with participant data for editing
   void initializeFormForEdit(ParticipantModel participant) {
     print('Initializing form for edit: ${participant.participantName}');
     print('Participant ID: ${participant.id}');
 
+    // Clear view mode flag
+    isViewMode.value = false;
+
     // Set participant to edit first (this sets isEditMode to true)
     participantToEdit.value = participant;
 
-    // Use participantImage API endpoint to get image URL
+    // Set competition/event ID first (needed for category dropdown)
+    if (participant.eventId != null && participant.eventId!.isNotEmpty) {
+      selectedEventId.value = participant.eventId!;
+    }
+
+    // Use participant registration photo API endpoint to get image URL
     // Set photo URL after participantToEdit to ensure isEditMode is true
     if (participant.id != null && participant.id!.isNotEmpty) {
-      final imageUrl = getParticipantImageUrl(participant.id);
+      // Use the new participant registration photo API with cache-busting
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final imageUrl = getParticipantRegistrationPhotoUrl(
+        participant.id,
+        cacheBuster: timestamp,
+      );
       existingPhotoUrl.value = imageUrl ?? '';
+
+      // Get bonafied certificate URL with cache-busting
+      final certificateUrl = getParticipantRegistrationCertificateUrl(
+        participant.id,
+        cacheBuster: timestamp,
+      );
+      existingCertificateUrl.value = certificateUrl ?? '';
+
       print('Photo URL from API: ${existingPhotoUrl.value}');
+      print('Certificate URL from API: ${existingCertificateUrl.value}');
       print('Participant ID: ${participant.id}');
       print('Is Edit Mode: ${isEditMode}');
     } else {
       // Fallback to photoUrl if ID is not available
       existingPhotoUrl.value = participant.photoUrl ?? '';
+      existingCertificateUrl.value = '';
       print('Photo URL from model: ${existingPhotoUrl.value}');
     }
 
     // Set form fields
     nameController.text = participant.participantName;
-    schoolNameController.text = participant.schoolName;
+    // Set institution name - use a small delay to ensure Autocomplete widget is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (formKey.currentContext != null) {
+        schoolNameController.text = participant.schoolName;
+      }
+    });
+    // Set institution ID from participantInstitutionId (stored from API response)
+    // This is critical - must be set before validation
+    if (participantInstitutionId.value != null &&
+        participantInstitutionId.value!.isNotEmpty) {
+      selectedInstitutionId.value = participantInstitutionId.value;
+      print(
+        'Set selectedInstitutionId from participantInstitutionId: ${selectedInstitutionId.value}',
+      );
+    } else {
+      // If participantInstitutionId is not set, try to find it by name
+      // Note: This is async and might complete after widget disposal, so we check if still needed
+      if (participant.schoolName.isNotEmpty) {
+        // Search for the institution and set the ID
+        searchInstitutions(participant.schoolName)
+            .then((_) {
+              // Check if we're still in edit mode and the value hasn't been set
+              if (participantToEdit.value?.id == participant.id &&
+                  (selectedInstitutionId.value == null ||
+                      selectedInstitutionId.value!.isEmpty)) {
+                final matchingInstitution = institutionSuggestions
+                    .firstWhereOrNull(
+                      (institution) =>
+                          institution.institutionName.trim().toLowerCase() ==
+                          participant.schoolName.trim().toLowerCase(),
+                    );
+                if (matchingInstitution != null &&
+                    matchingInstitution.id != null) {
+                  selectedInstitutionId.value = matchingInstitution.id;
+                  participantInstitutionId.value = matchingInstitution.id;
+                  print(
+                    'Found and set institution ID by name: ${selectedInstitutionId.value}',
+                  );
+                }
+              }
+            })
+            .catchError((error) {
+              // Silently handle errors to avoid assertion failures
+              print('Error searching institution: $error');
+            });
+      }
+    }
     addressController.text = participant.address;
     standard.value = participant.standard;
     gender.value = participant.gender;
     dateOfBirth.value = participant.dateOfBirth;
 
-    // Set category - handle comma-separated categories
-    selectedCategories.clear();
-    if (participant.category.isNotEmpty) {
-      final categories = participant.category
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
-      for (final cat in categories) {
-        if (cat == AppConstants.categoryCommon ||
-            cat == AppConstants.categorySpecial) {
-          selectedCategories.add(cat);
+    // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
+    // Otherwise, try to find the stage from competition data
+    if (participant.standard.isNotEmpty) {
+      final standardValue = participant.standard;
+
+      // Check if standard contains stage info in format "II (GROUP A)"
+      if (standardValue.contains('(GROUP')) {
+        // Extract stage name (between "GROUP " and ")")
+        final stagePart = standardValue
+            .split('GROUP ')
+            .last
+            .replaceAll(')', '')
+            .trim();
+        selectedStage.value = stagePart;
+
+        // Extract just the group name (before " (GROUP")
+        final groupName = standardValue.split(' (GROUP').first.trim();
+        standard.value = groupName;
+      } else {
+        // Standard is just the group name, need to find which stage contains this group
+        // Get CompetitionController to find the stage
+        try {
+          final compController = Get.find<CompetitionController>();
+          final selectedCompetition = compController.competitions
+              .firstWhereOrNull((c) => c.id == selectedEventId.value);
+
+          if (selectedCompetition != null &&
+              selectedCompetition.stageGroups != null) {
+            // Find which stage contains this group
+            String? foundStageName;
+            selectedCompetition.stageGroups!.forEach((stageIdStr, groupIds) {
+              final stageId = int.tryParse(stageIdStr);
+              if (stageId != null) {
+                final stageName = compController.getStageNameById(stageId);
+                if (stageName != null && stageName.isNotEmpty) {
+                  // Check if any group in this stage matches
+                  for (final groupId in groupIds) {
+                    final groupName = compController.getGroupNameById(groupId);
+                    if (groupName != null && groupName == standardValue) {
+                      foundStageName = stageName;
+                      break;
+                    }
+                  }
+                }
+              }
+            });
+
+            if (foundStageName != null && foundStageName!.isNotEmpty) {
+              selectedStage.value = foundStageName!;
+            }
+          }
+        } catch (e) {
+          print('Error finding stage for group: $e');
+          // If we can't find the stage, leave it empty - user will need to select it
         }
       }
+    }
+
+    // Set category - use the category name directly from participant
+    selectedCategories.clear();
+    if (participant.category.isNotEmpty) {
+      // Use the category name as-is (it should match competition categories)
+      selectedCategories.add(participant.category.trim());
     }
 
     // Set yoga master info
@@ -793,7 +1383,7 @@ class ParticipantController extends GetxController {
     yogaMasterContactController.text = participant.yogaMasterContact;
 
     print(
-      'Form initialized - Name: ${nameController.text}, Photo URL: ${existingPhotoUrl.value}',
+      'Form initialized - Name: ${nameController.text}, Category: ${selectedCategories.join(", ")}, Institution: ${schoolNameController.text}, Stage: ${selectedStage.value}, Group: ${standard.value}, Photo URL: ${existingPhotoUrl.value}',
     );
   }
 
@@ -877,7 +1467,122 @@ class ParticipantController extends GetxController {
   /// Check if form is in edit mode
   bool get isEditMode => participantToEdit.value != null;
 
-  Future<bool> submitRegistrationForm({required String eventId}) async {
+  /// Generate next registration number based on existing registrations
+  /// Format: [Category][Gender][Stage][Number]
+  /// Example: CBA001 (Common Boys Stage A, number 001)
+  ///          CGA001 (Common Girls Stage A, number 001)
+  ///          SBA001 (Special Boys Stage A, number 001)
+  ///          SGA001 (Special Girls Stage A, number 001)
+  /// 
+  /// NOTE: This method calls the eventbased API to fetch existing participants.
+  /// Currently disabled to avoid unnecessary API calls - backend should generate registration numbers.
+  /// Uncomment the call in submitRegistrationForm if frontend generation is needed.
+  // ignore: unused_element
+  Future<String?> _generateNextRegistrationNumber({
+    required int competitionId,
+    required String categoryName,
+    required String gender,
+    required String stageName,
+    required CompetitionController compController,
+  }) async {
+    try {
+      // Build prefix: Category + Gender + Stage
+      // Category: C = Common, S = Special
+      final categoryPrefix = categoryName.toUpperCase().startsWith('C') ? 'C' : 'S';
+      
+      // Gender: B = Boy/Male, G = Girl/Female
+      final genderPrefix = gender.toUpperCase().startsWith('M') || gender.toUpperCase() == 'MALE' ? 'B' : 'G';
+      
+      // Stage: A, B, C, D, E, F (first letter of stage name)
+      final stagePrefix = stageName.isNotEmpty ? stageName[0].toUpperCase() : 'A';
+      
+      final prefix = '$categoryPrefix$genderPrefix$stagePrefix';
+      
+      // Fetch existing participants with same competition, category, gender, and stage
+      final categoryId = compController.getCategoryIdByName(categoryName);
+      final stageId = compController.getStageIdByName(stageName);
+      
+      if (categoryId == null || stageId == null) {
+        print('Warning: Could not find category or stage ID for registration number generation');
+        return null;
+      }
+      
+      // Create filter to get participants with same competition, category, gender, and stage
+      final filter = ParticipantFilterRequest(
+        page: 0,
+        size: 1000, // Get a large number to find all matching participants
+        category: categoryName,
+        sortBy: 'registrationNo',
+        sortDirection: 'desc',
+      );
+      
+      // Fetch participants
+      final response = await _participantRepository.getParticipantsByEventId(
+        eventId: competitionId.toString(),
+        filter: filter,
+      );
+      
+      if (!response.success || response.data == null) {
+        print('Warning: Could not fetch participants for registration number generation');
+        // Return first number if we can't fetch
+        return '${prefix}001';
+      }
+      
+      final participants = response.data!.participants;
+      
+      // Filter participants by gender and stage
+      final matchingParticipants = participants.where((p) {
+        final matchesGender = p.gender.toUpperCase().startsWith('M') == gender.toUpperCase().startsWith('M') ||
+                             (p.gender.toUpperCase() == 'MALE' && (gender.toUpperCase() == 'MALE' || gender.toUpperCase().startsWith('M'))) ||
+                             (p.gender.toUpperCase() == 'FEMALE' && (gender.toUpperCase() == 'FEMALE' || gender.toUpperCase().startsWith('F')));
+        
+        // Check if participant's stage matches (we need to check by stage name or ID)
+        // Since we don't have direct stage info in ParticipantModel, we'll check registration number prefix
+        final matchesStage = p.registrationNo != null && 
+                            p.registrationNo!.length >= 3 &&
+                            p.registrationNo![2] == stagePrefix;
+        
+        return matchesGender && matchesStage;
+      }).toList();
+      
+      // Find the highest registration number
+      int maxNumber = 0;
+      for (final participant in matchingParticipants) {
+        if (participant.registrationNo != null && 
+            participant.registrationNo!.startsWith(prefix) &&
+            participant.registrationNo!.length > prefix.length) {
+          try {
+            final numberPart = participant.registrationNo!.substring(prefix.length);
+            final number = int.tryParse(numberPart);
+            if (number != null && number > maxNumber) {
+              maxNumber = number;
+            }
+          } catch (e) {
+            // Skip invalid registration numbers
+            continue;
+          }
+        }
+      }
+      
+      // Increment and format
+      final nextNumber = maxNumber + 1;
+      final formattedNumber = nextNumber.toString().padLeft(3, '0');
+      
+      return '$prefix$formattedNumber';
+    } catch (e) {
+      print('Error generating registration number: $e');
+      // Return first number on error
+      final categoryPrefix = categoryName.toUpperCase().startsWith('C') ? 'C' : 'S';
+      final genderPrefix = gender.toUpperCase().startsWith('M') || gender.toUpperCase() == 'MALE' ? 'B' : 'G';
+      final stagePrefix = stageName.isNotEmpty ? stageName[0].toUpperCase() : 'A';
+      return '${categoryPrefix}${genderPrefix}${stagePrefix}001';
+    }
+  }
+
+  Future<bool> submitRegistrationForm({
+    required String eventId,
+    CompetitionController? competitionController,
+  }) async {
     if (!formKey.currentState!.validate()) {
       return false;
     }
@@ -902,56 +1607,201 @@ class ParticipantController extends GetxController {
       return false;
     }
 
-    final age = app_date_utils.AppDateUtils.calculateAge(dateOfBirth.value!);
-
-    // Combine selected categories into a comma-separated string
-    final categoryString = selectedCategories.join(', ');
-
-    final participant = ParticipantModel(
-      participantName: nameController.text.trim().toUpperCase(),
-      dateOfBirth: dateOfBirth.value!,
-      age: age,
-      gender: gender.value,
-      category: categoryString,
-      standard: standard.value,
-      schoolName: schoolNameController.text.trim(),
-      address: addressController.text.trim(),
-      yogaMasterName: yogaMasterNameController.text.trim(),
-      yogaMasterContact: yogaMasterContactController.text.trim(),
-    );
-
-    final success = await createParticipant(
-      participant: participant,
-      photoFile: photoFile.value,
-      photoXFile: selectedImage.value,
-      eventId: eventId,
-    );
-
-    if (success) {
-      await loadParticipantsByEventId(eventId, resetPage: true);
-      resetForm();
+    if (selectedStage.value.isEmpty) {
+      errorMessage.value = 'Please select a stage';
+      return false;
     }
 
-    return success;
+    // Check if institution is selected
+    if (selectedInstitutionId.value == null ||
+        selectedInstitutionId.value!.isEmpty) {
+      // If institution name is provided but ID is not set, try to find it
+      if (schoolNameController.text.trim().isNotEmpty) {
+        // Search for the institution by name
+        await searchInstitutions(schoolNameController.text.trim());
+
+        // Check if we found a matching institution
+        final matchingInstitution = institutionSuggestions.firstWhereOrNull(
+          (institution) =>
+              institution.institutionName.trim().toLowerCase() ==
+              schoolNameController.text.trim().toLowerCase(),
+        );
+
+        if (matchingInstitution != null && matchingInstitution.id != null) {
+          // Set the institution ID
+          selectedInstitutionId.value = matchingInstitution.id;
+        } else {
+          // If still not found, check if participantInstitutionId is available (from edit mode)
+          if (participantInstitutionId.value != null &&
+              participantInstitutionId.value!.isNotEmpty) {
+            selectedInstitutionId.value = participantInstitutionId.value;
+          } else {
+            errorMessage.value = 'Please select an institution from the list';
+            return false;
+          }
+        }
+      } else {
+        errorMessage.value = 'Please select an institution from the list';
+        return false;
+      }
+    }
+
+    final age = app_date_utils.AppDateUtils.calculateAge(dateOfBirth.value!);
+
+    // Get CompetitionController if not provided
+    final compController =
+        competitionController ?? Get.find<CompetitionController>();
+
+    // Convert names to IDs
+    final competitionId = int.tryParse(eventId);
+    if (competitionId == null) {
+      errorMessage.value = 'Invalid competition ID';
+      return false;
+    }
+
+    final categoryName = selectedCategories.first;
+    final categoryId = compController.getCategoryIdByName(categoryName);
+    if (categoryId == null) {
+      errorMessage.value = 'Invalid category selected';
+      return false;
+    }
+
+    final institutionId = int.tryParse(selectedInstitutionId.value!);
+    if (institutionId == null) {
+      errorMessage.value = 'Invalid institution selected';
+      return false;
+    }
+
+    final groupId = compController.getGroupIdByName(standard.value);
+    if (groupId == null) {
+      errorMessage.value = 'Invalid group selected';
+      return false;
+    }
+
+    // Get stage ID from stage name
+    final stageId = compController.getStageIdByName(selectedStage.value);
+    if (stageId == null) {
+      errorMessage.value = 'Invalid stage selected';
+      return false;
+    }
+
+    // Format date as YYYY-MM-DD
+    final dobString =
+        '${dateOfBirth.value!.year}-'
+        '${dateOfBirth.value!.month.toString().padLeft(2, '0')}-'
+        '${dateOfBirth.value!.day.toString().padLeft(2, '0')}';
+
+    // Note: Registration number should be auto-generated by backend
+    // We don't need to generate it on frontend to avoid unnecessary API calls
+    // If backend doesn't generate it, uncomment the code below
+    // String? nextRegistrationNo;
+    // if (!isEditMode) {
+    //   nextRegistrationNo = await _generateNextRegistrationNumber(...);
+    // }
+
+    // Prepare registration data
+    final registrationData = <String, dynamic>{
+      'competitionId': competitionId,
+      'dateOfBirth': dobString,
+      'age': age,
+      'categoryId': categoryId,
+      'stageId': stageId,
+      'yogaTeacherName': yogaMasterNameController.text.trim(),
+      'institutionId': institutionId,
+      'participantName': nameController.text.trim().toUpperCase(),
+      'sex': gender.value,
+      'groupId': groupId,
+      'yogaTeacherCell': yogaMasterContactController.text.trim(),
+      'paymentMode': 'ONLINE', // Default payment mode
+      'isSpotRegistration': false,
+      // Registration number will be auto-generated by backend based on competition, category, gender, and stage
+    };
+
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      // Check if we're in edit mode
+      if (isEditMode && participantToEdit.value?.id != null) {
+        // Use PUT API for update
+        final participantId = participantToEdit.value!.id!;
+        final response = await _participantRepository
+            .updateParticipantRegistration(
+              id: participantId,
+              registrationData: registrationData,
+              photoFile: photoFile.value,
+              photoXFile: selectedImage.value,
+              bonafiedCertificateFile: bonafideFile.value,
+              bonafiedCertificateXFile: bonafideImage.value,
+            );
+
+        isLoading.value = false;
+
+        if (response.success) {
+          // Don't refresh image URLs here - they will be refreshed when form is re-initialized
+          // The resetForm() will clear everything, and if we're staying in edit mode,
+          // the form will be re-initialized with fresh data
+
+          // Reload participants list if we have an event ID selected
+          if (selectedEventId.value.isNotEmpty) {
+            await loadParticipantsByEventId(
+              selectedEventId.value,
+              resetPage: false,
+            );
+          }
+
+          // Reset form immediately after successful update
+          resetForm();
+          return true;
+        } else {
+          errorMessage.value =
+              response.message ?? 'Failed to update participant';
+          return false;
+        }
+      } else {
+        // Use POST API for create
+        final response = await _participantRepository
+            .createParticipantRegistration(
+              registrationData: registrationData,
+              photoFile: photoFile.value,
+              photoXFile: selectedImage.value,
+              bonafiedCertificateFile: bonafideFile.value,
+              bonafiedCertificateXFile: bonafideImage.value,
+            );
+
+        isLoading.value = false;
+
+        if (response.success) {
+          // Reload participants list if we have an event ID selected
+          if (selectedEventId.value.isNotEmpty) {
+            await loadParticipantsByEventId(
+              selectedEventId.value,
+              resetPage: false,
+            );
+          }
+
+          // Reset form immediately after successful save
+          resetForm();
+          return true;
+        } else {
+          errorMessage.value =
+              response.message ?? 'Failed to register participant';
+          return false;
+        }
+      }
+    } catch (e) {
+      isLoading.value = false;
+      errorMessage.value = isEditMode
+          ? 'Error updating participant: ${e.toString()}'
+          : 'Error registering participant: ${e.toString()}';
+      return false;
+    }
   }
 
   // Get filtered participants based on search query
+  // Note: Search is now handled by the API, so this just returns the participants list
   List<ParticipantModel> get filteredParticipants {
-    List<ParticipantModel> filtered = List<ParticipantModel>.from(participants);
-
-    // Filter by search query
-    if (searchQuery.value.isNotEmpty) {
-      final query = searchQuery.value.toLowerCase();
-      filtered = filtered.where((participant) {
-        return participant.participantName.toLowerCase().contains(query) ||
-            participant.category.toLowerCase().contains(query) ||
-            participant.standard.toLowerCase().contains(query) ||
-            participant.schoolName.toLowerCase().contains(query) ||
-            participant.yogaMasterName.toLowerCase().contains(query);
-      }).toList();
-    }
-
-    return filtered;
+    return List<ParticipantModel>.from(participants);
   }
 
   void reset() {

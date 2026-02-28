@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import '../../controllers/auth_controller.dart';
+// import '../../controllers/competition_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 
@@ -12,6 +13,14 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Ensure controller is initialized (handles browser refresh)
     final authController = Get.put(AuthController(), permanent: true);
+    // final competitionController = Get.put(CompetitionController());
+
+    // Load competitions if empty
+    // if (competitionController.competitions.isEmpty &&
+    //     !competitionController.isLoading.value) {
+    //   competitionController.loadCompetitions();
+    // }
+
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
@@ -189,16 +198,16 @@ class LoginScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 32),
 
-                              // Email Field
+                              // Name Field (replaces Email)
                               TextFormField(
-                                controller: authController.emailController,
-                                keyboardType: TextInputType.emailAddress,
+                                controller: authController.nameController,
+                                keyboardType: TextInputType.name,
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'Email Address',
+                                  labelText: 'Name',
                                   labelStyle: TextStyle(
                                     color: Colors.grey[600],
                                     fontWeight: FontWeight.w500,
@@ -213,7 +222,7 @@ class LoginScreen extends StatelessWidget {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Icon(
-                                      Icons.email_outlined,
+                                      Icons.person_outlined,
                                       color: AppTheme.primaryColor,
                                       size: 20,
                                     ),
@@ -246,9 +255,99 @@ class LoginScreen extends StatelessWidget {
                                     vertical: 18,
                                   ),
                                 ),
-                                validator: authController.validateEmail,
+                                validator: authController.validateName,
                               ),
                               const SizedBox(height: 24),
+
+                              // Competition Dropdown (Optional) - HIDDEN FOR NOW
+                              // Obx(
+                              //   () => DropdownButtonFormField<String>(
+                              //     value:
+                              //         authController
+                              //             .selectedCompetitionId
+                              //             .value
+                              //             .isNotEmpty
+                              //         ? authController
+                              //               .selectedCompetitionId
+                              //               .value
+                              //         : null,
+                              //     decoration: InputDecoration(
+                              //       labelText: 'Competition (Optional)',
+                              //       labelStyle: TextStyle(
+                              //         color: Colors.grey[600],
+                              //         fontWeight: FontWeight.w500,
+                              //       ),
+                              //       prefixIcon: Container(
+                              //         margin: const EdgeInsets.all(12),
+                              //         padding: const EdgeInsets.all(8),
+                              //         decoration: BoxDecoration(
+                              //           color: AppTheme.primaryColor
+                              //               .withOpacity(0.1),
+                              //           borderRadius: BorderRadius.circular(10),
+                              //         ),
+                              //         child: Icon(
+                              //           Icons.event_outlined,
+                              //           color: AppTheme.primaryColor,
+                              //           size: 20,
+                              //         ),
+                              //       ),
+                              //       border: OutlineInputBorder(
+                              //         borderRadius: BorderRadius.circular(16),
+                              //         borderSide: BorderSide(
+                              //           color: Colors.grey[300]!,
+                              //           width: 1.5,
+                              //         ),
+                              //       ),
+                              //       enabledBorder: OutlineInputBorder(
+                              //         borderRadius: BorderRadius.circular(16),
+                              //         borderSide: BorderSide(
+                              //           color: Colors.grey[300]!,
+                              //           width: 1.5,
+                              //         ),
+                              //       ),
+                              //       focusedBorder: OutlineInputBorder(
+                              //         borderRadius: BorderRadius.circular(16),
+                              //         borderSide: BorderSide(
+                              //           color: AppTheme.primaryColor,
+                              //           width: 2,
+                              //         ),
+                              //       ),
+                              //       filled: true,
+                              //       fillColor: Colors.grey[50],
+                              //       contentPadding: const EdgeInsets.symmetric(
+                              //         horizontal: 20,
+                              //         vertical: 18,
+                              //       ),
+                              //     ),
+                              //     hint: Text(
+                              //       'Select Competition (Optional)',
+                              //       style: TextStyle(
+                              //         color: Colors.grey[600],
+                              //         fontSize: 16,
+                              //       ),
+                              //     ),
+                              //     items: competitionController.competitions
+                              //         .where((c) => c.id != null)
+                              //         .map((competition) {
+                              //           return DropdownMenuItem<String>(
+                              //             value: competition.id,
+                              //             child: Text(
+                              //               competition.competitionName,
+                              //               style: const TextStyle(
+                              //                 fontSize: 16,
+                              //               ),
+                              //               overflow: TextOverflow.ellipsis,
+                              //             ),
+                              //           );
+                              //         })
+                              //         .toList(),
+                              //     onChanged: (value) {
+                              //       authController.selectedCompetitionId.value =
+                              //           value ?? '';
+                              //     },
+                              //   ),
+                              // ),
+                              // const SizedBox(height: 24),
 
                               // Password Field
                               Obx(

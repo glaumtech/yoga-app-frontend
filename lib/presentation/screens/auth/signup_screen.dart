@@ -242,7 +242,7 @@ class SignUpScreen extends StatelessWidget {
                                     vertical: 18,
                                   ),
                                 ),
-                                validator: authController.validateName,
+                                validator: authController.validateSignUpName,
                               ),
                               const SizedBox(height: 20),
 

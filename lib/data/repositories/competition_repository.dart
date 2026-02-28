@@ -381,6 +381,61 @@ class CompetitionRepository {
     }
   }
 
+  // Get categories by competition ID
+  Future<ApiResponse<List<CompetitionOptionModel>>> getCategoriesByCompetition(
+    int competitionId,
+  ) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.categoryByCompetition(competitionId),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        List<CompetitionOptionModel> categories = [];
+
+        if (response.data is Map<String, dynamic>) {
+          final dataMap = response.data as Map<String, dynamic>;
+          // API returns: { "data": { "categories": [...] } }
+          dynamic listData =
+              dataMap['data']?['categories'] ?? dataMap['categories'];
+
+          if (listData is List) {
+            categories = listData.map((json) {
+              return CompetitionOptionModel.fromJson(
+                json is Map<String, dynamic>
+                    ? json
+                    : json as Map<String, dynamic>,
+              );
+            }).toList();
+          }
+        } else if (response.data is List) {
+          categories = (response.data as List).map((json) {
+            return CompetitionOptionModel.fromJson(
+              json is Map<String, dynamic>
+                  ? json
+                  : json as Map<String, dynamic>,
+            );
+          }).toList();
+        }
+
+        return ApiResponse(success: true, data: categories);
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to fetch categories for competition',
+      );
+    } catch (e) {
+      print('Error in getCategoriesByCompetition: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching categories for competition: ${e.toString()}',
+      );
+    }
+  }
+
   // Get all prizes
   Future<ApiResponse<List<CompetitionOptionModel>>> getAllPrizes() async {
     try {
@@ -479,6 +534,60 @@ class CompetitionRepository {
       return ApiResponse(
         success: false,
         message: 'Error fetching stages: ${e.toString()}',
+      );
+    }
+  }
+
+  // Get stages by competition ID
+  Future<ApiResponse<List<CompetitionOptionModel>>> getStagesByCompetition(
+    int competitionId,
+  ) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.stageByCompetition(competitionId),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        List<CompetitionOptionModel> stages = [];
+
+        if (response.data is Map<String, dynamic>) {
+          final dataMap = response.data as Map<String, dynamic>;
+          // API returns: { "data": { "stages": [...] } }
+          dynamic listData = dataMap['data']?['stages'] ?? dataMap['stages'];
+
+          if (listData is List) {
+            stages = listData.map((json) {
+              return CompetitionOptionModel.fromJson(
+                json is Map<String, dynamic>
+                    ? json
+                    : json as Map<String, dynamic>,
+              );
+            }).toList();
+          }
+        } else if (response.data is List) {
+          stages = (response.data as List).map((json) {
+            return CompetitionOptionModel.fromJson(
+              json is Map<String, dynamic>
+                  ? json
+                  : json as Map<String, dynamic>,
+            );
+          }).toList();
+        }
+
+        return ApiResponse(success: true, data: stages);
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to fetch stages for competition',
+      );
+    } catch (e) {
+      print('Error in getStagesByCompetition: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching stages for competition: ${e.toString()}',
       );
     }
   }
@@ -726,6 +835,45 @@ class CompetitionRepository {
       return ApiResponse(
         success: false,
         message: 'Error creating group: ${e.toString()}',
+      );
+    }
+  }
+
+  // Get competition by ID
+  Future<ApiResponse<CompetitionModel>> getCompetitionById(int id) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionById(id.toString()),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        CompetitionModel? competition;
+
+        if (response.data is Map<String, dynamic>) {
+          final dataMap = response.data as Map<String, dynamic>;
+          // Check if data is nested
+          dynamic competitionData = dataMap['data'] ?? dataMap;
+          if (competitionData is Map<String, dynamic>) {
+            competition = CompetitionModel.fromJson(competitionData);
+          }
+        }
+
+        if (competition != null) {
+          return ApiResponse(success: true, data: competition);
+        }
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to fetch competition',
+      );
+    } catch (e) {
+      print('Error in getCompetitionById: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching competition: ${e.toString()}',
       );
     }
   }
