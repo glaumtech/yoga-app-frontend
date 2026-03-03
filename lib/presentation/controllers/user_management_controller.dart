@@ -56,7 +56,8 @@ class UserManagementController extends GetxController {
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<Uint8List?> photoBytes = Rx<Uint8List?>(null);
   final RxString photoUrl = ''.obs;
-
+  final RxBool selectedAllStage = false.obs;
+  final RxBool selectedAllCategory = false.obs;
   // Edit mode state
   final Rx<UserManagementModel?> userToEdit = Rx<UserManagementModel?>(null);
 

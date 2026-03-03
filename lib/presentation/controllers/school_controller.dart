@@ -4,6 +4,8 @@ import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
 import '../../data/models/city_model.dart';
 import '../../data/models/api_response.dart';
+import '../../data/models/institution_type_model.dart';
+import '../../data/models/institution_category_model.dart';
 import '../../data/repositories/location_repository.dart';
 import '../../data/repositories/school_repository.dart';
 
@@ -14,8 +16,11 @@ class SchoolController extends GetxController {
   // Form controllers
   final formKey = GlobalKey<FormState>();
   final institutionNameController = TextEditingController();
+  final institutionShortNameController = TextEditingController();
   final addressController = TextEditingController();
   final pincodeController = TextEditingController();
+  final emailController = TextEditingController();
+  final searchController = TextEditingController();
 
   // Observable state
   final RxBool isLoading = false.obs;
@@ -47,9 +52,15 @@ class SchoolController extends GetxController {
   final RxString selectedPincode = ''.obs;
   final RxString selectedInstitutionType = ''.obs;
 
+  // Sub-category fields (using category ID and display name)
+  final RxInt selectedInstitutionCategoryId = 0.obs;
+  final RxString selectedInstitutionCategory = ''.obs;
+  final RxString customCategory = ''.obs;
+
   // Report generation fields
   final RxString reportDistrict = ''.obs;
   final RxString reportState = ''.obs;
+  final RxInt reportInstitutionTypeId = 0.obs;
 
   // API-loaded data
   final RxList<StateModel> states = <StateModel>[].obs;
@@ -57,27 +68,83 @@ class SchoolController extends GetxController {
   final RxBool isLoadingStates = false.obs;
   final RxBool isLoadingCities = false.obs;
 
-  static const List<String> institutionTypes = [
-    'Private School',
-    'Govt / Govt Aided School',
-    'Private College',
-    'Govt / Govt Aided College',
-  ];
+  // Institution types and categories from API
+  final RxList<InstitutionTypeModel> institutionTypes =
+      <InstitutionTypeModel>[].obs;
+  final RxList<InstitutionCategoryModel> institutionCategories =
+      <InstitutionCategoryModel>[].obs;
+  final RxBool isLoadingInstitutionTypes = false.obs;
+  final RxBool isLoadingInstitutionCategories = false.obs;
 
-  // Map UI institution type to API format
-  String _mapInstitutionTypeToApi(String uiType) {
-    switch (uiType) {
-      case 'Private School':
-        return 'PRIVATE_SCHOOL';
-      case 'Govt / Govt Aided School':
-        return 'GOVT_AIDED_SCHOOL';
-      case 'Private College':
-        return 'PRIVATE_COLLEGE';
-      case 'Govt / Govt Aided College':
-        return 'GOVT_AIDED_COLLEGE';
-      default:
-        return uiType.toUpperCase().replaceAll(' ', '_').replaceAll('/', '_');
+  // Selected institution type ID
+  final RxInt selectedInstitutionTypeId = 0.obs;
+
+  // Load institution types from API
+  Future<void> loadInstitutionTypes() async {
+    try {
+      isLoadingInstitutionTypes.value = true;
+      final response = await _schoolRepository.getAllInstitutionTypes();
+      if (response.success && response.data != null) {
+        institutionTypes.value = response.data!;
+        // Sort by display name
+        institutionTypes.sort((a, b) => a.displayName.compareTo(b.displayName));
+      } else {
+        errorMessage.value =
+            response.message ?? 'Failed to load institution types';
+      }
+    } catch (e) {
+      errorMessage.value = 'Error loading institution types: ${e.toString()}';
+      print('Error loading institution types: $e');
+    } finally {
+      isLoadingInstitutionTypes.value = false;
     }
+  }
+
+  // Load institution categories by type ID
+  Future<void> loadInstitutionCategoriesByTypeId(int typeId) async {
+    try {
+      isLoadingInstitutionCategories.value = true;
+      institutionCategories.clear();
+      selectedInstitutionCategoryId.value = 0;
+      selectedInstitutionCategory.value = '';
+
+      final response = await _schoolRepository.getInstitutionCategoriesByType(
+        typeId,
+      );
+      if (response.success && response.data != null) {
+        institutionCategories.value = response.data!;
+        // Sort by display name
+        institutionCategories.sort(
+          (a, b) => a.displayName.compareTo(b.displayName),
+        );
+      } else {
+        errorMessage.value =
+            response.message ?? 'Failed to load institution categories';
+        institutionCategories.clear();
+      }
+    } catch (e) {
+      errorMessage.value =
+          'Error loading institution categories: ${e.toString()}';
+      print('Error loading institution categories: $e');
+      institutionCategories.clear();
+    } finally {
+      isLoadingInstitutionCategories.value = false;
+    }
+  }
+
+  // Map institution type ID to API format (using typeName from model)
+  String _mapInstitutionTypeToApi(int typeId, {int? categoryId}) {
+    final type = institutionTypes.firstWhereOrNull((t) => t.id == typeId);
+    if (type == null) return '';
+
+    String baseType = type.typeName;
+
+    // Append category ID if provided
+    if (categoryId != null && categoryId > 0) {
+      return '$baseType|$categoryId';
+    }
+
+    return baseType;
   }
 
   // Get city ID from selected city name
@@ -141,6 +208,7 @@ class SchoolController extends GetxController {
     super.onInit();
     loadSchools();
     loadStates();
+    loadInstitutionTypes();
   }
 
   // Load states from API
@@ -187,8 +255,11 @@ class SchoolController extends GetxController {
   @override
   void onClose() {
     institutionNameController.dispose();
+    institutionShortNameController.dispose();
     addressController.dispose();
     pincodeController.dispose();
+    emailController.dispose();
+    searchController.dispose();
     super.onClose();
   }
 
@@ -197,12 +268,13 @@ class SchoolController extends GetxController {
     String? search,
     int? stateId,
     int? cityId,
-    String? institutionType,
+    int? institutionTypeId,
     int? page,
     int? limit,
     String? sortByParam,
     String? orderParam,
     bool resetPage = false,
+    bool useReportFilters = true,
   }) async {
     try {
       isLoading.value = true;
@@ -224,17 +296,68 @@ class SchoolController extends GetxController {
       final sortByValue = sortByParam ?? sortBy.value;
       final orderValue = orderParam ?? sortOrder.value;
 
-      // Map UI institution type to API format if needed
-      String? apiInstitutionType;
-      if (institutionType != null && institutionType.isNotEmpty) {
-        apiInstitutionType = _mapInstitutionTypeToApi(institutionType);
+      // Use report filters if enabled
+      int? finalStateId = stateId;
+      int? finalCityId = cityId;
+      int? finalInstitutionTypeId = institutionTypeId;
+
+      if (useReportFilters) {
+        // Use report state filter if set
+        if (reportState.value.isNotEmpty && finalStateId == null) {
+          final selectedState = states.firstWhereOrNull(
+            (s) => s.stateName == reportState.value,
+          );
+          if (selectedState != null) {
+            finalStateId = selectedState.id;
+          }
+        }
+
+        // Use report district/city filter if set
+        if (reportDistrict.value.isNotEmpty && finalCityId == null) {
+          // Determine which state ID to use for filtering
+          final stateIdForFilter = finalStateId ?? selectedStateId.value;
+
+          // Try to find city by name first (in case reportDistrict contains city name)
+          final cityByName = cities.firstWhereOrNull(
+            (c) =>
+                c.cityName == reportDistrict.value &&
+                (stateIdForFilter > 0 ? c.stateId == stateIdForFilter : true),
+          );
+
+          if (cityByName != null) {
+            finalCityId = cityByName.id;
+          } else {
+            // If not found by name, try to find by district
+            // Get cities from the selected district for the current state
+            final districtCities = cities
+                .where(
+                  (c) =>
+                      c.district == reportDistrict.value &&
+                      (stateIdForFilter > 0
+                          ? c.stateId == stateIdForFilter
+                          : true),
+                )
+                .toList();
+
+            if (districtCities.isNotEmpty) {
+              // Use the first city from the district
+              finalCityId = districtCities.first.id;
+            }
+          }
+        }
+
+        // Use report institution type filter if set
+        if (reportInstitutionTypeId.value > 0 &&
+            finalInstitutionTypeId == null) {
+          finalInstitutionTypeId = reportInstitutionTypeId.value;
+        }
       }
 
       final response = await _schoolRepository.getInstitutionsList(
         search: searchTerm.isNotEmpty ? searchTerm : null,
-        stateId: stateId,
-        cityId: cityId,
-        institutionType: apiInstitutionType,
+        stateId: finalStateId,
+        cityId: finalCityId,
+        institutionTypeId: finalInstitutionTypeId,
         page: pageNum,
         limit: limitNum,
         sortBy: sortByValue,
@@ -335,9 +458,18 @@ class SchoolController extends GetxController {
       return;
     }
 
-    if (selectedInstitutionType.value.isEmpty) {
+    if (selectedInstitutionTypeId.value == 0) {
       errorMessage.value = 'Please select institution type';
       return;
+    }
+
+    // If categories exist for this type, validate category selection
+    if (institutionCategories.isNotEmpty) {
+      if (selectedInstitutionCategoryId.value == 0 &&
+          selectedInstitutionCategory.value.isEmpty) {
+        errorMessage.value = 'Please select or add a category';
+        return;
+      }
     }
 
     if (selectedStateId.value == 0) {
@@ -361,19 +493,26 @@ class SchoolController extends GetxController {
       errorMessage.value = '';
 
       final institutionName = institutionNameController.text.trim();
+      final institutionShortName = institutionShortNameController.text.trim();
       final address = addressController.text.trim();
       final pincode = pincodeController.text.trim();
-      final apiInstitutionType = _mapInstitutionTypeToApi(
-        selectedInstitutionType.value,
-      );
+      final emailId = emailController.text.trim();
+
+      // Get category ID if selected
+      final categoryId = selectedInstitutionCategoryId.value > 0
+          ? selectedInstitutionCategoryId.value
+          : null;
 
       print('Submitting institution:');
       print('  Name: $institutionName');
+      print('  Short Name: $institutionShortName');
       print('  Address: $address');
+      print('  Email ID: $emailId');
       print('  State ID: ${selectedStateId.value}');
       print('  City ID: $cityId');
       print('  Pincode: $pincode');
-      print('  Institution Type: $apiInstitutionType');
+      print('  Institution Type ID: ${selectedInstitutionTypeId.value}');
+      print('  Institution Category ID: ${categoryId ?? 'null'}');
 
       ApiResponse<SchoolModel> response;
 
@@ -384,20 +523,30 @@ class SchoolController extends GetxController {
         response = await _schoolRepository.updateInstitution(
           id: editingSchoolId.value ?? '',
           institutionName: institutionName,
+          institutionShortName: institutionShortName.isNotEmpty
+              ? institutionShortName
+              : null,
           address: address,
+          emailId: emailId.isNotEmpty ? emailId : null,
           stateId: selectedStateId.value,
           cityId: cityId,
-          institutionType: apiInstitutionType,
+          institutionTypeId: selectedInstitutionTypeId.value,
+          institutionCategoryId: categoryId,
           pincode: pincode,
         );
       } else {
         // Create new institution
         response = await _schoolRepository.createInstitution(
           institutionName: institutionName,
+          institutionShortName: institutionShortName.isNotEmpty
+              ? institutionShortName
+              : null,
           address: address,
+          emailId: emailId.isNotEmpty ? emailId : null,
           stateId: selectedStateId.value,
           cityId: cityId,
-          institutionType: apiInstitutionType,
+          institutionTypeId: selectedInstitutionTypeId.value,
+          institutionCategoryId: categoryId,
           pincode: pincode,
         );
       }
@@ -462,6 +611,11 @@ class SchoolController extends GetxController {
         await loadStates();
       }
 
+      // Ensure institution types are loaded first
+      if (institutionTypes.isEmpty) {
+        await loadInstitutionTypes();
+      }
+
       final response = await _schoolRepository.getInstitutionById(id);
 
       if (response.success && response.data != null) {
@@ -470,6 +624,10 @@ class SchoolController extends GetxController {
         print('Loading school for edit: ${school.institutionName}');
         print('State ID: ${school.stateId}, State Name: ${school.stateName}');
         print('City ID: ${school.cityId}, City Name: ${school.cityName}');
+        print(
+          'Institution Type Display Name: ${school.institutionTypeDisplayName}',
+        );
+        print('Institution Type: ${school.institutionType}');
 
         // Set edit mode first
         isEditMode.value = true;
@@ -483,13 +641,64 @@ class SchoolController extends GetxController {
 
         // Populate form fields - always populate these
         institutionNameController.text = school.institutionName;
+        institutionShortNameController.text = school.institutionShortName ?? '';
         addressController.text = school.address;
         pincodeController.text = school.pincode;
+        emailController.text = school.email ?? '';
 
-        // Map API institution type to UI format
-        selectedInstitutionType.value = _mapInstitutionTypeFromApi(
-          school.institutionType,
-        );
+        // Find and set institution type ID - prefer displayName from API if available
+        InstitutionTypeModel? type;
+        if (school.institutionTypeDisplayName != null &&
+            school.institutionTypeDisplayName!.isNotEmpty) {
+          // Use displayName from API response
+          type = institutionTypes.firstWhereOrNull(
+            (t) => t.displayName == school.institutionTypeDisplayName,
+          );
+          print(
+            'Matching by displayName: ${school.institutionTypeDisplayName}',
+          );
+        }
+
+        // Fallback: Map API institution type to UI format
+        if (type == null) {
+          final uiType = _mapInstitutionTypeFromApi(school.institutionType);
+          selectedInstitutionType.value = uiType;
+          type = institutionTypes.firstWhereOrNull(
+            (t) =>
+                t.displayName == uiType ||
+                t.typeName == school.institutionType.split('|')[0],
+          );
+          print('Matching by mapped type: $uiType');
+        }
+
+        if (type != null) {
+          selectedInstitutionTypeId.value = type.id;
+          selectedInstitutionType.value = type.displayName;
+          print('Institution type set: ${type.displayName} (ID: ${type.id})');
+          // Load categories for this type
+          await loadInstitutionCategoriesByTypeId(type.id);
+
+          // Set category if available
+          if (school.institutionCategoryDisplayName != null &&
+              school.institutionCategoryDisplayName!.isNotEmpty) {
+            // Wait for categories to load
+            await Future.delayed(const Duration(milliseconds: 300));
+            final category = institutionCategories.firstWhereOrNull(
+              (c) => c.displayName == school.institutionCategoryDisplayName,
+            );
+            if (category != null) {
+              selectedInstitutionCategoryId.value = category.id;
+              selectedInstitutionCategory.value = category.displayName;
+              print(
+                'Institution category set: ${category.displayName} (ID: ${category.id})',
+              );
+            }
+          }
+        } else {
+          print(
+            'Warning: Institution type not found. Available types: ${institutionTypes.map((t) => t.displayName).toList()}',
+          );
+        }
 
         print(
           'Basic fields populated - Name: ${school.institutionName}, Address: ${school.address}',
@@ -636,17 +845,73 @@ class SchoolController extends GetxController {
 
   // Map API institution type from API format to UI format
   String _mapInstitutionTypeFromApi(String apiType) {
-    switch (apiType.toUpperCase()) {
+    // Handle sub-categories (format: BASE_TYPE|SUBCATEGORY)
+    final parts = apiType.split('|');
+    final baseType = parts[0].toUpperCase();
+
+    String uiType;
+    switch (baseType) {
       case 'PRIVATE_SCHOOL':
-        return 'Private School';
+        uiType = 'Private School';
+        // Extract category ID if present
+        if (parts.length > 1) {
+          final categoryId = int.tryParse(parts[1]);
+          if (categoryId != null) {
+            selectedInstitutionCategoryId.value = categoryId;
+            // Load categories to get display name
+            final type = institutionTypes.firstWhereOrNull(
+              (t) => t.typeName == 'PRIVATE_SCHOOL',
+            );
+            if (type != null) {
+              loadInstitutionCategoriesByTypeId(type.id).then((_) {
+                final category = institutionCategories.firstWhereOrNull(
+                  (c) => c.id == categoryId,
+                );
+                if (category != null) {
+                  selectedInstitutionCategory.value = category.displayName;
+                }
+              });
+            }
+          }
+        }
+        break;
       case 'GOVT_AIDED_SCHOOL':
       case 'GOVT_SCHOOL':
-        return 'Govt / Govt Aided School';
+        uiType = 'Govt / Govt Aided School';
+        // Extract category ID if present
+        if (parts.length > 1) {
+          final categoryId = int.tryParse(parts[1]);
+          if (categoryId != null) {
+            selectedInstitutionCategoryId.value = categoryId;
+            // Load categories to get display name
+            final type = institutionTypes.firstWhereOrNull(
+              (t) =>
+                  t.typeName == 'GOVT_AIDED_SCHOOL' ||
+                  t.typeName == 'GOVT_SCHOOL',
+            );
+            if (type != null) {
+              loadInstitutionCategoriesByTypeId(type.id).then((_) {
+                final category = institutionCategories.firstWhereOrNull(
+                  (c) => c.id == categoryId,
+                );
+                if (category != null) {
+                  selectedInstitutionCategory.value = category.displayName;
+                }
+              });
+            }
+          }
+        }
+        break;
       case 'PRIVATE_COLLEGE':
-        return 'Private College';
+        uiType = 'Private College';
+        break;
       case 'GOVT_AIDED_COLLEGE':
       case 'GOVT_COLLEGE':
-        return 'Govt / Govt Aided College';
+        uiType = 'Govt / Govt Aided College';
+        break;
+      case 'YOGA_CENTER':
+        uiType = 'Yoga Center';
+        break;
       default:
         // If already in UI format, return as is
         if (institutionTypes.contains(apiType)) {
@@ -654,6 +919,8 @@ class SchoolController extends GetxController {
         }
         return apiType;
     }
+
+    return uiType;
   }
 
   // Reset form
@@ -665,9 +932,16 @@ class SchoolController extends GetxController {
     selectedStateId.value = 0;
     selectedPincode.value = '';
     selectedInstitutionType.value = '';
+    selectedInstitutionTypeId.value = 0;
+    selectedInstitutionCategory.value = '';
+    selectedInstitutionCategoryId.value = 0;
+    customCategory.value = '';
+    institutionCategories.clear();
     institutionNameController.clear();
+    institutionShortNameController.clear();
     addressController.clear();
     pincodeController.clear();
+    emailController.clear();
     cities.clear();
     errorMessage.value = '';
     isEditMode.value = false;
@@ -686,6 +960,74 @@ class SchoolController extends GetxController {
           (school.district?.toLowerCase().contains(query) ?? false) ||
           (school.state?.toLowerCase().contains(query) ?? false);
     }).toList();
+  }
+
+  // Create and add institution category via API
+  Future<bool> createInstitutionCategory(String categoryName) async {
+    if (categoryName.trim().isEmpty || selectedInstitutionTypeId.value == 0) {
+      return false;
+    }
+
+    try {
+      isLoadingInstitutionCategories.value = true;
+      errorMessage.value = '';
+
+      // Use categoryName as displayName if not provided separately
+      final displayName = categoryName.trim();
+      final categoryNameFormatted = categoryName
+          .trim()
+          .toUpperCase()
+          .replaceAll(' ', '_');
+
+      final response = await _schoolRepository.createInstitutionCategory(
+        categoryName: categoryNameFormatted,
+        displayName: displayName,
+        institutionTypeId: selectedInstitutionTypeId.value,
+      );
+
+      if (response.success && response.data != null) {
+        // Reload categories to include the new one
+        await loadInstitutionCategoriesByTypeId(
+          selectedInstitutionTypeId.value,
+        );
+
+        // Select the newly created category
+        selectedInstitutionCategoryId.value = response.data!.id;
+        selectedInstitutionCategory.value = response.data!.displayName;
+
+        Get.snackbar(
+          'Success',
+          'Category "$displayName" created successfully',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        return true;
+      } else {
+        errorMessage.value = response.message ?? 'Failed to create category';
+        Get.snackbar(
+          'Error',
+          errorMessage.value,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return false;
+      }
+    } catch (e) {
+      errorMessage.value = 'Error creating category: ${e.toString()}';
+      print('Error in createInstitutionCategory: $e');
+      Get.snackbar(
+        'Error',
+        errorMessage.value,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return false;
+    } finally {
+      isLoadingInstitutionCategories.value = false;
+    }
   }
 
   // Generate report

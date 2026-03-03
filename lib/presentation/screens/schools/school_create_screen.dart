@@ -4,6 +4,7 @@ import '../../controllers/school_controller.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
 import '../../../data/models/city_model.dart';
+import '../../../data/models/institution_category_model.dart';
 
 class SchoolCreateScreen extends StatelessWidget {
   const SchoolCreateScreen({super.key});
@@ -36,6 +37,15 @@ class SchoolCreateScreen extends StatelessWidget {
                   isTablet: isTablet,
                 ),
 
+                // Institution Type and Category (moved to top)
+                _buildInstitutionTypeField(
+                  context,
+                  controller,
+                  isMobile,
+                  isTablet,
+                ),
+                SizedBox(height: isMobile ? 20 : 24),
+
                 // Institution Name and Address in same row (desktop) or column (mobile)
                 isMobile
                     ? Column(
@@ -54,6 +64,34 @@ class SchoolCreateScreen extends StatelessWidget {
                               }
                               if (value.trim().length > 255) {
                                 return 'Institution name must not exceed 255 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          SizedBox(height: isMobile ? 20 : 24),
+
+                          _buildTextField(
+                            context,
+                            label: 'Institution Short Name :',
+                            controller:
+                                controller.institutionShortNameController,
+                            isMobile: isMobile,
+                          ),
+                          SizedBox(height: isMobile ? 20 : 24),
+                          _buildTextField(
+                            context,
+                            label: 'Email ID :',
+                            controller: controller.emailController,
+                            isMobile: isMobile,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value != null && value.isNotEmpty) {
+                                final emailRegex = RegExp(
+                                  r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                );
+                                if (!emailRegex.hasMatch(value.trim())) {
+                                  return 'Please enter a valid email address';
+                                }
                               }
                               return null;
                             },
@@ -107,19 +145,28 @@ class SchoolCreateScreen extends StatelessWidget {
                           Expanded(
                             child: _buildTextField(
                               context,
-                              label: 'Address :',
-                              controller: controller.addressController,
+                              label: 'Institution Short Name :',
+                              controller:
+                                  controller.institutionShortNameController,
                               isMobile: isMobile,
-                              maxLines: 1,
+                            ),
+                          ),
+                          SizedBox(width: isTablet ? 16 : 20),
+                          Expanded(
+                            child: _buildTextField(
+                              context,
+                              label: 'Email ID :',
+                              controller: controller.emailController,
+                              isMobile: isMobile,
+                              keyboardType: TextInputType.emailAddress,
                               validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter address';
-                                }
-                                if (value.trim().length < 10) {
-                                  return 'Address must be at least 10 characters';
-                                }
-                                if (value.trim().length > 2000) {
-                                  return 'Address must not exceed 2000 characters';
+                                if (value != null && value.isNotEmpty) {
+                                  final emailRegex = RegExp(
+                                    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                  );
+                                  if (!emailRegex.hasMatch(value.trim())) {
+                                    return 'Please enter a valid email address';
+                                  }
                                 }
                                 return null;
                               },
@@ -127,6 +174,28 @@ class SchoolCreateScreen extends StatelessWidget {
                           ),
                         ],
                       ),
+                SizedBox(height: isMobile ? 20 : 24),
+
+                // Address field
+                _buildTextField(
+                  context,
+                  label: 'Address :',
+                  controller: controller.addressController,
+                  isMobile: isMobile,
+                  maxLines: isMobile ? 3 : 1,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter address';
+                    }
+                    if (value.trim().length < 10) {
+                      return 'Address must be at least 10 characters';
+                    }
+                    if (value.trim().length > 2000) {
+                      return 'Address must not exceed 2000 characters';
+                    }
+                    return null;
+                  },
+                ),
                 SizedBox(height: isMobile ? 20 : 24),
 
                 // State, City, Pincode in row (desktop) or column (mobile)
@@ -187,15 +256,6 @@ class SchoolCreateScreen extends StatelessWidget {
                       ),
                 SizedBox(height: isMobile ? 20 : 24),
 
-                // Institution Type Radio Buttons
-                _buildInstitutionTypeField(
-                  context,
-                  controller,
-                  isMobile,
-                  isTablet,
-                ),
-                SizedBox(height: isMobile ? 24 : 32),
-
                 // Error Message
                 Obx(
                   () => controller.errorMessage.value.isNotEmpty
@@ -225,9 +285,12 @@ class SchoolCreateScreen extends StatelessWidget {
                             const SizedBox(height: 12),
                             cancelButton(
                               onPressed: () {
+                                // Check edit mode before resetting
+                                final wasInEditMode =
+                                    controller.isEditMode.value;
                                 controller.resetForm();
                                 // Redirect to list view if in edit mode
-                                if (controller.isEditMode.value) {
+                                if (wasInEditMode) {
                                   controller.toggleViewMode(true);
                                 }
                               },
@@ -249,9 +312,12 @@ class SchoolCreateScreen extends StatelessWidget {
                             const SizedBox(width: 16),
                             cancelButton(
                               onPressed: () {
+                                // Check edit mode before resetting
+                                final wasInEditMode =
+                                    controller.isEditMode.value;
                                 controller.resetForm();
                                 // Redirect to list view if in edit mode
-                                if (controller.isEditMode.value) {
+                                if (wasInEditMode) {
                                   controller.toggleViewMode(true);
                                 }
                               },
@@ -275,6 +341,8 @@ class SchoolCreateScreen extends StatelessWidget {
     required bool isMobile,
     int maxLines = 1,
     String? Function(String?)? validator,
+    TextInputType? keyboardType,
+    void Function(String?)? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,6 +358,7 @@ class SchoolCreateScreen extends StatelessWidget {
         TextFormField(
           controller: controller,
           maxLines: maxLines,
+          keyboardType: keyboardType,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: EdgeInsets.symmetric(
@@ -301,6 +370,7 @@ class SchoolCreateScreen extends StatelessWidget {
           ),
           style: TextStyle(fontSize: isMobile ? 14 : 16),
           validator: validator,
+          onChanged: onChanged,
         ),
       ],
     );
@@ -599,29 +669,300 @@ class SchoolCreateScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        Obx(
-          () => Wrap(
+        Obx(() {
+          if (controller.isLoadingInstitutionTypes.value) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          if (controller.institutionTypes.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'No institution types available',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: isMobile ? 14 : 16,
+                ),
+              ),
+            );
+          }
+
+          return Wrap(
             spacing: isMobile ? 16 : 24,
             runSpacing: isMobile ? 12 : 16,
-            children: SchoolController.institutionTypes.map((type) {
+            children: controller.institutionTypes.map((type) {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Radio<String>(
-                    value: type,
-                    groupValue: controller.selectedInstitutionType.value,
-                    onChanged: (value) {
-                      controller.selectedInstitutionType.value = value ?? '';
+                  Radio<int>(
+                    value: type.id,
+                    groupValue: controller.selectedInstitutionTypeId.value,
+                    onChanged: (value) async {
+                      if (value != null) {
+                        controller.selectedInstitutionTypeId.value = value;
+                        controller.selectedInstitutionType.value =
+                            type.displayName;
+                        // Clear category selection
+                        controller.selectedInstitutionCategoryId.value = 0;
+                        controller.selectedInstitutionCategory.value = '';
+                        // Load categories for this institution type
+                        await controller.loadInstitutionCategoriesByTypeId(
+                          value,
+                        );
+                      }
                     },
                     activeColor: Colors.green,
                   ),
-                  Text(type, style: TextStyle(fontSize: isMobile ? 14 : 16)),
+                  Text(
+                    type.displayName,
+                    style: TextStyle(fontSize: isMobile ? 14 : 16),
+                  ),
                 ],
               );
             }).toList(),
+          );
+        }),
+        // Show sub-category selection if categories are available
+        Obx(() {
+          if (controller.selectedInstitutionTypeId.value > 0 &&
+              controller.institutionCategories.isNotEmpty) {
+            final selectedType = controller.institutionTypes.firstWhereOrNull(
+              (t) => t.id == controller.selectedInstitutionTypeId.value,
+            );
+            final categoryLabel = selectedType != null
+                ? '${selectedType.displayName} Category :'
+                : 'Category :';
+
+            return Padding(
+              padding: EdgeInsets.only(top: isMobile ? 16 : 20),
+              child: _buildSubCategoryField(
+                context,
+                controller,
+                categoryLabel,
+                controller.institutionCategories,
+                isMobile,
+                isTablet,
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSubCategoryField(
+    BuildContext context,
+    SchoolController controller,
+    String label,
+    List<dynamic> categories, // InstitutionCategoryModel list
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: isMobile ? 14 : 16,
           ),
         ),
+        const SizedBox(height: 8),
+        Obx(() {
+          if (controller.isLoadingInstitutionCategories.value) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          final categoryList = categories
+              .whereType<InstitutionCategoryModel>()
+              .toList();
+
+          if (categoryList.isEmpty) {
+            return const SizedBox.shrink();
+          }
+
+          return Wrap(
+            spacing: isMobile ? 12 : 16,
+            runSpacing: isMobile ? 8 : 12,
+            children: [
+              ...categoryList.map((category) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Radio<int>(
+                      value: category.id,
+                      groupValue:
+                          controller.selectedInstitutionCategoryId.value > 0
+                          ? controller.selectedInstitutionCategoryId.value
+                          : 0,
+                      onChanged: (value) {
+                        if (value != null) {
+                          controller.selectedInstitutionCategoryId.value =
+                              value;
+                          controller.selectedInstitutionCategory.value =
+                              category.displayName;
+                        }
+                      },
+                      activeColor: Colors.green,
+                    ),
+                    Text(
+                      category.displayName,
+                      style: TextStyle(fontSize: isMobile ? 14 : 16),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ],
+          );
+        }),
+        const SizedBox(height: 12),
+        // Add new category button
+        OutlinedButton.icon(
+          onPressed: controller.isLoadingInstitutionCategories.value
+              ? null
+              : () => _showAddCategoryDialog(context, controller),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Add New Category'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.green[700],
+            side: BorderSide(color: Colors.green[700]!),
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 16 : 20,
+              vertical: isMobile ? 12 : 14,
+            ),
+          ),
+        ),
+        // Show custom category if selected
+        Obx(() {
+          if (controller.selectedInstitutionCategory.value.isNotEmpty &&
+              controller.selectedInstitutionCategoryId.value == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green[300]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: Colors.green[700],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Selected: ${controller.selectedInstitutionCategory.value}',
+                        style: TextStyle(
+                          fontSize: isMobile ? 13 : 14,
+                          color: Colors.green[900],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      color: Colors.green[700],
+                      onPressed: () {
+                        controller.selectedInstitutionCategory.value = '';
+                        controller.selectedInstitutionCategoryId.value = 0;
+                      },
+                      tooltip: 'Clear selection',
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        }),
       ],
+    );
+  }
+
+  void _showAddCategoryDialog(
+    BuildContext context,
+    SchoolController controller,
+  ) {
+    final categoryController = TextEditingController();
+    final selectedType = controller.institutionTypes.firstWhereOrNull(
+      (t) => t.id == controller.selectedInstitutionTypeId.value,
+    );
+    final institutionTypeName = selectedType?.displayName ?? 'Institution';
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add New Category for $institutionTypeName'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: categoryController,
+            decoration: const InputDecoration(
+              labelText: 'Category Name',
+              hintText: 'Enter category name',
+              border: OutlineInputBorder(),
+            ),
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter category name';
+              }
+              if (value.trim().length < 2) {
+                return 'Category name must be at least 2 characters';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          Obx(
+            () => TextButton(
+              onPressed: controller.isLoadingInstitutionCategories.value
+                  ? null
+                  : () async {
+                      if (formKey.currentState!.validate()) {
+                        final category = categoryController.text.trim();
+                        final success = await controller
+                            .createInstitutionCategory(category);
+                        if (success && context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      }
+                    },
+              style: TextButton.styleFrom(foregroundColor: Colors.green),
+              child: controller.isLoadingInstitutionCategories.value
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

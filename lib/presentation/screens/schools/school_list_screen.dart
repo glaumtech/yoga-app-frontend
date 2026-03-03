@@ -18,6 +18,10 @@ class SchoolListScreen extends StatelessWidget {
       if (controller.schools.isEmpty && !controller.isLoading.value) {
         controller.loadSchools();
       }
+      // Load institution types for filter dropdown
+      if (controller.institutionTypes.isEmpty) {
+        controller.loadInstitutionTypes();
+      }
     });
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -26,7 +30,7 @@ class SchoolListScreen extends StatelessWidget {
 
     return Card(
       elevation: 4,
-      margin: EdgeInsets.all(isMobile ? 16 : 24),
+      margin: EdgeInsets.symmetric(horizontal: 15, vertical: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(16),
@@ -40,11 +44,11 @@ class SchoolListScreen extends StatelessWidget {
               isMobile,
               isTablet,
             ),
-            SizedBox(height: isMobile ? 24 : 32),
+            SizedBox(height: 10),
 
             // Search and Sort Section
             _buildSearchAndSortSection(context, controller, isMobile, isTablet),
-            SizedBox(height: isMobile ? 16 : 24),
+            SizedBox(height: 10),
 
             // Schools List
             Expanded(
@@ -68,197 +72,269 @@ class SchoolListScreen extends StatelessWidget {
     bool isMobile,
     bool isTablet,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Report Generation',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: isMobile ? 18 : 20,
-          ),
-        ),
-        SizedBox(height: isMobile ? 16 : 20),
+    return Obx(
+      () => isMobile
+          ? Column(
+              children: [
+                // Filter by State
+                _buildStringDropdown(
+                  value: controller.reportState.value,
+                  items: controller.states.map((s) => s.stateName).toList(),
+                  hint: 'Select State',
+                  selectAllLabel: 'Select State',
+                  labelText: 'Filter by State',
+                  onChanged: (value) async {
+                    controller.reportState.value = value ?? '';
+                    controller.reportDistrict.value = '';
 
-        // District and State Selection
-        Obx(
-          () => isMobile
-              ? Column(
-                  children: [
-                    _buildReportDropdown(
-                      context,
-                      label: 'Select State :',
-                      value: controller.reportState.value,
-                      items: controller.states.map((s) => s.stateName).toList(),
+                    // Load cities for selected state
+                    if (value != null && value.isNotEmpty) {
+                      final selectedState = controller.states.firstWhereOrNull(
+                        (s) => s.stateName == value,
+                      );
+                      if (selectedState != null) {
+                        controller.selectedStateId.value = selectedState.id;
+                        await controller.loadCitiesByStateId(selectedState.id);
+                      }
+                    } else {
+                      controller.selectedStateId.value = 0;
+                      controller.cities.clear();
+                    }
+
+                    controller.loadSchools(resetPage: true);
+                  },
+                  isMobile: isMobile,
+                  isLoading: controller.isLoadingStates.value,
+                ),
+                SizedBox(height: isMobile ? 12 : 16),
+                // Filter by City
+                _buildStringDropdown(
+                  value: controller.reportDistrict.value,
+                  items: controller.reportState.value.isNotEmpty
+                      ? controller.getDistrictsForState(
+                          controller.reportState.value,
+                        )
+                      : [],
+                  hint: 'Select District',
+                  selectAllLabel: 'Select City',
+                  labelText: 'Filter by City',
+                  onChanged: (value) {
+                    controller.reportDistrict.value = value ?? '';
+                    controller.loadSchools(resetPage: true);
+                  },
+                  isMobile: isMobile,
+                  isLoading: controller.isLoadingCities.value,
+                ),
+                SizedBox(height: isMobile ? 12 : 16),
+                // Filter by Type
+                Obx(() {
+                  // Get current display name from ID
+                  String? currentValue;
+                  if (controller.reportInstitutionTypeId.value > 0) {
+                    final selectedType = controller.institutionTypes
+                        .firstWhereOrNull(
+                          (t) =>
+                              t.id == controller.reportInstitutionTypeId.value,
+                        );
+                    currentValue = selectedType?.displayName;
+                  }
+
+                  return _buildStringDropdown(
+                    value: currentValue,
+                    items: controller.institutionTypes
+                        .map((t) => t.displayName)
+                        .toList(),
+                    hint: 'Select Institution Type',
+                    selectAllLabel: 'Select Type',
+                    labelText: 'Filter by Type',
+                    onChanged: (value) {
+                      if (value == null || value.isEmpty) {
+                        controller.reportInstitutionTypeId.value = 0;
+                      } else {
+                        final selectedType = controller.institutionTypes
+                            .firstWhereOrNull((t) => t.displayName == value);
+                        controller.reportInstitutionTypeId.value =
+                            selectedType?.id ?? 0;
+                      }
+                      controller.loadSchools(resetPage: true);
+                    },
+                    isMobile: isMobile,
+                    isLoading: controller.isLoadingInstitutionTypes.value,
+                  );
+                }),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: _buildStringDropdown(
+                    value: controller.reportState.value,
+                    items: controller.states.map((s) => s.stateName).toList(),
+                    hint: 'Select State',
+                    selectAllLabel: 'Select State',
+                    labelText: 'Filter by State',
+                    onChanged: (value) async {
+                      controller.reportState.value = value ?? '';
+                      controller.reportDistrict.value = '';
+
+                      // Load cities for selected state
+                      if (value != null && value.isNotEmpty) {
+                        final selectedState = controller.states
+                            .firstWhereOrNull((s) => s.stateName == value);
+                        if (selectedState != null) {
+                          controller.selectedStateId.value = selectedState.id;
+                          await controller.loadCitiesByStateId(
+                            selectedState.id,
+                          );
+                        }
+                      } else {
+                        controller.selectedStateId.value = 0;
+                        controller.cities.clear();
+                      }
+
+                      controller.loadSchools(resetPage: true);
+                    },
+                    isMobile: isMobile,
+                    isLoading: controller.isLoadingStates.value,
+                  ),
+                ),
+                SizedBox(width: isTablet ? 12 : 16),
+                Expanded(
+                  child: _buildStringDropdown(
+                    value: controller.reportDistrict.value,
+                    items: controller.reportState.value.isNotEmpty
+                        ? controller.getDistrictsForState(
+                            controller.reportState.value,
+                          )
+                        : [],
+                    hint: 'Select District',
+                    selectAllLabel: 'Select City',
+                    labelText: 'Filter by City',
+                    onChanged: (value) {
+                      controller.reportDistrict.value = value ?? '';
+                      controller.loadSchools(resetPage: true);
+                    },
+                    isMobile: isMobile,
+                    isLoading: controller.isLoadingCities.value,
+                  ),
+                ),
+                SizedBox(width: isTablet ? 12 : 16),
+                Expanded(
+                  child: Obx(() {
+                    // Get current display name from ID
+                    String? currentValue;
+                    if (controller.reportInstitutionTypeId.value > 0) {
+                      final selectedType = controller.institutionTypes
+                          .firstWhereOrNull(
+                            (t) =>
+                                t.id ==
+                                controller.reportInstitutionTypeId.value,
+                          );
+                      currentValue = selectedType?.displayName;
+                    }
+
+                    return _buildStringDropdown(
+                      value: currentValue,
+                      items: controller.institutionTypes
+                          .map((t) => t.displayName)
+                          .toList(),
+                      hint: 'Select Institution Type',
+                      selectAllLabel: 'Select Type',
+                      labelText: 'Filter by Type',
                       onChanged: (value) {
-                        controller.reportState.value = value ?? '';
-                        controller.reportDistrict.value = '';
+                        if (value == null || value.isEmpty) {
+                          controller.reportInstitutionTypeId.value = 0;
+                        } else {
+                          final selectedType = controller.institutionTypes
+                              .firstWhereOrNull((t) => t.displayName == value);
+                          controller.reportInstitutionTypeId.value =
+                              selectedType?.id ?? 0;
+                        }
+                        controller.loadSchools(resetPage: true);
                       },
                       isMobile: isMobile,
-                    ),
-                    SizedBox(height: isMobile ? 16 : 20),
-                    _buildReportDropdown(
-                      context,
-                      label: 'Select District :',
-                      value: controller.reportDistrict.value,
-                      items: controller.reportState.value.isNotEmpty
-                          ? controller.getDistrictsForState(
-                              controller.reportState.value,
-                            )
-                          : [],
-                      onChanged: (value) =>
-                          controller.reportDistrict.value = value ?? '',
-                      isMobile: isMobile,
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(
-                      child: _buildReportDropdown(
-                        context,
-                        label: 'Select State :',
-                        value: controller.reportState.value,
-                        items: controller.states
-                            .map((s) => s.stateName)
-                            .toList(),
-                        onChanged: (value) {
-                          controller.reportState.value = value ?? '';
-                          controller.reportDistrict.value = '';
-                        },
-                        isMobile: isMobile,
-                      ),
-                    ),
-                    SizedBox(width: isTablet ? 16 : 20),
-                    Expanded(
-                      child: _buildReportDropdown(
-                        context,
-                        label: 'Select District :',
-                        value: controller.reportDistrict.value,
-                        items: controller.reportState.value.isNotEmpty
-                            ? controller.getDistrictsForState(
-                                controller.reportState.value,
-                              )
-                            : [],
-                        onChanged: (value) =>
-                            controller.reportDistrict.value = value ?? '',
-                        isMobile: isMobile,
-                      ),
-                    ),
-                  ],
+                      isLoading: controller.isLoadingInstitutionTypes.value,
+                    );
+                  }),
                 ),
-        ),
-        SizedBox(height: isMobile ? 20 : 24),
-
-        // Report Links
-        Wrap(
-          spacing: isMobile ? 12 : 16,
-          runSpacing: isMobile ? 12 : 16,
-          children: [
-            _buildReportLink(
-              context,
-              label: 'Private Schools',
-              onTap: () => controller.generateReport('private_schools'),
-              isMobile: isMobile,
+              ],
             ),
-            _buildReportLink(
-              context,
-              label: 'Govt / Govt Aided Schools',
-              onTap: () => controller.generateReport('govt_schools'),
-              isMobile: isMobile,
-            ),
-            _buildReportLink(
-              context,
-              label: 'Private Colleges',
-              onTap: () => controller.generateReport('private_colleges'),
-              isMobile: isMobile,
-            ),
-            _buildReportLink(
-              context,
-              label: 'Govt / Govt Aided Colleges',
-              onTap: () => controller.generateReport('govt_colleges'),
-              isMobile: isMobile,
-            ),
-          ],
-        ),
-      ],
     );
   }
 
-  Widget _buildReportDropdown(
-    BuildContext context, {
-    required String label,
-    required String value,
+  /// Reusable string-based dropdown
+  Widget _buildStringDropdown({
+    required String? value,
     required List<String> items,
+    required String hint,
+    required String selectAllLabel,
+    required String labelText,
     required Function(String?) onChanged,
     required bool isMobile,
+    bool isLoading = false,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: isMobile ? 14 : 16,
+    if (isLoading) {
+      return DropdownButtonFormField<String>(
+        value: null,
+        decoration: InputDecoration(
+          labelText: labelText,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 12 : 16,
+            vertical: 12,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          suffixIcon: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value.isNotEmpty ? value : null,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 12 : 16,
-              vertical: 12,
-            ),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-          hint: Text('Select', style: TextStyle(fontSize: isMobile ? 14 : 16)),
+        hint: Text(
+          'Loading...',
           style: TextStyle(fontSize: isMobile ? 14 : 16),
-          items: items.map((item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(item, style: TextStyle(fontSize: isMobile ? 14 : 16)),
-            );
-          }).toList(),
-          onChanged: onChanged,
         ),
-      ],
-    );
-  }
+        items: [],
+        onChanged: null,
+      );
+    }
 
-  Widget _buildReportLink(
-    BuildContext context, {
-    required String label,
-    required VoidCallback onTap,
-    required bool isMobile,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: isMobile ? 13 : 14,
-              color: Colors.purple,
-              decoration: TextDecoration.underline,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '(Printable PDF Format)',
-            style: TextStyle(
-              fontSize: isMobile ? 11 : 12,
-              color: Colors.grey[700],
-            ),
-          ),
-        ],
+    // Add select all option at the beginning
+    final allItems = [selectAllLabel, ...items];
+
+    return DropdownButtonFormField<String>(
+      value: value != null && value.isNotEmpty ? value : null,
+      decoration: InputDecoration(
+        labelText: labelText,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 12 : 16,
+          vertical: 12,
+        ),
+        filled: true,
+        fillColor: Colors.white,
       ),
+      hint: Text(hint, style: TextStyle(fontSize: isMobile ? 14 : 16)),
+      style: TextStyle(fontSize: isMobile ? 14 : 16),
+      items: allItems.map((item) {
+        final isSelectAll = item == selectAllLabel;
+        return DropdownMenuItem<String>(
+          value: isSelectAll ? '' : item,
+          child: Text(
+            item,
+            style: TextStyle(
+              fontSize: isMobile ? 14 : 16,
+              fontWeight: isSelectAll ? FontWeight.bold : FontWeight.normal,
+              color: isSelectAll ? Colors.blue : null,
+            ),
+          ),
+        );
+      }).toList(),
+      onChanged: onChanged,
     );
   }
 
@@ -275,6 +351,7 @@ class SchoolListScreen extends StatelessWidget {
           children: [
             Expanded(
               child: TextField(
+                controller: controller.searchController,
                 onChanged: (value) {
                   controller.searchQuery.value = value;
                   // Debounce search - reload after user stops typing
@@ -311,8 +388,29 @@ class SchoolListScreen extends StatelessWidget {
             ),
             SizedBox(width: isMobile ? 8 : 12),
             IconButton(
+              icon: const Icon(Icons.print),
+              onPressed: () => controller.generateReport('all'),
+              tooltip: 'Print Report',
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.grey[100],
+                padding: const EdgeInsets.all(12),
+              ),
+            ),
+            SizedBox(width: isMobile ? 8 : 12),
+            IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: () => controller.loadSchools(),
+              onPressed: () {
+                // Reset all filter options
+                controller.reportState.value = '';
+                controller.reportDistrict.value = '';
+                controller.reportInstitutionTypeId.value = 0;
+                controller.selectedStateId.value = 0;
+                controller.cities.clear();
+                controller.searchQuery.value = '';
+                controller.searchController.clear();
+                // Reload schools with cleared filters
+                controller.loadSchools(resetPage: true);
+              },
               tooltip: 'Refresh',
               style: IconButton.styleFrom(
                 backgroundColor: Colors.grey[100],
@@ -409,20 +507,35 @@ class SchoolListScreen extends StatelessWidget {
                     ],
                   ),
                   const Divider(height: 24),
-                  _buildSchoolInfoRow('Address', school.address),
+                  if (school.institutionShortName != null &&
+                      school.institutionShortName!.isNotEmpty)
+                    _buildSchoolInfoRow(
+                      'Short Name',
+                      school.institutionShortName!,
+                    ),
                   _buildSchoolInfoRow(
-                    'District',
-                    school.district ?? school.cityName ?? '',
+                    'Address & Location',
+                    _buildAddressLocationText(school),
                   ),
                   _buildSchoolInfoRow(
-                    'State',
-                    school.stateName ?? school.state ?? '',
+                    'Type & Category',
+                    _buildTypeAndCategoryText(school),
                   ),
-                  _buildSchoolInfoRow('Pincode', school.pincode),
+                  if (school.email != null && school.email!.isNotEmpty)
+                    _buildSchoolInfoRow('Email ID', school.email!),
                   if (school.createdAt != null)
                     _buildSchoolInfoRow(
                       'Created',
-                      DateFormat('MMM dd, yyyy').format(school.createdAt!),
+                      DateFormat(
+                        'MMM dd, yyyy HH:mm',
+                      ).format(school.createdAt!),
+                    ),
+                  if (school.updatedAt != null)
+                    _buildSchoolInfoRow(
+                      'Updated',
+                      DateFormat(
+                        'MMM dd, yyyy HH:mm',
+                      ).format(school.updatedAt!),
                     ),
                   const SizedBox(height: 12),
                   Row(
@@ -485,14 +598,13 @@ class SchoolListScreen extends StatelessWidget {
                   border: TableBorder.all(color: Colors.grey[300]!, width: 1),
                   columnWidths: {
                     0: const FixedColumnWidth(80),
-                    1: FlexColumnWidth(2.5),
-                    2: FlexColumnWidth(2.5),
-                    3: FlexColumnWidth(1.5),
+                    1: FlexColumnWidth(2.8),
+                    2: FlexColumnWidth(3.0),
+                    3: FlexColumnWidth(2.5),
                     4: FlexColumnWidth(1.5),
-                    5: FlexColumnWidth(1.0),
-                    6: FlexColumnWidth(2.0),
-                    7: FlexColumnWidth(1.2),
-                    8: FlexColumnWidth(1.0),
+                    5: FlexColumnWidth(1.2),
+                    6: FlexColumnWidth(1.2),
+                    7: FlexColumnWidth(1.0),
                   },
                   children: [
                     // Header Row
@@ -508,33 +620,31 @@ class SchoolListScreen extends StatelessWidget {
                           controller,
                         ),
                         _buildSortableHeader(
-                          'ADDRESS',
+                          'ADDRESS & LOCATION',
                           'address',
                           controller,
                           isSortable: false,
                         ),
                         _buildSortableHeader(
-                          'DISTRICT',
-                          'district',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader('STATE', 'stateName', controller),
-                        _buildSortableHeader(
-                          'PINCODE',
-                          'pincode',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'TYPE',
+                          'TYPE & CATEGORY',
                           'institutionType',
+                          controller,
+                          isSortable: false,
+                        ),
+                        _buildSortableHeader(
+                          'EMAIL ID',
+                          'email',
                           controller,
                           isSortable: false,
                         ),
                         _buildSortableHeader(
                           'CREATED',
                           'createdAt',
+                          controller,
+                        ),
+                        _buildSortableHeader(
+                          'UPDATED',
+                          'updatedAt',
                           controller,
                         ),
                         _buildTableCell('ACTIONS', isHeader: true),
@@ -552,31 +662,32 @@ class SchoolListScreen extends StatelessWidget {
                               ),
                             ),
                           ),
-                          _buildTableCell(school.institutionName),
-                          _buildTableCell(school.address),
                           _buildTableCell(
-                            school.district ?? school.cityName ?? '',
+                            _buildInstitutionNameWithShortName(school),
                           ),
-                          _buildTableCell(
-                            school.stateName ?? school.state ?? '',
-                          ),
-                          _buildTableCell(school.pincode),
+                          _buildTableCell(_buildAddressLocationText(school)),
                           TableCell(
                             child: Padding(
                               padding: const EdgeInsets.all(8),
                               child: Center(
-                                child: _buildInstitutionTypeChip(
-                                  school.institutionType,
-                                ),
+                                child: _buildTypeAndCategoryChip(school),
                               ),
                             ),
                           ),
+                          _buildTableCell(school.email ?? '-'),
                           _buildTableCell(
                             school.createdAt != null
                                 ? DateFormat(
-                                    'MMM dd, yyyy',
+                                    'MMM dd, yyyy HH:mm',
                                   ).format(school.createdAt!)
-                                : '',
+                                : '-',
+                          ),
+                          _buildTableCell(
+                            school.updatedAt != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy HH:mm',
+                                  ).format(school.updatedAt!)
+                                : '-',
                           ),
                           TableCell(
                             child: Padding(
@@ -730,12 +841,213 @@ class SchoolListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInstitutionTypeChip(String type) {
+  String _buildInstitutionNameWithShortName(SchoolModel school) {
+    if (school.institutionShortName != null &&
+        school.institutionShortName!.isNotEmpty) {
+      return '${school.institutionName}\n(${school.institutionShortName})';
+    }
+    return school.institutionName;
+  }
+
+  String _buildTypeAndCategoryText(SchoolModel school) {
+    // Use display names from API if available
+    String displayType = school.institutionTypeDisplayName ?? '';
+    String displayCategory = school.institutionCategoryDisplayName ?? '';
+
+    // If display names are not available, parse from institutionType
+    if (displayType.isEmpty) {
+      final type = school.institutionType;
+      if (type.contains('|')) {
+        final parts = type.split('|');
+        final baseType = parts[0].replaceAll('_', ' ');
+        displayType = baseType
+            .replaceAll('GOVT', 'Govt')
+            .replaceAll('AIDED', 'Aided')
+            .replaceAll('PRIVATE', 'Private')
+            .replaceAll('SCHOOL', 'School')
+            .replaceAll('COLLEGE', 'College')
+            .replaceAll('YOGA', 'Yoga')
+            .replaceAll('CENTER', 'Center');
+      } else {
+        displayType = type
+            .replaceAll('_', ' ')
+            .replaceAll('GOVT', 'Govt')
+            .replaceAll('AIDED', 'Aided')
+            .replaceAll('PRIVATE', 'Private')
+            .replaceAll('SCHOOL', 'School')
+            .replaceAll('COLLEGE', 'College')
+            .replaceAll('YOGA', 'Yoga')
+            .replaceAll('CENTER', 'Center');
+      }
+    }
+
+    // If category display name is not available but we have category ID
+    if (displayCategory.isEmpty && school.institutionType.contains('|')) {
+      final parts = school.institutionType.split('|');
+      if (parts.length > 1) {
+        displayCategory = 'Category ID: ${parts[1]}';
+      }
+    }
+
+    if (displayCategory.isNotEmpty) {
+      return '$displayType\n$displayCategory';
+    }
+    return displayType.isNotEmpty ? displayType : '-';
+  }
+
+  String _buildAddressLocationText(SchoolModel school) {
+    final parts = <String>[];
+    if (school.address.isNotEmpty) {
+      parts.add(school.address);
+    }
+
+    // Combine district, state, and pincode on the same line without labels
+    final locationParts = <String>[];
+    if (school.district != null && school.district!.isNotEmpty) {
+      locationParts.add(school.district!);
+    } else if (school.cityName != null && school.cityName!.isNotEmpty) {
+      locationParts.add(school.cityName!);
+    }
+    if (school.stateName != null && school.stateName!.isNotEmpty) {
+      locationParts.add(school.stateName!);
+    } else if (school.state != null && school.state!.isNotEmpty) {
+      locationParts.add(school.state!);
+    }
+    if (school.pincode.isNotEmpty) {
+      locationParts.add(school.pincode);
+    }
+
+    if (locationParts.isNotEmpty) {
+      parts.add(locationParts.join(', '));
+    }
+
+    return parts.join('\n');
+  }
+
+  Widget _buildTypeAndCategoryChip(SchoolModel school) {
+    // Use display names from API if available, otherwise parse from institutionType
+    String displayType = school.institutionTypeDisplayName ?? '';
+    String displayCategory = school.institutionCategoryDisplayName ?? '';
+
+    // If display names are not available, parse from institutionType
+    if (displayType.isEmpty) {
+      final type = school.institutionType;
+      if (type.contains('|')) {
+        final parts = type.split('|');
+        final baseType = parts[0].replaceAll('_', ' ');
+        displayType = baseType
+            .replaceAll('GOVT', 'Govt')
+            .replaceAll('AIDED', 'Aided')
+            .replaceAll('PRIVATE', 'Private')
+            .replaceAll('SCHOOL', 'School')
+            .replaceAll('COLLEGE', 'College')
+            .replaceAll('YOGA', 'Yoga')
+            .replaceAll('CENTER', 'Center');
+      } else {
+        displayType = type
+            .replaceAll('_', ' ')
+            .replaceAll('GOVT', 'Govt')
+            .replaceAll('AIDED', 'Aided')
+            .replaceAll('PRIVATE', 'Private')
+            .replaceAll('SCHOOL', 'School')
+            .replaceAll('COLLEGE', 'College')
+            .replaceAll('YOGA', 'Yoga')
+            .replaceAll('CENTER', 'Center');
+      }
+    }
+
+    // If category display name is not available but we have category ID
+    if (displayCategory.isEmpty && school.institutionType.contains('|')) {
+      final parts = school.institutionType.split('|');
+      if (parts.length > 1) {
+        displayCategory = 'Category ID: ${parts[1]}';
+      }
+    }
+
     Color chipColor;
-    if (type.contains('Private')) {
+    final typeString = school.institutionType;
+    if (typeString.contains('Private') || typeString.contains('PRIVATE')) {
       chipColor = Colors.blue;
-    } else if (type.contains('Govt')) {
+    } else if (typeString.contains('Govt') || typeString.contains('GOVT')) {
       chipColor = Colors.green;
+    } else if (typeString.contains('Yoga') || typeString.contains('YOGA')) {
+      chipColor = Colors.purple;
+    } else {
+      chipColor = Colors.grey;
+    }
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: chipColor.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: chipColor.withOpacity(0.5)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            displayType,
+            style: TextStyle(
+              color: chipColor,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.left,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (displayCategory.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              displayCategory,
+              style: TextStyle(
+                color: chipColor.withOpacity(0.8),
+                fontSize: 9,
+                fontWeight: FontWeight.normal,
+              ),
+              textAlign: TextAlign.left,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstitutionTypeChip(String type) {
+    // Format the type for display (handle sub-categories)
+    String displayType = type;
+    if (type.contains('|')) {
+      final parts = type.split('|');
+      final baseType = parts[0].replaceAll('_', ' ');
+      final subCategory = parts.length > 1 ? parts[1].replaceAll('_', ' ') : '';
+      displayType = subCategory.isNotEmpty
+          ? '$baseType - $subCategory'
+          : baseType;
+    } else {
+      // Convert API format to readable format
+      displayType = type
+          .replaceAll('_', ' ')
+          .replaceAll('GOVT', 'Govt')
+          .replaceAll('AIDED', 'Aided')
+          .replaceAll('PRIVATE', 'Private')
+          .replaceAll('SCHOOL', 'School')
+          .replaceAll('COLLEGE', 'College')
+          .replaceAll('YOGA', 'Yoga')
+          .replaceAll('CENTER', 'Center');
+    }
+
+    Color chipColor;
+    if (type.contains('Private') || type.contains('PRIVATE')) {
+      chipColor = Colors.blue;
+    } else if (type.contains('Govt') || type.contains('GOVT')) {
+      chipColor = Colors.green;
+    } else if (type.contains('Yoga') || type.contains('YOGA')) {
+      chipColor = Colors.purple;
     } else {
       chipColor = Colors.grey;
     }
@@ -749,7 +1061,7 @@ class SchoolListScreen extends StatelessWidget {
         border: Border.all(color: chipColor.withOpacity(0.5)),
       ),
       child: Text(
-        type,
+        displayType,
         style: TextStyle(
           color: chipColor,
           fontSize: 11,

@@ -47,9 +47,11 @@ class SchoolsScreen extends StatelessWidget {
                 ),
                 child: Obx(
                   () => ToggleButtonGroup(
-                    options: const [
-                      ToggleButtonOption(label: '+ CREATE'),
-                      ToggleButtonOption(label: '≡ LIST'),
+                    options: [
+                      ToggleButtonOption(
+                        label: controller.isEditMode.value ? 'EDIT' : '+ CREATE',
+                      ),
+                      const ToggleButtonOption(label: '≡ LIST'),
                     ],
                     selectedIndex: controller.isListView.value ? 1 : 0,
                     onTap: (index) => controller.toggleViewMode(index == 1),

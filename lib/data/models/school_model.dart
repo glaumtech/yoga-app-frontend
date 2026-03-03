@@ -1,6 +1,7 @@
 class SchoolModel {
   final String? id;
   final String institutionName;
+  final String? institutionShortName;
   final String address;
   final int? stateId;
   final String? stateName;
@@ -10,14 +11,18 @@ class SchoolModel {
   final String? district;
   final String? state; // Legacy field for backward compatibility
   final String pincode;
+  final String? email;
   final String
   institutionType; // 'PRIVATE_SCHOOL', 'GOVT_AIDED_SCHOOL', etc. or UI format
+  final String? institutionTypeDisplayName;
+  final String? institutionCategoryDisplayName;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   SchoolModel({
     this.id,
     required this.institutionName,
+    this.institutionShortName,
     required this.address,
     this.stateId,
     this.stateName,
@@ -27,7 +32,10 @@ class SchoolModel {
     this.district,
     this.state,
     required this.pincode,
+    this.email,
     required this.institutionType,
+    this.institutionTypeDisplayName,
+    this.institutionCategoryDisplayName,
     this.createdAt,
     this.updatedAt,
   });
@@ -39,6 +47,7 @@ class SchoolModel {
           json['institutionName']?.toString() ??
           json['institution_name']?.toString() ??
           '',
+      institutionShortName: json['institutionShortName']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
       stateId: json['stateId'] is int
           ? json['stateId'] as int
@@ -56,10 +65,15 @@ class SchoolModel {
       district: json['district']?.toString() ?? json['cityName']?.toString(),
       state: json['stateName']?.toString() ?? json['state']?.toString(),
       pincode: json['pincode']?.toString() ?? '',
+      email: json['email']?.toString() ?? json['emailId']?.toString(),
       institutionType:
           json['institutionType']?.toString() ??
           json['institution_type']?.toString() ??
           '',
+      institutionTypeDisplayName: json['institutionTypeDisplayName']
+          ?.toString(),
+      institutionCategoryDisplayName: json['institutionCategoryDisplayName']
+          ?.toString(),
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])
@@ -81,10 +95,12 @@ class SchoolModel {
     return {
       if (id != null && includeMetadata) 'id': id,
       'institutionName': institutionName,
+      'institutionShortName': institutionShortName,
       'address': address,
       if (stateId != null) 'stateId': stateId,
       if (cityId != null) 'cityId': cityId,
       'pincode': pincode,
+      if (email != null) 'email': email,
       'institutionType': institutionType,
       if (includeMetadata && createdAt != null)
         'createdAt': createdAt!.toIso8601String(),
@@ -96,6 +112,7 @@ class SchoolModel {
   SchoolModel copyWith({
     String? id,
     String? institutionName,
+    String? institutionShortName,
     String? address,
     int? stateId,
     String? stateName,
@@ -105,13 +122,17 @@ class SchoolModel {
     String? district,
     String? state,
     String? pincode,
+    String? email,
     String? institutionType,
+    String? institutionTypeDisplayName,
+    String? institutionCategoryDisplayName,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
     return SchoolModel(
       id: id ?? this.id,
       institutionName: institutionName ?? this.institutionName,
+      institutionShortName: institutionShortName ?? this.institutionShortName,
       address: address ?? this.address,
       stateId: stateId ?? this.stateId,
       stateName: stateName ?? this.stateName,
@@ -121,7 +142,12 @@ class SchoolModel {
       district: district ?? this.district,
       state: state ?? this.state,
       pincode: pincode ?? this.pincode,
+      email: email ?? this.email,
       institutionType: institutionType ?? this.institutionType,
+      institutionTypeDisplayName:
+          institutionTypeDisplayName ?? this.institutionTypeDisplayName,
+      institutionCategoryDisplayName:
+          institutionCategoryDisplayName ?? this.institutionCategoryDisplayName,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

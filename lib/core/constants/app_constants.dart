@@ -172,4 +172,11 @@ class EndPoints {
   static String institutionUpdate(String id) => '/institution/$id';
   static String institutionDelete(String id) => '/institution/$id';
   static String institutionSearch = '/institution/search';
+
+  /// INSTITUTION TYPES & CATEGORIES
+  static String institutionTypeList = '/institution-type';
+  static String institutionCategoryList = '/institution-category';
+  static String institutionCategoryCreate = '/institution-category';
+  static String institutionCategoryByType(int typeId) =>
+      '/institution-category/type/$typeId';
 }

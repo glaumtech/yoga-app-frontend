@@ -858,15 +858,47 @@ class UserManagementScreen extends StatelessWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'ALLOT STAGE(S) :',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: isTablet ? 15 : 16,
+                              Row(
+                                children: [
+                                  Text(
+                                    'ALLOT STAGE(S) :',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: isTablet ? 15 : 16,
+                                        ),
+                                  ),
+                                  Obx(
+                                    () => Checkbox(
+                                      value: controller.selectedAllStage.value,
+                                      onChanged: (value) => {
+                                        if (value != null)
+                                          {
+                                            controller.selectedAllStage.value =
+                                                value,
+                                            if (value)
+                                              {
+                                                controller
+                                                    .selectedStages
+                                                    .value = controller.stages
+                                                    .map((stage) => stage)
+                                                    .toList(),
+                                              }
+                                            else
+                                              {
+                                                controller
+                                                        .selectedStages
+                                                        .value =
+                                                    [],
+                                              },
+                                          },
+                                      },
                                     ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 8),
                               Obx(
                                 () => Wrap(
                                   spacing: 8,
@@ -909,15 +941,45 @@ class UserManagementScreen extends StatelessWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'ALLOT CATEGORIES :',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: isTablet ? 15 : 16,
-                                    ),
+                              Row(
+                                children: [
+                                  Text(
+                                    'ALLOT CATEGORIES :',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: isTablet ? 15 : 16,
+                                        ),
+                                  ),
+                                  Checkbox(
+                                    value: controller.selectedAllCategory.value,
+                                    onChanged: (value) => {
+                                      if (value != null)
+                                        {
+                                          controller.selectedAllCategory.value =
+                                              value,
+                                          if (value)
+                                            {
+                                              controller
+                                                  .selectedCategories
+                                                  .value = controller.categories
+                                                  .map((category) => category)
+                                                  .toList(),
+                                            }
+                                          else
+                                            {
+                                              controller
+                                                      .selectedCategories
+                                                      .value =
+                                                  [],
+                                            },
+                                        },
+                                    },
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 8),
                               Obx(
                                 () => Wrap(
                                   spacing: 8,

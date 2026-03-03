@@ -3,6 +3,8 @@ import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/school_model.dart';
 import '../models/api_response.dart';
+import '../models/institution_type_model.dart';
+import '../models/institution_category_model.dart';
 
 // Response class for institutions list with pagination
 class SchoolsListResponse {
@@ -18,11 +20,14 @@ class SchoolRepository {
   // Create institution
   Future<ApiResponse<SchoolModel>> createInstitution({
     required String institutionName,
+    String? institutionShortName,
     required String address,
     required int stateId,
     required int cityId,
-    required String institutionType,
+    required int institutionTypeId,
+    int? institutionCategoryId,
     required String pincode,
+    String? emailId,
   }) async {
     try {
       final requestBody = <String, dynamic>{
@@ -30,9 +35,19 @@ class SchoolRepository {
         'address': address,
         'stateId': stateId,
         'cityId': cityId,
-        'institutionType': institutionType,
+        'institutionTypeId': institutionTypeId,
         'pincode': pincode,
       };
+
+      if (institutionShortName != null && institutionShortName.isNotEmpty) {
+        requestBody['institutionShortName'] = institutionShortName;
+      }
+      if (institutionCategoryId != null && institutionCategoryId > 0) {
+        requestBody['institutionCategoryId'] = institutionCategoryId;
+      }
+      if (emailId != null && emailId.isNotEmpty) {
+        requestBody['emailId'] = emailId;
+      }
 
       print('Creating institution with data: ${requestBody}');
 
@@ -82,7 +97,7 @@ class SchoolRepository {
     String? search,
     int? stateId,
     int? cityId,
-    String? institutionType,
+    int? institutionTypeId,
     int? page,
     int? limit,
     String? sortBy,
@@ -100,8 +115,8 @@ class SchoolRepository {
       if (cityId != null && cityId > 0) {
         requestBody['cityId'] = cityId;
       }
-      if (institutionType != null && institutionType.isNotEmpty) {
-        requestBody['institutionType'] = institutionType;
+      if (institutionTypeId != null && institutionTypeId > 0) {
+        requestBody['institutionTypeId'] = institutionTypeId;
       }
       requestBody['page'] = page ?? 0;
       requestBody['limit'] = limit ?? 20;
@@ -304,10 +319,13 @@ class SchoolRepository {
   Future<ApiResponse<SchoolModel>> updateInstitution({
     required String id,
     String? institutionName,
+    String? institutionShortName,
     String? address,
+    String? emailId,
     int? stateId,
     int? cityId,
-    String? institutionType,
+    int? institutionTypeId,
+    int? institutionCategoryId,
     String? pincode,
   }) async {
     try {
@@ -316,8 +334,14 @@ class SchoolRepository {
       if (institutionName != null) {
         requestBody['institutionName'] = institutionName;
       }
+      if (institutionShortName != null && institutionShortName.isNotEmpty) {
+        requestBody['institutionShortName'] = institutionShortName;
+      }
       if (address != null) {
         requestBody['address'] = address;
+      }
+      if (emailId != null && emailId.isNotEmpty) {
+        requestBody['emailId'] = emailId;
       }
       if (stateId != null && stateId > 0) {
         requestBody['stateId'] = stateId;
@@ -325,8 +349,11 @@ class SchoolRepository {
       if (cityId != null && cityId > 0) {
         requestBody['cityId'] = cityId;
       }
-      if (institutionType != null) {
-        requestBody['institutionType'] = institutionType;
+      if (institutionTypeId != null && institutionTypeId > 0) {
+        requestBody['institutionTypeId'] = institutionTypeId;
+      }
+      if (institutionCategoryId != null && institutionCategoryId > 0) {
+        requestBody['institutionCategoryId'] = institutionCategoryId;
       }
       if (pincode != null) {
         requestBody['pincode'] = pincode;
@@ -443,6 +470,163 @@ class SchoolRepository {
       return ApiResponse<SchoolsListResponse>(
         success: false,
         message: 'Error searching institutions: ${e.toString()}',
+      );
+    }
+  }
+
+  // Get all institution types
+  Future<ApiResponse<List<InstitutionTypeModel>>>
+  getAllInstitutionTypes() async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.institutionTypeList,
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        List<InstitutionTypeModel> types = [];
+
+        if (response.data is Map<String, dynamic>) {
+          final dataMap = response.data as Map<String, dynamic>;
+          dynamic listData =
+              dataMap['data']?['institutionTypes'] ??
+              dataMap['institutionTypes'];
+
+          if (listData is List) {
+            types = listData.map((json) {
+              return InstitutionTypeModel.fromJson(
+                json is Map<String, dynamic>
+                    ? json
+                    : json as Map<String, dynamic>,
+              );
+            }).toList();
+          }
+        } else if (response.data is List) {
+          types = (response.data as List).map((json) {
+            return InstitutionTypeModel.fromJson(
+              json is Map<String, dynamic>
+                  ? json
+                  : json as Map<String, dynamic>,
+            );
+          }).toList();
+        }
+
+        return ApiResponse(success: true, data: types);
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to fetch institution types',
+      );
+    } catch (e) {
+      print('Error in getAllInstitutionTypes: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching institution types: ${e.toString()}',
+      );
+    }
+  }
+
+  // Get institution categories by type ID
+  Future<ApiResponse<List<InstitutionCategoryModel>>>
+  getInstitutionCategoriesByType(int institutionTypeId) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.institutionCategoryByType(institutionTypeId),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        List<InstitutionCategoryModel> categories = [];
+
+        if (response.data is Map<String, dynamic>) {
+          final dataMap = response.data as Map<String, dynamic>;
+          dynamic listData =
+              dataMap['data']?['categories'] ?? dataMap['categories'];
+
+          if (listData is List) {
+            categories = listData.map((json) {
+              return InstitutionCategoryModel.fromJson(
+                json is Map<String, dynamic>
+                    ? json
+                    : json as Map<String, dynamic>,
+              );
+            }).toList();
+          }
+        } else if (response.data is List) {
+          categories = (response.data as List).map((json) {
+            return InstitutionCategoryModel.fromJson(
+              json is Map<String, dynamic>
+                  ? json
+                  : json as Map<String, dynamic>,
+            );
+          }).toList();
+        }
+
+        return ApiResponse(success: true, data: categories);
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to fetch institution categories',
+      );
+    } catch (e) {
+      print('Error in getInstitutionCategoriesByType: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching institution categories: ${e.toString()}',
+      );
+    }
+  }
+
+  // Create institution category
+  Future<ApiResponse<InstitutionCategoryModel>> createInstitutionCategory({
+    required String categoryName,
+    required String displayName,
+    required int institutionTypeId,
+  }) async {
+    try {
+      final requestBody = <String, dynamic>{
+        'categoryName': categoryName,
+        'displayName': displayName,
+        'institutionTypeId': institutionTypeId,
+      };
+
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.institutionCategoryCreate,
+        apiType: APIType.aPost,
+        body: requestBody,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        InstitutionCategoryModel? category;
+
+        if (response.data is Map<String, dynamic>) {
+          final dataMap = response.data as Map<String, dynamic>;
+          dynamic categoryData = dataMap['data'] ?? dataMap;
+
+          if (categoryData is Map<String, dynamic>) {
+            category = InstitutionCategoryModel.fromJson(categoryData);
+          }
+        }
+
+        if (category != null) {
+          return ApiResponse(success: true, data: category);
+        }
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to create institution category',
+      );
+    } catch (e) {
+      print('Error in createInstitutionCategory: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error creating institution category: ${e.toString()}',
       );
     }
   }
