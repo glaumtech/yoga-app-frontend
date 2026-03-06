@@ -446,6 +446,20 @@ class CompetitionsListScreen extends StatelessWidget {
                     'Stages',
                     _getStageNames(competition, controller),
                   ),
+                  if (competition.createdAt != null)
+                    _buildInfoRow(
+                      'Created',
+                      DateFormat(
+                        'MMM dd, yyyy HH:mm',
+                      ).format(competition.createdAt!),
+                    ),
+                  if (competition.updatedAt != null)
+                    _buildInfoRow(
+                      'Updated',
+                      DateFormat(
+                        'MMM dd, yyyy HH:mm',
+                      ).format(competition.updatedAt!),
+                    ),
                 ],
               ),
             ),
@@ -483,7 +497,9 @@ class CompetitionsListScreen extends StatelessWidget {
                     5: FlexColumnWidth(1.5),
                     6: FlexColumnWidth(1.5),
                     7: FlexColumnWidth(1.5),
-                    8: FlexColumnWidth(0.8), // Action column
+                    8: FlexColumnWidth(1.2), // Created
+                    9: FlexColumnWidth(1.2), // Updated
+                    10: FlexColumnWidth(0.8), // Action column
                   },
                   children: [
                     // Header Row
@@ -538,6 +554,16 @@ class CompetitionsListScreen extends StatelessWidget {
                           controller,
                           isSortable: false,
                         ),
+                        _buildSortableHeader(
+                          'CREATED',
+                          'createdAt',
+                          controller,
+                        ),
+                        _buildSortableHeader(
+                          'UPDATED',
+                          'updatedAt',
+                          controller,
+                        ),
                         _buildTableCell('ACTION', isHeader: true),
                       ],
                     ),
@@ -571,6 +597,20 @@ class CompetitionsListScreen extends StatelessWidget {
                           ),
                           _buildTableCell(
                             _getStageNames(competition, controller),
+                          ),
+                          _buildTableCell(
+                            competition.createdAt != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy HH:mm',
+                                  ).format(competition.createdAt!)
+                                : '-',
+                          ),
+                          _buildTableCell(
+                            competition.updatedAt != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy HH:mm',
+                                  ).format(competition.updatedAt!)
+                                : '-',
                           ),
                           _buildActionCell(context, competition, controller),
                         ],

@@ -29,6 +29,8 @@ class UserManagementModel {
   final String? volunteerNo; // Auto-generated for volunteers
   final List<Map<String, dynamic>>?
   volunteers; // New API format: array of volunteer objects
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   UserManagementModel({
     this.id,
@@ -52,6 +54,8 @@ class UserManagementModel {
     this.cell,
     this.volunteerNo,
     this.volunteers,
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory UserManagementModel.fromJson(Map<String, dynamic> json) {
@@ -186,6 +190,20 @@ class UserManagementModel {
                 .map((e) => Map<String, dynamic>.from(e as Map))
                 .toList()
           : null,
+      createdAt: json['createdAt'] != null
+          ? (json['createdAt'] is String
+                ? DateTime.parse(json['createdAt'])
+                : json['createdAt'] is int
+                ? DateTime.fromMillisecondsSinceEpoch(json['createdAt'])
+                : null)
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? (json['updatedAt'] is String
+                ? DateTime.parse(json['updatedAt'])
+                : json['updatedAt'] is int
+                ? DateTime.fromMillisecondsSinceEpoch(json['updatedAt'])
+                : null)
+          : null,
     );
   }
 
@@ -271,6 +289,8 @@ class UserManagementModel {
     String? cell,
     String? volunteerNo,
     List<Map<String, dynamic>>? volunteers,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return UserManagementModel(
       id: id ?? this.id,
@@ -294,6 +314,8 @@ class UserManagementModel {
       cell: cell ?? this.cell,
       volunteerNo: volunteerNo ?? this.volunteerNo,
       volunteers: volunteers ?? this.volunteers,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 

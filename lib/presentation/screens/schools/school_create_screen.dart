@@ -7,7 +7,9 @@ import '../../../data/models/city_model.dart';
 import '../../../data/models/institution_category_model.dart';
 
 class SchoolCreateScreen extends StatelessWidget {
-  const SchoolCreateScreen({super.key});
+  final bool hideButtons;
+
+  const SchoolCreateScreen({super.key, this.hideButtons = false});
 
   @override
   Widget build(BuildContext context) {
@@ -27,102 +29,33 @@ class SchoolCreateScreen extends StatelessWidget {
           padding: EdgeInsets.all(16),
           child: Form(
             key: controller.formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Title
-                FormTitle(
-                  text: 'SCHOOLS & COLLEGES LIST',
-                  isMobile: isMobile,
-                  isTablet: isTablet,
-                ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: double.infinity),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title
+                  FormTitle(
+                    text: 'SCHOOLS & COLLEGES LIST',
+                    isMobile: isMobile,
+                    isTablet: isTablet,
+                  ),
 
-                // Institution Type and Category (moved to top)
-                _buildInstitutionTypeField(
-                  context,
-                  controller,
-                  isMobile,
-                  isTablet,
-                ),
-                SizedBox(height: isMobile ? 20 : 24),
+                  // Institution Type and Category (moved to top)
+                  _buildInstitutionTypeField(
+                    context,
+                    controller,
+                    isMobile,
+                    isTablet,
+                  ),
+                  SizedBox(height: isMobile ? 20 : 24),
 
-                // Institution Name and Address in same row (desktop) or column (mobile)
-                isMobile
-                    ? Column(
-                        children: [
-                          _buildTextField(
-                            context,
-                            label: 'Institution Name :',
-                            controller: controller.institutionNameController,
-                            isMobile: isMobile,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please enter institution name';
-                              }
-                              if (value.trim().length < 3) {
-                                return 'Institution name must be at least 3 characters';
-                              }
-                              if (value.trim().length > 255) {
-                                return 'Institution name must not exceed 255 characters';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-
-                          _buildTextField(
-                            context,
-                            label: 'Institution Short Name :',
-                            controller:
-                                controller.institutionShortNameController,
-                            isMobile: isMobile,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildTextField(
-                            context,
-                            label: 'Email ID :',
-                            controller: controller.emailController,
-                            isMobile: isMobile,
-                            keyboardType: TextInputType.emailAddress,
-                            validator: (value) {
-                              if (value != null && value.isNotEmpty) {
-                                final emailRegex = RegExp(
-                                  r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-                                );
-                                if (!emailRegex.hasMatch(value.trim())) {
-                                  return 'Please enter a valid email address';
-                                }
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildTextField(
-                            context,
-                            label: 'Address :',
-                            controller: controller.addressController,
-                            isMobile: isMobile,
-                            maxLines: 3,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please enter address';
-                              }
-                              if (value.trim().length < 10) {
-                                return 'Address must be at least 10 characters';
-                              }
-                              if (value.trim().length > 2000) {
-                                return 'Address must not exceed 2000 characters';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _buildTextField(
+                  // Institution Name and Address in same row (desktop) or column (mobile)
+                  isMobile
+                      ? Column(
+                          children: [
+                            _buildTextField(
                               context,
                               label: 'Institution Name :',
                               controller: controller.institutionNameController,
@@ -140,20 +73,17 @@ class SchoolCreateScreen extends StatelessWidget {
                                 return null;
                               },
                             ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 20),
-                          Expanded(
-                            child: _buildTextField(
+                            SizedBox(height: isMobile ? 20 : 24),
+
+                            _buildTextField(
                               context,
                               label: 'Institution Short Name :',
                               controller:
                                   controller.institutionShortNameController,
                               isMobile: isMobile,
                             ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 20),
-                          Expanded(
-                            child: _buildTextField(
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildTextField(
                               context,
                               label: 'Email ID :',
                               controller: controller.emailController,
@@ -171,162 +101,244 @@ class SchoolCreateScreen extends StatelessWidget {
                                 return null;
                               },
                             ),
-                          ),
-                        ],
-                      ),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                // Address field
-                _buildTextField(
-                  context,
-                  label: 'Address :',
-                  controller: controller.addressController,
-                  isMobile: isMobile,
-                  maxLines: isMobile ? 3 : 1,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter address';
-                    }
-                    if (value.trim().length < 10) {
-                      return 'Address must be at least 10 characters';
-                    }
-                    if (value.trim().length > 2000) {
-                      return 'Address must not exceed 2000 characters';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                // State, City, Pincode in row (desktop) or column (mobile)
-                isMobile
-                    ? Column(
-                        children: [
-                          _buildStateField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildCityField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildPincodeField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: _buildStateField(
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildTextField(
                               context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 20),
-                          Expanded(
-                            child: _buildCityField(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 20),
-                          Expanded(
-                            child: _buildPincodeField(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                          ),
-                        ],
-                      ),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                // Error Message
-                Obx(
-                  () => controller.errorMessage.value.isNotEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            controller.errorMessage.value,
-                            style: TextStyle(color: Colors.red[700]),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-
-                // Action Buttons (Save/Update and Cancel)
-                Obx(
-                  () => isMobile
-                      ? Column(
-                          children: [
-                            saveButton(
-                              onPressed: () => controller.submitSchool(),
-                              isLoading: controller.isLoading,
-                              text: controller.isEditMode.value
-                                  ? 'UPDATE'
-                                  : 'SAVE',
-                              isFullWidth: true,
-                            ),
-                            const SizedBox(height: 12),
-                            cancelButton(
-                              onPressed: () {
-                                // Check edit mode before resetting
-                                final wasInEditMode =
-                                    controller.isEditMode.value;
-                                controller.resetForm();
-                                // Redirect to list view if in edit mode
-                                if (wasInEditMode) {
-                                  controller.toggleViewMode(true);
+                              label: 'Address :',
+                              controller: controller.addressController,
+                              isMobile: isMobile,
+                              maxLines: 3,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter address';
                                 }
+                                if (value.trim().length < 10) {
+                                  return 'Address must be at least 10 characters';
+                                }
+                                if (value.trim().length > 2000) {
+                                  return 'Address must not exceed 2000 characters';
+                                }
+                                return null;
                               },
-                              isFullWidth: true,
                             ),
                           ],
                         )
                       : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            saveButton(
-                              onPressed: () => controller.submitSchool(),
-                              isLoading: controller.isLoading,
-                              text: controller.isEditMode.value
-                                  ? 'UPDATE'
-                                  : 'SAVE',
-                              width: 200,
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                label: 'Institution Name :',
+                                controller:
+                                    controller.institutionNameController,
+                                isMobile: isMobile,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter institution name';
+                                  }
+                                  if (value.trim().length < 3) {
+                                    return 'Institution name must be at least 3 characters';
+                                  }
+                                  if (value.trim().length > 255) {
+                                    return 'Institution name must not exceed 255 characters';
+                                  }
+                                  return null;
+                                },
+                              ),
                             ),
-                            const SizedBox(width: 16),
-                            cancelButton(
-                              onPressed: () {
-                                // Check edit mode before resetting
-                                final wasInEditMode =
-                                    controller.isEditMode.value;
-                                controller.resetForm();
-                                // Redirect to list view if in edit mode
-                                if (wasInEditMode) {
-                                  controller.toggleViewMode(true);
-                                }
-                              },
-                              width: 200,
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                label: 'Institution Short Name :',
+                                controller:
+                                    controller.institutionShortNameController,
+                                isMobile: isMobile,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                label: 'Email ID :',
+                                controller: controller.emailController,
+                                isMobile: isMobile,
+                                keyboardType: TextInputType.emailAddress,
+                                validator: (value) {
+                                  if (value != null && value.isNotEmpty) {
+                                    final emailRegex = RegExp(
+                                      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                    );
+                                    if (!emailRegex.hasMatch(value.trim())) {
+                                      return 'Please enter a valid email address';
+                                    }
+                                  }
+                                  return null;
+                                },
+                              ),
                             ),
                           ],
                         ),
-                ),
-              ],
+                  SizedBox(height: isMobile ? 20 : 24),
+
+                  // Address field
+                  _buildTextField(
+                    context,
+                    label: 'Address :',
+                    controller: controller.addressController,
+                    isMobile: isMobile,
+                    maxLines: isMobile ? 3 : 1,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter address';
+                      }
+                      if (value.trim().length < 10) {
+                        return 'Address must be at least 10 characters';
+                      }
+                      if (value.trim().length > 2000) {
+                        return 'Address must not exceed 2000 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  SizedBox(height: isMobile ? 20 : 24),
+
+                  // State, City, Pincode in row (desktop) or column (mobile)
+                  isMobile
+                      ? Column(
+                          children: [
+                            _buildStateField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildCityField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildPincodeField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 1,
+                              child: _buildStateField(
+                                context,
+                                controller,
+                                isMobile,
+                                isTablet,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 8 : 12),
+                            Expanded(
+                              flex: 1,
+                              child: _buildCityField(
+                                context,
+                                controller,
+                                isMobile,
+                                isTablet,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 8 : 12),
+                            Expanded(
+                              flex: 1,
+                              child: _buildPincodeField(
+                                context,
+                                controller,
+                                isMobile,
+                                isTablet,
+                              ),
+                            ),
+                          ],
+                        ),
+                  SizedBox(height: isMobile ? 20 : 24),
+
+                  // Error Message
+                  Obx(
+                    () => controller.errorMessage.value.isNotEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Text(
+                              controller.errorMessage.value,
+                              style: TextStyle(color: Colors.red[700]),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+
+                  // Action Buttons (Save/Update and Cancel) - Hide when used in dialog
+                  if (!hideButtons)
+                    Obx(
+                      () => isMobile
+                          ? Column(
+                              children: [
+                                saveButton(
+                                  onPressed: () => controller.submitSchool(),
+                                  isLoading: controller.isLoading,
+                                  text: controller.isEditMode.value
+                                      ? 'UPDATE'
+                                      : 'SAVE',
+                                  isFullWidth: true,
+                                ),
+                                const SizedBox(height: 12),
+                                cancelButton(
+                                  onPressed: () {
+                                    // Check edit mode before resetting
+                                    final wasInEditMode =
+                                        controller.isEditMode.value;
+                                    controller.resetForm();
+                                    // Redirect to list view if in edit mode
+                                    if (wasInEditMode) {
+                                      controller.toggleViewMode(true);
+                                    }
+                                  },
+                                  isFullWidth: true,
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                saveButton(
+                                  onPressed: () => controller.submitSchool(),
+                                  isLoading: controller.isLoading,
+                                  text: controller.isEditMode.value
+                                      ? 'UPDATE'
+                                      : 'SAVE',
+                                  width: 200,
+                                ),
+                                const SizedBox(width: 16),
+                                cancelButton(
+                                  onPressed: () {
+                                    // Check edit mode before resetting
+                                    final wasInEditMode =
+                                        controller.isEditMode.value;
+                                    controller.resetForm();
+                                    // Redirect to list view if in edit mode
+                                    if (wasInEditMode) {
+                                      controller.toggleViewMode(true);
+                                    }
+                                  },
+                                  width: 200,
+                                ),
+                              ],
+                            ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -445,12 +457,14 @@ class SchoolCreateScreen extends StatelessWidget {
               style: TextStyle(fontSize: isMobile ? 14 : 16),
             ),
             style: TextStyle(fontSize: isMobile ? 14 : 16),
+            isExpanded: true,
             items: controller.states.map((state) {
               return DropdownMenuItem<String>(
                 value: state.stateName,
                 child: Text(
                   state.stateName,
                   style: TextStyle(fontSize: isMobile ? 14 : 16),
+                  overflow: TextOverflow.ellipsis,
                 ),
               );
             }).toList(),
@@ -563,12 +577,14 @@ class SchoolCreateScreen extends StatelessWidget {
               style: TextStyle(fontSize: isMobile ? 14 : 16),
             ),
             style: TextStyle(fontSize: isMobile ? 14 : 16),
+            isExpanded: true,
             items: availableCities.map((city) {
               return DropdownMenuItem<String>(
                 value: city.cityName,
                 child: Text(
                   city.cityName,
                   style: TextStyle(fontSize: isMobile ? 14 : 16),
+                  overflow: TextOverflow.ellipsis,
                 ),
               );
             }).toList(),

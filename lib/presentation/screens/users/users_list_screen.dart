@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../controllers/user_management_controller.dart';
@@ -387,6 +388,16 @@ class UsersListScreen extends StatelessWidget {
                     _buildUserInfoRow('Stages', user.stages.join(', ')),
                   if (user.categories.isNotEmpty)
                     _buildUserInfoRow('Categories', user.categories.join(', ')),
+                  if (user.createdAt != null)
+                    _buildUserInfoRow(
+                      'Created',
+                      DateFormat('MMM dd, yyyy HH:mm').format(user.createdAt!),
+                    ),
+                  if (user.updatedAt != null)
+                    _buildUserInfoRow(
+                      'Updated',
+                      DateFormat('MMM dd, yyyy HH:mm').format(user.updatedAt!),
+                    ),
                   const SizedBox(height: 12),
                   // Action Buttons
                   Row(
@@ -527,7 +538,9 @@ class UsersListScreen extends StatelessWidget {
                     2: FlexColumnWidth(1.5),
                     3: FlexColumnWidth(2.5),
                     4: FlexColumnWidth(1.5),
-                    5: const FixedColumnWidth(120),
+                    5: FlexColumnWidth(1.2),
+                    6: FlexColumnWidth(1.2),
+                    7: const FixedColumnWidth(120),
                   },
                   children: [
                     // Header Row
@@ -541,6 +554,8 @@ class UsersListScreen extends StatelessWidget {
                         _buildTableCell('TYPE', isHeader: true),
                         _buildTableCell('COMPETITION', isHeader: true),
                         _buildTableCell('CELL', isHeader: true),
+                        _buildTableCell('CREATED', isHeader: true),
+                        _buildTableCell('UPDATED', isHeader: true),
                         _buildTableCell('ACTIONS', isHeader: true),
                       ],
                     ),
@@ -563,6 +578,20 @@ class UsersListScreen extends StatelessWidget {
                           ),
                           _buildTableCell(user.eventName ?? 'N/A'),
                           _buildTableCell(user.cell ?? 'N/A'),
+                          _buildTableCell(
+                            user.createdAt != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy HH:mm',
+                                  ).format(user.createdAt!)
+                                : '-',
+                          ),
+                          _buildTableCell(
+                            user.updatedAt != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy HH:mm',
+                                  ).format(user.updatedAt!)
+                                : '-',
+                          ),
                           _buildActionCell(context, user, controller),
                         ],
                       );

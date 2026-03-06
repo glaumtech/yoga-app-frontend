@@ -561,7 +561,8 @@ class ParticipantsListScreen extends StatelessWidget {
                     6: FlexColumnWidth(2.0),
                     7: FlexColumnWidth(1.5),
                     8: FlexColumnWidth(1.2),
-                    9: const FixedColumnWidth(100),
+                    9: FlexColumnWidth(1.2),
+                    10: const FixedColumnWidth(100),
                   },
                   children: [
                     // Header Row
@@ -612,6 +613,11 @@ class ParticipantsListScreen extends StatelessWidget {
                           'createdAt',
                           controller,
                         ),
+                        _buildSortableHeader(
+                          'UPDATED',
+                          'updatedAt',
+                          controller,
+                        ),
                         _buildTableCell('ACTIONS', isHeader: true),
                       ],
                     ),
@@ -641,8 +647,15 @@ class ParticipantsListScreen extends StatelessWidget {
                           _buildTableCell(participant.yogaMasterName),
                           _buildTableCell(
                             DateFormat(
-                              'MMM dd, yyyy',
+                              'MMM dd, yyyy hh:mm a',
                             ).format(participant.createdAt),
+                          ),
+                          _buildTableCell(
+                            participant.updatedAt != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy hh:mm a',
+                                  ).format(participant.updatedAt!)
+                                : '-',
                           ),
                           _buildActionCell(context, participant, controller),
                         ],

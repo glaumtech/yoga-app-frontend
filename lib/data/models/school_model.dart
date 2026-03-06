@@ -18,6 +18,8 @@ class SchoolModel {
   final String? institutionCategoryDisplayName;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final int? createdBy;
+  final int? updatedBy;
 
   SchoolModel({
     this.id,
@@ -38,6 +40,8 @@ class SchoolModel {
     this.institutionCategoryDisplayName,
     this.createdAt,
     this.updatedAt,
+    this.createdBy,
+    this.updatedBy,
   });
 
   factory SchoolModel.fromJson(Map<String, dynamic> json) {
@@ -88,6 +92,16 @@ class SchoolModel {
                 ? DateTime.fromMillisecondsSinceEpoch(json['updatedAt'])
                 : null)
           : null,
+      createdBy: json['createdBy'] is int
+          ? json['createdBy'] as int
+          : json['createdBy'] is String
+          ? int.tryParse(json['createdBy'])
+          : null,
+      updatedBy: json['updatedBy'] is int
+          ? json['updatedBy'] as int
+          : json['updatedBy'] is String
+          ? int.tryParse(json['updatedBy'])
+          : null,
     );
   }
 
@@ -128,6 +142,8 @@ class SchoolModel {
     String? institutionCategoryDisplayName,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? createdBy,
+    int? updatedBy,
   }) {
     return SchoolModel(
       id: id ?? this.id,
@@ -150,6 +166,8 @@ class SchoolModel {
           institutionCategoryDisplayName ?? this.institutionCategoryDisplayName,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
     );
   }
 }

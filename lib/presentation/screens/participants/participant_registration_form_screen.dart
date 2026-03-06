@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
+import '../../controllers/school_controller.dart';
 import '../../widgets/form_label_with_hint.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
@@ -13,6 +14,7 @@ import '../../../core/utils/date_utils.dart' as app_date_utils;
 import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/models/school_model.dart';
+import '../schools/school_create_screen.dart';
 
 class ParticipantRegistrationFormScreen extends StatelessWidget {
   const ParticipantRegistrationFormScreen({super.key});
@@ -42,6 +44,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         child: Form(
           key: participantController.formKey,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Title
@@ -54,6 +57,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               // Main content: Left side (fields in columns) and Right side (Photo & Certificate)
               isMobile
                   ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildCompetitionField(
                           context,
@@ -156,6 +161,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                               // Column 1
                               Expanded(
                                 child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     _buildCompetitionField(
                                       context,
@@ -215,6 +222,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                               // Column 2
                               Expanded(
                                 child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     _buildNameField(
                                       context,
@@ -262,6 +271,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                         Expanded(
                           flex: 1,
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildPhotoField(
                                 context,
@@ -319,139 +330,272 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                         participantController.resetForm();
                         participantController.toggleViewMode(true);
                       },
-                      width: 200,
+                      width: isMobile ? null : 200,
+                      isFullWidth: isMobile,
                     ),
                   );
                 }
 
                 // Hide buttons if not in edit mode (create mode shows buttons)
                 if (!participantController.isEditMode) {
-                  return Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        saveButton(
-                          onPressed: () async {
-                            // Clear any previous error messages
-                            participantController.errorMessage.value = '';
+                  return isMobile
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            saveButton(
+                              onPressed: () async {
+                                // Clear any previous error messages
+                                participantController.errorMessage.value = '';
 
-                            // Get selected competition/event ID
-                            final selectedCompetition = competitionController
-                                .competitions
-                                .firstWhereOrNull(
-                                  (c) =>
-                                      c.id ==
-                                      participantController
-                                          .selectedEventId
-                                          .value,
-                                );
-                            if (selectedCompetition == null) {
-                              participantController.errorMessage.value =
-                                  'Please select a competition';
-                              return;
-                            }
+                                // Get selected competition/event ID
+                                final selectedCompetition =
+                                    competitionController.competitions
+                                        .firstWhereOrNull(
+                                          (c) =>
+                                              c.id ==
+                                              participantController
+                                                  .selectedEventId
+                                                  .value,
+                                        );
+                                if (selectedCompetition == null) {
+                                  participantController.errorMessage.value =
+                                      'Please select a competition';
+                                  return;
+                                }
 
-                            final success = await participantController
-                                .submitRegistrationForm(
-                                  eventId: selectedCompetition.id!,
-                                  competitionController: competitionController,
-                                );
+                                final success = await participantController
+                                    .submitRegistrationForm(
+                                      eventId: selectedCompetition.id!,
+                                      competitionController:
+                                          competitionController,
+                                    );
 
-                            if (success && context.mounted) {
-                              // Clear error message on success
-                              participantController.errorMessage.value = '';
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Text(
-                                    'Participant registered successfully',
-                                  ),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              // Form is already reset in submitRegistrationForm method
-                            }
-                          },
-                          isLoading: participantController.isLoading,
-                          text: 'SAVE',
-                          width: 200,
-                        ),
-                        const SizedBox(width: 16),
-                        cancelButton(
-                          onPressed: () {
-                            // Clear error message and reset form
-                            participantController.errorMessage.value = '';
-                            participantController.resetForm();
-                          },
-                          width: 200,
-                        ),
-                      ],
-                    ),
-                  );
+                                if (success && context.mounted) {
+                                  // Clear error message on success
+                                  participantController.errorMessage.value = '';
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: const Text(
+                                        'Participant registered successfully',
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                  // Form is already reset in submitRegistrationForm method
+                                }
+                              },
+                              isLoading: participantController.isLoading,
+                              text: 'SAVE',
+                              isFullWidth: true,
+                            ),
+                            const SizedBox(height: 12),
+                            cancelButton(
+                              onPressed: () {
+                                // Clear error message and reset form
+                                participantController.errorMessage.value = '';
+                                participantController.resetForm();
+                              },
+                              isFullWidth: true,
+                            ),
+                          ],
+                        )
+                      : Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              saveButton(
+                                onPressed: () async {
+                                  // Clear any previous error messages
+                                  participantController.errorMessage.value = '';
+
+                                  // Get selected competition/event ID
+                                  final selectedCompetition =
+                                      competitionController.competitions
+                                          .firstWhereOrNull(
+                                            (c) =>
+                                                c.id ==
+                                                participantController
+                                                    .selectedEventId
+                                                    .value,
+                                          );
+                                  if (selectedCompetition == null) {
+                                    participantController.errorMessage.value =
+                                        'Please select a competition';
+                                    return;
+                                  }
+
+                                  final success = await participantController
+                                      .submitRegistrationForm(
+                                        eventId: selectedCompetition.id!,
+                                        competitionController:
+                                            competitionController,
+                                      );
+
+                                  if (success && context.mounted) {
+                                    // Clear error message on success
+                                    participantController.errorMessage.value =
+                                        '';
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Text(
+                                          'Participant registered successfully',
+                                        ),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                    // Form is already reset in submitRegistrationForm method
+                                  }
+                                },
+                                isLoading: participantController.isLoading,
+                                text: 'SAVE',
+                                width: 200,
+                              ),
+                              const SizedBox(width: 16),
+                              cancelButton(
+                                onPressed: () {
+                                  // Clear error message and reset form
+                                  participantController.errorMessage.value = '';
+                                  participantController.resetForm();
+                                },
+                                width: 200,
+                              ),
+                            ],
+                          ),
+                        );
                 }
 
                 // Edit mode: show both save and cancel buttons
-                return Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      saveButton(
-                        onPressed: () async {
-                          // Clear any previous error messages
-                          participantController.errorMessage.value = '';
+                return isMobile
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          saveButton(
+                            onPressed: () async {
+                              // Clear any previous error messages
+                              participantController.errorMessage.value = '';
 
-                          // Get selected competition/event ID
-                          final selectedCompetition = competitionController
-                              .competitions
-                              .firstWhereOrNull(
-                                (c) =>
-                                    c.id ==
-                                    participantController.selectedEventId.value,
-                              );
-                          if (selectedCompetition == null) {
-                            participantController.errorMessage.value =
-                                'Please select a competition';
-                            return;
-                          }
+                              // Get selected competition/event ID
+                              final selectedCompetition = competitionController
+                                  .competitions
+                                  .firstWhereOrNull(
+                                    (c) =>
+                                        c.id ==
+                                        participantController
+                                            .selectedEventId
+                                            .value,
+                                  );
+                              if (selectedCompetition == null) {
+                                participantController.errorMessage.value =
+                                    'Please select a competition';
+                                return;
+                              }
 
-                          final success = await participantController
-                              .submitRegistrationForm(
-                                eventId: selectedCompetition.id!,
-                                competitionController: competitionController,
-                              );
+                              final success = await participantController
+                                  .submitRegistrationForm(
+                                    eventId: selectedCompetition.id!,
+                                    competitionController:
+                                        competitionController,
+                                  );
 
-                          if (success && context.mounted) {
-                            // Clear error message on success
-                            participantController.errorMessage.value = '';
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text(
-                                  'Participant updated successfully',
-                                ),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                            // Redirect to list view after successful update
-                            participantController.resetForm();
-                            participantController.toggleViewMode(true);
-                          }
-                        },
-                        isLoading: participantController.isLoading,
-                        text: 'UPDATE',
-                        width: 200,
-                      ),
-                      const SizedBox(width: 16),
-                      cancelButton(
-                        onPressed: () {
-                          // Clear error message, reset form and redirect to list view
-                          participantController.errorMessage.value = '';
-                          participantController.resetForm();
-                          participantController.toggleViewMode(true);
-                        },
-                        width: 200,
-                      ),
-                    ],
-                  ),
-                );
+                              if (success && context.mounted) {
+                                // Clear error message on success
+                                participantController.errorMessage.value = '';
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                      'Participant updated successfully',
+                                    ),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                // Redirect to list view after successful update
+                                participantController.resetForm();
+                                participantController.toggleViewMode(true);
+                              }
+                            },
+                            isLoading: participantController.isLoading,
+                            text: 'UPDATE',
+                            isFullWidth: true,
+                          ),
+                          const SizedBox(height: 12),
+                          cancelButton(
+                            onPressed: () {
+                              // Clear error message, reset form and redirect to list view
+                              participantController.errorMessage.value = '';
+                              participantController.resetForm();
+                              participantController.toggleViewMode(true);
+                            },
+                            isFullWidth: true,
+                          ),
+                        ],
+                      )
+                    : Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            saveButton(
+                              onPressed: () async {
+                                // Clear any previous error messages
+                                participantController.errorMessage.value = '';
+
+                                // Get selected competition/event ID
+                                final selectedCompetition =
+                                    competitionController.competitions
+                                        .firstWhereOrNull(
+                                          (c) =>
+                                              c.id ==
+                                              participantController
+                                                  .selectedEventId
+                                                  .value,
+                                        );
+                                if (selectedCompetition == null) {
+                                  participantController.errorMessage.value =
+                                      'Please select a competition';
+                                  return;
+                                }
+
+                                final success = await participantController
+                                    .submitRegistrationForm(
+                                      eventId: selectedCompetition.id!,
+                                      competitionController:
+                                          competitionController,
+                                    );
+
+                                if (success && context.mounted) {
+                                  // Clear error message on success
+                                  participantController.errorMessage.value = '';
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: const Text(
+                                        'Participant updated successfully',
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                  // Redirect to list view after successful update
+                                  participantController.resetForm();
+                                  participantController.toggleViewMode(true);
+                                }
+                              },
+                              isLoading: participantController.isLoading,
+                              text: 'UPDATE',
+                              width: 200,
+                            ),
+                            const SizedBox(width: 16),
+                            cancelButton(
+                              onPressed: () {
+                                // Clear error message, reset form and redirect to list view
+                                participantController.errorMessage.value = '';
+                                participantController.resetForm();
+                                participantController.toggleViewMode(true);
+                              },
+                              width: 200,
+                            ),
+                          ],
+                        ),
+                      );
               }),
             ],
           ),
@@ -1088,8 +1232,37 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                   textEditingValue.text.length < 3) {
                 return const Iterable<SchoolModel>.empty();
               }
-              await controller.searchInstitutions(textEditingValue.text);
-              return controller.institutionSuggestions;
+              // Store the search text for use in optionsViewBuilder
+              final searchText = textEditingValue.text.trim();
+
+              // Perform the search
+              await controller.searchInstitutions(searchText);
+
+              // Get the suggestions list
+              final suggestions = controller.institutionSuggestions;
+
+              // If no results and search has completed, return a placeholder item
+              // This ensures the overlay is shown so we can display the "no results" message
+              if (suggestions.isEmpty &&
+                  !controller.isLoadingInstitutions.value &&
+                  searchText.length >= 3) {
+                // Return a placeholder SchoolModel with a special ID to indicate "no results"
+                // We'll check for this in optionsViewBuilder and show the message instead
+                return [
+                  SchoolModel(
+                    id: '__NO_RESULTS__',
+                    institutionName: '__NO_RESULTS__',
+                    address: '',
+                    pincode: '',
+                    institutionType: '__NO_RESULTS__',
+                    stateId: 0,
+                    cityId: 0,
+                  ),
+                ];
+              }
+
+              // Return the actual suggestions
+              return suggestions;
             },
             onSelected: (SchoolModel institution) {
               controller.selectInstitution(institution);
@@ -1182,65 +1355,171 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                   AutocompleteOnSelected<SchoolModel> onSelected,
                   Iterable<SchoolModel> options,
                 ) {
-                  return Align(
-                    alignment: Alignment.topLeft,
-                    child: Material(
-                      elevation: 4.0,
-                      borderRadius: BorderRadius.circular(8),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 200),
-                        child: ListView.builder(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          itemCount: options.length,
-                          itemBuilder: (BuildContext context, int index) {
-                            final SchoolModel option = options.elementAt(index);
-                            return InkWell(
-                              onTap: () => onSelected(option),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      option.institutionName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w500,
+                  return Obx(() {
+                    // Get current search text from the controller
+                    final searchText = controller.schoolNameController.text
+                        .trim();
+                    final hasSearchText = searchText.length >= 3;
+                    final isLoading = controller.isLoadingInstitutions.value;
+                    final suggestions = controller.institutionSuggestions;
+
+                    // Check if we have no results:
+                    // - search text is at least 3 characters
+                    // - not currently loading (search has completed)
+                    // - institution suggestions list is empty (no results from API)
+                    // - options contains the placeholder item (indicates no results)
+                    final optionsList = options.toList();
+                    final hasPlaceholder =
+                        optionsList.isNotEmpty &&
+                        optionsList.first.id == '__NO_RESULTS__';
+                    final hasNoResults =
+                        hasSearchText &&
+                        !isLoading &&
+                        suggestions.isEmpty &&
+                        hasPlaceholder;
+
+                    // Debug: Print to see what's happening (remove in production)
+                    if (hasSearchText) {
+                      print(
+                        'DEBUG Autocomplete: hasNoResults=$hasNoResults, hasSearchText=$hasSearchText, isLoading=$isLoading, suggestions.length=${suggestions.length}, options.length=${optionsList.length}, searchText="$searchText"',
+                      );
+                    }
+
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4.0,
+                        borderRadius: BorderRadius.circular(8),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          child: hasNoResults
+                              ? Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.school_outlined,
+                                        size: 32,
+                                        color: Colors.grey[600],
                                       ),
-                                    ),
-                                    if (option.address.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 8),
                                       Text(
-                                        option.address,
+                                        'No institution found',
                                         style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
                                           color: Colors.grey[700],
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ],
-                                    if (option.cityName != null ||
-                                        option.stateName != null ||
-                                        option.pincode.isNotEmpty) ...[
-                                      const SizedBox(height: 2),
+                                      const SizedBox(height: 4),
                                       Text(
-                                        '${option.cityName ?? ''}${option.cityName != null && option.stateName != null ? ', ' : ''}${option.stateName ?? ''}${(option.cityName != null || option.stateName != null) && option.pincode.isNotEmpty ? ' - ' : ''}${option.pincode.isNotEmpty ? option.pincode : ''}',
+                                        'for "$searchText"',
                                         style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           color: Colors.grey[600],
                                         ),
                                       ),
+                                      const SizedBox(height: 12),
+                                      OutlinedButton.icon(
+                                        onPressed: () {
+                                          // Close the autocomplete overlay first
+                                          FocusScope.of(context).unfocus();
+
+                                          // Show dialog to create new institution
+                                          _showAddInstitutionDialog(
+                                            context,
+                                            controller,
+                                            searchText,
+                                          );
+                                        },
+                                        icon: const Icon(Icons.add, size: 18),
+                                        label: const Text(
+                                          'Add New Institution',
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.green[700],
+                                          side: BorderSide(
+                                            color: Colors.green[700]!,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 12,
+                                          ),
+                                        ),
+                                      ),
                                     ],
-                                  ],
+                                  ),
+                                )
+                              : controller.isLoadingInstitutions.value
+                              ? const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  itemBuilder: (BuildContext context, int index) {
+                                    final optionsList = options.toList();
+                                    final SchoolModel option =
+                                        optionsList[index];
+
+                                    // Skip the placeholder item - it's only used to show the overlay
+                                    if (option.id == '__NO_RESULTS__') {
+                                      return const SizedBox.shrink();
+                                    }
+
+                                    return InkWell(
+                                      onTap: () => onSelected(option),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12.0),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              option.institutionName,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            if (option.address.isNotEmpty) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                option.address,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[700],
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                            if (option.cityName != null ||
+                                                option.stateName != null ||
+                                                option.pincode.isNotEmpty) ...[
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                '${option.cityName ?? ''}${option.cityName != null && option.stateName != null ? ', ' : ''}${option.stateName ?? ''}${(option.cityName != null || option.stateName != null) && option.pincode.isNotEmpty ? ' - ' : ''}${option.pincode.isNotEmpty ? option.pincode : ''}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              ),
-                            );
-                          },
                         ),
                       ),
-                    ),
-                  );
+                    );
+                  });
                 },
           );
         }),
@@ -1502,6 +1781,194 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       loadingProgress.expectedTotalBytes!
                 : null,
           ),
+        );
+      },
+    );
+  }
+
+  void _showAddInstitutionDialog(
+    BuildContext context,
+    ParticipantController participantController,
+    String institutionName,
+  ) {
+    final schoolController = Get.put(SchoolController());
+
+    // Pre-fill the institution name
+    schoolController.institutionNameController.text = institutionName;
+    schoolController.isListView.value = false; // Show create form
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        // Use Builder to ensure we have access to MediaQuery from the dialog's context
+        return Builder(
+          builder: (builderContext) {
+            // Safely get MediaQuery - use dialogContext if available, otherwise use builderContext
+            final mediaQuery =
+                MediaQuery.maybeOf(dialogContext) ??
+                MediaQuery.maybeOf(builderContext) ??
+                MediaQuery.of(context);
+
+            final screenWidth = mediaQuery.size.width;
+            final screenHeight = mediaQuery.size.height;
+            final isMobile = screenWidth < 600;
+            final isTablet = screenWidth >= 600 && screenWidth < 1024;
+
+            // Calculate responsive width
+            double dialogWidth;
+            if (isMobile) {
+              dialogWidth = screenWidth - 32; // Full width minus padding
+            } else if (isTablet) {
+              dialogWidth = screenWidth * 0.85; // 85% of screen width
+            } else {
+              dialogWidth =
+                  1200; // Fixed width for desktop (increased from 800)
+            }
+
+            return Dialog(
+              insetPadding: EdgeInsets.all(16),
+              child: Container(
+                width: dialogWidth,
+                constraints: BoxConstraints(
+                  maxHeight: screenHeight * (isMobile ? 0.95 : 0.9),
+                  maxWidth: screenWidth - (isMobile ? 32 : 48),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.green[700],
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(8),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Add New Institution',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            onPressed: () {
+                              Navigator.pop(dialogContext);
+                              // Clear the pre-filled name when dialog is closed
+                              schoolController.institutionNameController
+                                  .clear();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Form content
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: const SchoolCreateScreen(hideButtons: true),
+                      ),
+                    ),
+                    // Action buttons
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: Colors.grey[300]!),
+                        ),
+                      ),
+                      child: Obx(
+                        () => Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(dialogContext);
+                                // Clear the pre-filled name when dialog is closed
+                                schoolController.institutionNameController
+                                    .clear();
+                              },
+                              child: const Text('Cancel'),
+                            ),
+                            const SizedBox(width: 12),
+                            ElevatedButton(
+                              onPressed: schoolController.isLoading.value
+                                  ? null
+                                  : () async {
+                                      await schoolController.submitSchool();
+                                      if (schoolController
+                                              .errorMessage
+                                              .value
+                                              .isEmpty &&
+                                          !schoolController.isLoading.value) {
+                                        // Success - close dialog and refresh institution search
+                                        Navigator.pop(dialogContext);
+
+                                        // Refresh the institution search with the new institution
+                                        await participantController
+                                            .searchInstitutions(
+                                              institutionName,
+                                            );
+
+                                        // Select the newly created institution if found
+                                        final newInstitution =
+                                            participantController
+                                                .institutionSuggestions
+                                                .firstWhereOrNull(
+                                                  (inst) =>
+                                                      inst.institutionName
+                                                          .toLowerCase()
+                                                          .trim() ==
+                                                      institutionName
+                                                          .toLowerCase()
+                                                          .trim(),
+                                                );
+                                        if (newInstitution != null) {
+                                          participantController
+                                              .selectInstitution(
+                                                newInstitution,
+                                              );
+                                        }
+
+                                        // Clear the school controller form
+                                        schoolController.resetForm();
+                                      }
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green[700],
+                                foregroundColor: Colors.white,
+                              ),
+                              child: schoolController.isLoading.value
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                      ),
+                                    )
+                                  : const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
