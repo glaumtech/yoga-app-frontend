@@ -581,6 +581,118 @@ class SchoolRepository {
     }
   }
 
+  // Get institutions for printing
+  Future<ApiResponse<SchoolsListResponse>> getInstitutionsForPrint({
+    String? search,
+    int? stateId,
+    int? cityId,
+    int? institutionTypeId,
+    String? sortBy,
+    String? order,
+  }) async {
+    try {
+      final requestBody = <String, dynamic>{};
+
+      if (search != null && search.isNotEmpty) {
+        requestBody['search'] = search;
+      }
+      if (stateId != null && stateId > 0) {
+        requestBody['stateId'] = stateId;
+      }
+      if (cityId != null && cityId > 0) {
+        requestBody['cityId'] = cityId;
+      }
+      if (institutionTypeId != null && institutionTypeId > 0) {
+        requestBody['institutionTypeId'] = institutionTypeId;
+      }
+      requestBody['page'] = 0;
+      requestBody['limit'] = 10000; // Large limit for printing
+      requestBody['sortBy'] = sortBy ?? 'institutionName';
+      requestBody['order'] = order ?? 'asc';
+
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.institutionPrint,
+        apiType: APIType.aPost,
+        body: requestBody,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        List<SchoolModel> institutions = [];
+        Map<String, dynamic>? paginationData;
+
+        if (response.data is Map<String, dynamic>) {
+          final dataMap = response.data as Map<String, dynamic>;
+
+          if (dataMap.containsKey('institutions')) {
+            final institutionsList = dataMap['institutions'];
+            if (institutionsList is List) {
+              institutions = institutionsList.map((json) {
+                return SchoolModel.fromJson(
+                  json is Map<String, dynamic>
+                      ? json
+                      : json as Map<String, dynamic>,
+                );
+              }).toList();
+            }
+
+            if (dataMap.containsKey('total')) {
+              paginationData = {
+                'total': dataMap['total'],
+                'page': 0,
+                'limit': institutions.length,
+              };
+            }
+          } else if (dataMap.containsKey('data')) {
+            final innerData = dataMap['data'];
+            if (innerData is Map<String, dynamic>) {
+              final institutionsList = innerData['institutions'];
+              if (institutionsList is List) {
+                institutions = institutionsList.map((json) {
+                  return SchoolModel.fromJson(
+                    json is Map<String, dynamic>
+                        ? json
+                        : json as Map<String, dynamic>,
+                  );
+                }).toList();
+              }
+
+              if (innerData.containsKey('total')) {
+                paginationData = {
+                  'total': innerData['total'],
+                  'page': 0,
+                  'limit': institutions.length,
+                };
+              }
+            }
+          }
+        }
+
+        final listResponse = SchoolsListResponse(
+          institutions: institutions,
+          pagination: paginationData,
+        );
+
+        return ApiResponse<SchoolsListResponse>(
+          success: true,
+          data: listResponse,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            response.message ?? 'Failed to fetch institutions for printing',
+      );
+    } catch (e) {
+      print('Error in getInstitutionsForPrint: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching institutions for printing: ${e.toString()}',
+      );
+    }
+  }
+
   // Create institution category
   Future<ApiResponse<InstitutionCategoryModel>> createInstitutionCategory({
     required String categoryName,

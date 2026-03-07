@@ -26,11 +26,13 @@ class UserManagementScreen extends StatelessWidget {
     // Initialize CompetitionController if not already initialized
     final competitionController = Get.put(CompetitionController());
 
-    // Load competitions if empty
-    if (competitionController.competitions.isEmpty &&
-        !competitionController.isLoading.value) {
-      competitionController.loadCompetitions();
-    }
+    // Load competitions if empty - defer to avoid build phase error
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (competitionController.competitions.isEmpty &&
+          !competitionController.isLoading.value) {
+        competitionController.loadCompetitions();
+      }
+    });
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;

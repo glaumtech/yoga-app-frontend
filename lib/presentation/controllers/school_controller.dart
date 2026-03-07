@@ -1,5 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
 import '../../data/models/city_model.dart';
@@ -8,6 +12,11 @@ import '../../data/models/institution_type_model.dart';
 import '../../data/models/institution_category_model.dart';
 import '../../data/repositories/location_repository.dart';
 import '../../data/repositories/school_repository.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/storage_service.dart';
+
+// Conditional import for web
+import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class SchoolController extends GetxController {
   final LocationRepository _locationRepository = LocationRepository();
@@ -1030,32 +1039,146 @@ class SchoolController extends GetxController {
     }
   }
 
-  // Generate report
+  // Generate report and print
   Future<void> generateReport(String reportType) async {
-    if (reportDistrict.value.isEmpty || reportState.value.isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Please select District and State',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-      return;
-    }
-
     try {
-      // TODO: Implement API call to generate PDF report
+      isLoading.value = true;
+      errorMessage.value = '';
+
       Get.snackbar(
-        'Info',
-        'Report generation will be implemented',
-        snackPosition: SnackPosition.BOTTOM,
+        'Generating',
+        'Preparing report...',
         backgroundColor: Colors.blue,
         colorText: Colors.white,
+        duration: const Duration(seconds: 1),
       );
+
+      // Get filter values
+      int? stateIdForPrint;
+      int? cityIdForPrint;
+
+      if (reportState.value.isNotEmpty) {
+        final state = states.firstWhereOrNull(
+          (s) => s.stateName == reportState.value,
+        );
+        stateIdForPrint = state?.id;
+      }
+
+      if (reportDistrict.value.isNotEmpty && stateIdForPrint != null) {
+        final city = cities.firstWhereOrNull(
+          (c) =>
+              c.cityName == reportDistrict.value &&
+              c.stateId == stateIdForPrint,
+        );
+        cityIdForPrint = city?.id;
+      }
+
+      // Prepare request body
+      final requestBody = <String, dynamic>{};
+      if (searchQuery.value.isNotEmpty) {
+        requestBody['search'] = searchQuery.value;
+      }
+      if (stateIdForPrint != null) {
+        requestBody['stateId'] = stateIdForPrint;
+      }
+      if (cityIdForPrint != null) {
+        requestBody['cityId'] = cityIdForPrint;
+      }
+      if (reportInstitutionTypeId.value > 0) {
+        requestBody['institutionTypeId'] = reportInstitutionTypeId.value;
+      }
+      requestBody['sortBy'] = sortBy.value;
+      requestBody['order'] = sortOrder.value;
+
+      // Download PDF from backend
+      await _downloadInstitutionsPdf(requestBody);
     } catch (e) {
       Get.snackbar(
         'Error',
         'Error generating report: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Download institutions PDF report
+  Future<void> _downloadInstitutionsPdf(
+    Map<String, dynamic> requestBody,
+  ) async {
+    try {
+      final url = '${BaseUrl.baseUrl}${EndPoints.institutionPrint}';
+      final uri = Uri.parse(url);
+
+      // Include auth token if available
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept': 'application/pdf',
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      // Use proper JSON encoding
+      final jsonBody = jsonEncode(requestBody);
+      final response = await http.post(uri, headers: headers, body: jsonBody);
+
+      if (response.statusCode == 200) {
+        if (kIsWeb) {
+          // Web: Create blob and trigger download/print
+          final blob = html.Blob([response.bodyBytes]);
+          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+          html.AnchorElement(href: blobUrl)
+            ..setAttribute('download', 'institutions_report.pdf')
+            ..click();
+          html.Url.revokeObjectUrl(blobUrl);
+
+          Get.snackbar(
+            'Success',
+            'Report download started',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+        } else {
+          // Mobile: Open PDF
+          final dataUri = Uri.dataFromBytes(
+            response.bodyBytes,
+            mimeType: 'application/pdf',
+          );
+          if (await canLaunchUrl(dataUri)) {
+            await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+            Get.snackbar(
+              'Success',
+              'Report opened',
+              backgroundColor: Colors.green,
+              colorText: Colors.white,
+            );
+          } else {
+            Get.snackbar(
+              'Error',
+              'Could not open report',
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+            );
+          }
+        }
+      } else {
+        Get.snackbar(
+          'Error',
+          'Failed to generate report (status ${response.statusCode})',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to download report: ${e.toString()}',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,

@@ -168,6 +168,7 @@ class EndPoints {
   /// INSTITUTIONS
   static String institutionCreate = '/institution';
   static String institutionList = '/institution/list';
+  static String institutionPrint = '/institution/print';
   static String institutionById(String id) => '/institution/$id';
   static String institutionUpdate(String id) => '/institution/$id';
   static String institutionDelete(String id) => '/institution/$id';
