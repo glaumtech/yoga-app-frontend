@@ -18,8 +18,8 @@ class SchoolModel {
   final String? institutionCategoryDisplayName;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  final int? createdBy;
-  final int? updatedBy;
+  final String? createdBy;
+  final String? updatedBy;
 
   SchoolModel({
     this.id,
@@ -92,16 +92,8 @@ class SchoolModel {
                 ? DateTime.fromMillisecondsSinceEpoch(json['updatedAt'])
                 : null)
           : null,
-      createdBy: json['createdBy'] is int
-          ? json['createdBy'] as int
-          : json['createdBy'] is String
-          ? int.tryParse(json['createdBy'])
-          : null,
-      updatedBy: json['updatedBy'] is int
-          ? json['updatedBy'] as int
-          : json['updatedBy'] is String
-          ? int.tryParse(json['updatedBy'])
-          : null,
+      createdBy: json['createdBy']?.toString(),
+      updatedBy: json['updatedBy']?.toString(),
     );
   }
 
@@ -142,8 +134,8 @@ class SchoolModel {
     String? institutionCategoryDisplayName,
     DateTime? createdAt,
     DateTime? updatedAt,
-    int? createdBy,
-    int? updatedBy,
+    String? createdBy,
+    String? updatedBy,
   }) {
     return SchoolModel(
       id: id ?? this.id,

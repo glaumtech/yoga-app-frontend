@@ -320,6 +320,7 @@ class SchoolListScreen extends StatelessWidget {
       ),
       hint: Text(hint, style: TextStyle(fontSize: isMobile ? 14 : 16)),
       style: TextStyle(fontSize: isMobile ? 14 : 16),
+      menuMaxHeight: 250,
       items: allItems.map((item) {
         final isSelectAll = item == selectAllLabel;
         return DropdownMenuItem<String>(
@@ -524,19 +525,9 @@ class SchoolListScreen extends StatelessWidget {
                   if (school.email != null && school.email!.isNotEmpty)
                     _buildSchoolInfoRow('Email ID', school.email!),
                   if (school.createdAt != null)
-                    _buildSchoolInfoRow(
-                      'Created',
-                      DateFormat(
-                        'MMM dd, yyyy HH:mm',
-                      ).format(school.createdAt!),
-                    ),
+                    _buildSchoolInfoRow('Created', _buildCreatedText(school)),
                   if (school.updatedAt != null)
-                    _buildSchoolInfoRow(
-                      'Updated',
-                      DateFormat(
-                        'MMM dd, yyyy HH:mm',
-                      ).format(school.updatedAt!),
-                    ),
+                    _buildSchoolInfoRow('Updated', _buildUpdatedText(school)),
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -598,13 +589,13 @@ class SchoolListScreen extends StatelessWidget {
                   border: TableBorder.all(color: Colors.grey[300]!, width: 1),
                   columnWidths: {
                     0: const FixedColumnWidth(80),
-                    1: FlexColumnWidth(2.8),
-                    2: FlexColumnWidth(3.0),
-                    3: FlexColumnWidth(2.5),
+                    1: FlexColumnWidth(2.5),
+                    2: FlexColumnWidth(2.5),
+                    3: FlexColumnWidth(1.5), // Reduced TYPE & CATEGORY width
                     4: FlexColumnWidth(1.5),
                     5: FlexColumnWidth(1.2),
                     6: FlexColumnWidth(1.2),
-                    7: FlexColumnWidth(1.0),
+                    7: FlexColumnWidth(0.8),
                   },
                   children: [
                     // Header Row
@@ -675,20 +666,8 @@ class SchoolListScreen extends StatelessWidget {
                             ),
                           ),
                           _buildTableCell(school.email ?? '-'),
-                          _buildTableCell(
-                            school.createdAt != null
-                                ? DateFormat(
-                                    'MMM dd, yyyy HH:mm',
-                                  ).format(school.createdAt!)
-                                : '-',
-                          ),
-                          _buildTableCell(
-                            school.updatedAt != null
-                                ? DateFormat(
-                                    'MMM dd, yyyy HH:mm',
-                                  ).format(school.updatedAt!)
-                                : '-',
-                          ),
+                          _buildCreatedCellWidget(school),
+                          _buildUpdatedCellWidget(school),
                           TableCell(
                             child: Padding(
                               padding: const EdgeInsets.all(8),
@@ -749,6 +728,58 @@ class SchoolListScreen extends StatelessWidget {
         maxLines: null,
       ),
     );
+  }
+
+  Widget _buildCreatedCellWidget(SchoolModel school) {
+    if (school.createdAt == null) {
+      return _buildTableCell('-');
+    }
+    final dateTime = DateFormat(
+      'MMM dd, yyyy hh:mm a',
+    ).format(school.createdAt!);
+    if (school.createdBy != null && school.createdBy!.isNotEmpty) {
+      return _buildTableCell('$dateTime by ${school.createdBy}');
+    }
+    return _buildTableCell(dateTime);
+  }
+
+  Widget _buildUpdatedCellWidget(SchoolModel school) {
+    if (school.updatedAt == null) {
+      return _buildTableCell('-');
+    }
+    final dateTime = DateFormat(
+      'MMM dd, yyyy hh:mm a',
+    ).format(school.updatedAt!);
+    if (school.updatedBy != null && school.updatedBy!.isNotEmpty) {
+      return _buildTableCell('$dateTime by ${school.updatedBy}');
+    }
+    return _buildTableCell(dateTime);
+  }
+
+  String _buildCreatedText(SchoolModel school) {
+    if (school.createdAt == null) {
+      return '-';
+    }
+    final dateTime = DateFormat(
+      'MMM dd, yyyy hh:mm a',
+    ).format(school.createdAt!);
+    if (school.createdBy != null && school.createdBy!.isNotEmpty) {
+      return '$dateTime by ${school.createdBy}';
+    }
+    return dateTime;
+  }
+
+  String _buildUpdatedText(SchoolModel school) {
+    if (school.updatedAt == null) {
+      return '-';
+    }
+    final dateTime = DateFormat(
+      'MMM dd, yyyy hh:mm a',
+    ).format(school.updatedAt!);
+    if (school.updatedBy != null && school.updatedBy!.isNotEmpty) {
+      return '$dateTime by ${school.updatedBy}';
+    }
+    return dateTime;
   }
 
   Widget _buildSortableHeader(

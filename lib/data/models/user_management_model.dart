@@ -31,6 +31,9 @@ class UserManagementModel {
   volunteers; // New API format: array of volunteer objects
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? createdBy;
+  final String? updatedBy;
+  final String? confirmPassword;
 
   UserManagementModel({
     this.id,
@@ -56,6 +59,9 @@ class UserManagementModel {
     this.volunteers,
     this.createdAt,
     this.updatedAt,
+    this.createdBy,
+    this.updatedBy,
+    this.confirmPassword,
   });
 
   factory UserManagementModel.fromJson(Map<String, dynamic> json) {
@@ -204,6 +210,9 @@ class UserManagementModel {
                 ? DateTime.fromMillisecondsSinceEpoch(json['updatedAt'])
                 : null)
           : null,
+      createdBy: json['createdBy']?.toString(),
+      updatedBy: json['updatedBy']?.toString(),
+      confirmPassword: json['confirmPassword']?.toString(),
     );
   }
 
@@ -291,6 +300,9 @@ class UserManagementModel {
     List<Map<String, dynamic>>? volunteers,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? createdBy,
+    String? updatedBy,
+    String? confirmPassword,
   }) {
     return UserManagementModel(
       id: id ?? this.id,
@@ -316,6 +328,9 @@ class UserManagementModel {
       volunteers: volunteers ?? this.volunteers,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
+      confirmPassword: confirmPassword ?? this.confirmPassword,
     );
   }
 

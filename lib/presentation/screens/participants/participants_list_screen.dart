@@ -554,15 +554,14 @@ class ParticipantsListScreen extends StatelessWidget {
                   columnWidths: {
                     0: const FixedColumnWidth(80),
                     1: FlexColumnWidth(2.0),
-                    2: FlexColumnWidth(1.0),
-                    3: FlexColumnWidth(1.0),
-                    4: FlexColumnWidth(1.5),
-                    5: FlexColumnWidth(1.5),
-                    6: FlexColumnWidth(2.0),
-                    7: FlexColumnWidth(1.5),
-                    8: FlexColumnWidth(1.2),
-                    9: FlexColumnWidth(1.2),
-                    10: const FixedColumnWidth(100),
+                    2: FlexColumnWidth(1.3), // AGE & GENDER combined
+                    3: FlexColumnWidth(1),
+                    4: FlexColumnWidth(1),
+                    5: FlexColumnWidth(2.0),
+                    6: FlexColumnWidth(1.5),
+                    7: FlexColumnWidth(1.4),
+                    8: FlexColumnWidth(1.4),
+                    9: const FixedColumnWidth(100),
                   },
                   children: [
                     // Header Row
@@ -577,13 +576,7 @@ class ParticipantsListScreen extends StatelessWidget {
                           'participantName',
                           controller,
                         ),
-                        _buildSortableHeader('AGE', 'age', controller),
-                        _buildSortableHeader(
-                          'GENDER',
-                          'sex',
-                          controller,
-                          isSortable: false,
-                        ),
+                        _buildSortableHeader('AGE & GENDER', 'age', controller),
                         _buildSortableHeader(
                           'CATEGORY',
                           'categoryName',
@@ -639,24 +632,15 @@ class ParticipantsListScreen extends StatelessWidget {
                             participant,
                             controller,
                           ),
-                          _buildTableCell(participant.age.toString()),
-                          _buildTableCell(participant.gender),
+                          _buildTableCell(
+                            '${participant.age} | ${participant.gender}',
+                          ),
                           _buildTableCell(participant.category),
                           _buildTableCell(participant.standard),
                           _buildTableCell(participant.schoolName),
                           _buildTableCell(participant.yogaMasterName),
-                          _buildTableCell(
-                            DateFormat(
-                              'MMM dd, yyyy hh:mm a',
-                            ).format(participant.createdAt),
-                          ),
-                          _buildTableCell(
-                            participant.updatedAt != null
-                                ? DateFormat(
-                                    'MMM dd, yyyy hh:mm a',
-                                  ).format(participant.updatedAt!)
-                                : '-',
-                          ),
+                          _buildCreatedCellWidget(participant),
+                          _buildUpdatedCellWidget(participant),
                           _buildActionCell(context, participant, controller),
                         ],
                       );
@@ -745,6 +729,73 @@ class ParticipantsListScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildCreatedCellWidget(ParticipantModel participant) {
+    final dateTime = DateFormat(
+      'MMM dd, yyyy hh:mm a',
+    ).format(participant.createdAt);
+    if (participant.createdBy != null && participant.createdBy!.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              dateTime,
+              style: const TextStyle(fontSize: 13),
+              softWrap: true,
+            ),
+            Text(
+              'by ${participant.createdBy}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+              softWrap: true,
+            ),
+          ],
+        ),
+      );
+    }
+    return _buildTableCell(dateTime);
+  }
+
+  Widget _buildUpdatedCellWidget(ParticipantModel participant) {
+    if (participant.updatedAt == null) {
+      return _buildTableCell('-');
+    }
+    final dateTime = DateFormat(
+      'MMM dd, yyyy hh:mm a',
+    ).format(participant.updatedAt!);
+    if (participant.updatedBy != null && participant.updatedBy!.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              dateTime,
+              style: const TextStyle(fontSize: 13),
+              softWrap: true,
+            ),
+            Text(
+              'by ${participant.updatedBy}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+              softWrap: true,
+            ),
+          ],
+        ),
+      );
+    }
+    return _buildTableCell(dateTime);
   }
 
   Widget _buildClickableNameCell(

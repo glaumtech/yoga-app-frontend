@@ -25,6 +25,8 @@ class CompetitionModel {
   final String? brochureUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? createdBy;
+  final String? updatedBy;
 
   CompetitionModel({
     this.id,
@@ -49,6 +51,8 @@ class CompetitionModel {
     this.brochureUrl,
     this.createdAt,
     this.updatedAt,
+    this.createdBy,
+    this.updatedBy,
   });
 
   factory CompetitionModel.fromJson(Map<String, dynamic> json) {
@@ -212,6 +216,8 @@ class CompetitionModel {
                 ? DateTime.fromMillisecondsSinceEpoch(json['updatedAt'])
                 : null)
           : null,
+      createdBy: json['createdBy']?.toString(),
+      updatedBy: json['updatedBy']?.toString(),
     );
   }
 
@@ -280,6 +286,8 @@ class CompetitionModel {
     String? brochureUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? createdBy,
+    String? updatedBy,
   }) {
     return CompetitionModel(
       id: id ?? this.id,
@@ -304,6 +312,8 @@ class CompetitionModel {
       brochureUrl: brochureUrl ?? this.brochureUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
     );
   }
 }

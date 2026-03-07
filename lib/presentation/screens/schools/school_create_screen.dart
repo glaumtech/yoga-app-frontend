@@ -458,6 +458,7 @@ class SchoolCreateScreen extends StatelessWidget {
             ),
             style: TextStyle(fontSize: isMobile ? 14 : 16),
             isExpanded: true,
+            menuMaxHeight: 250,
             items: controller.states.map((state) {
               return DropdownMenuItem<String>(
                 value: state.stateName,
@@ -578,6 +579,7 @@ class SchoolCreateScreen extends StatelessWidget {
             ),
             style: TextStyle(fontSize: isMobile ? 14 : 16),
             isExpanded: true,
+            menuMaxHeight: 250,
             items: availableCities.map((city) {
               return DropdownMenuItem<String>(
                 value: city.cityName,

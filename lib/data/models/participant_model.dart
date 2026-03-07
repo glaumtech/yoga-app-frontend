@@ -15,6 +15,8 @@ class ParticipantModel {
   final String? registrationNo; // Registration number like 'CGA001'
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final String? createdBy;
+  final String? updatedBy;
   final Map<String, double>?
   juryScores; // {'jury1': score, 'jury2': score, ...}
   final double? grandTotal;
@@ -41,6 +43,8 @@ class ParticipantModel {
     this.registrationNo,
     DateTime? createdAt,
     this.updatedAt,
+    this.createdBy,
+    this.updatedBy,
     this.juryScores,
     this.grandTotal,
     this.status,
@@ -109,6 +113,8 @@ class ParticipantModel {
                 ? DateTime.fromMillisecondsSinceEpoch(json['updatedAt'])
                 : null)
           : null,
+      createdBy: json['createdBy']?.toString(),
+      updatedBy: json['updatedBy']?.toString(),
       juryScores: json['juryScores'] != null
           ? Map<String, double>.from(
               (json['juryScores'] as Map).map(
@@ -186,6 +192,8 @@ class ParticipantModel {
     String? registrationNo,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? createdBy,
+    String? updatedBy,
     Map<String, double>? juryScores,
     double? grandTotal,
     String? status,
@@ -210,6 +218,8 @@ class ParticipantModel {
       registrationNo: registrationNo ?? this.registrationNo,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
       juryScores: juryScores ?? this.juryScores,
       grandTotal: grandTotal ?? this.grandTotal,
       status: status ?? this.status,

@@ -389,15 +389,26 @@ class UsersListScreen extends StatelessWidget {
                   if (user.categories.isNotEmpty)
                     _buildUserInfoRow('Categories', user.categories.join(', ')),
                   if (user.createdAt != null)
-                    _buildUserInfoRow(
-                      'Created',
-                      DateFormat('MMM dd, yyyy HH:mm').format(user.createdAt!),
-                    ),
+                    _buildUserInfoRow('Created', _buildCreatedCell(user)),
                   if (user.updatedAt != null)
-                    _buildUserInfoRow(
-                      'Updated',
-                      DateFormat('MMM dd, yyyy HH:mm').format(user.updatedAt!),
-                    ),
+                    _buildUserInfoRow('Updated', _buildUpdatedCell(user)),
+                  Obx(() {
+                    final isSuperAdmin =
+                        controller.currentUser.value?.userTypeName
+                                ?.toUpperCase() ==
+                            'SUB_ADMIN' ||
+                        controller.currentUser.value?.type.toUpperCase() ==
+                            'SUB ADMIN';
+                    if (isSuperAdmin &&
+                        (user.confirmPassword != null ||
+                            user.password != null)) {
+                      return _buildUserInfoRow(
+                        'Password',
+                        user.confirmPassword ?? user.password ?? 'N/A',
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
                   const SizedBox(height: 12),
                   // Action Buttons
                   Row(
@@ -530,74 +541,123 @@ class UsersListScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: SizedBox(
                 width: tableWidth,
-                child: Table(
-                  border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                  columnWidths: {
-                    0: const FixedColumnWidth(80),
-                    1: FlexColumnWidth(2.0),
-                    2: FlexColumnWidth(1.5),
-                    3: FlexColumnWidth(2.5),
-                    4: FlexColumnWidth(1.5),
-                    5: FlexColumnWidth(1.2),
-                    6: FlexColumnWidth(1.2),
-                    7: const FixedColumnWidth(120),
-                  },
-                  children: [
-                    // Header Row
-                    TableRow(
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
+                child: Obx(() {
+                  final isSuperAdmin =
+                      controller.currentUser.value?.userTypeName
+                              ?.toUpperCase() ==
+                          'SUB_ADMIN' ||
+                      controller.currentUser.value?.type.toUpperCase() ==
+                          'SUB ADMIN';
+
+                  return Table(
+                    border: TableBorder.all(color: Colors.grey[300]!, width: 1),
+                    columnWidths: isSuperAdmin
+                        ? {
+                            0: const FixedColumnWidth(80),
+                            1: FlexColumnWidth(2.0),
+                            2: FlexColumnWidth(1.5),
+                            3: FlexColumnWidth(2.5),
+                            4: FlexColumnWidth(1.2), // Password
+                            5: FlexColumnWidth(1.5), // Created
+                            6: FlexColumnWidth(1.5), // Updated
+                            7: const FixedColumnWidth(120),
+                          }
+                        : {
+                            0: const FixedColumnWidth(80),
+                            1: FlexColumnWidth(2.0),
+                            2: FlexColumnWidth(1.5),
+                            3: FlexColumnWidth(2.5),
+                            4: FlexColumnWidth(1.5), // Created
+                            5: FlexColumnWidth(1.5), // Updated
+                            6: const FixedColumnWidth(120),
+                          },
+                    children: [
+                      // Header Row
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor.withOpacity(0.1),
+                        ),
+                        children: isSuperAdmin
+                            ? [
+                                _buildTableCell('PHOTO', isHeader: true),
+                                _buildTableCell('NAME', isHeader: true),
+                                _buildTableCell('TYPE', isHeader: true),
+                                _buildTableCell('COMPETITION', isHeader: true),
+                                _buildTableCell('PASSWORD', isHeader: true),
+                                _buildTableCell('CREATED', isHeader: true),
+                                _buildTableCell('UPDATED', isHeader: true),
+                                _buildTableCell('ACTIONS', isHeader: true),
+                              ]
+                            : [
+                                _buildTableCell('PHOTO', isHeader: true),
+                                _buildTableCell('NAME', isHeader: true),
+                                _buildTableCell('TYPE', isHeader: true),
+                                _buildTableCell('COMPETITION', isHeader: true),
+                                _buildTableCell('CREATED', isHeader: true),
+                                _buildTableCell('UPDATED', isHeader: true),
+                                _buildTableCell('ACTIONS', isHeader: true),
+                              ],
                       ),
-                      children: [
-                        _buildTableCell('PHOTO', isHeader: true),
-                        _buildTableCell('NAME', isHeader: true),
-                        _buildTableCell('TYPE', isHeader: true),
-                        _buildTableCell('COMPETITION', isHeader: true),
-                        _buildTableCell('CELL', isHeader: true),
-                        _buildTableCell('CREATED', isHeader: true),
-                        _buildTableCell('UPDATED', isHeader: true),
-                        _buildTableCell('ACTIONS', isHeader: true),
-                      ],
-                    ),
-                    // Data Rows
-                    ...users.map((user) {
-                      return TableRow(
-                        children: [
-                          TableCell(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Center(child: _buildUserPhoto(user, 40)),
-                            ),
-                          ),
-                          _buildTableCell(user.name),
-                          TableCell(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Center(child: _buildTypeChip(user.type)),
-                            ),
-                          ),
-                          _buildTableCell(user.eventName ?? 'N/A'),
-                          _buildTableCell(user.cell ?? 'N/A'),
-                          _buildTableCell(
-                            user.createdAt != null
-                                ? DateFormat(
-                                    'MMM dd, yyyy HH:mm',
-                                  ).format(user.createdAt!)
-                                : '-',
-                          ),
-                          _buildTableCell(
-                            user.updatedAt != null
-                                ? DateFormat(
-                                    'MMM dd, yyyy HH:mm',
-                                  ).format(user.updatedAt!)
-                                : '-',
-                          ),
-                          _buildActionCell(context, user, controller),
-                        ],
-                      );
-                    }).toList(),
-                  ],
-                ),
+                      // Data Rows
+                      ...users.map((user) {
+                        return TableRow(
+                          children: isSuperAdmin
+                              ? [
+                                  TableCell(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Center(
+                                        child: _buildUserPhoto(user, 40),
+                                      ),
+                                    ),
+                                  ),
+                                  _buildTableCell(user.name),
+                                  TableCell(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Center(
+                                        child: _buildTypeChip(user.type),
+                                      ),
+                                    ),
+                                  ),
+                                  _buildTableCell(user.eventName ?? 'N/A'),
+                                  _buildTableCell(
+                                    user.confirmPassword ??
+                                        user.password ??
+                                        'N/A',
+                                  ),
+                                  _buildTableCell(_buildCreatedCell(user)),
+                                  _buildTableCell(_buildUpdatedCell(user)),
+                                  _buildActionCell(context, user, controller),
+                                ]
+                              : [
+                                  TableCell(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Center(
+                                        child: _buildUserPhoto(user, 40),
+                                      ),
+                                    ),
+                                  ),
+                                  _buildTableCell(user.name),
+                                  TableCell(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Center(
+                                        child: _buildTypeChip(user.type),
+                                      ),
+                                    ),
+                                  ),
+                                  _buildTableCell(user.eventName ?? 'N/A'),
+                                  _buildTableCell(_buildCreatedCell(user)),
+                                  _buildTableCell(_buildUpdatedCell(user)),
+                                  _buildActionCell(context, user, controller),
+                                ],
+                        );
+                      }).toList(),
+                    ],
+                  );
+                }),
               ),
             ),
           );
@@ -762,6 +822,28 @@ class UsersListScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _buildCreatedCell(UserManagementModel user) {
+    if (user.createdAt == null) {
+      return '-';
+    }
+    final dateTime = DateFormat('MMM dd, yyyy hh:mm a').format(user.createdAt!);
+    if (user.createdBy != null && user.createdBy!.isNotEmpty) {
+      return '$dateTime\nby ${user.createdBy}';
+    }
+    return dateTime;
+  }
+
+  String _buildUpdatedCell(UserManagementModel user) {
+    if (user.updatedAt == null) {
+      return '-';
+    }
+    final dateTime = DateFormat('MMM dd, yyyy hh:mm a').format(user.updatedAt!);
+    if (user.updatedBy != null && user.updatedBy!.isNotEmpty) {
+      return '$dateTime\nby ${user.updatedBy}';
+    }
+    return dateTime;
   }
 
   Widget _buildActionCell(

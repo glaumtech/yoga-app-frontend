@@ -537,6 +537,8 @@ class ParticipantController extends GetxController {
       status: reg['status'] as String?,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      createdBy: reg['createdBy']?.toString(),
+      updatedBy: reg['updatedBy']?.toString(),
       eventId: reg['competitionId']?.toString(),
     );
   }

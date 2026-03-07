@@ -294,29 +294,36 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     ),
               SizedBox(height: isMobile ? 24 : 32),
 
-              // Error Message
-              if (participantController.errorMessage.value.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          participantController.errorMessage.value,
-                          style: TextStyle(color: Colors.red[700]),
+              // Error Message (only show when not in list view)
+              Obx(() {
+                if (participantController.isListView.value) {
+                  return const SizedBox.shrink();
+                }
+                if (participantController.errorMessage.value.isNotEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            participantController.errorMessage.value,
+                            style: TextStyle(color: Colors.red[700]),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
+                      ],
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              }),
 
               // Action Buttons (Save and Cancel)
               Obx(() {
@@ -853,7 +860,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             child: Obx(
               () => OutlinedButton.icon(
                 onPressed: !controller.isViewMode.value
-                    ? () => _pickPhoto(controller)
+                    ? () => _pickPhoto(controller, context)
                     : null,
                 icon: const Icon(Icons.upload_file, size: 16),
                 label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
@@ -1558,24 +1565,55 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.only(top: 16),
-          child: Center(
-            child: Obx(
-              () => OutlinedButton.icon(
-                onPressed: !controller.isViewMode.value
-                    ? () => _pickBonafideCertificate(controller)
-                    : null,
-                icon: const Icon(Icons.upload_file, size: 16),
-                label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+          child: Obx(() {
+            final hasCertificate =
+                controller.bonafideFile.value != null ||
+                controller.bonafideImage.value != null ||
+                (controller.existingCertificateUrl.value.isNotEmpty);
+
+            return Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: !controller.isViewMode.value
+                        ? () => _pickBonafideCertificate(controller, context)
+                        : null,
+                    icon: const Icon(Icons.upload_file, size: 16),
+                    label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      minimumSize: const Size(0, 36),
+                    ),
                   ),
-                  minimumSize: const Size(0, 36),
-                ),
+                  if (hasCertificate && !controller.isViewMode.value) ...[
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _removeBonafideCertificate(controller),
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: const Text(
+                        'REMOVE',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        minimumSize: const Size(0, 36),
+                        foregroundColor: Colors.red,
+                        side: BorderSide(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ),
-          ),
+            );
+          }),
         ),
       ],
     );
@@ -1633,7 +1671,10 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _pickPhoto(ParticipantController controller) async {
+  Future<void> _pickPhoto(
+    ParticipantController controller,
+    BuildContext context,
+  ) async {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? file = await picker.pickImage(
@@ -1651,12 +1692,20 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         controller.existingPhotoUrl.value = '';
       }
     } catch (e) {
-      Get.snackbar('Error', 'Failed to pick image: ${e.toString()}');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _pickBonafideCertificate(
     ParticipantController controller,
+    BuildContext context,
   ) async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -1673,11 +1722,31 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         // Clear existing certificate URL when a new certificate is selected
         // This ensures the newly selected local image is shown instead of the old URL
         controller.existingCertificateUrl.value = '';
-        Get.snackbar('Success', 'Bonafide certificate selected');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Bonafide certificate selected'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
-      Get.snackbar('Error', 'Failed to pick certificate: ${e.toString()}');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick certificate: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
+  }
+
+  void _removeBonafideCertificate(ParticipantController controller) {
+    controller.bonafideFile.value = null;
+    controller.bonafideImage.value = null;
+    controller.existingCertificateUrl.value = '';
   }
 
   Widget _buildImagePreview(
