@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flutter: Build Web (QA)",
+      "type": "shell",
+      "command": "flutter",
+      "args": [
+        "build",
+        "web",
+        "--release",
+        "-t",
+        "lib/main_qa.dart"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Build Web (QA with /yogatest base-href)",
+      "type": "shell",
+      "command": "flutter",
+      "args": [
+        "build",
+        "web",
+        "--release",
+        "-t",
+        "lib/main_qa.dart",
+        "--base-href",
+        "/yogatest/"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Build Web (Prod)",
+      "type": "shell",
+      "command": "flutter",
+      "args": [
+        "build",
+        "web",
+        "--release",
+        "-t",
+        "lib/main_prod.dart"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
