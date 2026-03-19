@@ -1,16 +1,44 @@
 # yoga_champ
 
-Yogo competition Application
+Yoga competition application frontend (Flutter).
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+Install dependencies:
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+flutter pub get
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Run the app with a profile entrypoint:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter run -t lib/main_qa.dart
+```
+
+## Web Build Profiles
+
+This project uses separate entrypoints to set environment configuration:
+
+- `lib/main_qa.dart` -> QA (`https://ghopon.com/yogatest`)
+- `lib/main_prod.dart` -> Production (`https://ghopon.com/school`)
+
+Build web for QA deployment:
+
+```bash
+flutter build web --release -t lib/main_qa.dart
+```
+
+If QA is hosted under a subpath, set the base href accordingly:
+
+```bash
+flutter build web --release -t lib/main_qa.dart --base-href /yogatest/
+```
+
+Build web for production:
+
+```bash
+flutter build web --release -t lib/main_prod.dart
+```
+
+Build output is generated in `build/web/`.
