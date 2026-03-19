@@ -508,8 +508,14 @@ class ParticipantsListScreen extends StatelessWidget {
                     ],
                   ),
                   const Divider(height: 24),
-                  _buildInfoRow('Category', participant.category),
-                  _buildInfoRow('Group', participant.standard),
+                  _buildInfoRow(
+                    'Category / Group',
+                    '${participant.category} / ${participant.standard}',
+                  ),
+                  _buildInfoRow(
+                    'Spot Reg',
+                    participant.isSpotRegistration ? 'Yes' : 'No',
+                  ),
                   _buildInfoRow('Institution', participant.schoolName),
                   _buildInfoRow('Yoga Teacher', participant.yogaMasterName),
                   if (participant.yogaMasterContact.isNotEmpty)
@@ -555,12 +561,12 @@ class ParticipantsListScreen extends StatelessWidget {
                     0: const FixedColumnWidth(80),
                     1: FlexColumnWidth(2.0),
                     2: FlexColumnWidth(1.3), // AGE & GENDER combined
-                    3: FlexColumnWidth(1),
-                    4: FlexColumnWidth(1),
-                    5: FlexColumnWidth(2.0),
-                    6: FlexColumnWidth(1.5),
+                    3: FlexColumnWidth(1.2), // CATEGORY / GROUP combined
+                    4: FlexColumnWidth(2.0),
+                    5: FlexColumnWidth(1.5),
+                    6: FlexColumnWidth(1.4),
                     7: FlexColumnWidth(1.4),
-                    8: FlexColumnWidth(1.4),
+                    8: const FixedColumnWidth(80), // SPOT REG
                     9: const FixedColumnWidth(100),
                   },
                   children: [
@@ -577,18 +583,7 @@ class ParticipantsListScreen extends StatelessWidget {
                           controller,
                         ),
                         _buildSortableHeader('AGE & GENDER', 'age', controller),
-                        _buildSortableHeader(
-                          'CATEGORY',
-                          'categoryName',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'GROUP',
-                          'groupName',
-                          controller,
-                          isSortable: false,
-                        ),
+                        _buildTableCell('CATEGORY / GROUP', isHeader: true),
                         _buildSortableHeader(
                           'INSTITUTION',
                           'institutionName',
@@ -611,6 +606,7 @@ class ParticipantsListScreen extends StatelessWidget {
                           'updatedAt',
                           controller,
                         ),
+                        _buildTableCell('SPOT REG', isHeader: true),
                         _buildTableCell('ACTIONS', isHeader: true),
                       ],
                     ),
@@ -635,12 +631,16 @@ class ParticipantsListScreen extends StatelessWidget {
                           _buildTableCell(
                             '${participant.age} | ${participant.gender}',
                           ),
-                          _buildTableCell(participant.category),
-                          _buildTableCell(participant.standard),
+                          _buildTableCell(
+                            '${participant.category} / ${participant.standard}',
+                          ),
                           _buildTableCell(participant.schoolName),
                           _buildTableCell(participant.yogaMasterName),
                           _buildCreatedCellWidget(participant),
                           _buildUpdatedCellWidget(participant),
+                          _buildTableCell(
+                            participant.isSpotRegistration ? 'Yes' : 'No',
+                          ),
                           _buildActionCell(context, participant, controller),
                         ],
                       );

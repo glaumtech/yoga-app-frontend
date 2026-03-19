@@ -25,6 +25,7 @@ class ParticipantModel {
   final Map<String, String>?
   categoryStatusMap; // {'common': 'Un Assigned', 'special': 'Scored'}
   final String? eventId; // Event ID
+  final bool isSpotRegistration;
 
   ParticipantModel({
     this.id,
@@ -51,6 +52,7 @@ class ParticipantModel {
     this.group,
     this.categoryStatusMap,
     this.eventId,
+    this.isSpotRegistration = false,
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory ParticipantModel.fromJson(Map<String, dynamic> json) {
@@ -145,7 +147,20 @@ class ParticipantModel {
             )
           : null,
       eventId: json['eventId']?.toString(),
+      isSpotRegistration: _parseBool(json['isSpotRegistration']) ??
+          _parseBool(json['is_spot_registration']) ??
+          _parseBool(json['spotRegistration']) ??
+          _parseBool(json['spot_registration']) ??
+          false,
     );
+  }
+
+  static bool? _parseBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is int) return value == 1;
+    if (value is String) return value.toLowerCase() == 'true' || value == '1';
+    return null;
   }
 
   Map<String, dynamic> toJson({bool includeCreatedAt = false}) {
@@ -172,6 +187,7 @@ class ParticipantModel {
       if (group != null) 'group': group,
       if (categoryStatusMap != null) 'categoryStatusMap': categoryStatusMap,
       if (eventId != null) 'eventId': eventId,
+      'isSpotRegistration': isSpotRegistration,
     };
   }
 
@@ -200,6 +216,7 @@ class ParticipantModel {
     String? group,
     Map<String, String>? categoryStatusMap,
     String? eventId,
+    bool? isSpotRegistration,
   }) {
     return ParticipantModel(
       id: id ?? this.id,
@@ -226,6 +243,7 @@ class ParticipantModel {
       group: group ?? this.group,
       categoryStatusMap: categoryStatusMap ?? this.categoryStatusMap,
       eventId: eventId ?? this.eventId,
+      isSpotRegistration: isSpotRegistration ?? this.isSpotRegistration,
     );
   }
 

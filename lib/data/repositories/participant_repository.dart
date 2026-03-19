@@ -465,11 +465,13 @@ class ParticipantRepository {
       print('=== Creating Participant Registration ===');
       print('Registration Data: $dataJsonString');
       print('Has Photo: ${photoXFile != null || photoFile != null}');
-      print('Has Bonafied Certificate: ${bonafiedCertificateXFile != null || bonafiedCertificateFile != null}');
+      print(
+        'Has Bonafied Certificate: ${bonafiedCertificateXFile != null || bonafiedCertificateFile != null}',
+      );
 
       final fullUrl = BaseUrl.baseUrl + EndPoints.participantRegistrationCreate;
       print('Full URL: $fullUrl');
-      
+
       final request = http.MultipartRequest('POST', Uri.parse(fullUrl));
 
       // Add authorization token
@@ -548,7 +550,9 @@ class ParticipantRepository {
       }
 
       // Send request
-      print('Sending multipart request with ${request.fields.length} fields and ${request.files.length} files');
+      print(
+        'Sending multipart request with ${request.fields.length} fields and ${request.files.length} files',
+      );
       print('Request fields: ${request.fields}');
       final streamedResponse = await request.send().timeout(BaseUrl.apiTimeout);
       final response = await http.Response.fromStream(streamedResponse);
@@ -819,7 +823,8 @@ class ParticipantRepository {
   }
 
   /// Get participants for scoring based on filters
-  Future<ApiResponse<ParticipantsForScoringResponse>> getParticipantsForScoring({
+  Future<ApiResponse<ParticipantsForScoringResponse>>
+  getParticipantsForScoring({
     required int competitionId,
     required int juryId,
     int? stageId,

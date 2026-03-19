@@ -95,6 +95,13 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                           isTablet,
                         ),
                         SizedBox(height: isMobile ? 20 : 24),
+                        _buildSpotRegistrationField(
+                          context,
+                          participantController,
+                          isMobile,
+                          isTablet,
+                        ),
+                        SizedBox(height: isMobile ? 20 : 24),
                         _buildCategoryField(
                           context,
                           participantController,
@@ -234,6 +241,13 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
 
                                     SizedBox(height: isMobile ? 20 : 24),
                                     _buildGenderField(
+                                      context,
+                                      participantController,
+                                      isMobile,
+                                      isTablet,
+                                    ),
+                                    SizedBox(height: isMobile ? 20 : 24),
+                                    _buildSpotRegistrationField(
                                       context,
                                       participantController,
                                       isMobile,
@@ -916,6 +930,56 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.gender.value = value;
+                          }
+                        }
+                      : null,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSpotRegistrationField(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(label: 'Spot Registration :', bottomSpacing: 8),
+        Obx(
+          () => Row(
+            children: [
+              Expanded(
+                child: RadioListTile<bool>(
+                  title: const Text('No'),
+                  value: false,
+                  groupValue: controller.isSpotRegistration.value,
+                  onChanged: !controller.isViewMode.value
+                      ? (value) {
+                          if (value != null) {
+                            controller.isSpotRegistration.value = value;
+                          }
+                        }
+                      : null,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              Expanded(
+                child: RadioListTile<bool>(
+                  title: const Text('Yes'),
+                  value: true,
+                  groupValue: controller.isSpotRegistration.value,
+                  onChanged: !controller.isViewMode.value
+                      ? (value) {
+                          if (value != null) {
+                            controller.isSpotRegistration.value = value;
                           }
                         }
                       : null,

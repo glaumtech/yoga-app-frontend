@@ -65,6 +65,7 @@ class ParticipantController extends GetxController {
 
   final Rx<DateTime?> dateOfBirth = Rx<DateTime?>(null);
   final RxString gender = ''.obs;
+  final RxBool isSpotRegistration = false.obs;
   final RxList<String> selectedCategories = <String>[].obs;
   final RxString selectedStage = ''.obs; // Selected stage name
   final RxString standard = ''.obs;
@@ -540,7 +541,18 @@ class ParticipantController extends GetxController {
       createdBy: reg['createdBy']?.toString(),
       updatedBy: reg['updatedBy']?.toString(),
       eventId: reg['competitionId']?.toString(),
+      isSpotRegistration: _parseRegBool(reg['isSpotRegistration']) ||
+          _parseRegBool(reg['is_spot_registration']) ||
+          _parseRegBool(reg['spotRegistration']),
     );
+  }
+
+  bool _parseRegBool(dynamic value) {
+    if (value == null) return false;
+    if (value is bool) return value;
+    if (value is int) return value == 1;
+    if (value is String) return value.toLowerCase() == 'true' || value == '1';
+    return false;
   }
 
   // Sorting methods
@@ -1030,6 +1042,7 @@ class ParticipantController extends GetxController {
     yogaMasterContactController.clear();
     dateOfBirth.value = null;
     gender.value = '';
+    isSpotRegistration.value = false;
     selectedCategories.clear();
     selectedStage.value = '';
     standard.value = '';
@@ -1137,6 +1150,7 @@ class ParticipantController extends GetxController {
       addressController.text = participant.address;
       standard.value = participant.standard;
       gender.value = participant.gender;
+      isSpotRegistration.value = participant.isSpotRegistration;
       dateOfBirth.value = participant.dateOfBirth;
 
       // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
@@ -1313,6 +1327,7 @@ class ParticipantController extends GetxController {
     addressController.text = participant.address;
     standard.value = participant.standard;
     gender.value = participant.gender;
+    isSpotRegistration.value = participant.isSpotRegistration;
     dateOfBirth.value = participant.dateOfBirth;
 
     // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
@@ -1475,7 +1490,7 @@ class ParticipantController extends GetxController {
   ///          CGA001 (Common Girls Stage A, number 001)
   ///          SBA001 (Special Boys Stage A, number 001)
   ///          SGA001 (Special Girls Stage A, number 001)
-  /// 
+  ///
   /// NOTE: This method calls the eventbased API to fetch existing participants.
   /// Currently disabled to avoid unnecessary API calls - backend should generate registration numbers.
   /// Uncomment the call in submitRegistrationForm if frontend generation is needed.
@@ -1490,25 +1505,34 @@ class ParticipantController extends GetxController {
     try {
       // Build prefix: Category + Gender + Stage
       // Category: C = Common, S = Special
-      final categoryPrefix = categoryName.toUpperCase().startsWith('C') ? 'C' : 'S';
-      
+      final categoryPrefix = categoryName.toUpperCase().startsWith('C')
+          ? 'C'
+          : 'S';
+
       // Gender: B = Boy/Male, G = Girl/Female
-      final genderPrefix = gender.toUpperCase().startsWith('M') || gender.toUpperCase() == 'MALE' ? 'B' : 'G';
-      
+      final genderPrefix =
+          gender.toUpperCase().startsWith('M') || gender.toUpperCase() == 'MALE'
+          ? 'B'
+          : 'G';
+
       // Stage: A, B, C, D, E, F (first letter of stage name)
-      final stagePrefix = stageName.isNotEmpty ? stageName[0].toUpperCase() : 'A';
-      
+      final stagePrefix = stageName.isNotEmpty
+          ? stageName[0].toUpperCase()
+          : 'A';
+
       final prefix = '$categoryPrefix$genderPrefix$stagePrefix';
-      
+
       // Fetch existing participants with same competition, category, gender, and stage
       final categoryId = compController.getCategoryIdByName(categoryName);
       final stageId = compController.getStageIdByName(stageName);
-      
+
       if (categoryId == null || stageId == null) {
-        print('Warning: Could not find category or stage ID for registration number generation');
+        print(
+          'Warning: Could not find category or stage ID for registration number generation',
+        );
         return null;
       }
-      
+
       // Create filter to get participants with same competition, category, gender, and stage
       final filter = ParticipantFilterRequest(
         page: 0,
@@ -1517,44 +1541,55 @@ class ParticipantController extends GetxController {
         sortBy: 'registrationNo',
         sortDirection: 'desc',
       );
-      
+
       // Fetch participants
       final response = await _participantRepository.getParticipantsByEventId(
         eventId: competitionId.toString(),
         filter: filter,
       );
-      
+
       if (!response.success || response.data == null) {
-        print('Warning: Could not fetch participants for registration number generation');
+        print(
+          'Warning: Could not fetch participants for registration number generation',
+        );
         // Return first number if we can't fetch
         return '${prefix}001';
       }
-      
+
       final participants = response.data!.participants;
-      
+
       // Filter participants by gender and stage
       final matchingParticipants = participants.where((p) {
-        final matchesGender = p.gender.toUpperCase().startsWith('M') == gender.toUpperCase().startsWith('M') ||
-                             (p.gender.toUpperCase() == 'MALE' && (gender.toUpperCase() == 'MALE' || gender.toUpperCase().startsWith('M'))) ||
-                             (p.gender.toUpperCase() == 'FEMALE' && (gender.toUpperCase() == 'FEMALE' || gender.toUpperCase().startsWith('F')));
-        
+        final matchesGender =
+            p.gender.toUpperCase().startsWith('M') ==
+                gender.toUpperCase().startsWith('M') ||
+            (p.gender.toUpperCase() == 'MALE' &&
+                (gender.toUpperCase() == 'MALE' ||
+                    gender.toUpperCase().startsWith('M'))) ||
+            (p.gender.toUpperCase() == 'FEMALE' &&
+                (gender.toUpperCase() == 'FEMALE' ||
+                    gender.toUpperCase().startsWith('F')));
+
         // Check if participant's stage matches (we need to check by stage name or ID)
         // Since we don't have direct stage info in ParticipantModel, we'll check registration number prefix
-        final matchesStage = p.registrationNo != null && 
-                            p.registrationNo!.length >= 3 &&
-                            p.registrationNo![2] == stagePrefix;
-        
+        final matchesStage =
+            p.registrationNo != null &&
+            p.registrationNo!.length >= 3 &&
+            p.registrationNo![2] == stagePrefix;
+
         return matchesGender && matchesStage;
       }).toList();
-      
+
       // Find the highest registration number
       int maxNumber = 0;
       for (final participant in matchingParticipants) {
-        if (participant.registrationNo != null && 
+        if (participant.registrationNo != null &&
             participant.registrationNo!.startsWith(prefix) &&
             participant.registrationNo!.length > prefix.length) {
           try {
-            final numberPart = participant.registrationNo!.substring(prefix.length);
+            final numberPart = participant.registrationNo!.substring(
+              prefix.length,
+            );
             final number = int.tryParse(numberPart);
             if (number != null && number > maxNumber) {
               maxNumber = number;
@@ -1565,18 +1600,25 @@ class ParticipantController extends GetxController {
           }
         }
       }
-      
+
       // Increment and format
       final nextNumber = maxNumber + 1;
       final formattedNumber = nextNumber.toString().padLeft(3, '0');
-      
+
       return '$prefix$formattedNumber';
     } catch (e) {
       print('Error generating registration number: $e');
       // Return first number on error
-      final categoryPrefix = categoryName.toUpperCase().startsWith('C') ? 'C' : 'S';
-      final genderPrefix = gender.toUpperCase().startsWith('M') || gender.toUpperCase() == 'MALE' ? 'B' : 'G';
-      final stagePrefix = stageName.isNotEmpty ? stageName[0].toUpperCase() : 'A';
+      final categoryPrefix = categoryName.toUpperCase().startsWith('C')
+          ? 'C'
+          : 'S';
+      final genderPrefix =
+          gender.toUpperCase().startsWith('M') || gender.toUpperCase() == 'MALE'
+          ? 'B'
+          : 'G';
+      final stagePrefix = stageName.isNotEmpty
+          ? stageName[0].toUpperCase()
+          : 'A';
       return '${categoryPrefix}${genderPrefix}${stagePrefix}001';
     }
   }
@@ -1715,7 +1757,7 @@ class ParticipantController extends GetxController {
       'groupId': groupId,
       'yogaTeacherCell': yogaMasterContactController.text.trim(),
       'paymentMode': 'ONLINE', // Default payment mode
-      'isSpotRegistration': false,
+      'isSpotRegistration': isSpotRegistration.value,
       // Registration number will be auto-generated by backend based on competition, category, gender, and stage
     };
 
