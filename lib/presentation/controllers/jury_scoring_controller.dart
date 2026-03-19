@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/jury_assignment_model.dart';
 import '../../data/repositories/user_management_repository.dart';
 import '../../data/repositories/participant_repository.dart';
+import '../../routes/app_routes.dart';
 import 'user_management_controller.dart';
 
 class JuryScoringController extends GetxController {
@@ -30,6 +32,20 @@ class JuryScoringController extends GetxController {
   // Score controllers for each participant and asana
   // Format: Map<participantId, Map<asanaNumber, TextEditingController>>
   final Map<String, Map<int, TextEditingController>> scoreControllers = {};
+
+  // Score values for each participant and asana (whole number and decimal)
+  // Format: Map<participantId, Map<asanaNumber, Map<String, int>>>
+  // where inner map has 'whole' and 'decimal' keys
+  // Using regular Map with RxInt trigger for reactivity
+  final Map<String, Map<int, Map<String, int>>> scoreValues = {};
+  final RxInt scoreUpdateTrigger = 0.obs; // Trigger for reactivity
+
+  // Derived flags for UI enable/disable states
+  final RxBool hasScoresEntered = false.obs;
+  final RxBool canSubmitScores = false.obs;
+
+  // Current asana being scored (1-5)
+  final RxInt currentAsana = 1.obs;
 
   // Jury submission status
   final RxMap<String, bool> jurySubmissionStatus =
@@ -57,8 +73,13 @@ class JuryScoringController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // Don't load data automatically - wait for explicit call
-    // This prevents loading with stale user data
+    // Don't load data in onInit - wait for onReady so widget is built
+  }
+
+  @override
+  void onReady() {
+    super.onReady();
+    resetAndLoadData();
   }
 
   // Method to initialize/reset controller data
@@ -99,6 +120,10 @@ class JuryScoringController extends GetxController {
 
     // Clear error messages
     errorMessage.value = '';
+
+    // Reset derived flags
+    hasScoresEntered.value = false;
+    canSubmitScores.value = false;
   }
 
   Future<void> loadInitialData() async {
@@ -145,6 +170,29 @@ class JuryScoringController extends GetxController {
     }
   }
 
+  // Remaining participants count
+  final RxInt remainingCount = 0.obs;
+
+  // Helper method to check if all dropdowns are selected and call API
+  void _checkAndCallApiIfAllSelected() {
+    // Only call API if all three dropdowns are selected
+    if (selectedStage.value.isNotEmpty &&
+        selectedCategory.value.isNotEmpty &&
+        selectedGroup.value.isNotEmpty) {
+      print(
+        'All dropdowns selected - Stage: ${selectedStage.value}, Category: ${selectedCategory.value}, Group: ${selectedGroup.value} - Calling for-scoring API',
+      );
+      loadParticipantsForSelection();
+    } else {
+      // Clear participants if not all are selected
+      currentParticipants.clear();
+      remainingCount.value = 0;
+      print(
+        'Not all dropdowns selected - Stage: ${selectedStage.value}, Category: ${selectedCategory.value}, Group: ${selectedGroup.value} - Skipping API call',
+      );
+    }
+  }
+
   // Set selected stage
   void setSelectedStage(String stage) {
     selectedStage.value = stage;
@@ -168,19 +216,45 @@ class JuryScoringController extends GetxController {
       selectedGroup.value = '';
     }
 
-    // Don't call API - wait for search button click
+    // Clear participants if stage is cleared
+    if (stage.isEmpty) {
+      currentParticipants.clear();
+      remainingCount.value = 0;
+      return;
+    }
+
+    // Check if all dropdowns are selected, then call API
+    _checkAndCallApiIfAllSelected();
   }
 
   // Set selected category
   void setSelectedCategory(String category) {
     selectedCategory.value = category;
-    // Don't call API - wait for search button click
+
+    // Clear participants if category is cleared
+    if (category.isEmpty) {
+      currentParticipants.clear();
+      remainingCount.value = 0;
+      return;
+    }
+
+    // Check if all dropdowns are selected, then call API
+    _checkAndCallApiIfAllSelected();
   }
 
   // Set selected group
   void setSelectedGroup(String group) {
     selectedGroup.value = group;
-    // Don't call API - wait for search button click
+
+    // Clear participants if group is cleared
+    if (group.isEmpty) {
+      currentParticipants.clear();
+      remainingCount.value = 0;
+      return;
+    }
+
+    // Check if all dropdowns are selected, then call API
+    _checkAndCallApiIfAllSelected();
   }
 
   // Search participants based on current filter selections
@@ -194,7 +268,10 @@ class JuryScoringController extends GetxController {
   }
 
   // Load participants based on current selections
-  Future<void> loadParticipantsForSelection() async {
+  // `replaceParticipantIdsOverride` is only used for refresh/reallocate flows.
+  Future<void> loadParticipantsForSelection({
+    List<int>? replaceParticipantIdsOverride,
+  }) async {
     // Get competition and jury info
     if (juryAssignment.value == null) {
       currentParticipants.clear();
@@ -216,11 +293,16 @@ class JuryScoringController extends GetxController {
     }
 
     isLoading.value = true;
+    errorMessage.value = ''; // Clear previous errors
     try {
       // Map stage/category/group names to IDs
       int? stageId;
       int? categoryId;
       int? groupId;
+
+      print(
+        'Loading participants - Stage: ${selectedStage.value}, Category: ${selectedCategory.value}, Group: ${selectedGroup.value}',
+      );
 
       // Get stage ID (required)
       final stageAssignment = availableStages.firstWhereOrNull(
@@ -236,79 +318,115 @@ class JuryScoringController extends GetxController {
 
       // Get category ID (optional)
       if (selectedCategory.value.isNotEmpty) {
+        print(
+          'Available categories: ${availableCategories.map((c) => c.categoryName).toList()}',
+        );
+        print('Selected category: ${selectedCategory.value}');
         final categoryAssignment = availableCategories.firstWhereOrNull(
           (c) => c.categoryName == selectedCategory.value,
         );
         categoryId = categoryAssignment?.id;
+        print('Category ID found: $categoryId');
       }
 
       // Get group ID
       if (selectedGroup.value.isNotEmpty) {
+        print(
+          'Available groups: ${availableGroups.map((g) => g.groupName).toList()}',
+        );
+        print('Selected group: ${selectedGroup.value}');
         final groupAssignment = availableGroups.firstWhereOrNull(
           (g) => g.groupName == selectedGroup.value,
         );
         groupId = groupAssignment?.id;
+        print('Group ID found: $groupId');
       } else {
         groupId = null;
       }
 
-      // Get unselected participant IDs (those with unchecked checkboxes)
-      final List<int> unselectedParticipantIds = [];
-      for (final participant in currentParticipants) {
-        if (participant.id != null) {
-          final isSelected =
-              selectedParticipantCheckboxes[participant.id!] ?? false;
-          if (!isSelected) {
-            final participantId = int.tryParse(participant.id!);
-            if (participantId != null) {
-              unselectedParticipantIds.add(participantId);
-            }
-          }
-        }
-      }
+      // Only refresh flow should send replace IDs.
+      // Normal auto-load (on stage/category/group change) should NOT send replace IDs.
+      final List<int>? replaceParticipantIds = replaceParticipantIdsOverride;
 
       // Call API to get participants for scoring
+      print(
+        'Calling API with - CompetitionId: $competitionId, JuryId: $juryId, StageId: $stageId, CategoryId: $categoryId, GroupId: $groupId',
+      );
       final response = await _participantRepository.getParticipantsForScoring(
         competitionId: competitionId,
         juryId: juryId,
         stageId: stageId,
         categoryId: categoryId,
         groupId: groupId,
-        replaceParticipantIds: unselectedParticipantIds.isNotEmpty
-            ? unselectedParticipantIds
+        replaceParticipantIds:
+            replaceParticipantIds != null && replaceParticipantIds.isNotEmpty
+            ? replaceParticipantIds
             : null,
       );
 
-      if (response.success && response.data != null) {
-        // Take first 3 participants (A, B, C)
-        currentParticipants.value = response.data!.take(3).toList();
+      print(
+        'API Response - Success: ${response.success}, Participants count: ${response.data?.participants.length ?? 0}',
+      );
 
-        // Initialize score controllers for new participants (5 asanas each)
+      if (response.success && response.data != null) {
+        // Extract participants and remaining count
+        final participants = response.data!.participants;
+        print('Loaded ${participants.length} participants');
+        // Take first 3 participants (A, B, C)
+        currentParticipants.value = participants.take(3).toList();
+
+        // Update remaining count if available
+        if (response.data!.remainingCount != null) {
+          remainingCount.value = response.data!.remainingCount!;
+        } else {
+          remainingCount.value = 0;
+        }
+
+        // Initialize score controllers and values for new participants (5 asanas each)
         for (final participant in currentParticipants) {
           if (participant.id != null) {
             if (!scoreControllers.containsKey(participant.id)) {
               scoreControllers[participant.id!] = {};
             }
-            // Initialize controllers for all 5 asanas
+            if (!scoreValues.containsKey(participant.id)) {
+              scoreValues[participant.id!] = {};
+            }
+            // Initialize controllers and score values for all 5 asanas
             for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
               if (!scoreControllers[participant.id!]!.containsKey(asanaNum)) {
                 scoreControllers[participant.id!]![asanaNum] =
                     TextEditingController();
               }
+              if (!scoreValues[participant.id!]!.containsKey(asanaNum)) {
+                scoreValues[participant.id!]![asanaNum] = {
+                  'whole': 0,
+                  'decimal': 0,
+                };
+              }
             }
-            // Initialize checkbox state - select all by default
-            selectedParticipantCheckboxes[participant.id!] = true;
+            // Initialize checkbox state - UNSELECTED by default
+            selectedParticipantCheckboxes[participant.id!] = false;
           }
         }
+        // Reset to first asana when new participants are loaded
+        currentAsana.value = 1;
+
+        // Reset derived flags for the new queue
+        hasScoresEntered.value = false;
+        canSubmitScores.value = false;
       } else {
         currentParticipants.clear();
         errorMessage.value = response.message ?? 'Failed to load participants';
+        hasScoresEntered.value = false;
+        canSubmitScores.value = false;
       }
     } catch (e, stackTrace) {
       print('Error in loadParticipantsForSelection: $e');
       print('Stack trace: $stackTrace');
       errorMessage.value = 'Error loading participants: ${e.toString()}';
       currentParticipants.clear();
+      hasScoresEntered.value = false;
+      canSubmitScores.value = false;
     } finally {
       isLoading.value = false;
     }
@@ -320,6 +438,225 @@ class JuryScoringController extends GetxController {
     selectedParticipantCheckboxes[participantId] = !currentValue;
   }
 
+  // Set score for a participant's asana using whole number and decimal
+  void setAsanaScore(
+    String participantId,
+    int asanaNum,
+    int whole,
+    int decimal,
+  ) {
+    if (!scoreValues.containsKey(participantId)) {
+      scoreValues[participantId] = {};
+    }
+    if (!scoreValues[participantId]!.containsKey(asanaNum)) {
+      scoreValues[participantId]![asanaNum] = {'whole': 0, 'decimal': 0};
+    }
+    scoreValues[participantId]![asanaNum]!['whole'] = whole;
+    scoreValues[participantId]![asanaNum]!['decimal'] = decimal;
+    // Trigger reactivity by updating the trigger
+    scoreUpdateTrigger.value = scoreUpdateTrigger.value + 1;
+
+    // Update derived flags for UI
+    _recomputeScoreFlags();
+
+    // Auto move to next asana if:
+    // - user is scoring the currently visible asana
+    // - all participants have a valid score for this asana
+    // - next asana still has missing scores
+    if (asanaNum == currentAsana.value) {
+      _autoAdvanceIfReady();
+    }
+
+    // Update text controller with formatted score
+    // Decimal values: 25 = 0.25, 50 = 0.5, 75 = 0.75
+    final score = whole + (decimal / 100);
+    final controller = scoreControllers[participantId]?[asanaNum];
+    if (controller != null) {
+      // Format to show 1-2 decimal places (e.g., 6.5 or 6.75)
+      if (decimal == 0) {
+        controller.text = whole.toString();
+      } else if (decimal == 50) {
+        controller.text = score.toStringAsFixed(1); // 6.5
+      } else {
+        controller.text = score.toStringAsFixed(2); // 6.25 or 6.75
+      }
+    }
+  }
+
+  void _recomputeScoreFlags() {
+    // Any score entered = any asana whole between 3..10 for any participant
+    bool any = false;
+    bool all = currentParticipants.isNotEmpty;
+
+    for (final participant in currentParticipants) {
+      final pid = participant.id;
+      if (pid == null) continue;
+
+      final participantScores = scoreValues[pid];
+      if (participantScores == null) {
+        all = false;
+        continue;
+      }
+
+      for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
+        final score = participantScores[asanaNum];
+        final whole = score?['whole'] ?? 0;
+
+        if (whole >= 3 && whole <= 10) {
+          any = true;
+        }
+
+        if (whole < 3 || whole > 10) {
+          all = false;
+        }
+      }
+    }
+
+    hasScoresEntered.value = any;
+    canSubmitScores.value = all;
+  }
+
+  void _autoAdvanceIfReady() {
+    if (currentParticipants.isEmpty) return;
+    if (currentAsana.value >= numberOfAsanas) return;
+
+    // Check current asana is fully scored (whole >= 3)
+    for (final participant in currentParticipants) {
+      if (participant.id == null) continue;
+      final score = getAsanaScore(participant.id!, currentAsana.value);
+      final whole = score?['whole'] ?? 0;
+      if (whole < 3) {
+        return;
+      }
+    }
+
+    // Only advance if the next asana has at least one missing score
+    final nextAsanaNum = currentAsana.value + 1;
+    bool nextHasMissing = false;
+    for (final participant in currentParticipants) {
+      if (participant.id == null) continue;
+      final score = getAsanaScore(participant.id!, nextAsanaNum);
+      final whole = score?['whole'] ?? 0;
+      if (whole < 3) {
+        nextHasMissing = true;
+        break;
+      }
+    }
+    if (!nextHasMissing) return;
+
+    // Small delay so the UI updates the last selected score before switching
+    Future.delayed(const Duration(milliseconds: 250), () {
+      // Don't advance if user navigated manually in the meantime
+      if (currentAsana.value + 1 == nextAsanaNum) {
+        currentAsana.value = nextAsanaNum;
+      }
+    });
+  }
+
+  // Get score for a participant's asana
+  Map<String, int>? getAsanaScore(String participantId, int asanaNum) {
+    return scoreValues[participantId]?[asanaNum];
+  }
+
+  // Get formatted score string (e.g., "6.5", "6.25", "6.75")
+  String getFormattedScore(String participantId, int asanaNum) {
+    final score = getAsanaScore(participantId, asanaNum);
+    if (score == null || (score['whole'] == 0 && score['decimal'] == 0)) {
+      return '';
+    }
+    final whole = score['whole'] ?? 0;
+    final decimal = score['decimal'] ?? 0;
+    // Decimal values: 25 = 0.25, 50 = 0.5, 75 = 0.75
+    final totalScore = whole + (decimal / 100);
+    // Format to show 1-2 decimal places (e.g., 6.5 or 6.75)
+    if (decimal == 0) {
+      return whole.toString();
+    } else if (decimal == 50) {
+      return totalScore.toStringAsFixed(1); // 6.5
+    } else {
+      return totalScore.toStringAsFixed(2); // 6.25 or 6.75
+    }
+  }
+
+  // Move to next asana
+  void nextAsana() {
+    if (currentAsana.value < numberOfAsanas) {
+      currentAsana.value++;
+    }
+  }
+
+  // Move to previous asana
+  void previousAsana() {
+    if (currentAsana.value > 1) {
+      currentAsana.value--;
+    }
+  }
+
+  // Check if current asana has a score
+  bool hasCurrentAsanaScore() {
+    for (final participant in currentParticipants) {
+      if (participant.id != null) {
+        final score = getAsanaScore(participant.id!, currentAsana.value);
+        if (score == null || (score['whole'] == 0 && score['decimal'] == 0)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Check if all participants have scores for all 5 asanas
+  bool hasAllAsanasScored() {
+    // Force reactivity for UI (scoreValues is a plain Map)
+    scoreUpdateTrigger.value;
+    if (currentParticipants.isEmpty) return false;
+
+    for (final participant in currentParticipants) {
+      if (participant.id != null) {
+        final participantScores = scoreValues[participant.id!];
+        if (participantScores == null) return false;
+
+        // Check all 5 asanas
+        for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
+          final score = participantScores[asanaNum];
+          if (score == null) return false;
+
+          final whole = score['whole'] ?? 0;
+          // A valid score must have whole number >= 3
+          if (whole < 3 || whole > 10) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Check if any participant has any score entered (to disable filters)
+  bool hasAnyScoresEntered() {
+    // Force reactivity for UI (scoreValues is a plain Map)
+    scoreUpdateTrigger.value;
+    if (currentParticipants.isEmpty) return false;
+
+    for (final participant in currentParticipants) {
+      if (participant.id != null) {
+        final participantScores = scoreValues[participant.id!];
+        if (participantScores != null) {
+          // Check if any asana has a valid score (whole >= 3)
+          for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
+            final score = participantScores[asanaNum];
+            if (score != null) {
+              final whole = score['whole'] ?? 0;
+              // A valid score must have whole number >= 3
+              if (whole >= 3 && whole <= 10) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   // Refresh and reallocate from queue based on selected checkboxes
   Future<void> refreshAndReallocate() async {
     try {
@@ -328,15 +665,30 @@ class JuryScoringController extends GetxController {
         return;
       }
 
-    // Don't reload assignments - just reload participants with unselected IDs
-    // Reload participants based on current filters and unselected participant IDs
-    await loadParticipantsForSelection();
+      // Only selected participant IDs should be passed for replacement
+      final List<int> selectedParticipantIds = [];
+      for (final participant in currentParticipants) {
+        if (participant.id == null) continue;
+        final isSelected =
+            selectedParticipantCheckboxes[participant.id!] ?? false;
+        if (isSelected) {
+          final idInt = int.tryParse(participant.id!);
+          if (idInt != null) {
+            selectedParticipantIds.add(idInt);
+          }
+        }
+      }
+
+      // Reload participants based on current filters and selected participant IDs
+      await loadParticipantsForSelection(
+        replaceParticipantIdsOverride: selectedParticipantIds,
+      );
 
       _showSnackbar(
         title: 'Success',
         message: 'Participants refreshed successfully',
-      backgroundColor: Colors.green,
-    );
+        backgroundColor: Colors.green,
+      );
     } catch (e, stackTrace) {
       print('Error in refreshAndReallocate: $e');
       print('Stack trace: $stackTrace');
@@ -351,271 +703,352 @@ class JuryScoringController extends GetxController {
 
   // Submit scores
   Future<void> submitScores() async {
+    print('=== submitScores() called ===');
     // Prevent multiple simultaneous submissions
     if (isLoading.value) {
+      print('Already loading, returning early');
       return;
     }
 
-    // Validate that all required fields are filled
-    if (selectedStage.value.isEmpty ||
-        selectedCategory.value.isEmpty ||
-        selectedGroup.value.isEmpty) {
-      _showSnackbar(
-        title: 'Validation Error',
-        message: 'Please select Stage, Category, and Group',
-        backgroundColor: Colors.red,
-      );
-      return;
-    }
-
-    if (currentParticipants.isEmpty) {
-      _showSnackbar(
-        title: 'Validation Error',
-        message: 'No participants to score',
-        backgroundColor: Colors.red,
-      );
-      return;
-    }
-
-    // Validate that all participants have scores for all 5 asanas
-    bool allScoresFilled = true;
-    String? missingScoreInfo;
-    for (final participant in currentParticipants) {
-      if (participant.id != null) {
-        final participantControllers = scoreControllers[participant.id!];
-        if (participantControllers == null) {
-          allScoresFilled = false;
-          missingScoreInfo =
-              'Missing controllers for ${participant.participantName}';
-          break;
-        }
-        // Check all 5 asanas
-        for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
-          final controller = participantControllers[asanaNum];
-          if (controller == null || controller.text.trim().isEmpty) {
-            allScoresFilled = false;
-            missingScoreInfo =
-                'Missing score for ${participant.participantName} - ASANA $asanaNum';
-            break;
-          }
-          // Validate that the score is a valid number
-          final scoreText = controller.text.trim();
-          final score = double.tryParse(scoreText);
-          if (score == null) {
-            allScoresFilled = false;
-            missingScoreInfo =
-                'Invalid score for ${participant.participantName} - ASANA $asanaNum (must be a number)';
-            break;
-          }
-        }
-        if (!allScoresFilled) break;
-      }
-    }
-
-    if (!allScoresFilled) {
-      _showSnackbar(
-        title: 'Validation Error',
-        message: missingScoreInfo ??
-            'Please enter scores for all participants and all asanas',
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 4),
-      );
-      return;
-    }
-
-    // Get competition and jury info
-    if (juryAssignment.value == null) {
-      _showSnackbar(
-        title: 'Error',
-        message: 'Jury assignments not loaded',
-        backgroundColor: Colors.red,
-      );
-      return;
-    }
-
-    final competitionId = juryAssignment.value!.competitionId;
-    final juryId = juryAssignment.value!.juryId;
-
-    if (competitionId == 0 || juryId == 0) {
-      _showSnackbar(
-        title: 'Error',
-        message: 'Invalid competition or jury ID',
-        backgroundColor: Colors.red,
-      );
-      return;
-    }
-
-    // Get stage, category, and group IDs
-    final stageAssignment = availableStages.firstWhereOrNull(
-      (s) => s.stageName == selectedStage.value,
-    );
-    final categoryAssignment = availableCategories.firstWhereOrNull(
-      (c) => c.categoryName == selectedCategory.value,
-    );
-    final groupAssignment = availableGroups.firstWhereOrNull(
-      (g) => g.groupName == selectedGroup.value,
-    );
-
-    if (stageAssignment == null ||
-        categoryAssignment == null ||
-        groupAssignment == null) {
-      _showSnackbar(
-        title: 'Error',
-        message: 'Invalid stage, category, or group selection',
-        backgroundColor: Colors.red,
-      );
-      return;
-    }
-
-    final stageId = stageAssignment.id;
-    final categoryId = categoryAssignment.id;
-    final groupId = groupAssignment.id;
-
+    print('Setting isLoading to true');
     isLoading.value = true;
-    errorMessage.value = '';
 
     try {
-      print('=== Starting Score Submission ===');
-      print('Competition ID: $competitionId');
-      print('Jury ID: $juryId');
-      print('Stage ID: $stageId');
-      print('Category ID: $categoryId');
-      print('Group ID: $groupId');
-      print('Number of participants: ${currentParticipants.length}');
+      // Validate that all required fields are filled
+      print('Checking stage/category/group selection...');
+      print('  Stage: ${selectedStage.value}');
+      print('  Category: ${selectedCategory.value}');
+      print('  Group: ${selectedGroup.value}');
 
-      // Build participant scores array in the new format
-      final List<Map<String, dynamic>> participantScoresList = [];
-
-      for (final participant in currentParticipants) {
-        if (participant.id == null) {
-          print('Warning: Participant ${participant.participantName} has no ID, skipping');
-          continue;
-        }
-
-        final participantControllers = scoreControllers[participant.id!];
-        if (participantControllers == null) {
-          print('Warning: No controllers found for participant ${participant.id}, skipping');
-          continue;
-        }
-
-        // Parse participant registration ID
-        final participantRegistrationId = int.tryParse(participant.id!);
-        if (participantRegistrationId == null) {
-          print('Warning: Invalid participant ID format: ${participant.id}, skipping');
-          continue;
-        }
-
-        // Build asana scores array for all 5 asanas
-        // Since validation passed, all scores should be present and valid
-        final List<Map<String, dynamic>> asanaScores = [];
-        for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
-          final controller = participantControllers[asanaNum];
-          if (controller == null || controller.text.trim().isEmpty) {
-            print('Error: Missing score for participant ${participant.id} - ASANA $asanaNum');
-            isLoading.value = false;
-            _showSnackbar(
-              title: 'Error',
-              message: 'Missing score for ${participant.participantName} - ASANA $asanaNum',
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
-            );
-            return;
-          }
-
-          final scoreText = controller.text.trim();
-          final score = double.tryParse(scoreText);
-          if (score == null) {
-            print('Error: Invalid score format for participant ${participant.id} - ASANA $asanaNum: $scoreText');
-            isLoading.value = false;
-            _showSnackbar(
-              title: 'Error',
-              message: 'Invalid score for ${participant.participantName} - ASANA $asanaNum: $scoreText',
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
-            );
-            return;
-          }
-
-          asanaScores.add({'asanaName': 'ASANA $asanaNum', 'score': score});
-        }
-
-        // Add participant score entry
-        participantScoresList.add({
-          'participantRegistrationId': participantRegistrationId,
-          'asanaScores': asanaScores,
-        });
-        print('Added scores for participant $participantRegistrationId with ${asanaScores.length} asanas');
-      }
-
-      if (participantScoresList.isEmpty) {
+      if (selectedStage.value.isEmpty ||
+          selectedCategory.value.isEmpty ||
+          selectedGroup.value.isEmpty) {
+        print('Validation failed: Missing stage/category/group');
         isLoading.value = false;
-        print('Error: No valid scores to submit after processing');
         _showSnackbar(
-          title: 'Error',
-          message: 'No valid scores to submit',
+          title: 'Validation Error',
+          message: 'Please select Stage, Category, and Group',
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
         );
         return;
       }
 
-      print('Total participants to submit: ${participantScoresList.length}');
-      print('Request payload: ${jsonEncode(participantScoresList)}');
+      print('Checking participants...');
+      print('  Participants count: ${currentParticipants.length}');
 
-      // Call API to submit all scores in bulk
-      print('Calling submitBulkScores API...');
-      final response = await _participantRepository.submitBulkScores(
-        competitionId: competitionId,
-        juryId: juryId,
-        stageId: stageId,
-        categoryId: categoryId,
-        groupId: groupId,
-        participantScores: participantScoresList,
+      if (currentParticipants.isEmpty) {
+        print('Validation failed: No participants');
+        isLoading.value = false;
+        _showSnackbar(
+          title: 'Validation Error',
+          message: 'No participants to score',
+          backgroundColor: Colors.red,
+        );
+        return;
+      }
+
+      // Validate that all participants have scores for all 5 asanas
+      bool allScoresFilled = true;
+      String? missingScoreInfo;
+      print('=== Validating Scores ===');
+      print('Number of participants: ${currentParticipants.length}');
+
+      for (final participant in currentParticipants) {
+        if (participant.id != null) {
+          print(
+            'Checking participant: ${participant.participantName} (ID: ${participant.id})',
+          );
+          final participantScores = scoreValues[participant.id!];
+          if (participantScores == null) {
+            print('  - No scores found for participant');
+            allScoresFilled = false;
+            missingScoreInfo =
+                'Missing scores for ${participant.participantName}';
+            break;
+          }
+          print('  - Found scores for ${participantScores.length} asanas');
+          // Check all 5 asanas
+          for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
+            final score = participantScores[asanaNum];
+            if (score == null) {
+              print('  - Missing score for ASANA $asanaNum');
+              allScoresFilled = false;
+              missingScoreInfo =
+                  'Missing score for ${participant.participantName} - ASANA $asanaNum';
+              break;
+            }
+            // Validate that the score is within valid range
+            final whole = score['whole'] ?? 0;
+            final decimal = score['decimal'] ?? 0;
+            print('  - ASANA $asanaNum: whole=$whole, decimal=$decimal');
+            // A valid score must have whole number >= 3
+            if (whole < 3 || whole > 10) {
+              print('  - Invalid whole number: $whole (must be 3-10)');
+              allScoresFilled = false;
+              missingScoreInfo =
+                  'Missing or invalid score for ${participant.participantName} - ASANA $asanaNum (whole number must be 3-10, current: $whole)';
+              break;
+            }
+          }
+          if (!allScoresFilled) break;
+        }
+      }
+
+      print('Validation result: allScoresFilled=$allScoresFilled');
+
+      if (!allScoresFilled) {
+        print('Validation failed: $missingScoreInfo');
+        _showSnackbar(
+          title: 'Validation Error',
+          message:
+              missingScoreInfo ??
+              'Please enter scores for all participants and all asanas',
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        );
+        isLoading.value = false;
+        return;
+      }
+
+      print('Validation passed! Proceeding to API call...');
+
+      // Get competition and jury info
+      if (juryAssignment.value == null) {
+        isLoading.value = false;
+        _showSnackbar(
+          title: 'Error',
+          message: 'Jury assignments not loaded',
+          backgroundColor: Colors.red,
+        );
+        return;
+      }
+
+      final competitionId = juryAssignment.value!.competitionId;
+      final juryId = juryAssignment.value!.juryId;
+
+      if (competitionId == 0 || juryId == 0) {
+        isLoading.value = false;
+        _showSnackbar(
+          title: 'Error',
+          message: 'Invalid competition or jury ID',
+          backgroundColor: Colors.red,
+        );
+        return;
+      }
+
+      // Get stage, category, and group IDs
+      final stageAssignment = availableStages.firstWhereOrNull(
+        (s) => s.stageName == selectedStage.value,
+      );
+      final categoryAssignment = availableCategories.firstWhereOrNull(
+        (c) => c.categoryName == selectedCategory.value,
+      );
+      final groupAssignment = availableGroups.firstWhereOrNull(
+        (g) => g.groupName == selectedGroup.value,
       );
 
-      print('API Response - Success: ${response.success}');
-      print('API Response - Message: ${response.message}');
-      print('API Response - Status Code: ${response.statusCode}');
-
-      if (response.success) {
-        print('Submission successful!');
-        // Mark current jury as submitted
-        try {
-          final userController = Get.find<UserManagementController>();
-          final currentUser = userController.currentUser.value;
-          if (currentUser?.id != null) {
-            final currentUserId = currentUser!.id.toString();
-            jurySubmissionStatus[currentUserId] = true;
-          }
-        } catch (e) {
-          // Continue even if we can't mark submission status
-        }
-
-        // Clear current scores for all participants and asanas
-        for (final participantControllers in scoreControllers.values) {
-          for (final controller in participantControllers.values) {
-            controller.clear();
-          }
-        }
-
-        // Reload participants list based on current filters
-        try {
-        await loadParticipantsForSelection();
-        } catch (e) {
-          // Log error but don't fail the submission
-          print('Error reloading participants after submission: $e');
-        }
-
+      if (stageAssignment == null ||
+          categoryAssignment == null ||
+          groupAssignment == null) {
+        isLoading.value = false;
         _showSnackbar(
-          title: 'Success',
-          message: response.message ?? 'Scores submitted successfully',
-          backgroundColor: Colors.green,
+          title: 'Error',
+          message: 'Invalid stage, category, or group selection',
+          backgroundColor: Colors.red,
         );
-      } else {
-        print('Submission failed!');
-        print('Error message: ${response.message}');
-        print('Status code: ${response.statusCode}');
-        errorMessage.value = response.message ?? 'Failed to submit scores';
+        return;
+      }
+
+      final stageId = stageAssignment.id;
+      final categoryId = categoryAssignment.id;
+      final groupId = groupAssignment.id;
+
+      // isLoading.value is already set at the beginning of the method
+      errorMessage.value = '';
+
+      try {
+        print('=== Starting Score Submission ===');
+        print('Competition ID: $competitionId');
+        print('Jury ID: $juryId');
+        print('Stage ID: $stageId');
+        print('Category ID: $categoryId');
+        print('Group ID: $groupId');
+        print('Number of participants: ${currentParticipants.length}');
+
+        // Build participant scores array in the new format
+        final List<Map<String, dynamic>> participantScoresList = [];
+
+        for (final participant in currentParticipants) {
+          if (participant.id == null) {
+            print(
+              'Warning: Participant ${participant.participantName} has no ID, skipping',
+            );
+            continue;
+          }
+
+          final participantScores = scoreValues[participant.id!];
+          if (participantScores == null) {
+            print(
+              'Warning: No scores found for participant ${participant.id}, skipping',
+            );
+            continue;
+          }
+
+          // Parse participant registration ID
+          final participantRegistrationId = int.tryParse(participant.id!);
+          if (participantRegistrationId == null) {
+            print(
+              'Warning: Invalid participant ID format: ${participant.id}, skipping',
+            );
+            continue;
+          }
+
+          // Build asana scores array for all 5 asanas
+          // Since validation passed, all scores should be present and valid
+          final List<Map<String, dynamic>> asanaScores = [];
+          for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
+            final score = participantScores[asanaNum];
+            if (score == null) {
+              print(
+                'Error: Missing score for participant ${participant.id} - ASANA $asanaNum',
+              );
+              isLoading.value = false;
+              _showSnackbar(
+                title: 'Error',
+                message:
+                    'Missing score for ${participant.participantName} - ASANA $asanaNum',
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              );
+              return;
+            }
+
+            final whole = score['whole'] ?? 0;
+            final decimal = score['decimal'] ?? 0;
+
+            // Validate whole number is in valid range
+            if (whole < 3 || whole > 10) {
+              print(
+                'Error: Invalid score for participant ${participant.id} - ASANA $asanaNum (whole: $whole)',
+              );
+              isLoading.value = false;
+              _showSnackbar(
+                title: 'Error',
+                message:
+                    'Invalid score for ${participant.participantName} - ASANA $asanaNum (whole number must be 3-10)',
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              );
+              return;
+            }
+
+            // Decimal values: 25 = 0.25, 50 = 0.5, 75 = 0.75
+            final totalScore = whole + (decimal / 100);
+
+            asanaScores.add({
+              'asanaName': 'ASANA $asanaNum',
+              'score': totalScore,
+            });
+          }
+
+          // Add participant score entry
+          participantScoresList.add({
+            'participantRegistrationId': participantRegistrationId,
+            'asanaScores': asanaScores,
+          });
+          print(
+            'Added scores for participant $participantRegistrationId with ${asanaScores.length} asanas',
+          );
+        }
+
+        if (participantScoresList.isEmpty) {
+          isLoading.value = false;
+          print('Error: No valid scores to submit after processing');
+          _showSnackbar(
+            title: 'Error',
+            message: 'No valid scores to submit',
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          );
+          return;
+        }
+
+        print('Total participants to submit: ${participantScoresList.length}');
+        print('Request payload: ${jsonEncode(participantScoresList)}');
+
+        // Call API to submit all scores in bulk
+        print('=== CALLING submitBulkScores API ===');
+        print('CompetitionId: $competitionId, JuryId: $juryId');
+        print('StageId: $stageId, CategoryId: $categoryId, GroupId: $groupId');
+
+        final response = await _participantRepository.submitBulkScores(
+          competitionId: competitionId,
+          juryId: juryId,
+          stageId: stageId,
+          categoryId: categoryId,
+          groupId: groupId,
+          participantScores: participantScoresList,
+        );
+
+        print('API Response - Success: ${response.success}');
+        print('API Response - Message: ${response.message}');
+        print('API Response - Status Code: ${response.statusCode}');
+
+        if (response.success) {
+          print('Submission successful!');
+          // Mark current jury as submitted
+          try {
+            final userController = Get.find<UserManagementController>();
+            final currentUser = userController.currentUser.value;
+            if (currentUser?.id != null) {
+              final currentUserId = currentUser!.id.toString();
+              jurySubmissionStatus[currentUserId] = true;
+            }
+          } catch (e) {
+            // Continue even if we can't mark submission status
+          }
+
+          // Clear current scores for all participants and asanas
+          for (final participantControllers in scoreControllers.values) {
+            for (final controller in participantControllers.values) {
+              controller.clear();
+            }
+          }
+          // Clear score values map to re-enable filters
+          scoreValues.clear();
+          scoreUpdateTrigger.value = 0;
+          hasScoresEntered.value = false;
+          canSubmitScores.value = false;
+
+          // Reload participants list based on current filters
+          try {
+            await loadParticipantsForSelection();
+          } catch (e) {
+            // Log error but don't fail the submission
+            print('Error reloading participants after submission: $e');
+          }
+
+          _showSnackbar(
+            title: 'Success',
+            message: response.message ?? 'Scores submitted successfully',
+            backgroundColor: Colors.green,
+          );
+        } else {
+          print('Submission failed!');
+          print('Error message: ${response.message}');
+          print('Status code: ${response.statusCode}');
+          errorMessage.value = response.message ?? 'Failed to submit scores';
+          _showSnackbar(
+            title: 'Error',
+            message: errorMessage.value,
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          );
+        }
+      } catch (e, stackTrace) {
+        print('EXCEPTION in API call: $e');
+        print('Stack trace: $stackTrace');
+        errorMessage.value = 'Error submitting scores: ${e.toString()}';
         _showSnackbar(
           title: 'Error',
           message: errorMessage.value,
@@ -624,7 +1057,7 @@ class JuryScoringController extends GetxController {
         );
       }
     } catch (e, stackTrace) {
-      print('EXCEPTION in submitScores: $e');
+      print('EXCEPTION in submitScores (outer catch): $e');
       print('Stack trace: $stackTrace');
       errorMessage.value = 'Error submitting scores: ${e.toString()}';
       _showSnackbar(
@@ -662,6 +1095,49 @@ class JuryScoringController extends GetxController {
         .where((entry) => entry.value == false)
         .map((entry) => entry.key)
         .toList();
+  }
+
+  /// Handle logout: show dialog, then logout and navigate to login.
+  Future<void> handleLogout(BuildContext context) async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout != true || !context.mounted) return;
+
+    try {
+      if (Get.isRegistered<UserManagementController>()) {
+        final userController = Get.find<UserManagementController>();
+        await userController.logout();
+      }
+      if (context.mounted) {
+        context.go(AppRoutes.login);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error during logout: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // Helper method to safely show snackbars

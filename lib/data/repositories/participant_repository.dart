@@ -8,6 +8,17 @@ import '../models/participant_model.dart';
 import '../models/api_response.dart';
 import '../models/score_response_model.dart';
 
+/// Response wrapper for participants with remaining count
+class ParticipantsForScoringResponse {
+  final List<ParticipantModel> participants;
+  final int? remainingCount;
+
+  ParticipantsForScoringResponse({
+    required this.participants,
+    this.remainingCount,
+  });
+}
+
 class ParticipantRepository {
   final APIService _apiService = APIService();
 
@@ -808,7 +819,7 @@ class ParticipantRepository {
   }
 
   /// Get participants for scoring based on filters
-  Future<ApiResponse<List<ParticipantModel>>> getParticipantsForScoring({
+  Future<ApiResponse<ParticipantsForScoringResponse>> getParticipantsForScoring({
     required int competitionId,
     required int juryId,
     int? stageId,
@@ -845,6 +856,7 @@ class ParticipantRepository {
 
       if (response.success && response.data != null) {
         List<ParticipantModel> participants = [];
+        int? remainingCount;
 
         // Handle different response structures
         if (response.data is List) {
@@ -856,6 +868,11 @@ class ParticipantRepository {
               .toList();
         } else if (response.data is Map<String, dynamic>) {
           final dataMap = response.data as Map<String, dynamic>;
+
+          // Extract remainingCount if available
+          if (dataMap.containsKey('remainingCount')) {
+            remainingCount = dataMap['remainingCount'] as int?;
+          }
 
           // Check for 'participants' or 'data' field
           dynamic participantsList =
@@ -873,7 +890,10 @@ class ParticipantRepository {
 
         return ApiResponse(
           success: true,
-          data: participants,
+          data: ParticipantsForScoringResponse(
+            participants: participants,
+            remainingCount: remainingCount,
+          ),
           message: response.message ?? 'Participants retrieved successfully',
         );
       } else {

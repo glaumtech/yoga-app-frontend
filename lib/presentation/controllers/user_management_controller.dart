@@ -26,6 +26,12 @@ class UserManagementController extends GetxController {
   final RxString searchQuery = ''.obs;
   final RxBool isListView = false.obs;
 
+  // Pagination state for /user/list
+  final RxInt usersPage = 0.obs;
+  final RxInt usersLimit = 10.obs;
+  final RxInt usersTotal = 0.obs;
+  final RxInt usersTotalPages = 0.obs;
+
   // Current logged-in user
   final Rx<UserManagementModel?> currentUser = Rx<UserManagementModel?>(null);
 
@@ -173,6 +179,7 @@ class UserManagementController extends GetxController {
   Future<void> loadUsers({
     int? eventId,
     int? userTypeId,
+    String? roleType,
     String? search,
     int page = 0,
     int limit = 10,
@@ -184,13 +191,27 @@ class UserManagementController extends GetxController {
       final response = await _repository.getAllUsers(
         competitionId: eventId != null && eventId > 0 ? eventId : null,
         userTypeId: userTypeId,
+        roleType: roleType,
         search: search,
         page: page,
         limit: limit,
       );
 
       if (response.success && response.data != null) {
-        users.value = response.data!;
+        final paged = response.data!;
+        users.value = paged.users;
+        final p = paged.pagination;
+        if (p != null) {
+          usersPage.value = p.page;
+          usersLimit.value = p.limit;
+          usersTotal.value = p.total;
+          usersTotalPages.value = p.totalPages;
+        } else {
+          usersPage.value = page;
+          usersLimit.value = limit;
+          usersTotal.value = paged.users.length;
+          usersTotalPages.value = 1;
+        }
       } else {
         errorMessage.value = response.message ?? 'Failed to load users';
       }

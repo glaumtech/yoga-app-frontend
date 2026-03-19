@@ -32,6 +32,11 @@ class UserManagementScreen extends StatelessWidget {
           !competitionController.isLoading.value) {
         competitionController.loadCompetitions();
       }
+      // Load user types if empty when screen first builds
+      if (userController.userTypesList.isEmpty &&
+          !userController.isLoadingUserTypes.value) {
+        userController.loadUserTypes();
+      }
     });
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -88,6 +93,11 @@ class UserManagementScreen extends StatelessWidget {
                         } else {
                           // Switching to create view - reset form to ensure clean state
                           userController.resetForm();
+                          // Reload user types if empty when switching to create view
+                          if (userController.userTypesList.isEmpty &&
+                              !userController.isLoadingUserTypes.value) {
+                            userController.loadUserTypes();
+                          }
                           userController.toggleViewMode(false);
                         }
                       }
@@ -461,12 +471,25 @@ class UserManagementScreen extends StatelessWidget {
           if (userTypes.isEmpty) {
             return Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'No user types available',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: isMobile ? 13 : 14,
-                ),
+              child: Column(
+                children: [
+                  Text(
+                    'No user types available',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: isMobile ? 13 : 14,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () => controller.loadUserTypes(),
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Retry'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.primaryColor,
+                    ),
+                  ),
+                ],
               ),
             );
           }

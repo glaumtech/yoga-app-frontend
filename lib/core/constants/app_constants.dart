@@ -180,4 +180,11 @@ class EndPoints {
   static String institutionCategoryCreate = '/institution-category';
   static String institutionCategoryByType(int typeId) =>
       '/institution-category/type/$typeId';
+
+  /// REPORTS
+  static String competitionReportSummary(int competitionId) =>
+      '/reports/competition/$competitionId/summary';
+
+  static String competitionParticipantScores(int competitionId) =>
+      '/reports/competition/$competitionId/participant-scores';
 }

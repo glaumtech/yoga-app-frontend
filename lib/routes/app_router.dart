@@ -22,7 +22,7 @@ import '../presentation/screens/admin/admin_scoring_screen.dart';
 import '../presentation/screens/admin/participant_scores_list_screen.dart';
 import '../presentation/screens/admin/participant_score_detail_screen.dart';
 import '../presentation/screens/schools/schools_screen.dart';
-import '../presentation/screens/admin/reports_screen.dart';
+import '../presentation/screens/reports/reports_screen.dart';
 import '../presentation/screens/sponsors/sponsors_screen.dart';
 import '../presentation/screens/users/user_management_screen.dart';
 import '../presentation/screens/users/users_list_screen.dart';

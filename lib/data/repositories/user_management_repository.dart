@@ -1,6 +1,7 @@
 import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/user_management_model.dart';
+import '../models/paged_users_response.dart';
 import '../models/user_type_model.dart';
 import '../models/jury_assignment_model.dart';
 import '../models/api_response.dart';
@@ -13,9 +14,10 @@ import '../../core/utils/storage_service.dart';
 class UserManagementRepository {
   final APIService _apiService = APIService();
 
-  Future<ApiResponse<List<UserManagementModel>>> getAllUsers({
+  Future<ApiResponse<PagedUsersResponse>> getAllUsers({
     int? competitionId,
     int? userTypeId,
+    String? roleType,
     String? search,
     int page = 0,
     int limit = 10,
@@ -27,6 +29,9 @@ class UserManagementRepository {
       final requestBody = <String, dynamic>{};
       if (competitionId != null) requestBody['competitionId'] = competitionId;
       if (userTypeId != null) requestBody['userTypeId'] = userTypeId;
+      if (roleType != null && roleType.isNotEmpty) {
+        requestBody['roleType'] = roleType;
+      }
       if (search != null && search.isNotEmpty) requestBody['search'] = search;
       requestBody['page'] = page;
       requestBody['limit'] = limit;
@@ -41,33 +46,18 @@ class UserManagementRepository {
       );
 
       if (response.success && response.data != null) {
-        List<UserManagementModel> users = [];
-
         if (response.data is Map<String, dynamic>) {
           final dataMap = response.data as Map<String, dynamic>;
-          dynamic listData = dataMap['users'];
-
-          if (listData is List) {
-            users = listData.map((json) {
-              return UserManagementModel.fromJson(
-                json is Map<String, dynamic>
-                    ? json
-                    : json as Map<String, dynamic>,
-              );
-            }).toList();
-          }
-        } else if (response.data is List) {
-          // Fallback for old format
-          users = (response.data as List).map((json) {
-            return UserManagementModel.fromJson(
-              json is Map<String, dynamic>
-                  ? json
-                  : json as Map<String, dynamic>,
-            );
-          }).toList();
+          // dataMap should contain: { users: [...], pagination: {...} }
+          final paged = PagedUsersResponse.fromJson(dataMap);
+          return ApiResponse(success: true, data: paged);
         }
 
-        return ApiResponse(success: true, data: users);
+        // Fallback for unexpected formats
+        return ApiResponse(
+          success: true,
+          data: PagedUsersResponse(users: const []),
+        );
       }
 
       return ApiResponse(
