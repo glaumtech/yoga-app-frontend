@@ -45,7 +45,10 @@ class JuryScoringScreen extends StatelessWidget {
                           centerTitle: true,
                           actions: [
                             IconButton(
-                              icon: const Icon(Icons.logout, color: Colors.white),
+                              icon: const Icon(
+                                Icons.logout,
+                                color: Colors.white,
+                              ),
                               tooltip: 'Logout',
                               onPressed: () => controller.handleLogout(context),
                             ),
@@ -109,7 +112,9 @@ class JuryScoringScreen extends StatelessWidget {
                                     ],
                                   );
                                 }),
-                                if (controller.getPendingJuries().isNotEmpty) ...[
+                                if (controller
+                                    .getPendingJuries()
+                                    .isNotEmpty) ...[
                                   SizedBox(height: isMobile ? 10 : 20),
                                   _buildPendingJuriesNote(controller),
                                 ],
@@ -483,48 +488,15 @@ class JuryScoringScreen extends StatelessWidget {
                           color: AppTheme.primaryColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: currentAsanaNum > 1
-                                  ? () => controller.previousAsana()
-                                  : null,
-                              icon: Icon(
-                                Icons.chevron_left,
-                                color: AppTheme.primaryColor,
-                                size: isMobile ? 22 : 26,
-                              ),
-                              tooltip: 'Previous Asana',
+                        child: Center(
+                          child: Text(
+                            'ASANA $currentAsanaNum',
+                            style: TextStyle(
+                              fontSize: isMobile ? 14 : 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryColor,
                             ),
-                            Text(
-                              'ASANA $currentAsanaNum',
-                              style: TextStyle(
-                                fontSize: isMobile ? 14 : 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed:
-                                  currentAsanaNum <
-                                      JuryScoringController.numberOfAsanas
-                                  ? () => controller.nextAsana()
-                                  : null,
-                              icon: Icon(
-                                Icons.chevron_right,
-                                color: AppTheme.primaryColor,
-                                size: isMobile ? 22 : 26,
-                              ),
-                              tooltip: 'Next Asana',
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     )

@@ -47,6 +47,9 @@ class JuryScoringController extends GetxController {
   // Current asana being scored (1-5)
   final RxInt currentAsana = 1.obs;
 
+  // Asana numbers (1-5) for which user has clicked Submit this round; API is called only when all 5 are submitted
+  final RxList<int> submittedAsanas = <int>[].obs;
+
   // Jury submission status
   final RxMap<String, bool> jurySubmissionStatus =
       <String, bool>{}.obs; // Map of juryId to submission status
@@ -124,6 +127,7 @@ class JuryScoringController extends GetxController {
     // Reset derived flags
     hasScoresEntered.value = false;
     canSubmitScores.value = false;
+    submittedAsanas.clear();
   }
 
   Future<void> loadInitialData() async {
@@ -410,6 +414,7 @@ class JuryScoringController extends GetxController {
         }
         // Reset to first asana when new participants are loaded
         currentAsana.value = 1;
+        submittedAsanas.clear();
 
         // Reset derived flags for the new queue
         hasScoresEntered.value = false;
@@ -459,13 +464,7 @@ class JuryScoringController extends GetxController {
     // Update derived flags for UI
     _recomputeScoreFlags();
 
-    // Auto move to next asana if:
-    // - user is scoring the currently visible asana
-    // - all participants have a valid score for this asana
-    // - next asana still has missing scores
-    if (asanaNum == currentAsana.value) {
-      _autoAdvanceIfReady();
-    }
+    // Next asana loads only after user clicks Submit (no auto-advance)
 
     // Update text controller with formatted score
     // Decimal values: 25 = 0.25, 50 = 0.5, 75 = 0.75
@@ -486,7 +485,9 @@ class JuryScoringController extends GetxController {
   void _recomputeScoreFlags() {
     // Any score entered = any asana whole between 3..10 for any participant
     bool any = false;
-    bool all = currentParticipants.isNotEmpty;
+    // Submit enabled only when all participants have valid score for *current* asana
+    bool currentAsanaComplete = currentParticipants.isNotEmpty;
+    final asanaNum = currentAsana.value;
 
     for (final participant in currentParticipants) {
       final pid = participant.id;
@@ -494,63 +495,27 @@ class JuryScoringController extends GetxController {
 
       final participantScores = scoreValues[pid];
       if (participantScores == null) {
-        all = false;
-        continue;
-      }
-
-      for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
+        currentAsanaComplete = false;
+      } else {
         final score = participantScores[asanaNum];
         final whole = score?['whole'] ?? 0;
+        if (whole < 3 || whole > 10) {
+          currentAsanaComplete = false;
+        }
+      }
 
+      for (int a = 1; a <= numberOfAsanas; a++) {
+        final score = participantScores?[a];
+        final whole = score?['whole'] ?? 0;
         if (whole >= 3 && whole <= 10) {
           any = true;
-        }
-
-        if (whole < 3 || whole > 10) {
-          all = false;
+          break;
         }
       }
     }
 
     hasScoresEntered.value = any;
-    canSubmitScores.value = all;
-  }
-
-  void _autoAdvanceIfReady() {
-    if (currentParticipants.isEmpty) return;
-    if (currentAsana.value >= numberOfAsanas) return;
-
-    // Check current asana is fully scored (whole >= 3)
-    for (final participant in currentParticipants) {
-      if (participant.id == null) continue;
-      final score = getAsanaScore(participant.id!, currentAsana.value);
-      final whole = score?['whole'] ?? 0;
-      if (whole < 3) {
-        return;
-      }
-    }
-
-    // Only advance if the next asana has at least one missing score
-    final nextAsanaNum = currentAsana.value + 1;
-    bool nextHasMissing = false;
-    for (final participant in currentParticipants) {
-      if (participant.id == null) continue;
-      final score = getAsanaScore(participant.id!, nextAsanaNum);
-      final whole = score?['whole'] ?? 0;
-      if (whole < 3) {
-        nextHasMissing = true;
-        break;
-      }
-    }
-    if (!nextHasMissing) return;
-
-    // Small delay so the UI updates the last selected score before switching
-    Future.delayed(const Duration(milliseconds: 250), () {
-      // Don't advance if user navigated manually in the meantime
-      if (currentAsana.value + 1 == nextAsanaNum) {
-        currentAsana.value = nextAsanaNum;
-      }
-    });
+    canSubmitScores.value = currentAsanaComplete;
   }
 
   // Get score for a participant's asana
@@ -747,64 +712,93 @@ class JuryScoringController extends GetxController {
         return;
       }
 
-      // Validate that all participants have scores for all 5 asanas
-      bool allScoresFilled = true;
+      // Validate that all participants have scores for *current* asana only
+      final asanaNum = currentAsana.value;
+      bool currentAsanaFilled = true;
       String? missingScoreInfo;
-      print('=== Validating Scores ===');
-      print('Number of participants: ${currentParticipants.length}');
+      print('=== Validating current ASANA $asanaNum ===');
 
       for (final participant in currentParticipants) {
-        if (participant.id != null) {
-          print(
-            'Checking participant: ${participant.participantName} (ID: ${participant.id})',
-          );
-          final participantScores = scoreValues[participant.id!];
-          if (participantScores == null) {
-            print('  - No scores found for participant');
-            allScoresFilled = false;
-            missingScoreInfo =
-                'Missing scores for ${participant.participantName}';
-            break;
-          }
-          print('  - Found scores for ${participantScores.length} asanas');
-          // Check all 5 asanas
-          for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
-            final score = participantScores[asanaNum];
-            if (score == null) {
-              print('  - Missing score for ASANA $asanaNum');
-              allScoresFilled = false;
-              missingScoreInfo =
-                  'Missing score for ${participant.participantName} - ASANA $asanaNum';
-              break;
-            }
-            // Validate that the score is within valid range
-            final whole = score['whole'] ?? 0;
-            final decimal = score['decimal'] ?? 0;
-            print('  - ASANA $asanaNum: whole=$whole, decimal=$decimal');
-            // A valid score must have whole number >= 3
-            if (whole < 3 || whole > 10) {
-              print('  - Invalid whole number: $whole (must be 3-10)');
-              allScoresFilled = false;
-              missingScoreInfo =
-                  'Missing or invalid score for ${participant.participantName} - ASANA $asanaNum (whole number must be 3-10, current: $whole)';
-              break;
-            }
-          }
-          if (!allScoresFilled) break;
+        if (participant.id == null) continue;
+        final participantScores = scoreValues[participant.id!];
+        if (participantScores == null) {
+          currentAsanaFilled = false;
+          missingScoreInfo = 'Missing scores for ${participant.participantName}';
+          break;
+        }
+        final score = participantScores[asanaNum];
+        if (score == null) {
+          currentAsanaFilled = false;
+          missingScoreInfo =
+              'Missing score for ${participant.participantName} - ASANA $asanaNum';
+          break;
+        }
+        final whole = score['whole'] ?? 0;
+        if (whole < 3 || whole > 10) {
+          currentAsanaFilled = false;
+          missingScoreInfo =
+              'Invalid score for ${participant.participantName} - ASANA $asanaNum (whole must be 3-10)';
+          break;
         }
       }
 
-      print('Validation result: allScoresFilled=$allScoresFilled');
-
-      if (!allScoresFilled) {
-        print('Validation failed: $missingScoreInfo');
+      if (!currentAsanaFilled) {
         _showSnackbar(
           title: 'Validation Error',
           message:
               missingScoreInfo ??
-              'Please enter scores for all participants and all asanas',
+              'Please enter scores for all participants for this asana',
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 4),
+        );
+        isLoading.value = false;
+        return;
+      }
+
+      // Record this asana as submitted; next asana loads only after Submit
+      if (!submittedAsanas.contains(asanaNum)) {
+        submittedAsanas.add(asanaNum);
+      }
+
+      // If not all 5 asanas submitted yet, advance to next asana and return (no API call)
+      if (submittedAsanas.length < numberOfAsanas) {
+        if (currentAsana.value < numberOfAsanas) {
+          currentAsana.value++;
+        }
+        _recomputeScoreFlags();
+        _showSnackbar(
+          title: 'Asana $asanaNum submitted',
+          message: 'Enter scores for ASANA ${currentAsana.value}',
+          backgroundColor: Colors.green,
+        );
+        isLoading.value = false;
+        return;
+      }
+
+      // All 5 asanas submitted — validate all asanas for API payload
+      bool allScoresFilled = true;
+      for (final participant in currentParticipants) {
+        if (participant.id == null) continue;
+        final participantScores = scoreValues[participant.id!];
+        if (participantScores == null) {
+          allScoresFilled = false;
+          break;
+        }
+        for (int a = 1; a <= numberOfAsanas; a++) {
+          final score = participantScores[a];
+          final whole = score?['whole'] ?? 0;
+          if (score == null || whole < 3 || whole > 10) {
+            allScoresFilled = false;
+            break;
+          }
+        }
+        if (!allScoresFilled) break;
+      }
+      if (!allScoresFilled) {
+        _showSnackbar(
+          title: 'Error',
+          message: 'All asanas must be scored before saving',
+          backgroundColor: Colors.red,
         );
         isLoading.value = false;
         return;
@@ -1007,6 +1001,10 @@ class JuryScoringController extends GetxController {
           } catch (e) {
             // Continue even if we can't mark submission status
           }
+
+          // Clear submitted-asana tracking and current asana
+          submittedAsanas.clear();
+          currentAsana.value = 1;
 
           // Clear current scores for all participants and asanas
           for (final participantControllers in scoreControllers.values) {
