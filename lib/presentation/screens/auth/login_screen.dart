@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:go_router/go_router.dart';
 import '../../controllers/auth_controller.dart';
 // import '../../controllers/competition_controller.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../routes/app_routes.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -553,35 +551,6 @@ class LoginScreen extends StatelessWidget {
                             ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Sign Up Link
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Don\'t have an account? ',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Colors.grey[600]),
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              context.push(AppRoutes.signUp);
-                            },
-                            child: Text(
-                              'Sign Up',
-                              style: TextStyle(
-                                color: AppTheme.primaryColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                decoration: TextDecoration.underline,
-                                decorationColor: AppTheme.primaryColor,
-                                decorationThickness: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
