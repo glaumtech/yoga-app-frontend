@@ -22,93 +22,102 @@ class JuryScoringScreen extends StatelessWidget {
       builder: (controller) {
         return Scaffold(
           backgroundColor: Colors.grey[50],
-          appBar: AppBar(
-            elevation: 0,
-            backgroundColor: AppTheme.primaryColor,
-            title: Text(
-              'SCORING SCREEN',
-              style: TextStyle(
-                fontSize: isMobile ? 15 : 20,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-              ),
-            ),
-            centerTitle: true,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
-                tooltip: 'Logout',
-                onPressed: () => controller.handleLogout(context),
-              ),
-            ],
-          ),
           body: SafeArea(
             child: Obx(
               () => controller.isLoading.value
                   ? const Center(child: CustomLoader())
-                  : SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        isMobile ? 5 : (isWeb ? 32 : 5),
-                        isMobile ? 5 : (isWeb ? 24 : 5),
-                        isMobile ? 5 : (isWeb ? 32 : 5),
-                        isMobile ? 5 : (isWeb ? 24 : 5),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSelectionSection(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
+                  : CustomScrollView(
+                      slivers: [
+                        SliverAppBar(
+                          elevation: 0,
+                          backgroundColor: AppTheme.primaryColor,
+                          floating: true,
+                          snap: true,
+                          pinned: false,
+                          title: Text(
+                            'SCORING SCREEN',
+                            style: TextStyle(
+                              fontSize: isMobile ? 15 : 20,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
                           ),
-                          _buildParticipantsSection(
-                            controller,
-                            isMobile,
-                            isTablet,
+                          centerTitle: true,
+                          actions: [
+                            IconButton(
+                              icon: const Icon(Icons.logout, color: Colors.white),
+                              tooltip: 'Logout',
+                              onPressed: () => controller.handleLogout(context),
+                            ),
+                          ],
+                        ),
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            isMobile ? 5 : (isWeb ? 32 : 5),
+                            isMobile ? 5 : (isWeb ? 24 : 5),
+                            isMobile ? 5 : (isWeb ? 32 : 5),
+                            isMobile ? 5 : (isWeb ? 24 : 5),
                           ),
-                          Obx(() {
-                            if (controller.currentParticipants.isEmpty) {
-                              return const SizedBox.shrink();
-                            }
-
-                            final readyToSubmit =
-                                controller.canSubmitScores.value;
-                            return Column(
+                          sliver: SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SizedBox(height: isMobile ? 1 : 24),
-                                Opacity(
-                                  opacity: readyToSubmit ? 1.0 : 0.55,
-                                  child: IgnorePointer(
-                                    ignoring: !readyToSubmit,
-                                    child: _buildSubmitButton(
-                                      context,
-                                      controller,
-                                      isMobile,
-                                      isTablet,
-                                    ),
-                                  ),
+                                _buildSelectionSection(
+                                  context,
+                                  controller,
+                                  isMobile,
+                                  isTablet,
                                 ),
-                                if (!readyToSubmit) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Please enter scores for all 5 asanas for all participants (whole score 3–10).',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: isMobile ? 11 : 13,
-                                      color: Colors.grey[700],
-                                    ),
-                                  ),
+                                _buildParticipantsSection(
+                                  controller,
+                                  isMobile,
+                                  isTablet,
+                                ),
+                                Obx(() {
+                                  if (controller.currentParticipants.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  final readyToSubmit =
+                                      controller.canSubmitScores.value;
+                                  return Column(
+                                    children: [
+                                      SizedBox(height: isMobile ? 1 : 24),
+                                      Opacity(
+                                        opacity: readyToSubmit ? 1.0 : 0.55,
+                                        child: IgnorePointer(
+                                          ignoring: !readyToSubmit,
+                                          child: _buildSubmitButton(
+                                            context,
+                                            controller,
+                                            isMobile,
+                                            isTablet,
+                                          ),
+                                        ),
+                                      ),
+                                      if (!readyToSubmit) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Please enter scores for all 5 asanas for all participants (whole score 3–10).',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: isMobile ? 11 : 13,
+                                            color: Colors.grey[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                }),
+                                if (controller.getPendingJuries().isNotEmpty) ...[
+                                  SizedBox(height: isMobile ? 10 : 20),
+                                  _buildPendingJuriesNote(controller),
                                 ],
                               ],
-                            );
-                          }),
-                          if (controller.getPendingJuries().isNotEmpty) ...[
-                            SizedBox(height: isMobile ? 10 : 20),
-                            _buildPendingJuriesNote(controller),
-                          ],
-                        ],
-                      ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
             ),
           ),
