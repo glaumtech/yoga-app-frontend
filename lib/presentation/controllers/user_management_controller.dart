@@ -798,6 +798,8 @@ class UserManagementController extends GetxController {
     selectedPermissions.clear();
     selectedStages.clear();
     selectedCategories.clear();
+    selectedAllStage.value = false;
+    selectedAllCategory.value = false;
     photoFile.value = null;
     photoBytes.value = null;
     photoUrl.value = '';

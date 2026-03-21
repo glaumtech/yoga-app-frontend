@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -1242,7 +1243,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           () => TextFormField(
             controller: controller.yogaMasterContactController,
             readOnly: controller.isViewMode.value,
-            keyboardType: TextInputType.phone,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             maxLength: 10,
             decoration: InputDecoration(
               border: OutlineInputBorder(

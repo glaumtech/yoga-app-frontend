@@ -3,6 +3,7 @@ import 'dart:html' as html show Blob, Url, AnchorElement;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/competition_model.dart';
@@ -30,6 +31,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
   void initState() {
     super.initState();
     controller = Get.put(ReportsController(), permanent: false);
+    // Refresh competition list (/competition/list) + report summary on every
+    // navigation to Reports (GetX controller may be reused across visits).
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      controller.loadCompetitionsAndMaybeReport();
+    });
   }
 
   @override

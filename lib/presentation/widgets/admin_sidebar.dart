@@ -211,16 +211,17 @@ class AdminSidebar extends StatelessWidget {
                       context.push(AppRoutes.reports);
                     },
                   ),
-                  _buildMenuItem(
-                    context,
-                    title: 'SPONSORS',
-                    icon: Icons.business,
-                    route: AppRoutes.sponsors,
-                    currentLocation: currentLocation,
-                    onTap: () {
-                      context.push(AppRoutes.sponsors);
-                    },
-                  ),
+                  // SPONSORS menu hidden for now
+                  // _buildMenuItem(
+                  //   context,
+                  //   title: 'SPONSORS',
+                  //   icon: Icons.business,
+                  //   route: AppRoutes.sponsors,
+                  //   currentLocation: currentLocation,
+                  //   onTap: () {
+                  //     context.push(AppRoutes.sponsors);
+                  //   },
+                  // ),
                 ],
               ),
             ),

@@ -27,7 +27,8 @@ class ReportsController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    loadCompetitionsAndMaybeReport();
+    // Data load is triggered from [ReportsScreen] on every visit so
+    // competition list + summary APIs run each time the Reports menu opens.
   }
 
   Future<void> loadCompetitionsAndMaybeReport() async {

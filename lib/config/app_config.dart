@@ -14,7 +14,7 @@ class AppConfig {
       case Environment.prod:
         return 'https://ghopon.com/school'; // Update with your production server URL
       case Environment.dev:
-        return 'http://localhost:8083'; // Development server URL
+        return 'http://localhost:8080'; // Development server URL
     }
   }
 

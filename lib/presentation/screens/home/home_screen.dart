@@ -232,7 +232,18 @@ class HomeScreen extends StatelessWidget {
                               onSelected: (value) async {
                                 switch (value) {
                                   case 'profile':
-                                    // TODO: Navigate to profile
+                                    final u = userController.currentUser.value;
+                                    final typeStr =
+                                        (u?.userTypeName ?? u?.type ?? '')
+                                            .toUpperCase();
+                                    // JURY / JURY(S): open scoring (not plain JUDGE unless type string includes JURY)
+                                    final isJuryUser =
+                                        typeStr == 'JURY' ||
+                                        typeStr.contains('JURY');
+                                    if (!context.mounted) break;
+                                    if (isJuryUser) {
+                                      context.go(AppRoutes.juryScoring);
+                                    }
                                     break;
                                   case 'logout':
                                     // Sign out first

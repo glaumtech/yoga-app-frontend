@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/navigation/root_scaffold_messenger_key.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/jury_assignment_model.dart';
 import '../../data/repositories/user_management_repository.dart';
@@ -19,7 +21,8 @@ class JuryScoringController extends GetxController {
   final RxString selectedGroup = ''.obs;
 
   // Selection panel expand/collapse state
-  final RxBool isSelectionExpanded = false.obs;
+  /// SELECT filter section starts expanded so Stage/Category/Group are visible on load.
+  final RxBool isSelectionExpanded = true.obs;
 
   // Current participants (A, B, C)
   final RxList<ParticipantModel> currentParticipants = <ParticipantModel>[].obs;
@@ -1026,10 +1029,14 @@ class JuryScoringController extends GetxController {
             print('Error reloading participants after submission: $e');
           }
 
+          final successMsg = response.message?.trim();
           _showSnackbar(
             title: 'Success',
-            message: response.message ?? 'Scores submitted successfully',
+            message: (successMsg != null && successMsg.isNotEmpty)
+                ? successMsg
+                : 'Scores saved successfully.',
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
           );
         } else {
           print('Submission failed!');
@@ -1138,25 +1145,84 @@ class JuryScoringController extends GetxController {
     }
   }
 
-  // Helper method to safely show snackbars
+  // Helper method to safely show snackbars.
+  // Deferred to next frame so we never call during a build/layout pass (e.g. after
+  // [loadParticipantsForSelection] updates Rx values and triggers Obx rebuilds).
   void _showSnackbar({
     required String title,
     required String message,
     Color backgroundColor = Colors.red,
     Duration duration = const Duration(seconds: 4),
   }) {
+    final safeTitle = title.trim();
+    final safeMessage = message.trim();
+    final body = safeTitle.isEmpty
+        ? safeMessage
+        : '$safeTitle\n$safeMessage';
+    if (body.isEmpty) return;
+
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (isClosed) return;
+
+      final messenger = rootScaffoldMessengerKey.currentState;
+      if (messenger != null) {
+        try {
+          messenger.clearSnackBars();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                body,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  height: 1.35,
+                ),
+              ),
+              backgroundColor: backgroundColor,
+              behavior: SnackBarBehavior.floating,
+              duration: duration,
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        } catch (e, st) {
+          debugPrint('ScaffoldMessenger snackbar failed: $e\n$st');
+          _showSnackbarGetXFallback(
+            safeTitle.isEmpty ? 'Notice' : safeTitle,
+            safeMessage.isEmpty ? body : safeMessage,
+            backgroundColor,
+            duration,
+          );
+        }
+        return;
+      }
+      _showSnackbarGetXFallback(
+        safeTitle.isEmpty ? 'Notice' : safeTitle,
+        safeMessage.isEmpty ? body : safeMessage,
+        backgroundColor,
+        duration,
+      );
+    });
+  }
+
+  void _showSnackbarGetXFallback(
+    String title,
+    String message,
+    Color backgroundColor,
+    Duration duration,
+  ) {
+    if (message.isEmpty) return;
     try {
       Get.snackbar(
         title,
         message,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: backgroundColor,
+        colorText: Colors.white,
         duration: duration,
       );
     } catch (e) {
-      // If GetX context is not available, just print the error
-      print('Error showing snackbar: $e');
-      print('Title: $title, Message: $message');
+      debugPrint('Error showing snackbar: $e');
+      debugPrint('Title: $title, Message: $message');
     }
   }
 

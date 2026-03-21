@@ -72,7 +72,6 @@ class ReportsParticipantsTab extends StatelessWidget {
         competitionId,
         stageId: tabController.selectedStageId.value,
         categoryId: tabController.selectedCategoryId.value,
-        groupId: tabController.selectedGroupId.value,
       );
 
       if (!resp.success || resp.data == null) {
@@ -93,6 +92,16 @@ class ReportsParticipantsTab extends StatelessWidget {
         tabController.reportsController.selectedCompetitionId.value ?? '',
       );
       if (competitionId == null) return;
+
+      if (tabController.selectedStageId.value == null) {
+        Get.snackbar(
+          'Stage required',
+          'Select a specific stage to download Excel. "All" is not allowed.',
+          backgroundColor: Colors.orange.shade800,
+          colorText: Colors.white,
+        );
+        return;
+      }
 
       final resp = await tabController.getParticipantsScoresExcel();
 
@@ -353,19 +362,27 @@ class ReportsParticipantsTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                IconButton(
-                  tooltip: 'Download Participants Excel',
-                  icon: const Icon(
-                    Icons.download,
-                    color: AppTheme.primaryColor,
-                  ),
-                  onPressed: onDownloadExcel,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 40,
-                    minHeight: 40,
-                  ),
-                ),
+                Obx(() {
+                  final stageSelected =
+                      controller.selectedStageId.value != null;
+                  return IconButton(
+                    tooltip: stageSelected
+                        ? 'Download Participants Excel'
+                        : 'Select a stage first (Excel requires a stage, not All)',
+                    icon: Icon(
+                      Icons.download,
+                      color: stageSelected
+                          ? AppTheme.primaryColor
+                          : Colors.grey,
+                    ),
+                    onPressed: stageSelected ? onDownloadExcel : null,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
+                  );
+                }),
               ],
             ),
             const SizedBox(height: 8),
@@ -385,14 +402,6 @@ class ReportsParticipantsTab extends StatelessWidget {
                         value: controller.selectedCategoryId.value,
                         items: controller.categoryOptions,
                         onChanged: (v) => controller.setCategory(v),
-                        isMobile: isMobile,
-                      ),
-                      const SizedBox(height: 8),
-                      _dropdown(
-                        label: 'Group',
-                        value: controller.selectedGroupId.value,
-                        items: controller.groupOptions,
-                        onChanged: (v) => controller.setGroup(v),
                         isMobile: isMobile,
                       ),
                     ],
@@ -415,16 +424,6 @@ class ReportsParticipantsTab extends StatelessWidget {
                           value: controller.selectedCategoryId.value,
                           items: controller.categoryOptions,
                           onChanged: (v) => controller.setCategory(v),
-                          isMobile: isMobile,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _dropdown(
-                          label: 'Group',
-                          value: controller.selectedGroupId.value,
-                          items: controller.groupOptions,
-                          onChanged: (v) => controller.setGroup(v),
                           isMobile: isMobile,
                         ),
                       ),
