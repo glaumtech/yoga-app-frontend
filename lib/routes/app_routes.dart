@@ -16,6 +16,12 @@ class AppRoutes {
   static const String myRegistrations = '/my-registrations';
   static const String registrationForm = '/registration-form';
   static const String register = '/register/:eventId';
+
+  /// User-facing participant registration for a competition (anyone can access).
+  static const String registerCompetition =
+      '/register/competition/:competitionId';
+  static String registerCompetitionPath(String competitionId) =>
+      '/register/competition/$competitionId';
   static const String assignParticipant = '/assign-participant/:eventId';
 
   // Admin

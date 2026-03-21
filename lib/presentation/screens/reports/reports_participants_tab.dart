@@ -1,11 +1,58 @@
+import 'dart:typed_data';
+import 'dart:html' as html show Blob, Url, AnchorElement;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/reports_participants_tab_controller.dart';
+import '../../../data/repositories/reports_repository.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ReportsParticipantsTab extends StatelessWidget {
   const ReportsParticipantsTab({super.key});
+
+  Future<void> _downloadPdf(Uint8List bytes, String filename) async {
+    if (bytes.isEmpty) return;
+
+    if (kIsWeb) {
+      final blob = html.Blob([bytes]);
+      final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: blobUrl)
+        ..setAttribute('download', filename)
+        ..click();
+      html.Url.revokeObjectUrl(blobUrl);
+      return;
+    }
+
+    final dataUri = Uri.dataFromBytes(bytes, mimeType: 'application/pdf');
+    if (await canLaunchUrl(dataUri)) {
+      await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _downloadExcel(Uint8List bytes, String filename) async {
+    if (bytes.isEmpty) return;
+
+    const excelMime =
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+    if (kIsWeb) {
+      final blob = html.Blob([bytes], excelMime);
+      final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: blobUrl)
+        ..setAttribute('download', filename)
+        ..click();
+      html.Url.revokeObjectUrl(blobUrl);
+      return;
+    }
+
+    final dataUri = Uri.dataFromBytes(bytes, mimeType: excelMime);
+    if (await canLaunchUrl(dataUri)) {
+      await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,6 +60,54 @@ class ReportsParticipantsTab extends StatelessWidget {
       ReportsParticipantsTabController(),
       permanent: false,
     );
+
+    Future<void> _printParticipants() async {
+      final repo = ReportsRepository();
+      final competitionId = int.tryParse(
+        tabController.reportsController.selectedCompetitionId.value ?? '',
+      );
+      if (competitionId == null) return;
+
+      final resp = await repo.getCompetitionParticipantsPrintPdf(
+        competitionId,
+        stageId: tabController.selectedStageId.value,
+        categoryId: tabController.selectedCategoryId.value,
+        groupId: tabController.selectedGroupId.value,
+      );
+
+      if (!resp.success || resp.data == null) {
+        Get.snackbar(
+          'Error',
+          resp.message ?? 'Failed to generate Participants PDF',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
+      await _downloadPdf(resp.data!, 'participants_$competitionId.pdf');
+    }
+
+    Future<void> _downloadParticipantsExcel() async {
+      final competitionId = int.tryParse(
+        tabController.reportsController.selectedCompetitionId.value ?? '',
+      );
+      if (competitionId == null) return;
+
+      final resp = await tabController.getParticipantsScoresExcel();
+
+      if (!resp.success || resp.data == null) {
+        Get.snackbar(
+          'Error',
+          resp.message ?? 'Failed to generate Participants Excel',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
+      await _downloadExcel(resp.data!, 'participants_$competitionId.xlsx');
+    }
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
@@ -49,6 +144,23 @@ class ReportsParticipantsTab extends StatelessWidget {
 
       final payload = tabController.data.value;
       final blocks = (payload?['blocks'] as List?)?.cast() ?? const [];
+      final query = tabController.participantSearchQuery.value
+          .trim()
+          .toLowerCase();
+      final visibleBlocks = query.isEmpty
+          ? blocks
+          : blocks.where((b) {
+              final block = (b as Map).cast<String, dynamic>();
+              final participants =
+                  (block['participants'] as List?)?.cast() ?? const [];
+              return participants.any((p) {
+                final m = (p as Map).cast<String, dynamic>();
+                final name = (m['participantName'] ?? '')
+                    .toString()
+                    .toLowerCase();
+                return name.contains(query);
+              });
+            }).toList();
 
       return RefreshIndicator(
         onRefresh: tabController.refresh,
@@ -56,20 +168,36 @@ class ReportsParticipantsTab extends StatelessWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.all(isMobile ? 12 : 16),
           children: [
-            _buildFilters(tabController, isMobile),
+            _buildFilters(
+              tabController,
+              isMobile,
+              onPrint: _printParticipants,
+              onDownloadExcel: _downloadParticipantsExcel,
+            ),
             const SizedBox(height: 12),
             if (payload == null)
               _infoCard('Select a competition to view participant scores.')
             else if (blocks.isEmpty)
               _infoCard('No participant scores found yet.')
+            else if (visibleBlocks.isEmpty)
+              _infoCard('No participants match your search.')
             else ...[
-              ...blocks.map((b) {
+              ...visibleBlocks.map((b) {
                 final block = (b as Map).cast<String, dynamic>();
                 final stageName = (block['stageName'] ?? '').toString();
                 final categoryName = (block['categoryName'] ?? '').toString();
                 final groupName = (block['groupName'] ?? '').toString();
                 final participants =
                     (block['participants'] as List?)?.cast() ?? const [];
+
+                final filteredParticipants = participants.where((p) {
+                  final m = (p as Map).cast<String, dynamic>();
+                  final name = (m['participantName'] ?? '')
+                      .toString()
+                      .toLowerCase();
+                  if (query.isEmpty) return true;
+                  return name.contains(query);
+                }).toList();
 
                 final title =
                     '${categoryName.isNotEmpty ? categoryName : 'Category'}'
@@ -108,7 +236,7 @@ class ReportsParticipantsTab extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              '${participants.length} participant${participants.length == 1 ? '' : 's'}',
+                              '${filteredParticipants.length} participant${filteredParticipants.length == 1 ? '' : 's'}',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -118,12 +246,12 @@ class ReportsParticipantsTab extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        if (participants.isEmpty)
+                        if (filteredParticipants.isEmpty)
                           _infoCard(
                             'No scored participants found for this block.',
                           )
                         else
-                          ...participants.map((p) {
+                          ...filteredParticipants.map((p) {
                             final m = (p as Map).cast<String, dynamic>();
                             return _participantCard(m, isMobile);
                           }).toList(),
@@ -142,8 +270,10 @@ class ReportsParticipantsTab extends StatelessWidget {
 
   Widget _buildFilters(
     ReportsParticipantsTabController controller,
-    bool isMobile,
-  ) {
+    bool isMobile, {
+    required VoidCallback onPrint,
+    required VoidCallback onDownloadExcel,
+  }) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -188,6 +318,52 @@ class ReportsParticipantsTab extends StatelessWidget {
                       fontSize: isMobile ? 12 : 13,
                       fontWeight: FontWeight.w700,
                     ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: controller.setParticipantSearchQuery,
+                    decoration: InputDecoration(
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: AppTheme.primaryColor,
+                      ),
+                      hintText: 'Search participant name',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                IconButton(
+                  tooltip: 'Print Participants',
+                  icon: const Icon(Icons.print, color: AppTheme.primaryColor),
+                  onPressed: onPrint,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Download Participants Excel',
+                  icon: const Icon(
+                    Icons.download,
+                    color: AppTheme.primaryColor,
+                  ),
+                  onPressed: onDownloadExcel,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
                   ),
                 ),
               ],
@@ -409,6 +585,8 @@ class ReportsParticipantsTab extends StatelessWidget {
               ...juryScores.map((js) {
                 final m = (js as Map).cast<String, dynamic>();
                 final juryId = (m['juryId'] ?? '').toString();
+                final juryName = (m['juryName'] ?? '').toString().trim();
+                final juryLabel = juryName.isNotEmpty ? juryName : juryId;
                 final total =
                     (double.tryParse((m['grandTotal'] ?? 0).toString()) ?? 0.0)
                         .toStringAsFixed(2);
@@ -438,7 +616,7 @@ class ReportsParticipantsTab extends StatelessWidget {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'Jury $juryId',
+                              juryLabel,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 color: AppTheme.primaryColor,

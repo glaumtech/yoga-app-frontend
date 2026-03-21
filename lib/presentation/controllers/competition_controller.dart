@@ -22,6 +22,10 @@ class CompetitionController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
   final RxList<CompetitionModel> competitions = <CompetitionModel>[].obs;
+  /// Public list for home screen (from GET /competition/public)
+  final RxList<HomeCompetitionModel> homeCompetitions =
+      <HomeCompetitionModel>[].obs;
+  final RxBool isLoadingHomeCompetitions = false.obs;
   final RxString searchQuery = ''.obs;
   final RxString selectedFilter = ''.obs;
   final RxBool isListView = false.obs; // Toggle between create and list view
@@ -140,6 +144,23 @@ class CompetitionController extends GetxController {
   }
 
   @override
+  /// Load competitions for home screen (public API, no auth required for display)
+  Future<void> loadCompetitionsForHome() async {
+    try {
+      isLoadingHomeCompetitions.value = true;
+      final response = await _repository.getCompetitionsPublic();
+      if (response.success && response.data != null) {
+        homeCompetitions.value = response.data!;
+      } else {
+        homeCompetitions.clear();
+      }
+    } catch (e) {
+      homeCompetitions.clear();
+    } finally {
+      isLoadingHomeCompetitions.value = false;
+    }
+  }
+
   void onInit() {
     super.onInit();
     // Initialize search controller text

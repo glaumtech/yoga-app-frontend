@@ -4,15 +4,49 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/user_management_controller.dart';
-import '../../controllers/event_controller.dart';
+import '../../controllers/competition_controller.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/section_header.dart';
-import '../../widgets/event_card.dart';
+import '../../widgets/competition_card.dart';
 import '../../widgets/banner_slider.dart';
+import '../../../data/models/competition_model.dart';
+
+class _BannerData {
+  final String id;
+  final String title;
+  final DateTime startDate;
+  final String venue;
+  final String? venueAddress;
+  final List<String> categories;
+
+  _BannerData({
+    required this.id,
+    required this.title,
+    required this.startDate,
+    required this.venue,
+    this.venueAddress,
+    required this.categories,
+  });
+
+  static _BannerData? fromCompetition(HomeCompetitionModel c) {
+    if (c.idStr == null) return null;
+    final start = c.eventStartDate != null
+        ? (DateTime.tryParse(c.eventStartDate!) ?? DateTime.now())
+        : DateTime.now();
+    return _BannerData(
+      id: c.idStr!,
+      title: c.competitionName,
+      startDate: start,
+      venue: c.address,
+      venueAddress: c.address.isNotEmpty ? c.address : null,
+      categories: c.categories,
+    );
+  }
+}
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -22,13 +56,12 @@ class HomeScreen extends StatelessWidget {
     try {
       final authController = Get.find<AuthController>();
       final userController = Get.put(UserManagementController());
-      final eventController = Get.find<EventController>();
+      final competitionController = Get.put(CompetitionController());
 
-      // Events are already loaded by EventController.onInit()
-      // Only reload if explicitly needed (e.g., after logout/login)
-      // The check is handled by the controller's loadEvents method
-      if (eventController.events.isEmpty && !eventController.isLoading.value) {
-        eventController.loadEvents();
+      // Load competitions for home (public API)
+      if (competitionController.homeCompetitions.isEmpty &&
+          !competitionController.isLoadingHomeCompetitions.value) {
+        competitionController.loadCompetitionsForHome();
       }
       return Scaffold(
         appBar: PreferredSize(
@@ -326,9 +359,9 @@ class HomeScreen extends StatelessWidget {
         ),
         body: SafeArea(
           child: Obx(() {
-            // Show loading indicator while events are loading
-            if (eventController.isLoading.value &&
-                eventController.events.isEmpty) {
+            // Show loading indicator while competitions are loading
+            if (competitionController.isLoadingHomeCompetitions.value &&
+                competitionController.homeCompetitions.isEmpty) {
               return const Center(child: CircularProgressIndicator());
             }
 
@@ -341,14 +374,20 @@ class HomeScreen extends StatelessWidget {
                       // Banner Slider Section
                       _buildBannerSliderSection(context),
 
-                      // Banner Section (Event Details)
-                      _buildBannerSection(context, eventController),
+                      // Banner Section (Competition Details)
+                      _buildBannerSection(context, competitionController),
 
-                      // Current Events Section
-                      _buildCurrentEventsSection(context, eventController),
+                      // Current Competitions Section
+                      _buildCurrentEventsSection(
+                        context,
+                        competitionController,
+                      ),
 
-                      // Upcoming Events Section
-                      _buildUpcomingEventsSection(context, eventController),
+                      // Upcoming Competitions Section
+                      _buildUpcomingEventsSection(
+                        context,
+                        competitionController,
+                      ),
 
                       // Footer
                       const FooterSection(),
@@ -422,12 +461,19 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBannerSection(BuildContext context, EventController controller) {
-    final authController = Get.find<AuthController>();
-    // Get the featured banner event (first active event or upcoming event)
-    final bannerEvent = controller.events.isNotEmpty
-        ? controller.events.firstWhereOrNull((e) => e.current) ??
-              controller.events.first
+  Widget _buildBannerSection(
+    BuildContext context,
+    CompetitionController controller,
+  ) {
+    // Get the featured competition (first ongoing or upcoming)
+    final bannerCompetition = controller.homeCompetitions.isNotEmpty
+        ? controller.homeCompetitions.firstWhereOrNull(
+                (c) => c.status == 'ongoing' || c.status == 'upcoming',
+              ) ??
+              controller.homeCompetitions.first
+        : null;
+    final bannerEvent = bannerCompetition != null
+        ? _BannerData.fromCompetition(bannerCompetition)
         : null;
 
     return Container(
@@ -714,7 +760,6 @@ class HomeScreen extends StatelessWidget {
                                       text: 'View Event',
                                       icon: Icons.visibility,
                                       onPressed: () {
-                                        controller.selectEvent(bannerEvent);
                                         context.push(
                                           '/events/${bannerEvent.id}',
                                         );
@@ -728,9 +773,10 @@ class HomeScreen extends StatelessWidget {
                                       text: 'Register Now!',
                                       icon: Icons.person_add,
                                       onPressed: () {
-                                        controller.selectEvent(bannerEvent);
                                         context.push(
-                                          '/register/${bannerEvent.id}',
+                                          AppRoutes.registerCompetitionPath(
+                                            bannerEvent.id,
+                                          ),
                                         );
                                       },
                                       width: 220,
@@ -743,7 +789,6 @@ class HomeScreen extends StatelessWidget {
                                         text: 'Add Score',
                                         icon: Icons.score,
                                         onPressed: () {
-                                          controller.selectEvent(bannerEvent);
                                           context.pushNamed(
                                             'assigned-participants',
                                             pathParameters: {
@@ -770,7 +815,6 @@ class HomeScreen extends StatelessWidget {
                                       text: 'View Event',
                                       icon: Icons.visibility,
                                       onPressed: () {
-                                        controller.selectEvent(bannerEvent);
                                         context.push(
                                           '/events/${bannerEvent.id}',
                                         );
@@ -784,9 +828,10 @@ class HomeScreen extends StatelessWidget {
                                       text: 'Register Now!',
                                       icon: Icons.person_add,
                                       onPressed: () {
-                                        controller.selectEvent(bannerEvent);
                                         context.push(
-                                          '/register/${bannerEvent.id}',
+                                          AppRoutes.registerCompetitionPath(
+                                            bannerEvent.id,
+                                          ),
                                         );
                                       },
                                       width: 220,
@@ -799,7 +844,6 @@ class HomeScreen extends StatelessWidget {
                                         text: 'Add Score',
                                         icon: Icons.score,
                                         onPressed: () {
-                                          controller.selectEvent(bannerEvent);
                                           context.pushNamed(
                                             'assigned-participants',
                                             pathParameters: {
@@ -890,22 +934,14 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildCurrentEventsSection(
     BuildContext context,
-    EventController controller,
+    CompetitionController controller,
   ) {
-    // Ensure we're observing the events list
-    final events = controller.events;
-
-    final now = DateTime.now();
-    final currentEvents = events
-        .where((e) {
-          // Events happening now or in the next 15 days
-          final daysUntil = e.startDate.difference(now).inDays;
-          return daysUntil >= 0 && daysUntil <= 15;
-        })
+    final currentCompetitions = controller.homeCompetitions
+        .where((c) => c.status == 'ongoing')
         .take(4)
         .toList();
 
-    if (currentEvents.isEmpty) {
+    if (currentCompetitions.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -943,30 +979,27 @@ class HomeScreen extends StatelessWidget {
               final isMobile = constraints.maxWidth < 600;
               final isTablet =
                   constraints.maxWidth >= 600 && constraints.maxWidth < 1024;
+              final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
 
               if (isMobile) {
-                // Mobile: Vertical list
                 return ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: currentEvents.length,
+                  itemCount: currentCompetitions.length,
                   itemBuilder: (context, index) {
-                    final event = currentEvents[index];
+                    final competition = currentCompetitions[index];
                     return Padding(
-                      key: ValueKey('current_event_${event.id}_$index'),
+                      key: ValueKey('current_comp_${idOf(competition)}_$index'),
                       padding: const EdgeInsets.only(bottom: 16),
-                      child: EventCard(
-                        event: event,
-                        onTap: () {
-                          controller.selectEvent(event);
-                          context.push('/events/${event.id}');
-                        },
+                      child: CompetitionCard(
+                        competition: competition,
+                        onTap: () =>
+                            context.push('/events/${idOf(competition)}'),
                       ),
                     );
                   },
                 );
               } else if (isTablet) {
-                // Tablet: 2 columns
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -976,21 +1009,17 @@ class HomeScreen extends StatelessWidget {
                     mainAxisSpacing: 16,
                     childAspectRatio: 0.75,
                   ),
-                  itemCount: currentEvents.length,
+                  itemCount: currentCompetitions.length,
                   itemBuilder: (context, index) {
-                    final event = currentEvents[index];
-                    return EventCard(
-                      key: ValueKey('current_event_${event.id}_$index'),
-                      event: event,
-                      onTap: () {
-                        controller.selectEvent(event);
-                        context.push('/events/${event.id}');
-                      },
+                    final competition = currentCompetitions[index];
+                    return CompetitionCard(
+                      key: ValueKey('current_comp_${idOf(competition)}_$index'),
+                      competition: competition,
+                      onTap: () => context.push('/events/${idOf(competition)}'),
                     );
                   },
                 );
               } else {
-                // Desktop: Horizontal scroll or grid
                 return SizedBox(
                   height: 320,
                   child: ListView.builder(
@@ -998,18 +1027,18 @@ class HomeScreen extends StatelessWidget {
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     itemExtent: constraints.maxWidth * 0.35,
-                    itemCount: currentEvents.length,
+                    itemCount: currentCompetitions.length,
                     itemBuilder: (context, index) {
-                      final event = currentEvents[index];
+                      final competition = currentCompetitions[index];
                       return Padding(
-                        key: ValueKey('current_event_${event.id}_$index'),
+                        key: ValueKey(
+                          'current_comp_${idOf(competition)}_$index',
+                        ),
                         padding: const EdgeInsets.only(right: 16),
-                        child: EventCard(
-                          event: event,
-                          onTap: () {
-                            controller.selectEvent(event);
-                            context.push('/events/${event.id}');
-                          },
+                        child: CompetitionCard(
+                          competition: competition,
+                          onTap: () =>
+                              context.push('/events/${idOf(competition)}'),
                         ),
                       );
                     },
@@ -1025,22 +1054,15 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildUpcomingEventsSection(
     BuildContext context,
-    EventController controller,
+    CompetitionController controller,
   ) {
-    // Ensure we're observing the events list
-    final events = controller.events;
-
-    final now = DateTime.now();
-    final upcomingEvents = events
-        .where((e) {
-          // Events happening more than 15 days from now
-          final daysUntil = e.startDate.difference(now).inDays;
-          return daysUntil > 15;
-        })
+    final upcomingCompetitions = controller.homeCompetitions
+        .where((c) => c.status == 'upcoming')
         .take(4)
         .toList();
+    final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
 
-    if (upcomingEvents.isEmpty) {
+    if (upcomingCompetitions.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
@@ -1062,7 +1084,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Check back later for upcoming events',
+                      'Check back later for upcoming competitions',
                       style: Theme.of(
                         context,
                       ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
@@ -1112,28 +1134,26 @@ class HomeScreen extends StatelessWidget {
                   constraints.maxWidth >= 600 && constraints.maxWidth < 1024;
 
               if (isMobile) {
-                // Mobile: Vertical list
                 return ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: upcomingEvents.length,
+                  itemCount: upcomingCompetitions.length,
                   itemBuilder: (context, index) {
-                    final event = upcomingEvents[index];
+                    final competition = upcomingCompetitions[index];
                     return Padding(
-                      key: ValueKey('upcoming_event_${event.id}_$index'),
+                      key: ValueKey(
+                        'upcoming_comp_${idOf(competition)}_$index',
+                      ),
                       padding: const EdgeInsets.only(bottom: 16),
-                      child: EventCard(
-                        event: event,
-                        onTap: () {
-                          controller.selectEvent(event);
-                          context.push('/events/${event.id}');
-                        },
+                      child: CompetitionCard(
+                        competition: competition,
+                        onTap: () =>
+                            context.push('/events/${idOf(competition)}'),
                       ),
                     );
                   },
                 );
               } else if (isTablet) {
-                // Tablet: 2 columns
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1143,21 +1163,19 @@ class HomeScreen extends StatelessWidget {
                     mainAxisSpacing: 16,
                     childAspectRatio: 0.75,
                   ),
-                  itemCount: upcomingEvents.length,
+                  itemCount: upcomingCompetitions.length,
                   itemBuilder: (context, index) {
-                    final event = upcomingEvents[index];
-                    return EventCard(
-                      key: ValueKey('upcoming_event_${event.id}_$index'),
-                      event: event,
-                      onTap: () {
-                        controller.selectEvent(event);
-                        context.push('/events/${event.id}');
-                      },
+                    final competition = upcomingCompetitions[index];
+                    return CompetitionCard(
+                      key: ValueKey(
+                        'upcoming_comp_${idOf(competition)}_$index',
+                      ),
+                      competition: competition,
+                      onTap: () => context.push('/events/${idOf(competition)}'),
                     );
                   },
                 );
               } else {
-                // Desktop: Horizontal scroll or grid
                 return SizedBox(
                   height: 320,
                   child: ListView.builder(
@@ -1165,18 +1183,18 @@ class HomeScreen extends StatelessWidget {
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     itemExtent: constraints.maxWidth * 0.35,
-                    itemCount: upcomingEvents.length,
+                    itemCount: upcomingCompetitions.length,
                     itemBuilder: (context, index) {
-                      final event = upcomingEvents[index];
+                      final competition = upcomingCompetitions[index];
                       return Padding(
-                        key: ValueKey('upcoming_event_${event.id}_$index'),
+                        key: ValueKey(
+                          'upcoming_comp_${idOf(competition)}_$index',
+                        ),
                         padding: const EdgeInsets.only(right: 16),
-                        child: EventCard(
-                          event: event,
-                          onTap: () {
-                            controller.selectEvent(event);
-                            context.push('/events/${event.id}');
-                          },
+                        child: CompetitionCard(
+                          competition: competition,
+                          onTap: () =>
+                              context.push('/events/${idOf(competition)}'),
                         ),
                       );
                     },

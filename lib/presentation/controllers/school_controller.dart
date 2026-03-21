@@ -464,6 +464,10 @@ class SchoolController extends GetxController {
   // Submit school form
   Future<void> submitSchool() async {
     if (!formKey.currentState!.validate()) {
+      // Important: The institution dialog closes based on `errorMessage`.
+      // If validation fails and we don't set an error, the dialog thinks it's
+      // a success and auto-closes.
+      errorMessage.value = 'Please fill all required fields';
       return;
     }
 

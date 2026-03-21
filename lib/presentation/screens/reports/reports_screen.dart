@@ -1,11 +1,17 @@
+import 'dart:typed_data';
+import 'dart:html' as html show Blob, Url, AnchorElement;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/competition_model.dart';
+import '../../../data/repositories/reports_repository.dart';
 import '../../controllers/reports_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import 'reports_users_tab.dart';
 import 'reports_participants_tab.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Reports Screen
 /// Displays various reports and analytics
@@ -18,6 +24,7 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   late final ReportsController controller;
+  final ReportsRepository _printRepository = ReportsRepository();
 
   @override
   void initState() {
@@ -528,19 +535,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Prize Winners (Category Wise)'),
+        Row(
+          children: [
+            Expanded(child: _sectionTitle('Prize Winners (Category Wise)')),
+            IconButton(
+              tooltip: 'Print Prize Winners',
+              icon: const Icon(Icons.print, color: AppTheme.primaryColor),
+              onPressed: _printPrizeWinnersPdf,
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
         ...blocks.map((b) {
           final block = (b as Map).cast<String, dynamic>();
           final stageName = (block['stageName'] ?? '').toString();
           final categoryName = (block['categoryName'] ?? '').toString();
-          final groupName = (block['groupName'] ?? '').toString();
           final winners = (block['winners'] as List?)?.cast() ?? [];
 
           final title =
               '${categoryName.isNotEmpty ? categoryName : 'Category'}'
-              '  •  ${stageName.isNotEmpty ? 'Stage $stageName' : 'Stage'}'
-              '  •  ${groupName.isNotEmpty ? groupName : 'Group'}';
+              '  •  ${stageName.isNotEmpty ? 'Stage $stageName' : 'Stage'}';
 
           return Card(
             elevation: 2,
@@ -597,7 +611,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         final participantName = (m['participantName'] ?? '')
                             .toString();
                         final regNo = (m['registrationNo'] ?? '').toString();
+                        final stageIdNum = (block['stageId'] as num?)?.toInt();
+                        final categoryIdNum = (block['categoryId'] as num?)
+                            ?.toInt();
+                        final participantRegIdNum =
+                            (m['participantRegistrationId'] as num?)?.toInt();
+                        final prizeRankNum = (m['prizeRank'] as num?)?.toInt();
                         final inst = (m['institutionName'] ?? '').toString();
+                        final winnerGroupName = (m['groupName'] ?? '')
+                            .toString();
                         final avg = (m['avgScore'] ?? 0).toString();
 
                         return Container(
@@ -636,34 +658,96 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      participantName.isNotEmpty
-                                          ? participantName
-                                          : 'Unknown',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          participantName.isNotEmpty
+                                              ? participantName
+                                              : 'Unknown',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        if (regNo.isNotEmpty) ...[
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            regNo,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[700],
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      [
-                                        if (regNo.isNotEmpty) regNo,
-                                        if (inst.isNotEmpty) inst,
-                                      ].join(' • '),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[700],
-                                        fontWeight: FontWeight.w600,
+                                    if (winnerGroupName.isNotEmpty ||
+                                        inst.isNotEmpty)
+                                      Text(
+                                        [
+                                          if (winnerGroupName.isNotEmpty)
+                                            winnerGroupName,
+                                          if (inst.isNotEmpty) inst,
+                                        ].join(' - '),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[700],
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              IconButton(
+                                tooltip: 'Download certificate',
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                ),
+                                icon: Icon(
+                                  Icons.workspace_premium_outlined,
+                                  color: AppTheme.primaryColor,
+                                  size: isMobile ? 22 : 24,
+                                ),
+                                onPressed: () async {
+                                  final cid = int.tryParse(
+                                    controller.selectedCompetitionId.value ??
+                                        '',
+                                  );
+                                  if (cid == null ||
+                                      stageIdNum == null ||
+                                      categoryIdNum == null ||
+                                      participantRegIdNum == null) {
+                                    Get.snackbar(
+                                      'Error',
+                                      'Cannot download certificate: missing data',
+                                      backgroundColor: Colors.red,
+                                      colorText: Colors.white,
+                                    );
+                                    return;
+                                  }
+                                  await _downloadPrizeWinnerCertificate(
+                                    competitionId: cid,
+                                    stageId: stageIdNum,
+                                    categoryId: categoryIdNum,
+                                    participantRegistrationId:
+                                        participantRegIdNum,
+                                    prizeRank: prizeRankNum,
+                                    regNoForFilename: regNo,
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 4),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
@@ -696,6 +780,84 @@ class _ReportsScreenState extends State<ReportsScreen> {
           );
         }),
       ],
+    );
+  }
+
+  Future<void> _downloadPdf(Uint8List bytes, String filename) async {
+    if (bytes.isEmpty) return;
+
+    if (kIsWeb) {
+      final blob = html.Blob([bytes]);
+      final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: blobUrl)
+        ..setAttribute('download', filename)
+        ..click();
+      html.Url.revokeObjectUrl(blobUrl);
+      return;
+    }
+
+    final dataUri = Uri.dataFromBytes(bytes, mimeType: 'application/pdf');
+    if (await canLaunchUrl(dataUri)) {
+      await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _printPrizeWinnersPdf() async {
+    final competitionId = int.tryParse(
+      controller.selectedCompetitionId.value ?? '',
+    );
+    if (competitionId == null) return;
+
+    final resp = await _printRepository.getCompetitionPrizeWinnersPrintPdf(
+      competitionId,
+    );
+
+    if (!resp.success || resp.data == null) {
+      Get.snackbar(
+        'Error',
+        resp.message ?? 'Failed to generate Prize Winners PDF',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    await _downloadPdf(resp.data!, 'prize_winners_$competitionId.pdf');
+  }
+
+  Future<void> _downloadPrizeWinnerCertificate({
+    required int competitionId,
+    required int stageId,
+    required int categoryId,
+    required int participantRegistrationId,
+    int? prizeRank,
+    required String regNoForFilename,
+  }) async {
+    final resp = await _printRepository.getPrizeWinnerCertificatePdf(
+      competitionId,
+      stageId: stageId,
+      categoryId: categoryId,
+      participantRegistrationId: participantRegistrationId,
+      prizeRank: prizeRank,
+    );
+
+    if (!resp.success || resp.data == null) {
+      Get.snackbar(
+        'Error',
+        resp.message ?? 'Failed to generate certificate',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    final safe = regNoForFilename.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final suffix = safe.isNotEmpty
+        ? safe
+        : participantRegistrationId.toString();
+    await _downloadPdf(
+      resp.data!,
+      'prize_certificate_${competitionId}_$suffix.pdf',
     );
   }
 

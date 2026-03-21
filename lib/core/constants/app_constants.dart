@@ -147,6 +147,9 @@ class EndPoints {
   static String competitionById(String id) => '/competition/$id';
   static String competitionBrochure(String id) => '/competition/$id/brochure';
 
+  /// Public competitions list (home / unauthenticated)
+  static String competitionPublic = '/competition/public';
+
   /// COMPETITION OPTIONS
   static String categoryList = '/category';
   static String categoryCreate = '/category';
@@ -187,4 +190,18 @@ class EndPoints {
 
   static String competitionParticipantScores(int competitionId) =>
       '/reports/competition/$competitionId/participant-scores';
+
+  /// REPORTS PRINT (PDF / Excel as blob)
+  static String competitionPrizeWinnersPrint(int competitionId) =>
+      '/reports/competition/$competitionId/print/prize-winners';
+
+  /// Single prize-winner certificate PDF (query: stageId, categoryId, participantRegistrationId, optional prizeRank)
+  static String competitionPrizeWinnerCertificate(int competitionId) =>
+      '/reports/competition/$competitionId/print/prize-winner-certificate';
+
+  static String competitionParticipantsPrint(int competitionId) =>
+      '/reports/competition/$competitionId/print/participants';
+
+  static String competitionParticipantsExcel(int competitionId) =>
+      '/reports/competition/$competitionId/print/participants/excel';
 }

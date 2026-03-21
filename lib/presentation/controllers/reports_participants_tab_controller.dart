@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:get/get.dart';
 
+import '../../data/models/api_response.dart';
 import '../../data/repositories/reports_repository.dart';
 import 'reports_controller.dart';
 
@@ -20,6 +23,9 @@ class ReportsParticipantsTabController extends GetxController {
   final RxnInt selectedStageId = RxnInt();
   final RxnInt selectedCategoryId = RxnInt();
   final RxnInt selectedGroupId = RxnInt();
+
+  // UI-only search (filters current blocks in the Participants tab)
+  final RxString participantSearchQuery = ''.obs;
 
   // Options derived from blocks
   final RxList<Map<String, dynamic>> stageOptions =
@@ -89,6 +95,10 @@ class ReportsParticipantsTabController extends GetxController {
     selectedStageId.value = null;
     selectedCategoryId.value = null;
     selectedGroupId.value = null;
+  }
+
+  void setParticipantSearchQuery(String value) {
+    participantSearchQuery.value = value;
   }
 
   void setStage(int? id) {
@@ -210,5 +220,25 @@ class ReportsParticipantsTabController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  Future<ApiResponse<Uint8List>> getParticipantsScoresExcel() async {
+    final competitionId = int.tryParse(
+      reportsController.selectedCompetitionId.value ?? '',
+    );
+    if (competitionId == null) {
+      return ApiResponse(
+        success: false,
+        message: 'Select a competition first',
+        statusCode: 0,
+      );
+    }
+
+    return _reportsRepository.getCompetitionParticipantsExcel(
+      competitionId,
+      stageId: selectedStageId.value,
+      categoryId: selectedCategoryId.value,
+      groupId: selectedGroupId.value,
+    );
   }
 }

@@ -317,3 +317,65 @@ class CompetitionModel {
     );
   }
 }
+
+/// Lightweight model for public competition list (home screen).
+/// Matches GET /competition/public response.
+class HomeCompetitionModel {
+  final int? id;
+  final String competitionName;
+  final String description;
+  final String address;
+  final String? eventStartDate;
+  final String? eventEndDate;
+  final String? displayAdFrom;
+  final List<String> categories;
+  final Map<String, double> categoryAmounts;
+  final String? brochureUrl;
+  final String? brochureFilePath;
+  final String status;
+
+  HomeCompetitionModel({
+    this.id,
+    required this.competitionName,
+    this.description = '',
+    this.address = '',
+    this.eventStartDate,
+    this.eventEndDate,
+    this.displayAdFrom,
+    this.categories = const [],
+    this.categoryAmounts = const {},
+    this.brochureUrl,
+    this.brochureFilePath,
+    this.status = 'upcoming',
+  });
+
+  factory HomeCompetitionModel.fromJson(Map<String, dynamic> json) {
+    Map<String, double> amounts = {};
+    if (json['categoryAmounts'] != null && json['categoryAmounts'] is Map) {
+      for (final e in (json['categoryAmounts'] as Map).entries) {
+        final v = e.value;
+        amounts[e.key.toString()] = v is int
+            ? v.toDouble()
+            : (v is double ? v : double.tryParse(v.toString()) ?? 0);
+      }
+    }
+    return HomeCompetitionModel(
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
+      competitionName: json['competitionName']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      eventStartDate: json['eventStartDate']?.toString(),
+      eventEndDate: json['eventEndDate']?.toString(),
+      displayAdFrom: json['displayAdFrom']?.toString(),
+      categories: json['categories'] != null
+          ? List<String>.from(json['categories'])
+          : [],
+      categoryAmounts: amounts,
+      brochureUrl: json['brochureUrl']?.toString(),
+      brochureFilePath: json['brochureFilePath']?.toString(),
+      status: json['status']?.toString() ?? 'upcoming',
+    );
+  }
+
+  String? get idStr => id?.toString();
+}

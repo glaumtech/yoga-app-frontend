@@ -28,6 +28,7 @@ import '../presentation/screens/users/user_management_screen.dart';
 import '../presentation/screens/users/users_list_screen.dart';
 import '../presentation/screens/competitions/create_competition_screen.dart';
 import '../presentation/screens/participants/participant_management_screen.dart';
+import '../presentation/screens/participants/user_competition_registration_screen.dart';
 import '../presentation/screens/judge/judge_assigned_participants_screen.dart';
 import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../core/constants/app_constants.dart';
@@ -294,6 +295,20 @@ class AppRouter {
       //   name: 'registration-form',
       //   builder: (context, state) => const RegistrationFormScreen(),
       // ),
+      // User-facing participant registration by competition (anyone can access)
+      GoRoute(
+        path: AppRoutes.registerCompetition,
+        name: 'register-competition',
+        builder: (context, state) {
+          final competitionId = state.pathParameters['competitionId'] ?? '';
+          if (competitionId.isEmpty) {
+            return const EventsListScreen();
+          }
+          return UserCompetitionRegistrationScreen(
+            competitionId: competitionId,
+          );
+        },
+      ),
       GoRoute(
         path: AppRoutes.register,
         name: 'register',

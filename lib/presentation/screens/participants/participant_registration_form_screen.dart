@@ -17,7 +17,12 @@ import '../../../data/models/school_model.dart';
 import '../schools/school_create_screen.dart';
 
 class ParticipantRegistrationFormScreen extends StatelessWidget {
-  const ParticipantRegistrationFormScreen({super.key});
+  final String? initialCompetitionId;
+
+  const ParticipantRegistrationFormScreen({
+    super.key,
+    this.initialCompetitionId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +34,13 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    // Load competitions if empty
+    // Preselect competition when coming from a competition-specific route
+    if ((initialCompetitionId ?? '').isNotEmpty &&
+        participantController.selectedEventId.value.isEmpty) {
+      participantController.selectedEventId.value = initialCompetitionId!;
+    }
+
+    // Load competitions (full model needed for category/group/stage mapping)
     if (competitionController.competitions.isEmpty &&
         !competitionController.isLoading.value) {
       competitionController.loadCompetitions();

@@ -193,6 +193,39 @@ class CompetitionRepository {
     }
   }
 
+  /// Public API for home screen: GET /competition/public
+  Future<ApiResponse<List<HomeCompetitionModel>>>
+  getCompetitionsPublic() async {
+    try {
+      final response = await _apiService
+          .getResponse<List<HomeCompetitionModel>>(
+            url: EndPoints.competitionPublic,
+            apiType: APIType.aGet,
+            fromJson: (json) {
+              if (json == null) return <HomeCompetitionModel>[];
+              if (json is List) {
+                return json
+                    .map(
+                      (e) => HomeCompetitionModel.fromJson(
+                        e as Map<String, dynamic>,
+                      ),
+                    )
+                    .toList();
+              }
+              return <HomeCompetitionModel>[];
+            },
+          );
+      return response;
+    } catch (e, stackTrace) {
+      print('Error in getCompetitionsPublic: $e');
+      print('Stack trace: $stackTrace');
+      return ApiResponse(
+        success: false,
+        message: 'Error loading competitions: ${e.toString()}',
+      );
+    }
+  }
+
   Future<ApiResponse<CompetitionsListResponse>> getAllCompetitions({
     String? search,
     String? status,
@@ -425,7 +458,8 @@ class CompetitionRepository {
 
       return ApiResponse(
         success: false,
-        message: response.message ?? 'Failed to fetch categories for competition',
+        message:
+            response.message ?? 'Failed to fetch categories for competition',
       );
     } catch (e) {
       print('Error in getCategoriesByCompetition: $e');
