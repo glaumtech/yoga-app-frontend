@@ -193,6 +193,44 @@ class CompetitionRepository {
     }
   }
 
+  /// DELETE /competition/{id}
+  Future<ApiResponse<void>> deleteCompetition(String id) async {
+    try {
+      if (id.isEmpty) {
+        return ApiResponse(
+          success: false,
+          message: 'Competition ID is required',
+        );
+      }
+
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionUpdate(id),
+        apiType: APIType.aDelete,
+        fromJson: (json) => json,
+      );
+
+      if (response.success) {
+        return ApiResponse(
+          success: true,
+          message: response.message ?? 'Competition deleted successfully',
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to delete competition',
+        statusCode: response.statusCode,
+      );
+    } catch (e, stackTrace) {
+      print('Error in deleteCompetition: $e');
+      print('Stack trace: $stackTrace');
+      return ApiResponse(
+        success: false,
+        message: 'Error deleting competition: ${e.toString()}',
+      );
+    }
+  }
+
   /// Public API for home screen: GET /competition/public
   Future<ApiResponse<List<HomeCompetitionModel>>>
   getCompetitionsPublic() async {

@@ -241,9 +241,17 @@ class HomeScreen extends StatelessWidget {
                                         typeStr == 'JURY' ||
                                         typeStr.contains('JURY');
                                     if (!context.mounted) break;
+                                    // Admins: user creation / management screen
+                                    if (userIsAdmin) {
+                                      context.push(AppRoutes.userManagement);
+                                      break;
+                                    }
                                     if (isJuryUser) {
                                       context.go(AppRoutes.juryScoring);
+                                      break;
                                     }
+                                    // Other logged-in users: participant dashboard
+                                    context.push(AppRoutes.userDashboard);
                                     break;
                                   case 'logout':
                                     // Sign out first
@@ -616,10 +624,22 @@ class HomeScreen extends StatelessWidget {
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: Icon(
-                                      Icons.qr_code,
-                                      size: 50,
-                                      color: AppTheme.primaryColor,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Image.asset(
+                                        'images/bar-code.jpg',
+                                        width: 100,
+                                        height: 100,
+                                        fit: BoxFit.contain,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                              return Icon(
+                                                Icons.qr_code,
+                                                size: 50,
+                                                color: AppTheme.primaryColor,
+                                              );
+                                            },
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(height: 8),
@@ -674,14 +694,14 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        // Event Details Grid
+                        // Competition details grid
                         Row(
                           children: [
                             Expanded(
                               child: _buildBannerDetail(
                                 context,
                                 Icons.calendar_today,
-                                'Event Date',
+                                'Competition Date',
                                 DateFormat(
                                   'EEEE, MMMM dd, yyyy',
                                 ).format(bannerEvent.startDate),
@@ -761,25 +781,17 @@ class HomeScreen extends StatelessWidget {
                                 userTypeUpper.contains('JUDGE');
 
                             if (isMobile) {
-                              // Mobile: Stack vertically
-                              return Center(
+                              // Full-width buttons on small screens (parent gives bounded width)
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // View Event Button
-                                    PrimaryButton(
-                                      text: 'View Event',
-                                      icon: Icons.visibility,
-                                      onPressed: () {
-                                        context.push(
-                                          '/events/${bannerEvent.id}',
-                                        );
-                                      },
-                                      width: 220,
-                                      height: 50,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    // Register Button
+                                    // View Event button hidden for now
                                     PrimaryButton(
                                       text: 'Register Now!',
                                       icon: Icons.person_add,
@@ -790,12 +802,11 @@ class HomeScreen extends StatelessWidget {
                                           ),
                                         );
                                       },
-                                      width: 220,
+                                      width: double.infinity,
                                       height: 50,
                                     ),
                                     if (userIsJudge) ...[
                                       const SizedBox(height: 12),
-                                      // Add Score Button (Judge only)
                                       PrimaryButton(
                                         text: 'Add Score',
                                         icon: Icons.score,
@@ -808,7 +819,7 @@ class HomeScreen extends StatelessWidget {
                                             },
                                           );
                                         },
-                                        width: 220,
+                                        width: double.infinity,
                                         height: 50,
                                       ),
                                     ],
@@ -821,19 +832,7 @@ class HomeScreen extends StatelessWidget {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    // View Event Button
-                                    PrimaryButton(
-                                      text: 'View Event',
-                                      icon: Icons.visibility,
-                                      onPressed: () {
-                                        context.push(
-                                          '/events/${bannerEvent.id}',
-                                        );
-                                      },
-                                      width: 220,
-                                      height: 50,
-                                    ),
-                                    const SizedBox(width: 16),
+                                    // View Event button hidden for now
                                     // Register Button
                                     PrimaryButton(
                                       text: 'Register Now!',
@@ -969,8 +968,8 @@ class HomeScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: SectionHeader(
-                  title: 'Current Events',
-                  subtitle: 'Events happening soon',
+                  title: 'Current Competitions',
+                  subtitle: 'Competitions happening soon',
                   showDivider: false,
                 ),
               ),
@@ -1002,11 +1001,7 @@ class HomeScreen extends StatelessWidget {
                     return Padding(
                       key: ValueKey('current_comp_${idOf(competition)}_$index'),
                       padding: const EdgeInsets.only(bottom: 16),
-                      child: CompetitionCard(
-                        competition: competition,
-                        onTap: () =>
-                            context.push('/events/${idOf(competition)}'),
-                      ),
+                      child: CompetitionCard(competition: competition),
                     );
                   },
                 );
@@ -1026,7 +1021,6 @@ class HomeScreen extends StatelessWidget {
                     return CompetitionCard(
                       key: ValueKey('current_comp_${idOf(competition)}_$index'),
                       competition: competition,
-                      onTap: () => context.push('/events/${idOf(competition)}'),
                     );
                   },
                 );
@@ -1046,11 +1040,7 @@ class HomeScreen extends StatelessWidget {
                           'current_comp_${idOf(competition)}_$index',
                         ),
                         padding: const EdgeInsets.only(right: 16),
-                        child: CompetitionCard(
-                          competition: competition,
-                          onTap: () =>
-                              context.push('/events/${idOf(competition)}'),
-                        ),
+                        child: CompetitionCard(competition: competition),
                       );
                     },
                   ),
@@ -1080,7 +1070,7 @@ class HomeScreen extends StatelessWidget {
         color: Colors.white,
         child: Column(
           children: [
-            SectionHeader(title: 'Upcoming Events', showDivider: false),
+            SectionHeader(title: 'Upcoming Competitions', showDivider: false),
             const SizedBox(height: 24),
             Card(
               child: Padding(
@@ -1090,7 +1080,7 @@ class HomeScreen extends StatelessWidget {
                     Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
                     const SizedBox(height: 16),
                     Text(
-                      'No upcoming events',
+                      'No upcoming competitions',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 8),
@@ -1122,7 +1112,7 @@ class HomeScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: SectionHeader(
-                  title: 'Upcoming Events',
+                  title: 'Upcoming Competitions',
                   subtitle: 'Future competitions',
                   showDivider: false,
                 ),
@@ -1156,11 +1146,7 @@ class HomeScreen extends StatelessWidget {
                         'upcoming_comp_${idOf(competition)}_$index',
                       ),
                       padding: const EdgeInsets.only(bottom: 16),
-                      child: CompetitionCard(
-                        competition: competition,
-                        onTap: () =>
-                            context.push('/events/${idOf(competition)}'),
-                      ),
+                      child: CompetitionCard(competition: competition),
                     );
                   },
                 );
@@ -1182,7 +1168,6 @@ class HomeScreen extends StatelessWidget {
                         'upcoming_comp_${idOf(competition)}_$index',
                       ),
                       competition: competition,
-                      onTap: () => context.push('/events/${idOf(competition)}'),
                     );
                   },
                 );
@@ -1202,11 +1187,7 @@ class HomeScreen extends StatelessWidget {
                           'upcoming_comp_${idOf(competition)}_$index',
                         ),
                         padding: const EdgeInsets.only(right: 16),
-                        child: CompetitionCard(
-                          competition: competition,
-                          onTap: () =>
-                              context.push('/events/${idOf(competition)}'),
-                        ),
+                        child: CompetitionCard(competition: competition),
                       );
                     },
                   ),

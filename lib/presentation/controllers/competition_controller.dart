@@ -1284,29 +1284,66 @@ class CompetitionController extends GetxController {
     await loadCompetitionForEdit(competition, isView: false);
   }
 
-  // Delete competition
+  // Delete competition — DELETE /competition/{id}
   void deleteCompetition(BuildContext context, CompetitionModel competition) {
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Competition'),
         content: Text(
           'Are you sure you want to delete "${competition.competitionName}"? This action cannot be undone.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
-              // TODO: Implement delete API call
-              Get.snackbar(
-                'Info',
-                'Delete functionality will be implemented soon',
-                snackPosition: SnackPosition.BOTTOM,
-              );
+              Navigator.pop(dialogContext);
+              final id = competition.id?.trim();
+              if (id == null || id.isEmpty) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Invalid competition ID'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+                return;
+              }
+
+              isLoading.value = true;
+              try {
+                final result = await _repository.deleteCompetition(id);
+                if (result.success) {
+                  await loadCompetitions();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          result.message ?? 'Competition deleted successfully',
+                        ),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          result.message ?? 'Failed to delete competition',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              } finally {
+                isLoading.value = false;
+              }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),

@@ -42,32 +42,22 @@ class CompetitionCard extends StatelessWidget {
         : null;
     final bannerUrl = _bannerImageUrl();
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-      clipBehavior: Clip.antiAlias,
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+    final cardBody = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Banner image/logo at the top
+        _buildBanner(context, bannerUrl),
+        Padding(
+          padding: const EdgeInsets.only(
+            left: 12,
+            right: 12,
+            top: 12,
+            bottom: 12,
+          ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Banner image/logo at the top
-              _buildBanner(context, bannerUrl),
-              Padding(
-                padding: const EdgeInsets.only(
-                  left: 12,
-                  right: 12,
-                  top: 12,
-                  bottom: 12,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
                     Row(
                       children: [
                         Expanded(
@@ -198,9 +188,23 @@ class CompetitionCard extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
+      ],
+    );
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+      clipBehavior: Clip.antiAlias,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Material(
+        color: Colors.transparent,
+        child: onTap != null
+            ? InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(12),
+                child: cardBody,
+              )
+            : cardBody,
       ),
     );
   }

@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
-import '../../controllers/auth_controller.dart';
+import '../../controllers/competition_controller.dart';
 import '../../controllers/event_controller.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/admin_sidebar_layout.dart';
@@ -13,7 +13,6 @@ class AdminDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authController = Get.find<AuthController>();
     final eventController = Get.find<EventController>();
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
@@ -123,14 +122,14 @@ class AdminDashboardScreen extends StatelessWidget {
                               children: [
                                 _buildStatCard(
                                   context,
-                                  'Total Events',
+                                  'Total Competitions',
                                   totalEventsCount.toString(),
                                   Icons.event,
                                   AppTheme.primaryColor,
                                 ),
                                 _buildStatCard(
                                   context,
-                                  'Active Events',
+                                  'Active Competitions',
                                   activeEventsCount.toString(),
                                   Icons.event_available,
                                   AppTheme.secondaryColor,
@@ -165,27 +164,27 @@ class AdminDashboardScreen extends StatelessWidget {
                                 children: [
                                   _buildActionCard(
                                     context,
-                                    'Manage Events',
-                                    Icons.event,
+                                    'Competitions',
+                                    Icons.emoji_events,
                                     AppTheme.primaryColor,
-                                    () =>
-                                        context.push(AppRoutes.eventManagement),
+                                    () => _openCompetitionsList(context),
                                   ),
                                   _buildActionCard(
                                     context,
-                                    'Manage Judges',
-                                    Icons.gavel,
+                                    'Users',
+                                    Icons.people,
                                     Colors.teal,
-                                    () =>
-                                        context.push(AppRoutes.judgeManagement),
+                                    () => context.push(
+                                      AppRoutes.userManagement,
+                                    ),
                                   ),
                                   _buildActionCard(
                                     context,
-                                    'Schedule Management',
-                                    Icons.schedule,
+                                    'Participants',
+                                    Icons.groups,
                                     Colors.orange,
                                     () => context.push(
-                                      AppRoutes.scheduleManagement,
+                                      AppRoutes.participantManagement,
                                     ),
                                   ),
                                   _buildActionCard(
@@ -193,7 +192,7 @@ class AdminDashboardScreen extends StatelessWidget {
                                     'View Scores',
                                     Icons.score,
                                     Colors.purple,
-                                    () => _showEventSelectionDialog(context),
+                                    () => context.push(AppRoutes.reports),
                                   ),
                                 ],
                               );
@@ -334,56 +333,12 @@ class AdminDashboardScreen extends StatelessWidget {
     );
   }
 
-  void _showEventSelectionDialog(BuildContext context) {
-    final eventController = Get.find<EventController>();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Event'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Obx(() {
-            if (eventController.isLoading.value) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (eventController.events.isEmpty) {
-              return const Text('No events available');
-            }
-
-            return ListView.builder(
-              shrinkWrap: true,
-              itemCount: eventController.events.length,
-              itemBuilder: (context, index) {
-                final event = eventController.events[index];
-                return ListTile(
-                  leading: Icon(Icons.event, color: AppTheme.primaryColor),
-                  title: Text(event.title),
-                  subtitle: Text(
-                    '${event.startDate.day}/${event.startDate.month}/${event.startDate.year}',
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push(
-                      AppRoutes.participantScoresList.replaceAll(
-                        ':eventId',
-                        event.id ?? '',
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          }),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
+  /// Opens [CreateCompetitionScreen] with the competitions list tab selected.
+  void _openCompetitionsList(BuildContext context) {
+    final cc = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
+    cc.isListView.value = true;
+    context.push(AppRoutes.createCompetition);
   }
 }

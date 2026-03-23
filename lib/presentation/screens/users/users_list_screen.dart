@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
@@ -402,8 +403,8 @@ class UsersListScreen extends StatelessWidget {
                     if (isSuperAdmin &&
                         (user.confirmPassword != null ||
                             user.password != null)) {
-                      return _buildUserInfoRow(
-                        'Password',
+                      return _buildPasswordInfoRow(
+                        context,
                         user.confirmPassword ?? user.password ?? 'N/A',
                       );
                     }
@@ -621,7 +622,8 @@ class UsersListScreen extends StatelessWidget {
                                     ),
                                   ),
                                   _buildTableCell(user.eventName ?? 'N/A'),
-                                  _buildTableCell(
+                                  _buildPasswordTableCell(
+                                    context,
                                     user.confirmPassword ??
                                         user.password ??
                                         'N/A',
@@ -677,6 +679,88 @@ class UsersListScreen extends StatelessWidget {
         ),
         softWrap: true,
         maxLines: null,
+      ),
+    );
+  }
+
+  /// Password column with copy (super-admin table).
+  Widget _buildPasswordTableCell(BuildContext context, String display) {
+    final canCopy = display.trim().isNotEmpty && display != 'N/A';
+    return TableCell(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  display,
+                  style: const TextStyle(fontSize: 13),
+                  softWrap: true,
+                  maxLines: null,
+                ),
+              ),
+            ),
+            if (canCopy)
+              IconButton(
+                icon: const Icon(Icons.copy, size: 18),
+                tooltip: 'Copy password',
+                onPressed: () =>
+                    _copyPasswordToClipboard(context, display.trim()),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _copyPasswordToClipboard(BuildContext context, String password) {
+    Clipboard.setData(ClipboardData(text: password));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Password copied to clipboard'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Mobile card password row with copy.
+  Widget _buildPasswordInfoRow(BuildContext context, String password) {
+    final canCopy = password.trim().isNotEmpty && password != 'N/A';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              'Password:',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(child: Text(password, style: const TextStyle(fontSize: 14))),
+          if (canCopy)
+            IconButton(
+              icon: const Icon(Icons.copy, size: 20),
+              tooltip: 'Copy password',
+              onPressed: () =>
+                  _copyPasswordToClipboard(context, password.trim()),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            ),
+        ],
       ),
     );
   }
