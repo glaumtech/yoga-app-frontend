@@ -6,46 +6,26 @@ class AppRoutes {
 
   // Public
   static const String home = '/home';
-  static const String events = '/events';
-  static const String eventDetails = '/events/:id';
   static const String about = '/about';
   static const String contact = '/contact';
-
-  // Participant
-  static const String userDashboard = '/user-dashboard';
-  static const String myRegistrations = '/my-registrations';
-  static const String registrationForm = '/registration-form';
-  static const String register = '/register/:eventId';
 
   /// User-facing participant registration for a competition (anyone can access).
   static const String registerCompetition =
       '/register/competition/:competitionId';
   static String registerCompetitionPath(String competitionId) =>
       '/register/competition/$competitionId';
-  static const String assignParticipant = '/assign-participant/:eventId';
 
   // Admin
   static const String adminLogin = '/admin/login';
   static const String adminDashboard = '/admin/dashboard';
-  static const String eventManagement = '/admin/events';
-  static const String participantList = '/participant-list';
-  static const String scheduleManagement = '/admin/schedule';
-  static const String adminScoring = '/admin-scoring';
-  static const String judgeManagement = '/admin/judges';
-  static const String participantScoresList = '/admin/scores/:eventId';
-  static const String participantScoreDetail =
-      '/admin/scores/:eventId/:participantId';
-  static const String schoolsList = '/admin/schools';
   static const String reports = '/admin/reports';
   static const String sponsors = '/admin/sponsors';
   static const String userManagement = '/admin/users';
   static const String usersList = '/admin/users/list';
   static const String createCompetition = '/admin/competitions/create';
   static const String participantManagement = '/admin/participants';
+  static const String schoolsList = '/admin/schools';
 
-  // Judge
-  static const String assignedParticipants = '/assigned-participants/:eventId';
-
-  // Scoring
+  // Jury Scoring
   static const String juryScoring = '/jury/scoring';
 }

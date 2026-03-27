@@ -7,12 +7,6 @@ import '../../data/models/user_model.dart';
 import '../../core/constants/app_constants.dart';
 import '../../routes/app_routes.dart';
 import 'participant_controller.dart';
-import 'event_controller.dart';
-import 'judge_controller.dart';
-import 'scoring_controller.dart';
-import 'team_controller.dart';
-import 'participant_assignment_controller.dart';
-import 'judge_assigned_participants_controller.dart';
 import 'user_management_controller.dart';
 
 class AuthController extends GetxController {
@@ -75,8 +69,7 @@ class AuthController extends GetxController {
         print('User found in storage: ${user.username}');
         currentUser.value = user;
 
-        // Events are already loaded by EventController.onInit()
-        // No need to reload here to avoid duplicate calls
+        // No additional controller preload required here.
       } else {
         print('No user found in storage');
       }
@@ -135,15 +128,6 @@ class AuthController extends GetxController {
       if (response.success && response.data != null) {
         currentUser.value = response.data;
         isLoading.value = false;
-
-        // Reload events after successful login
-        try {
-          if (Get.isRegistered<EventController>()) {
-            Get.find<EventController>().loadEvents();
-          }
-        } catch (e) {
-          // EventController might not be registered, ignore
-        }
 
         return true;
       } else {
@@ -384,60 +368,6 @@ class AuthController extends GetxController {
       // Reset Participant Controller
       if (Get.isRegistered<ParticipantController>()) {
         Get.find<ParticipantController>().reset();
-      }
-    } catch (e) {
-      // Controller might not be registered, ignore
-    }
-
-    // try {
-    //   // Reset Event Controller
-    //   if (Get.isRegistered<EventController>()) {
-    //     Get.find<EventController>().reset();
-    //   }
-    // } catch (e) {
-    //   // Controller might not be registered, ignore
-    // }
-
-    try {
-      // Reset Judge Controller
-      if (Get.isRegistered<JudgeController>()) {
-        Get.find<JudgeController>().reset();
-      }
-    } catch (e) {
-      // Controller might not be registered, ignore
-    }
-
-    try {
-      // Reset Scoring Controller
-      if (Get.isRegistered<ScoringController>()) {
-        Get.find<ScoringController>().reset();
-      }
-    } catch (e) {
-      // Controller might not be registered, ignore
-    }
-
-    try {
-      // Reset Team Controller
-      if (Get.isRegistered<TeamController>()) {
-        Get.find<TeamController>().reset();
-      }
-    } catch (e) {
-      // Controller might not be registered, ignore
-    }
-
-    try {
-      // Reset Participant Assignment Controller (temporary, but reset if exists)
-      if (Get.isRegistered<ParticipantAssignmentController>()) {
-        Get.find<ParticipantAssignmentController>().reset();
-      }
-    } catch (e) {
-      // Controller might not be registered, ignore
-    }
-
-    try {
-      // Reset Judge Assigned Participants Controller (temporary, but reset if exists)
-      if (Get.isRegistered<JudgeAssignedParticipantsController>()) {
-        Get.find<JudgeAssignedParticipantsController>().reset();
       }
     } catch (e) {
       // Controller might not be registered, ignore

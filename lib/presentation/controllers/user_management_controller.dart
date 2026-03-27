@@ -9,7 +9,6 @@ import '../../data/repositories/user_management_repository.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/user_management_model.dart';
 import '../../data/models/user_type_model.dart';
-import '../../data/models/event_model.dart';
 import '../../data/models/competition_option_model.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/storage_service.dart';
@@ -340,17 +339,6 @@ class UserManagementController extends GetxController {
       availableCategories.clear();
     } finally {
       isLoadingStagesCategories.value = false;
-    }
-  }
-
-  // Set selected event
-  void setSelectedEvent(EventModel? event) {
-    if (event != null && event.id != null) {
-      selectedEventId.value = event.id!;
-      selectedEventName.value = event.title;
-    } else {
-      selectedEventId.value = '';
-      selectedEventName.value = '';
     }
   }
 

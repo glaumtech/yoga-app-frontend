@@ -197,8 +197,7 @@ class HomeScreen extends StatelessWidget {
                                 icon: const Icon(Icons.dashboard),
                                 color: Colors.white,
                                 tooltip: 'Dashboard',
-                                onPressed: () =>
-                                    context.push(AppRoutes.userDashboard),
+                                onPressed: () => context.push(AppRoutes.home),
                               ),
                             if (userIsAdmin)
                               IconButton(
@@ -251,7 +250,7 @@ class HomeScreen extends StatelessWidget {
                                       break;
                                     }
                                     // Other logged-in users: participant dashboard
-                                    context.push(AppRoutes.userDashboard);
+                                    context.push(AppRoutes.home);
                                     break;
                                   case 'logout':
                                     // Sign out first
@@ -811,13 +810,7 @@ class HomeScreen extends StatelessWidget {
                                         text: 'Add Score',
                                         icon: Icons.score,
                                         onPressed: () {
-                                          context.pushNamed(
-                                            'assigned-participants',
-                                            pathParameters: {
-                                              'eventId': bannerEvent.id
-                                                  .toString(),
-                                            },
-                                          );
+                                          context.push(AppRoutes.juryScoring);
                                         },
                                         width: double.infinity,
                                         height: 50,
@@ -854,13 +847,7 @@ class HomeScreen extends StatelessWidget {
                                         text: 'Add Score',
                                         icon: Icons.score,
                                         onPressed: () {
-                                          context.pushNamed(
-                                            'assigned-participants',
-                                            pathParameters: {
-                                              'eventId': bannerEvent.id
-                                                  .toString(),
-                                            },
-                                          );
+                                          context.push(AppRoutes.juryScoring);
                                         },
                                         width: 220,
                                         height: 50,
@@ -974,7 +961,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               TextButton(
-                onPressed: () => context.push(AppRoutes.events),
+                onPressed: () => context.push(AppRoutes.home),
                 child: const Text('View More'),
               ),
             ],
@@ -1118,7 +1105,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               TextButton(
-                onPressed: () => context.push(AppRoutes.events),
+                onPressed: () => context.push(AppRoutes.home),
                 child: const Text('View More'),
               ),
             ],
@@ -1146,7 +1133,11 @@ class HomeScreen extends StatelessWidget {
                         'upcoming_comp_${idOf(competition)}_$index',
                       ),
                       padding: const EdgeInsets.only(bottom: 16),
-                      child: CompetitionCard(competition: competition),
+                      child: CompetitionCard(
+                        competition: competition,
+                        registrationButtonHeight: 40,
+                        showShareLinkOption: true,
+                      ),
                     );
                   },
                 );
@@ -1168,6 +1159,8 @@ class HomeScreen extends StatelessWidget {
                         'upcoming_comp_${idOf(competition)}_$index',
                       ),
                       competition: competition,
+                      registrationButtonHeight: 40,
+                      showShareLinkOption: true,
                     );
                   },
                 );
@@ -1187,7 +1180,11 @@ class HomeScreen extends StatelessWidget {
                           'upcoming_comp_${idOf(competition)}_$index',
                         ),
                         padding: const EdgeInsets.only(right: 16),
-                        child: CompetitionCard(competition: competition),
+                        child: CompetitionCard(
+                          competition: competition,
+                          registrationButtonHeight: 40,
+                          showShareLinkOption: true,
+                        ),
                       );
                     },
                   ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/participant_controller.dart';
-import '../../controllers/event_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/toggle_button_group.dart';
 import 'participants_list_screen.dart';
@@ -15,12 +14,6 @@ class ParticipantManagementScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final participantController = Get.put(ParticipantController());
-    final eventController = Get.find<EventController>();
-
-    // Load events if empty
-    if (eventController.events.isEmpty && !eventController.isLoading.value) {
-      eventController.loadEvents();
-    }
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;

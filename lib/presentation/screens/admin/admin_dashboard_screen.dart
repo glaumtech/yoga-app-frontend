@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/competition_controller.dart';
-import '../../controllers/event_controller.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 
@@ -13,7 +12,13 @@ class AdminDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final eventController = Get.find<EventController>();
+    final competitionController = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
+    if (competitionController.competitions.isEmpty &&
+        !competitionController.isLoading.value) {
+      competitionController.loadCompetitions();
+    }
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
@@ -74,7 +79,7 @@ class AdminDashboardScreen extends StatelessWidget {
                     ),
                     IconButton(
                       icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
-                      onPressed: () => eventController.loadEvents(),
+                      onPressed: () => competitionController.loadCompetitions(),
                       tooltip: 'Refresh',
                     ),
                   ],
@@ -83,12 +88,12 @@ class AdminDashboardScreen extends StatelessWidget {
               // Body Section
               Expanded(
                 child: Obx(() {
-                  if (eventController.isLoading.value) {
+                  if (competitionController.isLoading.value) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
                   return RefreshIndicator(
-                    onRefresh: () => eventController.loadEvents(),
+                    onRefresh: () => competitionController.loadCompetitions(),
                     child: SingleChildScrollView(
                       padding: EdgeInsets.all(isMobile ? 16 : 24),
                       child: Column(
@@ -98,11 +103,28 @@ class AdminDashboardScreen extends StatelessWidget {
                           SectionHeader(title: 'Overview', showDivider: false),
                           const SizedBox(height: 16),
                           Obx(() {
-                            // Calculate counts directly from EventController
-                            final eventsList = eventController.events;
-                            final totalEventsCount = eventsList.length;
-                            final activeEventsCount = eventsList
-                                .where((e) => e.active)
+                            final competitions =
+                                competitionController.competitions;
+                            final totalEventsCount = competitions.length;
+                            final now = DateTime.now();
+                            final activeEventsCount = competitions
+                                .where((c) {
+                                  final start = DateTime(
+                                    c.eventStartDate.year,
+                                    c.eventStartDate.month,
+                                    c.eventStartDate.day,
+                                  );
+                                  final end = DateTime(
+                                    c.eventEndDate.year,
+                                    c.eventEndDate.month,
+                                    c.eventEndDate.day,
+                                    23,
+                                    59,
+                                    59,
+                                  );
+                                  return !now.isBefore(start) &&
+                                      !now.isAfter(end);
+                                })
                                 .length;
 
                             final crossAxisCount = isMobile

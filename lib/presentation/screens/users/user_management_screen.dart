@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/user_management_controller.dart';
-import '../../controllers/event_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/primary_button.dart';
@@ -22,7 +21,6 @@ class UserManagementScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userController = Get.put(UserManagementController());
-    final eventController = Get.find<EventController>();
     // Initialize CompetitionController if not already initialized
     final competitionController = Get.put(CompetitionController());
 
@@ -118,7 +116,6 @@ class UserManagementScreen extends StatelessWidget {
                             () => _buildForm(
                               context,
                               userController,
-                              eventController,
                               competitionController,
                               isMobile,
                               isTablet,
@@ -137,7 +134,6 @@ class UserManagementScreen extends StatelessWidget {
   Widget _buildForm(
     BuildContext context,
     UserManagementController controller,
-    EventController eventController,
     CompetitionController competitionController,
     bool isMobile,
     bool isTablet,
@@ -1625,7 +1621,7 @@ class UserManagementScreen extends StatelessWidget {
   Widget _buildUsersListSection(
     BuildContext context,
     UserManagementController userController,
-    EventController eventController,
+    CompetitionController competitionController,
     bool isMobile,
     bool isTablet,
   ) {
@@ -1642,7 +1638,7 @@ class UserManagementScreen extends StatelessWidget {
             _buildListSearchAndFilter(
               context,
               userController,
-              eventController,
+              competitionController,
               isMobile,
               isTablet,
             ),
@@ -1661,7 +1657,7 @@ class UserManagementScreen extends StatelessWidget {
   Widget _buildListSearchAndFilter(
     BuildContext context,
     UserManagementController userController,
-    EventController eventController,
+    CompetitionController competitionController,
     bool isMobile,
     bool isTablet,
   ) {
@@ -1724,13 +1720,13 @@ class UserManagementScreen extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    ...eventController.events
-                        .where((event) => event.id != null)
-                        .map((event) {
+                    ...competitionController.competitions
+                        .where((competition) => competition.id != null)
+                        .map((competition) {
                           return DropdownMenuItem<int?>(
-                            value: int.tryParse(event.id!),
+                            value: int.tryParse(competition.id!),
                             child: Text(
-                              event.title,
+                              competition.competitionName,
                               overflow: TextOverflow.ellipsis,
                             ),
                           );
@@ -2206,7 +2202,7 @@ Widget _buildImagePreview(
 Widget _buildUsersListSection(
   BuildContext context,
   UserManagementController userController,
-  EventController eventController,
+  CompetitionController competitionController,
   bool isMobile,
   bool isTablet,
 ) {
@@ -2223,7 +2219,7 @@ Widget _buildUsersListSection(
           _buildListSearchAndFilter(
             context,
             userController,
-            eventController,
+            competitionController,
             isMobile,
             isTablet,
           ),
@@ -2241,7 +2237,7 @@ Widget _buildUsersListSection(
 Widget _buildListSearchAndFilter(
   BuildContext context,
   UserManagementController userController,
-  EventController eventController,
+  CompetitionController competitionController,
   bool isMobile,
   bool isTablet,
 ) {
@@ -2293,13 +2289,13 @@ Widget _buildListSearchAndFilter(
                     value: null,
                     child: Text('All Competitions'),
                   ),
-                  ...eventController.events
-                      .where((event) => event.id != null)
-                      .map((event) {
+                  ...competitionController.competitions
+                      .where((competition) => competition.id != null)
+                      .map((competition) {
                         return DropdownMenuItem<int?>(
-                          value: int.tryParse(event.id!),
+                          value: int.tryParse(competition.id!),
                           child: Text(
-                            event.title,
+                            competition.competitionName,
                             overflow: TextOverflow.ellipsis,
                           ),
                         );

@@ -1,15 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/models/competition_model.dart';
+import '../../../routes/app_routes.dart';
 import 'primary_button.dart';
 
 class CompetitionCard extends StatelessWidget {
   final HomeCompetitionModel competition;
   final VoidCallback? onTap;
+  final double registrationButtonHeight;
+  final bool showShareLinkOption;
 
-  const CompetitionCard({super.key, required this.competition, this.onTap});
+  const CompetitionCard({
+    super.key,
+    required this.competition,
+    this.onTap,
+    this.registrationButtonHeight = 40,
+    this.showShareLinkOption = false,
+  });
 
   static String _fullBrochureUrl(String path) {
     if (path.startsWith('http://') || path.startsWith('https://')) {
@@ -58,103 +68,102 @@ class CompetitionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            competition.competitionName,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primaryColor,
-                                ),
-                          ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      competition.competitionName,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                  if (competition.status.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: competition.status == 'ongoing'
+                            ? AppTheme.secondaryColor
+                            : competition.status == 'upcoming'
+                            ? Colors.orange
+                            : Colors.grey,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        competition.status.toUpperCase(),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 10,
                         ),
-                        if (competition.status.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: competition.status == 'ongoing'
-                                  ? AppTheme.secondaryColor
-                                  : competition.status == 'upcoming'
-                                      ? Colors.orange
-                                      : Colors.grey,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              competition.status.toUpperCase(),
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 10,
-                                  ),
-                            ),
-                          ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 6),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                competition.description,
+                style: Theme.of(context).textTheme.bodySmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              if (startDate != null)
+                Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      size: 16,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
                     Text(
-                      competition.description,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      _formatDate(startDate),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
                     ),
-                    const SizedBox(height: 8),
-                    if (startDate != null)
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today,
-                            size: 16,
-                            color: Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatDate(startDate),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.grey[600]),
-                          ),
-                        ],
+                  ],
+                ),
+              if (competition.address.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        competition.address,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    if (competition.address.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on,
-                            size: 16,
-                            color: Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              competition.address,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: Colors.grey[600]),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (competition.categories.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
+                    ),
+                  ],
+                ),
+              ],
+              if (competition.categories.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Wrap(
                         spacing: 6,
                         runSpacing: 6,
                         children: competition.categories.take(3).map((c) {
                           return Chip(
                             label: Text(
                               c,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(fontSize: 11),
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(fontSize: 11),
                             ),
                             backgroundColor: AppTheme.accentColor,
                             padding: EdgeInsets.zero,
@@ -168,26 +177,51 @@ class CompetitionCard extends StatelessWidget {
                           );
                         }).toList(),
                       ),
-                    ],
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: PrimaryButton(
-                        text: 'Registration Now',
-                        icon: Icons.person_add,
-                        height: 40,
-                        onPressed: () {
-                          final id = competition.idStr ?? '${competition.id}';
-                          context.pushNamed(
-                            'register-competition',
-                            pathParameters: {'competitionId': id},
-                          );
-                        },
-                      ),
                     ),
+                    if (showShareLinkOption) ...[
+                      const SizedBox(width: 6),
+                      SizedBox(
+                        height: 30,
+                        width: 30,
+                        child: IconButton(
+                          onPressed: () => _copyRegistrationLink(context),
+                          icon: const Icon(Icons.share, size: 16),
+                          tooltip: 'Share registration link',
+                          padding: EdgeInsets.zero,
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor.withOpacity(
+                              0.08,
+                            ),
+                            foregroundColor: AppTheme.primaryColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
+              ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: PrimaryButton(
+                      text: 'Registration Now',
+                      icon: Icons.person_add,
+                      height: registrationButtonHeight,
+                      onPressed: () {
+                        final id = competition.idStr ?? '${competition.id}';
+                        context.pushNamed(
+                          'register-competition',
+                          pathParameters: {'competitionId': id},
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
+            ],
+          ),
+        ),
       ],
     );
 
@@ -259,10 +293,10 @@ class CompetitionCard extends StatelessWidget {
             Text(
               'Yogasana',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                  ),
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
             ),
           ],
         ),
@@ -280,5 +314,24 @@ class CompetitionCard extends StatelessWidget {
 
   static String _formatDate(DateTime d) {
     return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+
+  void _copyRegistrationLink(BuildContext context) {
+    final id = competition.idStr ?? '${competition.id}';
+    final registerPath = AppRoutes.registerCompetitionPath(id);
+    final base = Uri.base;
+    final origin = '${base.scheme}://${base.authority}';
+    final usesHashRouting = base.hasFragment && base.fragment.startsWith('/');
+    final link = usesHashRouting
+        ? '$origin/#$registerPath'
+        : '$origin$registerPath';
+    Clipboard.setData(ClipboardData(text: link));
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Registration link copied'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 }

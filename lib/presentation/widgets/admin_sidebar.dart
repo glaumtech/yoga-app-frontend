@@ -180,17 +180,6 @@ class AdminSidebar extends StatelessWidget {
                       context.push(AppRoutes.participantManagement);
                     },
                   ),
-                  // REGISTRATION menu item hidden for now
-                  // _buildMenuItem(
-                  //   context,
-                  //   title: 'REGISTRATION',
-                  //   icon: Icons.app_registration,
-                  //   route: AppRoutes.events,
-                  //   currentLocation: currentLocation,
-                  //   onTap: () {
-                  //     context.push(AppRoutes.events);
-                  //   },
-                  // ),
                   _buildMenuItem(
                     context,
                     title: 'SCHOOLS & COLLEGE LIST',
@@ -256,21 +245,12 @@ class AdminSidebar extends StatelessWidget {
     // Check if this menu item is active
     final isActive =
         currentLocation == route ||
-        (route == AppRoutes.events &&
-            (currentLocation.startsWith('/events') ||
-                currentLocation.startsWith('/register'))) ||
-        (route == AppRoutes.judgeManagement &&
-            currentLocation.contains('/judges')) ||
         (route == AppRoutes.userManagement &&
             currentLocation.contains('/users')) ||
         (route == AppRoutes.participantManagement &&
             currentLocation.contains('/admin/participants')) ||
-        (route == AppRoutes.eventManagement &&
-            currentLocation.contains('/admin/events')) ||
         (route == AppRoutes.createCompetition &&
             currentLocation.contains('/admin/competitions')) ||
-        (route == AppRoutes.schoolsList &&
-            currentLocation.contains('/schools')) ||
         (route == AppRoutes.reports && currentLocation.contains('/reports')) ||
         (route == AppRoutes.sponsors && currentLocation.contains('/sponsors'));
 

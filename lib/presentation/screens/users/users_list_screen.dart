@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../controllers/user_management_controller.dart';
-import '../../controllers/event_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../../data/models/user_management_model.dart';
@@ -16,7 +15,6 @@ class UsersListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userController = Get.find<UserManagementController>();
-    final eventController = Get.find<EventController>();
     // Initialize CompetitionController if not already initialized
     final competitionController = Get.put(CompetitionController());
 
@@ -82,7 +80,6 @@ class UsersListScreen extends StatelessWidget {
             _buildSearchSection(
               context,
               userController,
-              eventController,
               competitionController,
               isMobile,
               isTablet,
@@ -181,7 +178,6 @@ class UsersListScreen extends StatelessWidget {
   Widget _buildSearchSection(
     BuildContext context,
     UserManagementController controller,
-    EventController eventController,
     CompetitionController competitionController,
     bool isMobile,
     bool isTablet,
