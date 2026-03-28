@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -46,6 +47,26 @@ class _BannerData {
       categories: c.categories,
     );
   }
+}
+
+String _registrationShareUrl(String competitionId) {
+  final registerPath = AppRoutes.registerCompetitionPath(competitionId);
+  final base = Uri.base;
+  final origin = '${base.scheme}://${base.authority}';
+  final usesHashRouting = base.hasFragment && base.fragment.startsWith('/');
+  return usesHashRouting ? '$origin/#$registerPath' : '$origin$registerPath';
+}
+
+void _copyBannerRegistrationLink(BuildContext context, String competitionId) {
+  Clipboard.setData(ClipboardData(text: _registrationShareUrl(competitionId)));
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).clearSnackBars();
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Registration link copied'),
+      duration: Duration(seconds: 2),
+    ),
+  );
 }
 
 class HomeScreen extends StatelessWidget {
@@ -790,19 +811,45 @@ class HomeScreen extends StatelessWidget {
                                       CrossAxisAlignment.stretch,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // View Event button hidden for now
-                                    PrimaryButton(
-                                      text: 'Register Now!',
-                                      icon: Icons.person_add,
-                                      onPressed: () {
-                                        context.push(
-                                          AppRoutes.registerCompetitionPath(
-                                            bannerEvent.id,
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Expanded(
+                                          child: PrimaryButton(
+                                            text: 'Register Now!',
+                                            icon: Icons.person_add,
+                                            onPressed: () {
+                                              context.push(
+                                                AppRoutes.registerCompetitionPath(
+                                                  bannerEvent.id,
+                                                ),
+                                              );
+                                            },
+                                            width: double.infinity,
+                                            height: 50,
                                           ),
-                                        );
-                                      },
-                                      width: double.infinity,
-                                      height: 50,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Material(
+                                          color: Colors.white.withOpacity(0.22),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          child: IconButton(
+                                            tooltip: 'Share registration link',
+                                            onPressed: () =>
+                                                _copyBannerRegistrationLink(
+                                                  context,
+                                                  bannerEvent.id,
+                                                ),
+                                            icon: const Icon(
+                                              Icons.share,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     if (userIsJudge) ...[
                                       const SizedBox(height: 12),
@@ -839,6 +886,23 @@ class HomeScreen extends StatelessWidget {
                                       },
                                       width: 220,
                                       height: 50,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Material(
+                                      color: Colors.white.withOpacity(0.22),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: IconButton(
+                                        tooltip: 'Share registration link',
+                                        onPressed: () =>
+                                            _copyBannerRegistrationLink(
+                                              context,
+                                              bannerEvent.id,
+                                            ),
+                                        icon: const Icon(
+                                          Icons.share,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                                     ),
                                     if (userIsJudge) ...[
                                       const SizedBox(width: 16),

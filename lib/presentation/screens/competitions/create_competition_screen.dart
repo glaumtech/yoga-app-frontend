@@ -1281,6 +1281,23 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  /// Groups checkboxes + "Add More" so each section is visually distinct.
+  Widget _optionSectionCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.primaryColor.withOpacity(0.22),
+          width: 1,
+        ),
+      ),
+      child: child,
+    );
+  }
+
   Widget _buildPrizesField(
     BuildContext context,
     CompetitionController controller,
@@ -1291,111 +1308,116 @@ class CreateCompetitionScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'PRIZES :'),
-        FormField<List<String>>(
-          initialValue: controller.selectedPrizes.toList(),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please select at least one prize';
-            }
-            return null;
-          },
-          builder: (FormFieldState<List<String>> field) {
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                return Obx(() {
-                  // Update field value when prizes change
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (field.value != controller.selectedPrizes.toList()) {
-                      field.didChange(controller.selectedPrizes.toList());
-                      field.validate();
-                    }
-                  });
+        const SizedBox(height: 8),
+        _optionSectionCard(
+          child: FormField<List<String>>(
+            initialValue: controller.selectedPrizes.toList(),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please select at least one prize';
+              }
+              return null;
+            },
+            builder: (FormFieldState<List<String>> field) {
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  return Obx(() {
+                    // Update field value when prizes change
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (field.value != controller.selectedPrizes.toList()) {
+                        field.didChange(controller.selectedPrizes.toList());
+                        field.validate();
+                      }
+                    });
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Wrap(
-                              spacing: isMobile ? 8 : 16,
-                              runSpacing: 8,
-                              children: [
-                                ...controller.prizeOptionNames.map((prize) {
-                                  final isSelected = controller.selectedPrizes
-                                      .contains(prize);
-                                  return Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Checkbox(
-                                        value: isSelected,
-                                        onChanged: controller.isViewMode.value
-                                            ? null
-                                            : (value) {
-                                                controller.togglePrize(prize);
-                                                field.didChange(
-                                                  controller.selectedPrizes
-                                                      .toList(),
-                                                );
-                                                field.validate();
-                                              },
-                                        activeColor: AppTheme.primaryColor,
-                                        materialTapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                      Text(prize),
-                                    ],
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
-                          if (!controller.isViewMode.value) ...[
-                            const SizedBox(width: 12),
-                            OutlinedButton.icon(
-                              onPressed: () =>
-                                  _showAddPrizeDialog(context, controller),
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('Add More'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.primaryColor,
-                                side: BorderSide(color: AppTheme.primaryColor),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: isMobile ? 12 : 16,
-                                  vertical: isMobile ? 8 : 10,
-                                ),
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Wrap(
+                                spacing: isMobile ? 8 : 16,
+                                runSpacing: 8,
+                                children: [
+                                  ...controller.prizeOptionNames.map((prize) {
+                                    final isSelected = controller.selectedPrizes
+                                        .contains(prize);
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Checkbox(
+                                          value: isSelected,
+                                          onChanged: controller.isViewMode.value
+                                              ? null
+                                              : (value) {
+                                                  controller.togglePrize(prize);
+                                                  field.didChange(
+                                                    controller.selectedPrizes
+                                                        .toList(),
+                                                  );
+                                                  field.validate();
+                                                },
+                                          activeColor: AppTheme.primaryColor,
+                                          materialTapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        Text(prize),
+                                      ],
+                                    );
+                                  }),
+                                ],
                               ),
                             ),
-                          ],
-                        ],
-                      ),
-                      Obx(
-                        () =>
-                            controller.hasAttemptedSubmit.value &&
-                                field.errorText != null
-                            ? Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 8,
-                                  left: 12,
-                                ),
-                                child: Text(
-                                  field.errorText!,
-                                  style: TextStyle(
-                                    color: Colors.red[700],
-                                    fontSize: 12,
+                            if (!controller.isViewMode.value) ...[
+                              const SizedBox(width: 12),
+                              OutlinedButton.icon(
+                                onPressed: () =>
+                                    _showAddPrizeDialog(context, controller),
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Add More'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.primaryColor,
+                                  side: BorderSide(
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isMobile ? 12 : 16,
+                                    vertical: isMobile ? 8 : 10,
                                   ),
                                 ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  );
-                });
-              },
-            );
-          },
+                              ),
+                            ],
+                          ],
+                        ),
+                        Obx(
+                          () =>
+                              controller.hasAttemptedSubmit.value &&
+                                  field.errorText != null
+                              ? Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 8,
+                                    left: 12,
+                                  ),
+                                  child: Text(
+                                    field.errorText!,
+                                    style: TextStyle(
+                                      color: Colors.red[700],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    );
+                  });
+                },
+              );
+            },
+          ),
         ),
       ],
     );
@@ -1411,91 +1433,95 @@ class CreateCompetitionScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'CATEGORIES :'),
-        FormField<List<String>>(
-          initialValue: controller.selectedCategories.toList(),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please select at least one category';
-            }
-            return null;
-          },
-          builder: (FormFieldState<List<String>> field) {
-            return Obx(() {
-              // Update field value when categories change
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (field.value != controller.selectedCategories.toList()) {
-                  field.didChange(controller.selectedCategories.toList());
-                  field.validate();
-                }
-              });
+        const SizedBox(height: 8),
+        _optionSectionCard(
+          child: FormField<List<String>>(
+            initialValue: controller.selectedCategories.toList(),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please select at least one category';
+              }
+              return null;
+            },
+            builder: (FormFieldState<List<String>> field) {
+              return Obx(() {
+                // Update field value when categories change
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (field.value != controller.selectedCategories.toList()) {
+                    field.didChange(controller.selectedCategories.toList());
+                    field.validate();
+                  }
+                });
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: isMobile ? 8 : 16,
-                    runSpacing: 8,
-                    children: [
-                      ...controller.categoryOptionNames.map((category) {
-                        final isSelected = controller.selectedCategories
-                            .contains(category);
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Checkbox(
-                              value: isSelected,
-                              onChanged: controller.isViewMode.value
-                                  ? null
-                                  : (value) {
-                                      controller.toggleCategory(category);
-                                      field.didChange(
-                                        controller.selectedCategories.toList(),
-                                      );
-                                      field.validate();
-                                    },
-                              activeColor: AppTheme.primaryColor,
-                            ),
-                            Text(category),
-                          ],
-                        );
-                      }),
-                      if (!controller.isViewMode.value)
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              _showAddCategoryDialog(context, controller),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add More'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.primaryColor,
-                            side: BorderSide(color: AppTheme.primaryColor),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? 12 : 16,
-                              vertical: isMobile ? 8 : 10,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  Obx(
-                    () =>
-                        controller.hasAttemptedSubmit.value &&
-                            field.errorText != null
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 8, left: 12),
-                            child: Text(
-                              field.errorText!,
-                              style: TextStyle(
-                                color: Colors.red[700],
-                                fontSize: 12,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: isMobile ? 8 : 16,
+                      runSpacing: 8,
+                      children: [
+                        ...controller.categoryOptionNames.map((category) {
+                          final isSelected = controller.selectedCategories
+                              .contains(category);
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Checkbox(
+                                value: isSelected,
+                                onChanged: controller.isViewMode.value
+                                    ? null
+                                    : (value) {
+                                        controller.toggleCategory(category);
+                                        field.didChange(
+                                          controller.selectedCategories
+                                              .toList(),
+                                        );
+                                        field.validate();
+                                      },
+                                activeColor: AppTheme.primaryColor,
+                              ),
+                              Text(category),
+                            ],
+                          );
+                        }),
+                        if (!controller.isViewMode.value)
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                _showAddCategoryDialog(context, controller),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Add More'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.primaryColor,
+                              side: BorderSide(color: AppTheme.primaryColor),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isMobile ? 12 : 16,
+                                vertical: isMobile ? 8 : 10,
                               ),
                             ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              );
-            });
-          },
+                          ),
+                      ],
+                    ),
+                    Obx(
+                      () =>
+                          controller.hasAttemptedSubmit.value &&
+                              field.errorText != null
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 8, left: 12),
+                              child: Text(
+                                field.errorText!,
+                                style: TextStyle(
+                                  color: Colors.red[700],
+                                  fontSize: 12,
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                );
+              });
+            },
+          ),
         ),
       ],
     );
@@ -1694,92 +1720,95 @@ class CreateCompetitionScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'STAGES :'),
-        FormField<List<String>>(
-          initialValue: controller.selectedStages.toList(),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please select at least one stage';
-            }
-            return null;
-          },
-          builder: (FormFieldState<List<String>> field) {
-            return Obx(() {
-              // Update field value when stages change
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (field.value != controller.selectedStages.toList()) {
-                  field.didChange(controller.selectedStages.toList());
-                  field.validate();
-                }
-              });
+        const SizedBox(height: 8),
+        _optionSectionCard(
+          child: FormField<List<String>>(
+            initialValue: controller.selectedStages.toList(),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please select at least one stage';
+              }
+              return null;
+            },
+            builder: (FormFieldState<List<String>> field) {
+              return Obx(() {
+                // Update field value when stages change
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (field.value != controller.selectedStages.toList()) {
+                    field.didChange(controller.selectedStages.toList());
+                    field.validate();
+                  }
+                });
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: isMobile ? 8 : 16,
-                    runSpacing: 8,
-                    children: [
-                      ...controller.stageOptionNames.map((stage) {
-                        final isSelected = controller.selectedStages.contains(
-                          stage,
-                        );
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Checkbox(
-                              value: isSelected,
-                              onChanged: controller.isViewMode.value
-                                  ? null
-                                  : (value) {
-                                      controller.toggleStage(stage);
-                                      field.didChange(
-                                        controller.selectedStages.toList(),
-                                      );
-                                      field.validate();
-                                    },
-                              activeColor: AppTheme.primaryColor,
-                            ),
-                            Text(stage),
-                          ],
-                        );
-                      }),
-                      if (!controller.isViewMode.value)
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              _showAddStageDialog(context, controller),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add More'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.primaryColor,
-                            side: BorderSide(color: AppTheme.primaryColor),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? 12 : 16,
-                              vertical: isMobile ? 8 : 10,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  Obx(
-                    () =>
-                        controller.hasAttemptedSubmit.value &&
-                            field.errorText != null
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 8, left: 12),
-                            child: Text(
-                              field.errorText!,
-                              style: TextStyle(
-                                color: Colors.red[700],
-                                fontSize: 12,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: isMobile ? 8 : 16,
+                      runSpacing: 8,
+                      children: [
+                        ...controller.stageOptionNames.map((stage) {
+                          final isSelected = controller.selectedStages.contains(
+                            stage,
+                          );
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Checkbox(
+                                value: isSelected,
+                                onChanged: controller.isViewMode.value
+                                    ? null
+                                    : (value) {
+                                        controller.toggleStage(stage);
+                                        field.didChange(
+                                          controller.selectedStages.toList(),
+                                        );
+                                        field.validate();
+                                      },
+                                activeColor: AppTheme.primaryColor,
+                              ),
+                              Text(stage),
+                            ],
+                          );
+                        }),
+                        if (!controller.isViewMode.value)
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                _showAddStageDialog(context, controller),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Add More'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.primaryColor,
+                              side: BorderSide(color: AppTheme.primaryColor),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isMobile ? 12 : 16,
+                                vertical: isMobile ? 8 : 10,
                               ),
                             ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              );
-            });
-          },
+                          ),
+                      ],
+                    ),
+                    Obx(
+                      () =>
+                          controller.hasAttemptedSubmit.value &&
+                              field.errorText != null
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 8, left: 12),
+                              child: Text(
+                                field.errorText!,
+                                style: TextStyle(
+                                  color: Colors.red[700],
+                                  fontSize: 12,
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                );
+              });
+            },
+          ),
         ),
       ],
     );

@@ -4,8 +4,34 @@ import '../../controllers/auth_controller.dart';
 // import '../../controllers/competition_controller.dart';
 import '../../../core/theme/app_theme.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  late final FocusNode _nameFocus;
+  late final FocusNode _passwordFocus;
+  late final FocusNode _passwordVisibilityFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameFocus = FocusNode();
+    _passwordFocus = FocusNode();
+    // Keeps Tab / "next" from landing on the eye icon before the password field.
+    _passwordVisibilityFocus = FocusNode(skipTraversal: true);
+  }
+
+  @override
+  void dispose() {
+    _nameFocus.dispose();
+    _passwordFocus.dispose();
+    _passwordVisibilityFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -199,6 +225,12 @@ class LoginScreen extends StatelessWidget {
                               // Name Field (replaces Email)
                               TextFormField(
                                 controller: authController.nameController,
+                                focusNode: _nameFocus,
+                                autofocus: true,
+                                textInputAction: TextInputAction.next,
+                                onFieldSubmitted: (_) {
+                                  _passwordFocus.requestFocus();
+                                },
                                 keyboardType: TextInputType.name,
                                 style: const TextStyle(
                                   fontSize: 16,
@@ -351,8 +383,22 @@ class LoginScreen extends StatelessWidget {
                               Obx(
                                 () => TextFormField(
                                   controller: authController.passwordController,
+                                  focusNode: _passwordFocus,
                                   obscureText:
                                       authController.obscurePassword.value,
+                                  textInputAction: TextInputAction.done,
+                                  onFieldSubmitted: (_) {
+                                    if (authController.isLoading.value) return;
+                                    try {
+                                      authController.handleLogin(context);
+                                    } catch (e) {
+                                      debugPrint('Login submit error: $e');
+                                      Get.snackbar(
+                                        'Error',
+                                        'Please try again. If the problem persists, refresh the page.',
+                                      );
+                                    }
+                                  },
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
@@ -378,6 +424,7 @@ class LoginScreen extends StatelessWidget {
                                       ),
                                     ),
                                     suffixIcon: IconButton(
+                                      focusNode: _passwordVisibilityFocus,
                                       icon: Icon(
                                         authController.obscurePassword.value
                                             ? Icons.visibility_outlined
