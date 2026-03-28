@@ -72,9 +72,38 @@ class JuryScoringController extends GetxController {
       <CategoryAssignment>[].obs;
   final RxList<GroupAssignment> availableGroups = <GroupAssignment>[].obs;
 
-  // Get minimum and maximum marks from assignment
-  int get minimumMarks => juryAssignment.value?.minimumMarks ?? 0;
-  int get maximumMarks => juryAssignment.value?.maximumMarks ?? 100;
+  /// Whole-number range from jury assignments API; falls back to 3–10 if missing/invalid.
+  int get effectiveMinimumMarks {
+    final j = juryAssignment.value;
+    if (j == null) return 3;
+    final min = j.minimumMarks;
+    final max = j.maximumMarks;
+    if (min > 0 && max > 0 && min <= max) return min;
+    return 3;
+  }
+
+  int get effectiveMaximumMarks {
+    final j = juryAssignment.value;
+    if (j == null) return 10;
+    final min = j.minimumMarks;
+    final max = j.maximumMarks;
+    if (min > 0 && max > 0 && min <= max) return max;
+    return 10;
+  }
+
+  /// Integer buttons for the whole part of the score (inclusive).
+  List<int> get wholeScoreValueOptions {
+    final min = effectiveMinimumMarks;
+    final max = effectiveMaximumMarks;
+    if (min > max) {
+      return List.generate(8, (i) => 3 + i);
+    }
+    return List.generate(max - min + 1, (i) => min + i);
+  }
+
+  bool _isWholeScoreValid(int whole) {
+    return whole >= effectiveMinimumMarks && whole <= effectiveMaximumMarks;
+  }
 
   @override
   void onInit() {
@@ -486,7 +515,6 @@ class JuryScoringController extends GetxController {
   }
 
   void _recomputeScoreFlags() {
-    // Any score entered = any asana whole between 3..10 for any participant
     bool any = false;
     // Submit enabled only when all participants have valid score for *current* asana
     bool currentAsanaComplete = currentParticipants.isNotEmpty;
@@ -502,7 +530,7 @@ class JuryScoringController extends GetxController {
       } else {
         final score = participantScores[asanaNum];
         final whole = score?['whole'] ?? 0;
-        if (whole < 3 || whole > 10) {
+        if (!_isWholeScoreValid(whole)) {
           currentAsanaComplete = false;
         }
       }
@@ -510,7 +538,7 @@ class JuryScoringController extends GetxController {
       for (int a = 1; a <= numberOfAsanas; a++) {
         final score = participantScores?[a];
         final whole = score?['whole'] ?? 0;
-        if (whole >= 3 && whole <= 10) {
+        if (_isWholeScoreValid(whole)) {
           any = true;
           break;
         }
@@ -590,8 +618,7 @@ class JuryScoringController extends GetxController {
           if (score == null) return false;
 
           final whole = score['whole'] ?? 0;
-          // A valid score must have whole number >= 3
-          if (whole < 3 || whole > 10) return false;
+          if (!_isWholeScoreValid(whole)) return false;
         }
       }
     }
@@ -608,13 +635,11 @@ class JuryScoringController extends GetxController {
       if (participant.id != null) {
         final participantScores = scoreValues[participant.id!];
         if (participantScores != null) {
-          // Check if any asana has a valid score (whole >= 3)
           for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
             final score = participantScores[asanaNum];
             if (score != null) {
               final whole = score['whole'] ?? 0;
-              // A valid score must have whole number >= 3
-              if (whole >= 3 && whole <= 10) {
+              if (_isWholeScoreValid(whole)) {
                 return true;
               }
             }
@@ -737,10 +762,10 @@ class JuryScoringController extends GetxController {
           break;
         }
         final whole = score['whole'] ?? 0;
-        if (whole < 3 || whole > 10) {
+        if (!_isWholeScoreValid(whole)) {
           currentAsanaFilled = false;
           missingScoreInfo =
-              'Invalid score for ${participant.participantName} - ASANA $asanaNum (whole must be 3-10)';
+              'Invalid score for ${participant.participantName} - ASANA $asanaNum (whole must be ${effectiveMinimumMarks}-${effectiveMaximumMarks})';
           break;
         }
       }
@@ -790,7 +815,7 @@ class JuryScoringController extends GetxController {
         for (int a = 1; a <= numberOfAsanas; a++) {
           final score = participantScores[a];
           final whole = score?['whole'] ?? 0;
-          if (score == null || whole < 3 || whole > 10) {
+          if (score == null || !_isWholeScoreValid(whole)) {
             allScoresFilled = false;
             break;
           }
@@ -923,8 +948,7 @@ class JuryScoringController extends GetxController {
             final whole = score['whole'] ?? 0;
             final decimal = score['decimal'] ?? 0;
 
-            // Validate whole number is in valid range
-            if (whole < 3 || whole > 10) {
+            if (!_isWholeScoreValid(whole)) {
               print(
                 'Error: Invalid score for participant ${participant.id} - ASANA $asanaNum (whole: $whole)',
               );
@@ -932,7 +956,7 @@ class JuryScoringController extends GetxController {
               _showSnackbar(
                 title: 'Error',
                 message:
-                    'Invalid score for ${participant.participantName} - ASANA $asanaNum (whole number must be 3-10)',
+                    'Invalid score for ${participant.participantName} - ASANA $asanaNum (whole number must be ${effectiveMinimumMarks}-${effectiveMaximumMarks})',
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 4),
               );

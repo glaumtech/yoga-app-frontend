@@ -77,12 +77,17 @@ class JuryScoringScreen extends StatelessWidget {
                                   isTablet,
                                 ),
                                 Obx(() {
+                                  controller.juryAssignment.value;
                                   if (controller.currentParticipants.isEmpty) {
                                     return const SizedBox.shrink();
                                   }
 
                                   final readyToSubmit =
                                       controller.canSubmitScores.value;
+                                  final minWhole =
+                                      controller.effectiveMinimumMarks;
+                                  final maxWhole =
+                                      controller.effectiveMaximumMarks;
                                   return Column(
                                     children: [
                                       SizedBox(height: isMobile ? 1 : 24),
@@ -101,7 +106,7 @@ class JuryScoringScreen extends StatelessWidget {
                                       if (!readyToSubmit) ...[
                                         const SizedBox(height: 6),
                                         Text(
-                                          'Please enter scores for all 5 asanas for all participants (whole score 3–10).',
+                                          'Please enter scores for all 5 asanas for all participants (whole score $minWhole–$maxWhole).',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             fontSize: isMobile ? 11 : 13,
@@ -730,6 +735,7 @@ class JuryScoringScreen extends StatelessWidget {
                           Obx(() {
                             // Listen to score update trigger to rebuild when scores change
                             controller.scoreUpdateTrigger.value;
+                            controller.juryAssignment.value;
                             final asanaNum = controller.currentAsana.value;
                             final score = controller.getAsanaScore(
                               participantId,
@@ -737,14 +743,16 @@ class JuryScoringScreen extends StatelessWidget {
                             );
                             final wholeValue = score?['whole'] ?? 0;
                             final decimalValue = score?['decimal'] ?? 0;
+                            final wholeOptions =
+                                controller.wholeScoreValueOptions;
+                            final minWhole = controller.effectiveMinimumMarks;
 
                             return isMobile
                                 ? Column(
                                     children: [
-                                      // Whole number slider (3-10)
                                       _buildScoreSlider(
                                         label: '',
-                                        values: [3, 4, 5, 6, 7, 8, 9, 10],
+                                        values: wholeOptions,
                                         currentValue: wholeValue > 0
                                             ? wholeValue
                                             : 0,
@@ -768,7 +776,9 @@ class JuryScoringScreen extends StatelessWidget {
                                           controller.setAsanaScore(
                                             participantId,
                                             asanaNum,
-                                            wholeValue > 0 ? wholeValue : 3,
+                                            wholeValue > 0
+                                                ? wholeValue
+                                                : minWhole,
                                             value,
                                           );
                                         },
@@ -782,7 +792,7 @@ class JuryScoringScreen extends StatelessWidget {
                                       Expanded(
                                         child: _buildScoreSlider(
                                           label: '',
-                                          values: [3, 4, 5, 6, 7, 8, 9, 10],
+                                          values: wholeOptions,
                                           currentValue: wholeValue > 0
                                               ? wholeValue
                                               : 0,
@@ -808,7 +818,9 @@ class JuryScoringScreen extends StatelessWidget {
                                             controller.setAsanaScore(
                                               participantId,
                                               asanaNum,
-                                              wholeValue > 0 ? wholeValue : 3,
+                                              wholeValue > 0
+                                                  ? wholeValue
+                                                  : minWhole,
                                               value,
                                             );
                                           },
@@ -961,8 +973,8 @@ class JuryScoringScreen extends StatelessWidget {
                             const SizedBox(height: 16),
                             // Score selectors (whole then decimal)
                             Obx(() {
-                              // Listen to score update trigger to rebuild when scores change
                               controller.scoreUpdateTrigger.value;
+                              controller.juryAssignment.value;
                               final asanaNum = controller.currentAsana.value;
                               final score = controller.getAsanaScore(
                                 participantId,
@@ -970,12 +982,15 @@ class JuryScoringScreen extends StatelessWidget {
                               );
                               final wholeValue = score?['whole'] ?? 0;
                               final decimalValue = score?['decimal'] ?? 0;
+                              final wholeOptions =
+                                  controller.wholeScoreValueOptions;
+                              final minWhole = controller.effectiveMinimumMarks;
 
                               return Column(
                                 children: [
                                   _buildScoreSlider(
                                     label: '',
-                                    values: [3, 4, 5, 6, 7, 8, 9, 10],
+                                    values: wholeOptions,
                                     currentValue: wholeValue > 0
                                         ? wholeValue
                                         : 0,
@@ -999,7 +1014,7 @@ class JuryScoringScreen extends StatelessWidget {
                                       controller.setAsanaScore(
                                         participantId,
                                         asanaNum,
-                                        wholeValue > 0 ? wholeValue : 3,
+                                        wholeValue > 0 ? wholeValue : minWhole,
                                         value,
                                       );
                                     },

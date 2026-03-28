@@ -37,7 +37,8 @@ class JuryAssignmentModel {
       competitionId: json['competitionId'] as int? ?? 0,
       competitionName: json['competitionName'] as String? ?? '',
       minimumMarks: json['minimumMarks'] as int? ?? 0,
-      maximumMarks: json['maximumMarks'] as int? ?? 100,
+      // Use 0 when absent so callers can fall back to a default range (e.g. 3–10).
+      maximumMarks: json['maximumMarks'] as int? ?? 0,
     );
   }
 
