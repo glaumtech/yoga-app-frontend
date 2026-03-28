@@ -313,7 +313,10 @@ class UserManagementRepository {
     int? competitionId,
   }) async {
     try {
-      final requestBody = <String, dynamic>{'name': name, 'password': password};
+      final requestBody = <String, dynamic>{
+        'userName': name,
+        'password': password,
+      };
 
       if (competitionId != null) {
         requestBody['competitionId'] = competitionId;

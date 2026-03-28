@@ -145,7 +145,7 @@ class AuthController extends GetxController {
   // Login form validation
   String? validateName(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Please enter your name';
+      return 'Please enter your username';
     }
     return null;
   }

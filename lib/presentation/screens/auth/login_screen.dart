@@ -222,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 32),
 
-                              // Name Field (replaces Email)
+                              // Username field (maps to API userName for login)
                               TextFormField(
                                 controller: authController.nameController,
                                 focusNode: _nameFocus,
@@ -237,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   fontWeight: FontWeight.w500,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'Name',
+                                  labelText: 'Username',
                                   labelStyle: TextStyle(
                                     color: Colors.grey[600],
                                     fontWeight: FontWeight.w500,

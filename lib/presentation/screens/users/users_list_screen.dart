@@ -372,6 +372,13 @@ class UsersListScreen extends StatelessWidget {
                     ],
                   ),
                   const Divider(height: 24),
+                  _buildUserInfoRow(
+                    'USER NAME',
+                    (user.userName != null && user.userName!.trim().isNotEmpty)
+                        ? user.userName!.trim()
+                        : '—',
+                  ),
+                  _buildUserInfoRow('NAME', user.name),
                   _buildUserInfoRow('Competition', user.eventName ?? 'N/A'),
                   if (user.volunteerNo != null)
                     _buildUserInfoRow('Volunteer No', user.volunteerNo!),
@@ -516,6 +523,13 @@ class UsersListScreen extends StatelessWidget {
     );
   }
 
+  /// API `userName` (`user_name`); em dash when unset.
+  String _apiUserNameCell(UserManagementModel user) {
+    final u = user.userName?.trim();
+    if (u != null && u.isNotEmpty) return u;
+    return '—';
+  }
+
   Widget _buildDesktopTable(
     BuildContext context,
     List<UserManagementModel> users,
@@ -551,22 +565,24 @@ class UsersListScreen extends StatelessWidget {
                     columnWidths: isSuperAdmin
                         ? {
                             0: const FixedColumnWidth(80),
-                            1: FlexColumnWidth(2.0),
-                            2: FlexColumnWidth(1.5),
-                            3: FlexColumnWidth(2.5),
-                            4: FlexColumnWidth(1.2), // Password
-                            5: FlexColumnWidth(1.5), // Created
-                            6: FlexColumnWidth(1.5), // Updated
-                            7: const FixedColumnWidth(120),
+                            1: FlexColumnWidth(1.8), // API userName
+                            2: FlexColumnWidth(1.8), // API name
+                            3: FlexColumnWidth(1.4),
+                            4: FlexColumnWidth(2.2),
+                            5: FlexColumnWidth(1.2), // Password
+                            6: FlexColumnWidth(1.4), // Created
+                            7: FlexColumnWidth(1.4), // Updated
+                            8: const FixedColumnWidth(120),
                           }
                         : {
                             0: const FixedColumnWidth(80),
-                            1: FlexColumnWidth(2.0),
-                            2: FlexColumnWidth(1.5),
-                            3: FlexColumnWidth(2.5),
-                            4: FlexColumnWidth(1.5), // Created
-                            5: FlexColumnWidth(1.5), // Updated
-                            6: const FixedColumnWidth(120),
+                            1: FlexColumnWidth(1.8), // API userName
+                            2: FlexColumnWidth(1.8), // API name
+                            3: FlexColumnWidth(1.4),
+                            4: FlexColumnWidth(2.2),
+                            5: FlexColumnWidth(1.4), // Created
+                            6: FlexColumnWidth(1.4), // Updated
+                            7: const FixedColumnWidth(120),
                           },
                     children: [
                       // Header Row
@@ -577,6 +593,7 @@ class UsersListScreen extends StatelessWidget {
                         children: isSuperAdmin
                             ? [
                                 _buildTableCell('PHOTO', isHeader: true),
+                                _buildTableCell('USER NAME', isHeader: true),
                                 _buildTableCell('NAME', isHeader: true),
                                 _buildTableCell('TYPE', isHeader: true),
                                 _buildTableCell('COMPETITION', isHeader: true),
@@ -587,6 +604,7 @@ class UsersListScreen extends StatelessWidget {
                               ]
                             : [
                                 _buildTableCell('PHOTO', isHeader: true),
+                                _buildTableCell('USER NAME', isHeader: true),
                                 _buildTableCell('NAME', isHeader: true),
                                 _buildTableCell('TYPE', isHeader: true),
                                 _buildTableCell('COMPETITION', isHeader: true),
@@ -608,6 +626,7 @@ class UsersListScreen extends StatelessWidget {
                                       ),
                                     ),
                                   ),
+                                  _buildTableCell(_apiUserNameCell(user)),
                                   _buildTableCell(user.name),
                                   TableCell(
                                     child: Padding(
@@ -637,6 +656,7 @@ class UsersListScreen extends StatelessWidget {
                                       ),
                                     ),
                                   ),
+                                  _buildTableCell(_apiUserNameCell(user)),
                                   _buildTableCell(user.name),
                                   TableCell(
                                     child: Padding(

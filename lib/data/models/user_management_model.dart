@@ -1,6 +1,8 @@
 class UserManagementModel {
   final String? id;
   final String name;
+  /// Display name stored as `user_name` on the server (optional).
+  final String? userName;
   final String? password;
   final String? photoUrl;
   final String? photo; // New API format
@@ -38,6 +40,7 @@ class UserManagementModel {
   UserManagementModel({
     this.id,
     required this.name,
+    this.userName,
     this.password,
     this.photoUrl,
     this.photo,
@@ -162,6 +165,7 @@ class UserManagementModel {
     return UserManagementModel(
       id: json['id']?.toString() ?? json['_id']?.toString(),
       name: json['name']?.toString() ?? json['username']?.toString() ?? '',
+      userName: json['userName']?.toString() ?? json['user_name']?.toString(),
       password: json['password']?.toString(),
       photoUrl:
           json['photoUrl']?.toString() ??
@@ -226,7 +230,8 @@ class UserManagementModel {
     };
 
     if (useNewFormat) {
-      // New API format
+      // New API format (always send so display name can be cleared on update)
+      json['userName'] = userName?.trim() ?? '';
       if (competitionId != null) json['competitionId'] = competitionId;
       if (userTypeId != null) json['userTypeId'] = userTypeId;
 
@@ -279,6 +284,7 @@ class UserManagementModel {
   UserManagementModel copyWith({
     String? id,
     String? name,
+    String? userName,
     String? password,
     String? photoUrl,
     String? photo,
@@ -307,6 +313,7 @@ class UserManagementModel {
     return UserManagementModel(
       id: id ?? this.id,
       name: name ?? this.name,
+      userName: userName ?? this.userName,
       password: password ?? this.password,
       photoUrl: photoUrl ?? this.photoUrl,
       photo: photo ?? this.photo,
@@ -333,6 +340,12 @@ class UserManagementModel {
       confirmPassword: confirmPassword ?? this.confirmPassword,
     );
   }
+
+  /// Shown in lists when [userName] is set; otherwise the login [name].
+  String get displayName =>
+      (userName != null && userName!.trim().isNotEmpty)
+          ? userName!.trim()
+          : name;
 
   // Helper getters for backward compatibility
   String get displayType => userTypeName ?? type;

@@ -15,6 +15,13 @@ import 'users_list_screen.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
+/// API `userName` for tables; em dash when unset.
+String _userNameOrDash(UserManagementModel user) {
+  final u = user.userName?.trim();
+  if (u != null && u.isNotEmpty) return u;
+  return '—';
+}
+
 class UserManagementScreen extends StatelessWidget {
   const UserManagementScreen({super.key});
 
@@ -112,15 +119,20 @@ class UserManagementScreen extends StatelessWidget {
                         )
                       : SingleChildScrollView(
                           padding: EdgeInsets.all(isMobile ? 16 : 16),
-                          child: Obx(
-                            () => _buildForm(
+                          child: Obx(() {
+                            // Must read Rx values here so GetX tracks this Obx (nested
+                            // widgets' Obx callbacks do not count for this parent).
+                            userController.userToEdit.value;
+                            userController.selectedType.value;
+                            userController.selectedEventId.value;
+                            return _buildForm(
                               context,
                               userController,
                               competitionController,
                               isMobile,
                               isTablet,
-                            ),
-                          ),
+                            );
+                          }),
                         ),
                 ),
               ),
@@ -610,7 +622,40 @@ class UserManagementScreen extends StatelessWidget {
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Name Field
+                  // API userName (`user_name`)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'USER NAME :',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: isMobile ? 14 : 16,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: controller.userNameController,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'User name is required';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -725,7 +770,7 @@ class UserManagementScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Name and Password in same line
+                        // API userName and Password in same line
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -734,7 +779,7 @@ class UserManagementScreen extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'NAME :',
+                                    'USER NAME :',
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleMedium
@@ -745,7 +790,7 @@ class UserManagementScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 8),
                                   TextFormField(
-                                    controller: controller.nameController,
+                                    controller: controller.userNameController,
                                     decoration: InputDecoration(
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(8),
@@ -759,7 +804,7 @@ class UserManagementScreen extends StatelessWidget {
                                     validator: (value) {
                                       if (value == null ||
                                           value.trim().isEmpty) {
-                                        return 'Name is required';
+                                        return 'User name is required';
                                       }
                                       return null;
                                     },
@@ -803,6 +848,39 @@ class UserManagementScreen extends StatelessWidget {
                                   ),
                                 ],
                               ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'NAME :',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: isTablet ? 14 : 16,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: controller.nameController,
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Name is required';
+                                }
+                                return null;
+                              },
                             ),
                           ],
                         ),
@@ -920,11 +998,14 @@ class UserManagementScreen extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              Obx(
-                                () => Wrap(
+                              Obx(() {
+                                final stageLabels = controller.availableStages
+                                    .map((s) => s.name)
+                                    .toList();
+                                return Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: controller.stages.map((stage) {
+                                  children: stageLabels.map((stage) {
                                     return InkWell(
                                       onTap: () =>
                                           controller.toggleStage(stage),
@@ -951,8 +1032,8 @@ class UserManagementScreen extends StatelessWidget {
                                       ),
                                     );
                                   }).toList(),
-                                ),
-                              ),
+                                );
+                              }),
                             ],
                           ),
                         ],
@@ -1001,13 +1082,15 @@ class UserManagementScreen extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              Obx(
-                                () => Wrap(
+                              Obx(() {
+                                final categoryLabels = controller
+                                    .availableCategories
+                                    .map((c) => c.name)
+                                    .toList();
+                                return Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: controller.categories.map((
-                                    category,
-                                  ) {
+                                  children: categoryLabels.map((category) {
                                     return InkWell(
                                       onTap: () =>
                                           controller.toggleCategory(category),
@@ -1034,8 +1117,8 @@ class UserManagementScreen extends StatelessWidget {
                                       ),
                                     );
                                   }).toList(),
-                                ),
-                              ),
+                                );
+                              }),
                             ],
                           ),
                         ],
@@ -1160,11 +1243,14 @@ class UserManagementScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Obx(
-                () => Wrap(
+              Obx(() {
+                final stageLabels = controller.availableStages
+                    .map((s) => s.name)
+                    .toList();
+                return Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: controller.stages.map((stage) {
+                  children: stageLabels.map((stage) {
                     return InkWell(
                       onTap: () => controller.toggleStage(stage),
                       child: Row(
@@ -1182,8 +1268,8 @@ class UserManagementScreen extends StatelessWidget {
                       ),
                     );
                   }).toList(),
-                ),
-              ),
+                );
+              }),
             ],
           ),
           const SizedBox(height: 24),
@@ -1202,9 +1288,12 @@ class UserManagementScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Obx(
-                () => Column(
-                  children: controller.categories.map((category) {
+              Obx(() {
+                final categoryLabels = controller.availableCategories
+                    .map((c) => c.name)
+                    .toList();
+                return Column(
+                  children: categoryLabels.map((category) {
                     return InkWell(
                       onTap: () => controller.toggleCategory(category),
                       child: Padding(
@@ -1233,8 +1322,8 @@ class UserManagementScreen extends StatelessWidget {
                       ),
                     );
                   }).toList(),
-                ),
-              ),
+                );
+              }),
             ],
           ),
         ],
@@ -1879,6 +1968,8 @@ class UserManagementScreen extends StatelessWidget {
                   ],
                 ),
                 const Divider(height: 24),
+                _buildUserInfoRow('USER NAME', _userNameOrDash(user)),
+                _buildUserInfoRow('NAME', user.name),
                 _buildUserInfoRow('Competition', user.eventName ?? 'N/A'),
                 if (user.volunteerNo != null)
                   _buildUserInfoRow('Volunteer No', user.volunteerNo!),
@@ -1916,10 +2007,11 @@ class UserManagementScreen extends StatelessWidget {
                 border: TableBorder.all(color: Colors.grey[300]!, width: 1),
                 columnWidths: {
                   0: const FixedColumnWidth(80),
-                  1: FlexColumnWidth(2.0),
-                  2: FlexColumnWidth(1.5),
-                  3: FlexColumnWidth(2.5),
-                  4: FlexColumnWidth(1.5),
+                  1: FlexColumnWidth(1.6),
+                  2: FlexColumnWidth(1.6),
+                  3: FlexColumnWidth(1.4),
+                  4: FlexColumnWidth(2.2),
+                  5: FlexColumnWidth(1.5),
                 },
                 children: [
                   // Header Row
@@ -1929,6 +2021,7 @@ class UserManagementScreen extends StatelessWidget {
                     ),
                     children: [
                       _buildTableCell('PHOTO', isHeader: true),
+                      _buildTableCell('USER NAME', isHeader: true),
                       _buildTableCell('NAME', isHeader: true),
                       _buildTableCell('TYPE', isHeader: true),
                       _buildTableCell('COMPETITION', isHeader: true),
@@ -1945,6 +2038,7 @@ class UserManagementScreen extends StatelessWidget {
                             child: Center(child: _buildUserPhoto(user, 40)),
                           ),
                         ),
+                        _buildTableCell(_userNameOrDash(user), maxLines: 2),
                         _buildTableCell(user.name, maxLines: 2),
                         TableCell(
                           child: Padding(
@@ -2441,6 +2535,8 @@ Widget _buildMobileUserList(
                 ],
               ),
               const Divider(height: 24),
+              _buildUserInfoRow('USER NAME', _userNameOrDash(user)),
+              _buildUserInfoRow('NAME', user.name),
               _buildUserInfoRow('Competition', user.eventName ?? 'N/A'),
               if (user.volunteerNo != null)
                 _buildUserInfoRow('Volunteer No', user.volunteerNo!),
@@ -2478,10 +2574,11 @@ Widget _buildDesktopUserTable(
               border: TableBorder.all(color: Colors.grey[300]!, width: 1),
               columnWidths: {
                 0: const FixedColumnWidth(80),
-                1: FlexColumnWidth(2.0),
-                2: FlexColumnWidth(1.5),
-                3: FlexColumnWidth(2.5),
-                4: FlexColumnWidth(1.5),
+                1: FlexColumnWidth(1.6),
+                2: FlexColumnWidth(1.6),
+                3: FlexColumnWidth(1.4),
+                4: FlexColumnWidth(2.2),
+                5: FlexColumnWidth(1.5),
               },
               children: [
                 // Header Row
@@ -2491,6 +2588,7 @@ Widget _buildDesktopUserTable(
                   ),
                   children: [
                     _buildTableCell('PHOTO', isHeader: true),
+                    _buildTableCell('USER NAME', isHeader: true),
                     _buildTableCell('NAME', isHeader: true),
                     _buildTableCell('TYPE', isHeader: true),
                     _buildTableCell('COMPETITION', isHeader: true),
@@ -2507,6 +2605,7 @@ Widget _buildDesktopUserTable(
                           child: Center(child: _buildUserPhoto(user, 40)),
                         ),
                       ),
+                      _buildTableCell(_userNameOrDash(user), maxLines: 2),
                       _buildTableCell(user.name, maxLines: 2),
                       TableCell(
                         child: Padding(
