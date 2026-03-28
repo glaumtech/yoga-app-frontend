@@ -7,6 +7,7 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/layout/home_layout.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 import '../../widgets/footer_section.dart';
@@ -410,25 +411,16 @@ class HomeScreen extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Banner Slider Section
                       _buildBannerSliderSection(context),
-
-                      // Banner Section (Competition Details)
                       _buildBannerSection(context, competitionController),
-
-                      // Current Competitions Section
                       _buildCurrentEventsSection(
                         context,
                         competitionController,
                       ),
-
-                      // Upcoming Competitions Section
                       _buildUpcomingEventsSection(
                         context,
                         competitionController,
                       ),
-
-                      // Footer
                       const FooterSection(),
                     ],
                   ),
@@ -488,7 +480,7 @@ class HomeScreen extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: BannerSlider(
         bannerImages: bannerImages,
         height: 400,
@@ -515,320 +507,281 @@ class HomeScreen extends StatelessWidget {
         ? _BannerData.fromCompetition(bannerCompetition)
         : null;
 
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 500),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.primaryColor,
-            AppTheme.secondaryColor,
-            AppTheme.primaryColor.withOpacity(0.9),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryColor.withOpacity(0.4),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final isNarrow = w < HomeLayout.mobile;
+        final contentPad = w < HomeLayout.mobile
+            ? 16.0
+            : (w < HomeLayout.tablet ? 22.0 : 28.0);
+
+        return Container(
+          width: double.infinity,
+          constraints: BoxConstraints(
+            minHeight: HomeLayout.heroBannerMinHeight(w),
           ),
-        ],
-      ),
-      child: bannerEvent != null
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Stack(
-                children: [
-                  // Decorative Background Elements
-                  Positioned(
-                    right: -50,
-                    top: -50,
-                    child: Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.1),
+          margin: EdgeInsets.symmetric(
+            horizontal: HomeLayout.sectionHorizontalPadding(w),
+            vertical: 8,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.primaryColor,
+                AppTheme.secondaryColor,
+                AppTheme.primaryColor.withOpacity(0.9),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryColor.withOpacity(0.4),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: bannerEvent != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Stack(
+                    children: [
+                      // Decorative Background Elements
+                      Positioned(
+                        right: -50,
+                        top: -50,
+                        child: Container(
+                          width: 200,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withOpacity(0.1),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    left: -30,
-                    bottom: -30,
-                    child: Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.1),
+                      Positioned(
+                        left: -30,
+                        bottom: -30,
+                        child: Container(
+                          width: 150,
+                          height: 150,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withOpacity(0.1),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Top Row: Title and QR Code
-                        Row(
+                      // Content
+                      Padding(
+                        padding: EdgeInsets.all(contentPad),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            _buildBannerHeroHeader(
+                              context,
+                              bannerEvent,
+                              isNarrow,
+                            ),
+                            const SizedBox(height: 24),
+                            // Slogan
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.25),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.4),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
                                 children: [
-                                  // Main Title
-                                  Text(
-                                    bannerEvent.title.toUpperCase(),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .displayMedium
-                                        ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 2,
-                                          height: 1.2,
-                                        ),
+                                  Icon(
+                                    Icons.celebration,
+                                    color: Colors.yellow[300],
                                   ),
-                                  const SizedBox(height: 12),
-                                  // Tagline
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.yellow[400]?.withOpacity(
-                                        0.9,
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
                                     child: Text(
-                                      'BE PART OF INDIA\'S BIGGEST YOGA CELEBRATION',
+                                      'Your Championship, Your Moment! Don\'t Miss the Date!',
                                       style: Theme.of(context)
                                           .textTheme
-                                          .titleSmall
+                                          .titleMedium
                                           ?.copyWith(
-                                            color: Colors.black87,
+                                            color: Colors.white,
                                             fontWeight: FontWeight.bold,
-                                            letterSpacing: 0.5,
                                           ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            // QR Code Section
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.25),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: Image.asset(
-                                        'images/bar-code.jpg',
-                                        width: 100,
-                                        height: 100,
-                                        fit: BoxFit.contain,
-                                        errorBuilder:
-                                            (context, error, stackTrace) {
-                                              return Icon(
-                                                Icons.qr_code,
-                                                size: 50,
-                                                color: AppTheme.primaryColor,
-                                              );
-                                            },
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'SCAN FOR\nREGISTRATION',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 10,
-                                        ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
+                            const SizedBox(height: 24),
+                            _buildBannerDateVenueRow(
+                              context,
+                              bannerEvent,
+                              isNarrow,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        // Slogan
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.25),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.4),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.celebration,
-                                color: Colors.yellow[300],
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Your Championship, Your Moment! Don\'t Miss the Date!',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
+                            if (bannerEvent.venueAddress != null) ...[
+                              const SizedBox(height: 12),
+                              _buildBannerDetail(
+                                context,
+                                Icons.map,
+                                'Address',
+                                bannerEvent.venueAddress!,
                               ),
                             ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        // Competition details grid
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildBannerDetail(
-                                context,
-                                Icons.calendar_today,
-                                'Competition Date',
-                                DateFormat(
-                                  'EEEE, MMMM dd, yyyy',
-                                ).format(bannerEvent.startDate),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _buildBannerDetail(
-                                context,
-                                Icons.location_on,
-                                'Venue',
-                                bannerEvent.venue,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (bannerEvent.venueAddress != null) ...[
-                          const SizedBox(height: 12),
-                          _buildBannerDetail(
-                            context,
-                            Icons.map,
-                            'Address',
-                            bannerEvent.venueAddress!,
-                          ),
-                        ],
-                        const SizedBox(height: 20),
-                        // Categories and Age Groups
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            ...bannerEvent.categories.map((category) {
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
+                            const SizedBox(height: 20),
+                            // Categories and Age Groups
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ...bannerEvent.categories.map((category) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 8,
                                     ),
-                                  ],
-                                ),
-                                child: Text(
-                                  category,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: AppTheme.primaryColor,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        // Action Buttons
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final isMobile = constraints.maxWidth < 600;
-                            final userCtrl =
-                                Get.find<UserManagementController>();
-                            final currentUser = userCtrl.currentUser.value;
-                            final userTypeName =
-                                currentUser?.userTypeName ??
-                                currentUser?.type ??
-                                '';
-                            final userTypeUpper = userTypeName.toUpperCase();
-                            final userIsJudge =
-                                userTypeUpper == 'JURY' ||
-                                userTypeUpper.contains('JURY') ||
-                                userTypeUpper.contains('JUDGE');
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.1),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      category,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: AppTheme.primaryColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            // Action Buttons
+                            Builder(
+                              builder: (context) {
+                                final userCtrl =
+                                    Get.find<UserManagementController>();
+                                final currentUser = userCtrl.currentUser.value;
+                                final userTypeName =
+                                    currentUser?.userTypeName ??
+                                    currentUser?.type ??
+                                    '';
+                                final userTypeUpper = userTypeName
+                                    .toUpperCase();
+                                final userIsJudge =
+                                    userTypeUpper == 'JURY' ||
+                                    userTypeUpper.contains('JURY') ||
+                                    userTypeUpper.contains('JUDGE');
 
-                            if (isMobile) {
-                              // Full-width buttons on small screens (parent gives bounded width)
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Row(
+                                if (isNarrow) {
+                                  // Full-width buttons on small screens (parent gives bounded width)
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    child: Column(
                                       crossAxisAlignment:
-                                          CrossAxisAlignment.center,
+                                          CrossAxisAlignment.stretch,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Expanded(
-                                          child: PrimaryButton(
-                                            text: 'Register Now!',
-                                            icon: Icons.person_add,
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              child: PrimaryButton(
+                                                text: 'Register Now!',
+                                                icon: Icons.person_add,
+                                                onPressed: () {
+                                                  context.push(
+                                                    AppRoutes.registerCompetitionPath(
+                                                      bannerEvent.id,
+                                                    ),
+                                                  );
+                                                },
+                                                width: double.infinity,
+                                                height: 50,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Material(
+                                              color: Colors.white.withOpacity(
+                                                0.22,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              child: IconButton(
+                                                tooltip:
+                                                    'Share registration link',
+                                                onPressed: () =>
+                                                    _copyBannerRegistrationLink(
+                                                      context,
+                                                      bannerEvent.id,
+                                                    ),
+                                                icon: const Icon(
+                                                  Icons.share,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (userIsJudge) ...[
+                                          const SizedBox(height: 12),
+                                          PrimaryButton(
+                                            text: 'Add Score',
+                                            icon: Icons.score,
                                             onPressed: () {
                                               context.push(
-                                                AppRoutes.registerCompetitionPath(
-                                                  bannerEvent.id,
-                                                ),
+                                                AppRoutes.juryScoring,
                                               );
                                             },
                                             width: double.infinity,
                                             height: 50,
                                           ),
+                                        ],
+                                      ],
+                                    ),
+                                  );
+                                } else {
+                                  // Desktop/Tablet: Side by side
+                                  return Center(
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        // View Event button hidden for now
+                                        // Register Button
+                                        PrimaryButton(
+                                          text: 'Register Now!',
+                                          icon: Icons.person_add,
+                                          onPressed: () {
+                                            context.push(
+                                              AppRoutes.registerCompetitionPath(
+                                                bannerEvent.id,
+                                              ),
+                                            );
+                                          },
+                                          width: 220,
+                                          height: 50,
                                         ),
                                         const SizedBox(width: 10),
                                         Material(
@@ -849,111 +802,204 @@ class HomeScreen extends StatelessWidget {
                                             ),
                                           ),
                                         ),
+                                        if (userIsJudge) ...[
+                                          const SizedBox(width: 16),
+                                          // Add Score Button (Judge only)
+                                          PrimaryButton(
+                                            text: 'Add Score',
+                                            icon: Icons.score,
+                                            onPressed: () {
+                                              context.push(
+                                                AppRoutes.juryScoring,
+                                              );
+                                            },
+                                            width: 220,
+                                            height: 50,
+                                          ),
+                                        ],
                                       ],
                                     ),
-                                    if (userIsJudge) ...[
-                                      const SizedBox(height: 12),
-                                      PrimaryButton(
-                                        text: 'Add Score',
-                                        icon: Icons.score,
-                                        onPressed: () {
-                                          context.push(AppRoutes.juryScoring);
-                                        },
-                                        width: double.infinity,
-                                        height: 50,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              );
-                            } else {
-                              // Desktop/Tablet: Side by side
-                              return Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // View Event button hidden for now
-                                    // Register Button
-                                    PrimaryButton(
-                                      text: 'Register Now!',
-                                      icon: Icons.person_add,
-                                      onPressed: () {
-                                        context.push(
-                                          AppRoutes.registerCompetitionPath(
-                                            bannerEvent.id,
-                                          ),
-                                        );
-                                      },
-                                      width: 220,
-                                      height: 50,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Material(
-                                      color: Colors.white.withOpacity(0.22),
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: IconButton(
-                                        tooltip: 'Share registration link',
-                                        onPressed: () =>
-                                            _copyBannerRegistrationLink(
-                                              context,
-                                              bannerEvent.id,
-                                            ),
-                                        icon: const Icon(
-                                          Icons.share,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    if (userIsJudge) ...[
-                                      const SizedBox(width: 16),
-                                      // Add Score Button (Judge only)
-                                      PrimaryButton(
-                                        text: 'Add Score',
-                                        icon: Icons.score,
-                                        onPressed: () {
-                                          context.push(AppRoutes.juryScoring);
-                                        },
-                                        width: 220,
-                                        height: 50,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              );
-                            }
-                          },
+                                  );
+                                }
+                              },
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )
-          : Container(
-              padding: const EdgeInsets.all(40),
-              child: Column(
-                children: [
-                  Icon(Icons.self_improvement, size: 80, color: Colors.white),
-                  const SizedBox(height: 16),
-                  Text(
-                    AppConstants.appName,
-                    style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
+                )
+              : Container(
+                  padding: EdgeInsets.all(w < HomeLayout.mobile ? 28 : 40),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.self_improvement,
+                        size: w < HomeLayout.mobile ? 64 : 80,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        AppConstants.appName,
+                        style: Theme.of(context).textTheme.displayMedium
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Harmony • Balance • Excellence',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(color: Colors.white70),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Harmony • Balance • Excellence',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(color: Colors.white70),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBannerHeroHeader(
+    BuildContext context,
+    _BannerData bannerEvent,
+    bool isNarrow,
+  ) {
+    final titleStyle = isNarrow
+        ? Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+            height: 1.2,
+          )
+        : Theme.of(context).textTheme.displayMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+            height: 1.2,
+          );
+    final qrSize = isNarrow ? 88.0 : 100.0;
+    final tagline = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.yellow[400]?.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        'BE PART OF INDIA\'S BIGGEST YOGA CELEBRATION',
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: Colors.black87,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+    final titleBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(bannerEvent.title.toUpperCase(), style: titleStyle),
+        const SizedBox(height: 12),
+        tagline,
+      ],
+    );
+    final qrBlock = Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.25),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.asset(
+                'images/bar-code.jpg',
+                width: qrSize,
+                height: qrSize,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.qr_code,
+                    size: qrSize * 0.5,
+                    color: AppTheme.primaryColor,
+                  );
+                },
               ),
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'SCAN FOR\nREGISTRATION',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+    if (isNarrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          titleBlock,
+          const SizedBox(height: 20),
+          Center(child: qrBlock),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: titleBlock),
+        const SizedBox(width: 16),
+        qrBlock,
+      ],
+    );
+  }
+
+  Widget _buildBannerDateVenueRow(
+    BuildContext context,
+    _BannerData bannerEvent,
+    bool isNarrow,
+  ) {
+    final dateChild = _buildBannerDetail(
+      context,
+      Icons.calendar_today,
+      'Competition Date',
+      DateFormat('EEEE, MMMM dd, yyyy').format(bannerEvent.startDate),
+    );
+    final venueChild = _buildBannerDetail(
+      context,
+      Icons.location_on,
+      'Venue',
+      bannerEvent.venue,
+    );
+    if (isNarrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [dateChild, const SizedBox(height: 12), venueChild],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(child: dateChild),
+        const SizedBox(width: 16),
+        Expanded(child: venueChild),
+      ],
     );
   }
 
@@ -1006,101 +1052,121 @@ class HomeScreen extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-      color: Colors.grey[50],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final padH = HomeLayout.sectionHorizontalPadding(w);
+        final padV = HomeLayout.sectionVerticalPadding(w);
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(vertical: padV, horizontal: padH),
+          color: Colors.grey[50],
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: SectionHeader(
-                  title: 'Current Competitions',
-                  subtitle: 'Competitions happening soon',
-                  showDivider: false,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: SectionHeader(
+                      title: 'Current Competitions',
+                      subtitle: 'Competitions happening soon',
+                      showDivider: false,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => context.push(AppRoutes.home),
+                    child: const Text('View More'),
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () => context.push(AppRoutes.home),
-                child: const Text('View More'),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth <= 0) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final cw = constraints.maxWidth;
+                  final isMobile = cw < HomeLayout.mobile;
+                  final isTablet =
+                      cw >= HomeLayout.mobile && cw < HomeLayout.tablet;
+                  final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
+
+                  if (isMobile) {
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: currentCompetitions.length,
+                      itemBuilder: (context, index) {
+                        final competition = currentCompetitions[index];
+                        return Padding(
+                          key: ValueKey(
+                            'current_comp_${idOf(competition)}_$index',
+                          ),
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: CompetitionCard(competition: competition),
+                        );
+                      },
+                    );
+                  } else if (isTablet) {
+                    final crossCount = HomeLayout.competitionGridCrossAxisCount(
+                      cw,
+                    );
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossCount,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio:
+                            HomeLayout.competitionGridChildAspectRatio(
+                              crossCount,
+                            ),
+                      ),
+                      itemCount: currentCompetitions.length,
+                      itemBuilder: (context, index) {
+                        final competition = currentCompetitions[index];
+                        return CompetitionCard(
+                          key: ValueKey(
+                            'current_comp_${idOf(competition)}_$index',
+                          ),
+                          competition: competition,
+                        );
+                      },
+                    );
+                  } else {
+                    return SizedBox(
+                      height: HomeLayout.competitionCarouselHeight(cw),
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        itemExtent: HomeLayout.competitionCarouselItemExtent(
+                          cw,
+                        ),
+                        itemCount: currentCompetitions.length,
+                        itemBuilder: (context, index) {
+                          final competition = currentCompetitions[index];
+                          return Padding(
+                            key: ValueKey(
+                              'current_comp_${idOf(competition)}_$index',
+                            ),
+                            padding: const EdgeInsets.only(right: 16),
+                            child: CompetitionCard(competition: competition),
+                          );
+                        },
+                      ),
+                    );
+                  }
+                },
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth <= 0) {
-                return const SizedBox.shrink();
-              }
-
-              final isMobile = constraints.maxWidth < 600;
-              final isTablet =
-                  constraints.maxWidth >= 600 && constraints.maxWidth < 1024;
-              final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
-
-              if (isMobile) {
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: currentCompetitions.length,
-                  itemBuilder: (context, index) {
-                    final competition = currentCompetitions[index];
-                    return Padding(
-                      key: ValueKey('current_comp_${idOf(competition)}_$index'),
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: CompetitionCard(competition: competition),
-                    );
-                  },
-                );
-              } else if (isTablet) {
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 0.75,
-                  ),
-                  itemCount: currentCompetitions.length,
-                  itemBuilder: (context, index) {
-                    final competition = currentCompetitions[index];
-                    return CompetitionCard(
-                      key: ValueKey('current_comp_${idOf(competition)}_$index'),
-                      competition: competition,
-                    );
-                  },
-                );
-              } else {
-                return SizedBox(
-                  height: 320,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemExtent: constraints.maxWidth * 0.35,
-                    itemCount: currentCompetitions.length,
-                    itemBuilder: (context, index) {
-                      final competition = currentCompetitions[index];
-                      return Padding(
-                        key: ValueKey(
-                          'current_comp_${idOf(competition)}_$index',
-                        ),
-                        padding: const EdgeInsets.only(right: 16),
-                        child: CompetitionCard(competition: competition),
-                      );
-                    },
-                  ),
-                );
-              }
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1115,149 +1181,177 @@ class HomeScreen extends StatelessWidget {
     final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
 
     if (upcomingCompetitions.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-        color: Colors.white,
-        child: Column(
-          children: [
-            SectionHeader(title: 'Upcoming Competitions', showDivider: false),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  children: [
-                    Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No upcoming competitions',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Check back later for upcoming competitions',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-                    ),
-                  ],
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final padH = HomeLayout.sectionHorizontalPadding(w);
+          final padV = HomeLayout.sectionVerticalPadding(w);
+          return Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(vertical: padV, horizontal: padH),
+            color: Colors.white,
+            child: Column(
+              children: [
+                SectionHeader(
+                  title: 'Upcoming Competitions',
+                  showDivider: false,
                 ),
-              ),
+                const SizedBox(height: 24),
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(w < HomeLayout.mobile ? 24 : 32),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.event_busy,
+                          size: w < HomeLayout.mobile ? 56 : 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No upcoming competitions',
+                          style: Theme.of(context).textTheme.titleLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Check back later for upcoming competitions',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       );
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final padH = HomeLayout.sectionHorizontalPadding(w);
+        final padV = HomeLayout.sectionVerticalPadding(w);
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(vertical: padV, horizontal: padH),
+          color: Colors.white,
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: SectionHeader(
-                  title: 'Upcoming Competitions',
-                  subtitle: 'Future competitions',
-                  showDivider: false,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: SectionHeader(
+                      title: 'Upcoming Competitions',
+                      subtitle: 'Future competitions',
+                      showDivider: false,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => context.push(AppRoutes.home),
+                    child: const Text('View More'),
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () => context.push(AppRoutes.home),
-                child: const Text('View More'),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth <= 0) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final cw = constraints.maxWidth;
+                  final isMobile = cw < HomeLayout.mobile;
+                  final isTablet =
+                      cw >= HomeLayout.mobile && cw < HomeLayout.tablet;
+
+                  if (isMobile) {
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: upcomingCompetitions.length,
+                      itemBuilder: (context, index) {
+                        final competition = upcomingCompetitions[index];
+                        return Padding(
+                          key: ValueKey(
+                            'upcoming_comp_${idOf(competition)}_$index',
+                          ),
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: CompetitionCard(
+                            competition: competition,
+                            showShareLinkOption: true,
+                          ),
+                        );
+                      },
+                    );
+                  } else if (isTablet) {
+                    final crossCount = HomeLayout.competitionGridCrossAxisCount(
+                      cw,
+                    );
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossCount,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio:
+                            HomeLayout.competitionGridChildAspectRatio(
+                              crossCount,
+                            ),
+                      ),
+                      itemCount: upcomingCompetitions.length,
+                      itemBuilder: (context, index) {
+                        final competition = upcomingCompetitions[index];
+                        return CompetitionCard(
+                          key: ValueKey(
+                            'upcoming_comp_${idOf(competition)}_$index',
+                          ),
+                          competition: competition,
+                          showShareLinkOption: true,
+                        );
+                      },
+                    );
+                  } else {
+                    return SizedBox(
+                      height: HomeLayout.competitionCarouselHeight(cw),
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        itemExtent: HomeLayout.competitionCarouselItemExtent(
+                          cw,
+                        ),
+                        itemCount: upcomingCompetitions.length,
+                        itemBuilder: (context, index) {
+                          final competition = upcomingCompetitions[index];
+                          return Padding(
+                            key: ValueKey(
+                              'upcoming_comp_${idOf(competition)}_$index',
+                            ),
+                            padding: const EdgeInsets.only(right: 16),
+                            child: CompetitionCard(
+                              competition: competition,
+                              showShareLinkOption: true,
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  }
+                },
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth <= 0) {
-                return const SizedBox.shrink();
-              }
-
-              final isMobile = constraints.maxWidth < 600;
-              final isTablet =
-                  constraints.maxWidth >= 600 && constraints.maxWidth < 1024;
-
-              if (isMobile) {
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: upcomingCompetitions.length,
-                  itemBuilder: (context, index) {
-                    final competition = upcomingCompetitions[index];
-                    return Padding(
-                      key: ValueKey(
-                        'upcoming_comp_${idOf(competition)}_$index',
-                      ),
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: CompetitionCard(
-                        competition: competition,
-                        registrationButtonHeight: 40,
-                        showShareLinkOption: true,
-                      ),
-                    );
-                  },
-                );
-              } else if (isTablet) {
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 0.75,
-                  ),
-                  itemCount: upcomingCompetitions.length,
-                  itemBuilder: (context, index) {
-                    final competition = upcomingCompetitions[index];
-                    return CompetitionCard(
-                      key: ValueKey(
-                        'upcoming_comp_${idOf(competition)}_$index',
-                      ),
-                      competition: competition,
-                      registrationButtonHeight: 40,
-                      showShareLinkOption: true,
-                    );
-                  },
-                );
-              } else {
-                return SizedBox(
-                  height: 320,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemExtent: constraints.maxWidth * 0.35,
-                    itemCount: upcomingCompetitions.length,
-                    itemBuilder: (context, index) {
-                      final competition = upcomingCompetitions[index];
-                      return Padding(
-                        key: ValueKey(
-                          'upcoming_comp_${idOf(competition)}_$index',
-                        ),
-                        padding: const EdgeInsets.only(right: 16),
-                        child: CompetitionCard(
-                          competition: competition,
-                          registrationButtonHeight: 40,
-                          showShareLinkOption: true,
-                        ),
-                      );
-                    },
-                  ),
-                );
-              }
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

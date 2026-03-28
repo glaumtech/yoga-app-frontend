@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/competition_brochure_banner_url.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/competition_controller.dart';
 import '../../../data/models/competition_model.dart';
@@ -309,8 +309,8 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
     HomeCompetitionModel competition,
     bool isMobile,
   ) {
-    final bannerUrl = _bannerImageUrl(competition);
-    final height = isMobile ? 140.0 : 180.0;
+    final bannerUrl = competitionBrochureBannerUrl(competition);
+    final height = isMobile ? 210.0 : 400.0;
 
     if (bannerUrl != null && bannerUrl.isNotEmpty) {
       return ClipRRect(
@@ -331,25 +331,6 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
       );
     }
     return _buildDefaultBanner(context, height, competition.competitionName);
-  }
-
-  /// Use image URL if available (brochureUrl when image, or backend can add bannerImageUrl later).
-  String? _bannerImageUrl(HomeCompetitionModel c) {
-    final url = c.brochureUrl ?? c.brochureFilePath;
-    if (url == null || url.isEmpty) return null;
-    final lower = url.toLowerCase();
-    if (lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png') ||
-        lower.endsWith('.webp')) {
-      if (url.startsWith('http')) return url;
-      try {
-        return Uri.parse(BaseUrl.baseUrl).resolve(url).toString();
-      } catch (_) {
-        return null;
-      }
-    }
-    return null;
   }
 
   Widget _buildDefaultBanner(

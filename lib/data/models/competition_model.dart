@@ -360,7 +360,9 @@ class HomeCompetitionModel {
       }
     }
     return HomeCompetitionModel(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id']?.toString() ?? ''),
       competitionName: json['competitionName']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
