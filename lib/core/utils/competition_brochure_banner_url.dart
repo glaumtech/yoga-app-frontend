@@ -1,13 +1,28 @@
 import '../constants/app_constants.dart';
 import '../../data/models/competition_model.dart';
 
-/// Full URL to load a competition brochure as a banner image via
-/// `GET /competition/{id}/brochure` when the public list includes brochure metadata.
+/// URL to show a competition brochure as a banner image.
+///
+/// When [HomeCompetitionModel] has an `id`, uses `GET /competition/{id}/brochure`
+/// so the banner loads even if the public list omits `brochureUrl` / `brochureFilePath`.
+/// [Image.network] [Image.errorBuilder] should handle 404 or non-image bodies (e.g. PDF).
 String? competitionBrochureBannerUrl(HomeCompetitionModel c) {
-  final rawBrochure = c.brochureUrl?.trim() ?? '';
-  final rawPath = c.brochureFilePath?.trim() ?? '';
-  final hasBrochure = rawBrochure.isNotEmpty || rawPath.isNotEmpty;
-  if (!hasBrochure) return null;
+  final raw = c.brochureUrl?.trim();
+  final rawPath = c.brochureFilePath?.trim();
+  final combined = raw ?? rawPath;
+
+  // Prefer explicit absolute image URLs when the API returns a direct link.
+  if (combined != null && combined.isNotEmpty) {
+    final lower = combined.toLowerCase();
+    if (combined.startsWith('http://') || combined.startsWith('https://')) {
+      if (lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png') ||
+          lower.endsWith('.webp')) {
+        return combined;
+      }
+    }
+  }
 
   final id = c.idStr ?? (c.id != null ? '${c.id}' : null);
   if (id != null && id.isNotEmpty) {
@@ -15,19 +30,17 @@ String? competitionBrochureBannerUrl(HomeCompetitionModel c) {
     return '$base${EndPoints.competitionBrochure(id)}';
   }
 
-  final raw = c.brochureUrl ?? c.brochureFilePath;
-  if (raw == null || raw.isEmpty) return null;
-  final lower = raw.toLowerCase();
-  if (lower.endsWith('.jpg') ||
-      lower.endsWith('.jpeg') ||
-      lower.endsWith('.png') ||
-      lower.endsWith('.webp')) {
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      return raw;
+  // No id: resolve relative image paths only.
+  if (combined != null && combined.isNotEmpty) {
+    final lower = combined.toLowerCase();
+    if (lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp')) {
+      final base = BaseUrl.baseUrl.replaceAll(RegExp(r'/$'), '');
+      final p = combined.startsWith('/') ? combined : '/$combined';
+      return '$base$p';
     }
-    final base = BaseUrl.baseUrl.replaceAll(RegExp(r'/$'), '');
-    final p = raw.startsWith('/') ? raw : '/$raw';
-    return '$base$p';
   }
   return null;
 }
