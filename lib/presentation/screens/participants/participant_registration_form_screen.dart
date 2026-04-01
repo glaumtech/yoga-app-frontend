@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
+import '../../controllers/participant_registration_form_controller.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_label_with_hint.dart';
 import '../../widgets/form_title.dart';
@@ -27,6 +28,13 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Keep screen Stateless: init work happens in controller.onReady()
+    Get.put(
+      ParticipantRegistrationFormController(
+        initialCompetitionId: initialCompetitionId,
+      ),
+    );
+
     final participantController = Get.find<ParticipantController>();
     // Initialize CompetitionController if not already initialized
     final competitionController = Get.put(CompetitionController());
@@ -34,18 +42,6 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
-
-    // Preselect competition when coming from a competition-specific route
-    if ((initialCompetitionId ?? '').isNotEmpty &&
-        participantController.selectedEventId.value.isEmpty) {
-      participantController.selectedEventId.value = initialCompetitionId!;
-    }
-
-    // Load competitions (full model needed for category/group/stage mapping)
-    if (competitionController.competitions.isEmpty &&
-        !competitionController.isLoading.value) {
-      competitionController.loadCompetitions();
-    }
 
     return Card(
       elevation: 4,

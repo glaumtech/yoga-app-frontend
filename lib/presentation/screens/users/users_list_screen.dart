@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/competition_controller.dart';
+import '../../controllers/users_list_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../../data/models/user_management_model.dart';
 
@@ -14,54 +15,11 @@ class UsersListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Keep screen Stateless: initialization happens in UsersListController.onReady()
+    Get.put(UsersListController());
+
     final userController = Get.find<UserManagementController>();
-    // Initialize CompetitionController if not already initialized
     final competitionController = Get.put(CompetitionController());
-
-    // Load competitions if empty
-    if (competitionController.competitions.isEmpty &&
-        !competitionController.isLoading.value) {
-      competitionController.loadCompetitions().then((_) {
-        // Set first competition as default if no competition is selected
-        if (competitionController.competitions.isNotEmpty &&
-            userController.selectedEventId.value.isEmpty) {
-          final firstCompetition = competitionController.competitions
-              .firstWhere(
-                (c) => c.id != null,
-                orElse: () => competitionController.competitions.first,
-              );
-          if (firstCompetition.id != null) {
-            final competitionId = int.tryParse(firstCompetition.id!);
-            if (competitionId != null) {
-              userController.selectedEventId.value = firstCompetition.id!;
-              userController.loadUsers(eventId: competitionId);
-            }
-          }
-        }
-      });
-    } else if (competitionController.competitions.isNotEmpty &&
-        userController.selectedEventId.value.isEmpty) {
-      // Set first competition as default if competitions are already loaded
-      final firstCompetition = competitionController.competitions.firstWhere(
-        (c) => c.id != null,
-        orElse: () => competitionController.competitions.first,
-      );
-      if (firstCompetition.id != null) {
-        final competitionId = int.tryParse(firstCompetition.id!);
-        if (competitionId != null) {
-          userController.selectedEventId.value = firstCompetition.id!;
-          userController.loadUsers(eventId: competitionId);
-        }
-      }
-    }
-
-    // Load users on first build (only if a competition is selected)
-    if (userController.users.isEmpty &&
-        !userController.isLoading.value &&
-        userController.selectedEventId.value.isNotEmpty) {
-      final eventId = int.tryParse(userController.selectedEventId.value);
-      userController.loadUsers(eventId: eventId);
-    }
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
@@ -397,13 +355,17 @@ class UsersListScreen extends StatelessWidget {
                   if (user.updatedAt != null)
                     _buildUserInfoRow('Updated', _buildUpdatedCell(user)),
                   Obx(() {
-                    final isSuperAdmin =
-                        controller.currentUser.value?.userTypeName
-                                ?.toUpperCase() ==
-                            'SUB_ADMIN' ||
-                        controller.currentUser.value?.type.toUpperCase() ==
-                            'SUB ADMIN';
-                    if (isSuperAdmin &&
+                    final typeName =
+                        (controller.currentUser.value?.userTypeName ??
+                                controller.currentUser.value?.type ??
+                                '')
+                            .trim()
+                            .toUpperCase()
+                            .replaceAll(' ', '_');
+                    final canViewPassword =
+                        typeName == 'SUB_ADMIN' || typeName == 'BRANCH_ADMIN';
+
+                    if (canViewPassword &&
                         (user.confirmPassword != null ||
                             user.password != null)) {
                       return _buildPasswordInfoRow(
@@ -553,16 +515,19 @@ class UsersListScreen extends StatelessWidget {
               child: SizedBox(
                 width: tableWidth,
                 child: Obx(() {
-                  final isSuperAdmin =
-                      controller.currentUser.value?.userTypeName
-                              ?.toUpperCase() ==
-                          'SUB_ADMIN' ||
-                      controller.currentUser.value?.type.toUpperCase() ==
-                          'SUB ADMIN';
+                  final typeName =
+                      (controller.currentUser.value?.userTypeName ??
+                              controller.currentUser.value?.type ??
+                              '')
+                          .trim()
+                          .toUpperCase()
+                          .replaceAll(' ', '_');
+                  final canViewPassword =
+                      typeName == 'SUB_ADMIN' || typeName == 'BRANCH_ADMIN';
 
                   return Table(
                     border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                    columnWidths: isSuperAdmin
+                    columnWidths: canViewPassword
                         ? {
                             0: const FixedColumnWidth(80),
                             1: FlexColumnWidth(1.8), // API userName
@@ -590,7 +555,7 @@ class UsersListScreen extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: AppTheme.primaryColor.withOpacity(0.1),
                         ),
-                        children: isSuperAdmin
+                        children: canViewPassword
                             ? [
                                 _buildTableCell('PHOTO', isHeader: true),
                                 _buildTableCell('USER NAME', isHeader: true),
@@ -616,7 +581,7 @@ class UsersListScreen extends StatelessWidget {
                       // Data Rows
                       ...users.map((user) {
                         return TableRow(
-                          children: isSuperAdmin
+                          children: canViewPassword
                               ? [
                                   TableCell(
                                     child: Padding(

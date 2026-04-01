@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/competition_controller.dart';
+import '../../controllers/competitions_list_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../../data/models/competition_model.dart';
 
@@ -75,12 +76,9 @@ class CompetitionsListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Keep screen Stateless: initial load happens in CompetitionsListController.onReady()
+    Get.put(CompetitionsListController());
     final controller = Get.put(CompetitionController());
-
-    // Load competitions on first build
-    if (controller.competitions.isEmpty && !controller.isLoading.value) {
-      controller.loadCompetitions();
-    }
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;

@@ -18,6 +18,7 @@ import '../presentation/screens/competitions/create_competition_screen.dart';
 import '../presentation/screens/participants/participant_management_screen.dart';
 import '../presentation/screens/participants/user_competition_registration_screen.dart';
 import '../presentation/screens/scoring/jury_scoring_screen.dart';
+import '../presentation/screens/organization_setup/organization_setup_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/storage_service.dart';
 import '../presentation/controllers/auth_controller.dart';
@@ -79,6 +80,8 @@ class AppRouter {
                   userTypeUpper == 'SUB_ADMIN' ||
                   userTypeUpper == 'SPOT_REG_ADMIN' ||
                   userTypeUpper.contains('SUB ADMIN') ||
+                  userTypeUpper.contains('ORG_ADMIN') ||
+                  userTypeUpper.contains('BRANCH_ADMIN') ||
                   userTypeUpper.contains('SPOT REG ADMIN');
 
               isJury =
@@ -259,6 +262,12 @@ class AppRouter {
         path: AppRoutes.juryScoring,
         name: 'jury-scoring',
         builder: (context, state) => const JuryScoringScreen(),
+      ),
+
+      GoRoute(
+        path: AppRoutes.organizationSetup,
+        name: 'organization-setup',
+        builder: (context, state) => const OrganizationSetupScreen(),
       ),
     ],
   );

@@ -171,6 +171,8 @@ class HomeScreen extends StatelessWidget {
                           userTypeUpper == 'SUB_ADMIN' ||
                           userTypeUpper == 'SPOT_REG_ADMIN' ||
                           userTypeUpper.contains('SUB ADMIN') ||
+                          userTypeUpper.contains('ORG_ADMIN') ||
+                          userTypeUpper.contains('BRANCH_ADMIN') ||
                           userTypeUpper.contains('SPOT REG ADMIN');
 
                       // JURY has judge/jury access

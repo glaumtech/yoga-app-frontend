@@ -165,4 +165,7 @@ class EndPoints {
 
   static String competitionParticipantsExcel(int competitionId) =>
       '/reports/competition/$competitionId/print/participants/excel';
+
+  /// ORGANIZATION / BRANCH SETUP
+  static String organizationSetup = '/organization/setup';
 }

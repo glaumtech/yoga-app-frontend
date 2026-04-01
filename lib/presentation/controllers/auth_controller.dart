@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:yoga_champ/core/utils/storage_service.dart';
@@ -8,6 +9,10 @@ import '../../core/constants/app_constants.dart';
 import '../../routes/app_routes.dart';
 import 'participant_controller.dart';
 import 'user_management_controller.dart';
+import 'competition_controller.dart';
+import 'school_controller.dart';
+import 'reports_controller.dart';
+import 'organization_setup_controller.dart';
 
 class AuthController extends GetxController {
   final AuthRepository _authRepository = AuthRepository();
@@ -375,6 +380,49 @@ class AuthController extends GetxController {
 
     // Call repository signOut (calls API and clears storage)
     await _authRepository.signOut();
+
+    // Clear any remaining cached/local app data
+    // (some screens store additional keys beyond token/user/role)
+    await StorageService.clear();
+
+    // Dispose/reset other feature controllers so lists/forms don't leak
+    // into the next login session.
+    //
+    // Important: do this AFTER the current frame. If we delete controllers
+    // synchronously while widgets are still building/unmounting, Flutter can
+    // throw `_dependents.isEmpty is not true` assertions (InheritedWidget/Obx).
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      try {
+        if (Get.isRegistered<UserManagementController>()) {
+          Get.delete<UserManagementController>(force: true);
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<CompetitionController>()) {
+          Get.delete<CompetitionController>(force: true);
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<ParticipantController>()) {
+          Get.delete<ParticipantController>(force: true);
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<SchoolController>()) {
+          Get.delete<SchoolController>(force: true);
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<ReportsController>()) {
+          Get.delete<ReportsController>(force: true);
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<OrganizationSetupController>()) {
+          Get.delete<OrganizationSetupController>(force: true);
+        }
+      } catch (_) {}
+    });
 
     // Clear all login form data
     clearLoginData();

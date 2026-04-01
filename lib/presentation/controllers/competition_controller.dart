@@ -22,6 +22,7 @@ class CompetitionController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
   final RxList<CompetitionModel> competitions = <CompetitionModel>[].obs;
+
   /// Public list for home screen (from GET /competition/public)
   final RxList<HomeCompetitionModel> homeCompetitions =
       <HomeCompetitionModel>[].obs;

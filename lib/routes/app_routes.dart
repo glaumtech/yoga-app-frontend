@@ -28,4 +28,7 @@ class AppRoutes {
 
   // Jury Scoring
   static const String juryScoring = '/jury/scoring';
+
+  // Organization Setup
+  static const String organizationSetup = '/organization/setup';
 }

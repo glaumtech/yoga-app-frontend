@@ -1,11 +1,292 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../controllers/jury_scoring_controller.dart';
+import '../../controllers/user_management_controller.dart';
 import '../../widgets/custom_loader.dart';
 
 class JuryScoringScreen extends StatelessWidget {
   const JuryScoringScreen({super.key});
+
+  Widget _buildScoreChip({
+    required String scoreText,
+    required bool isMobile,
+    bool isTablet = false,
+  }) {
+    final hasScore = scoreText.trim().isNotEmpty;
+    final display = hasScore ? scoreText.trim() : 'Not scored';
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 10 : 12,
+        vertical: isMobile ? 5 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: hasScore
+            ? AppTheme.primaryColor.withOpacity(0.12)
+            : Colors.grey[100],
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: hasScore
+              ? AppTheme.primaryColor.withOpacity(0.35)
+              : Colors.grey[300]!,
+        ),
+      ),
+      child: Text(
+        display,
+        style: TextStyle(
+          fontSize: isMobile ? 13 : (isTablet ? 14 : 15),
+          fontWeight: FontWeight.w800,
+          color: hasScore ? AppTheme.primaryColor : Colors.grey[700],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildParticipantHeaderRow({
+    required String participantId,
+    required String regNo,
+    required String name,
+    required bool checked,
+    required ValueChanged<bool?> onChanged,
+    required bool isMobile,
+    required bool isTablet,
+    required bool isCompactWidth,
+    required String label,
+    required String scoreText,
+  }) {
+    // Compact layout (mobile OR narrow widths): use 2 rows to avoid overlap.
+    if (isMobile || isCompactWidth) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (participantId.isNotEmpty) ...[
+                _buildParticipantAvatar(participantId, isMobile, size: 46),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: Colors.grey[850],
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      regNo,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Checkbox(
+                    value: checked,
+                    onChanged: onChanged,
+                    activeColor: AppTheme.primaryColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black87,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _buildScoreChip(scoreText: scoreText, isMobile: true),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // Tablet/Desktop: single row, no overlay (prevents overlap).
+    return Row(
+      children: [
+        if (participantId.isNotEmpty) ...[
+          _buildParticipantAvatar(
+            participantId,
+            isMobile,
+            size: isTablet ? 48 : 56,
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: isTablet ? 13 : 14,
+                  color: Colors.grey[850],
+                  fontWeight: FontWeight.w700,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                regNo,
+                style: TextStyle(
+                  fontSize: isTablet ? 11.5 : 12.5,
+                  color: AppTheme.primaryColor,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Checkbox(
+              value: checked,
+              onChanged: onChanged,
+              activeColor: AppTheme.primaryColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 10 : 12,
+                vertical: isTablet ? 6 : 7,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: isTablet ? 18 : 20,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.black87,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            _buildScoreChip(
+              scoreText: scoreText,
+              isMobile: isMobile,
+              isTablet: isTablet,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildParticipantAvatar(
+    String participantId,
+    bool isMobile, {
+    double? size,
+  }) {
+    final url =
+        '${BaseUrl.baseUrl}${EndPoints.participantRegistrationPhoto(participantId)}';
+    final s = size ?? (isMobile ? 28.0 : 32.0);
+
+    return ClipOval(
+      child: Image.network(
+        url,
+        width: s,
+        height: s,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: s,
+          height: s,
+          color: Colors.grey[200],
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.person,
+            size: isMobile ? 18 : 20,
+            color: Colors.grey[600],
+          ),
+        ),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: s,
+            height: s,
+            color: Colors.grey[200],
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: isMobile ? 16 : 18,
+              height: isMobile ? 16 : 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppTheme.primaryColor,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,6 +294,9 @@ class JuryScoringScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
     final isWeb = screenWidth >= 1024;
+    final userController = Get.isRegistered<UserManagementController>()
+        ? Get.find<UserManagementController>()
+        : Get.put(UserManagementController());
 
     // Create a fresh controller per screen visit, and auto-remove it when leaving
     // so the assignments API is called every time user navigates here.
@@ -34,25 +318,92 @@ class JuryScoringScreen extends StatelessWidget {
                           floating: true,
                           snap: true,
                           pinned: false,
-                          title: Text(
-                            'SCORING SCREEN',
-                            style: TextStyle(
-                              fontSize: isMobile ? 15 : 20,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                          titleSpacing: 12,
+                          title: SizedBox(
+                            width: double.infinity,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'SCORING SCREEN',
+                                    style: TextStyle(
+                                      fontSize: isMobile ? 15 : 20,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                Center(
+                                  child: Obx(() {
+                                    final name =
+                                        (controller
+                                                    .juryAssignment
+                                                    .value
+                                                    ?.competitionName ??
+                                                '')
+                                            .trim();
+                                    if (name.isEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Text(
+                                      name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: isMobile ? 13 : 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    );
+                                  }),
+                                ),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Obx(() {
+                                    final u = userController.currentUser.value;
+                                    final userName = (u?.name ?? '').trim();
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (userName.isNotEmpty)
+                                          ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              maxWidth: isMobile ? 140 : 220,
+                                            ),
+                                            child: Text(
+                                              userName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: isMobile ? 12 : 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white.withOpacity(
+                                                  0.95,
+                                                ),
+                                              ),
+                                              textAlign: TextAlign.right,
+                                            ),
+                                          ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.logout,
+                                            color: Colors.white,
+                                          ),
+                                          tooltip: 'Logout',
+                                          onPressed: () =>
+                                              controller.handleLogout(context),
+                                        ),
+                                      ],
+                                    );
+                                  }),
+                                ),
+                              ],
                             ),
                           ),
-                          centerTitle: true,
-                          actions: [
-                            IconButton(
-                              icon: const Icon(
-                                Icons.logout,
-                                color: Colors.white,
-                              ),
-                              tooltip: 'Logout',
-                              onPressed: () => controller.handleLogout(context),
-                            ),
-                          ],
                         ),
                         SliverPadding(
                           padding: EdgeInsets.fromLTRB(
@@ -72,6 +423,7 @@ class JuryScoringScreen extends StatelessWidget {
                                   isTablet,
                                 ),
                                 _buildParticipantsSection(
+                                  context,
                                   controller,
                                   isMobile,
                                   isTablet,
@@ -439,6 +791,7 @@ class JuryScoringScreen extends StatelessWidget {
   }
 
   Widget _buildParticipantsSection(
+    BuildContext context,
     JuryScoringController controller,
     bool isMobile,
     bool isTablet,
@@ -582,7 +935,12 @@ class JuryScoringScreen extends StatelessWidget {
                   ),
                 )
               else
-                _buildParticipantsContent(controller, isMobile, isTablet),
+                _buildParticipantsContent(
+                  context,
+                  controller,
+                  isMobile,
+                  isTablet,
+                ),
             ],
           ),
         ),
@@ -591,15 +949,19 @@ class JuryScoringScreen extends StatelessWidget {
   }
 
   Widget _buildParticipantsContent(
+    BuildContext context,
     JuryScoringController controller,
     bool isMobile,
     bool isTablet,
   ) {
-    // Display up to 3 participants
-    final participantsToShow = controller.currentParticipants.take(3).toList();
     final labels = ['A', 'B', 'C'];
 
     return Obx(() {
+      // Display up to 3 participants (reactive)
+      final participantsToShow = controller.currentParticipants
+          .take(3)
+          .toList();
+      final isCompactWidth = MediaQuery.of(context).size.width < 800;
       return Column(
         children: [
           SizedBox(height: 5),
@@ -632,105 +994,29 @@ class JuryScoringScreen extends StatelessWidget {
                             );
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 6.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      label,
-                                      style: TextStyle(
-                                        fontSize: isMobile ? 14 : 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.grey[800],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    scoreText.isNotEmpty
-                                        ? scoreText
-                                        : 'Not scored',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: isMobile ? 20 : 28,
-                                      fontWeight: FontWeight.bold,
-                                      color: scoreText.isNotEmpty
-                                          ? AppTheme.primaryColor
-                                          : Colors.grey[600],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                          // Checkbox, Registration Number, and Name row
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Checkbox
-                              Checkbox(
-                                value:
+                              child: _buildParticipantHeaderRow(
+                                participantId: participantId,
+                                regNo:
+                                    (participant.registrationNo ??
+                                            participant.participantCode ??
+                                            'N/A')
+                                        .toString(),
+                                name: participant.participantName,
+                                checked:
                                     controller
                                         .selectedParticipantCheckboxes[participantId] ??
                                     false,
                                 onChanged: (value) => controller
                                     .toggleParticipantCheckbox(participantId),
-                                activeColor: AppTheme.primaryColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
+                                isMobile: isMobile,
+                                isTablet: isTablet,
+                                isCompactWidth: isCompactWidth,
+                                label: label,
+                                scoreText: scoreText,
                               ),
-                              const SizedBox(width: 6),
-                              // Registration Number
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryColor,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  participant.registrationNo ??
-                                      participant.participantCode ??
-                                      'N/A',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // Participant Name (score moved above)
-                              Expanded(
-                                child: Text(
-                                  participant.participantName,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey[800],
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  textAlign: TextAlign.left,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
+                            );
+                          }),
+                          const SizedBox(height: 6),
                           // Score selectors (mobile: whole on first row, decimal on next row)
                           Obx(() {
                             // Listen to score update trigger to rebuild when scores change
@@ -870,107 +1156,30 @@ class JuryScoringScreen extends StatelessWidget {
                                 asanaNum,
                               );
                               return Padding(
-                                padding: const EdgeInsets.only(bottom: 8.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[200],
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        labels[entry.key],
-                                        style: TextStyle(
-                                          fontSize: isTablet ? 18 : 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.grey[800],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      scoreText.isNotEmpty
-                                          ? scoreText
-                                          : 'Not scored',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: isTablet ? 24 : 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: scoreText.isNotEmpty
-                                            ? AppTheme.primaryColor
-                                            : Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                            // Checkbox, Registration Number, and Name in same row
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                // Checkbox
-                                Checkbox(
-                                  value:
+                                padding: const EdgeInsets.only(bottom: 10.0),
+                                child: _buildParticipantHeaderRow(
+                                  participantId: participantId,
+                                  regNo:
+                                      (participant.registrationNo ??
+                                              participant.participantCode ??
+                                              'N/A')
+                                          .toString(),
+                                  name: participant.participantName,
+                                  checked:
                                       controller
                                           .selectedParticipantCheckboxes[participantId] ??
                                       false,
                                   onChanged: (value) => controller
                                       .toggleParticipantCheckbox(participantId),
-                                  activeColor: AppTheme.primaryColor,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
+                                  isMobile: isMobile,
+                                  isTablet: isTablet,
+                                  isCompactWidth: isCompactWidth,
+                                  label: labels[entry.key],
+                                  scoreText: scoreText,
                                 ),
-                                const SizedBox(width: 8),
-                                // Registration Number
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryColor,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    participant.registrationNo ??
-                                        participant.participantCode ??
-                                        'N/A',
-                                    style: TextStyle(
-                                      fontSize: isTablet ? 12 : 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // Participant Name (score moved above)
-                                Expanded(
-                                  child: Text(
-                                    participant.participantName,
-                                    style: TextStyle(
-                                      fontSize: isTablet ? 12 : 13,
-                                      color: Colors.grey[800],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                    textAlign: TextAlign.left,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
+                              );
+                            }),
+                            const SizedBox(height: 10),
                             // Score selectors (whole then decimal)
                             Obx(() {
                               controller.scoreUpdateTrigger.value;
