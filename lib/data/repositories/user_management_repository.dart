@@ -347,6 +347,18 @@ class UserManagementRepository {
               AppConstants.userKey,
               jsonEncode(userData),
             );
+
+            // Store permission keys separately for common access across the app
+            final rawPermissions = userData['permissions'];
+            if (rawPermissions is List) {
+              final keys = rawPermissions.map((e) => e.toString()).toList();
+              await StorageService.setStringList(
+                AppConstants.permissionKeysKey,
+                keys,
+              );
+            } else {
+              await StorageService.remove(AppConstants.permissionKeysKey);
+            }
           }
 
           return ApiResponse(
@@ -393,6 +405,7 @@ class UserManagementRepository {
       // Clear local storage regardless of API response
       await StorageService.remove(AppConstants.tokenKey);
       await StorageService.remove(AppConstants.userKey);
+      await StorageService.remove(AppConstants.permissionKeysKey);
 
       if (response.success) {
         return ApiResponse(
@@ -422,10 +435,15 @@ class UserManagementRepository {
   }
 
   /// Get all user types with their permissions
-  Future<ApiResponse<List<UserTypeModel>>> getUserTypes() async {
+  Future<ApiResponse<List<UserTypeModel>>> getUserTypes({
+    bool includeAdminTypes = false,
+  }) async {
     try {
+      final url = includeAdminTypes
+          ? '${EndPoints.userTypes}?includeAdminTypes=true'
+          : EndPoints.userTypes;
       final response = await _apiService.getResponse<dynamic>(
-        url: EndPoints.userTypes,
+        url: url,
         apiType: APIType.aGet,
         fromJson: (json) => json,
       );
@@ -507,6 +525,48 @@ class UserManagementRepository {
       return ApiResponse(
         success: false,
         message: 'Error retrieving jury assignments: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<ApiResponse<UserTypeModel>> updateUserTypePermissions({
+    required int userTypeId,
+    int? branchId,
+    required List<int> permissionIds,
+  }) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: '${EndPoints.userTypes}/$userTypeId/permissions',
+        apiType: APIType.aPut,
+        body: {
+          if (branchId != null) 'branchId': branchId,
+          'permissionIds': permissionIds,
+        },
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+        final userTypeRaw = data['userType'];
+        if (userTypeRaw is Map<String, dynamic>) {
+          return ApiResponse<UserTypeModel>(
+            success: true,
+            data: UserTypeModel.fromJson(userTypeRaw),
+            message: response.message ?? 'Permissions updated successfully',
+          );
+        }
+      }
+
+      return ApiResponse<UserTypeModel>(
+        success: false,
+        message: response.message ?? 'Failed to update permissions',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse<UserTypeModel>(
+        success: false,
+        message: e.toString(),
+        statusCode: 0,
       );
     }
   }

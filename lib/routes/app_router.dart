@@ -1,5 +1,4 @@
 import 'package:go_router/go_router.dart';
-import 'package:get/get.dart';
 import 'package:yoga_champ/routes/app_routes.dart';
 import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
@@ -11,6 +10,7 @@ import '../presentation/screens/admin/admin_dashboard_screen.dart';
 
 import '../presentation/screens/schools/schools_screen.dart';
 import '../presentation/screens/reports/reports_screen.dart';
+import '../presentation/screens/settings/settings_screen.dart';
 import '../presentation/screens/sponsors/sponsors_screen.dart';
 import '../presentation/screens/users/user_management_screen.dart';
 import '../presentation/screens/users/users_list_screen.dart';
@@ -21,8 +21,6 @@ import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../presentation/screens/organization_setup/organization_setup_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/storage_service.dart';
-import '../presentation/controllers/auth_controller.dart';
-import '../presentation/controllers/user_management_controller.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -63,97 +61,71 @@ class AppRouter {
       // If logged in, check admin routes and redirect JURY users
       if (token != null) {
         try {
-          // Try to get user from UserManagementController first (new login system)
-          bool isAdmin = false;
-          bool isJury = false;
+          final keys =
+              StorageService.getStringList(AppConstants.permissionKeysKey)
+                  .map((e) => e.trim().toUpperCase())
+                  .where((e) => e.isNotEmpty)
+                  .toSet();
+          bool hasKey(String k) => keys.contains(k.trim().toUpperCase());
 
-          try {
-            final userController = Get.find<UserManagementController>();
-            final currentUser = userController.currentUser.value;
-            if (currentUser != null) {
-              final userTypeName = currentUser.userTypeName ?? currentUser.type;
-              final userTypeUpper = userTypeName.toUpperCase();
+          // "Jury mode" is permission-driven now.
+          final isJury = hasKey('SHOW_JURY_SCREEN');
 
-              // Check specific user types from database
-              // SUB_ADMIN and SPOT_REG_ADMIN have admin access
-              isAdmin =
-                  userTypeUpper == 'SUB_ADMIN' ||
-                  userTypeUpper == 'SPOT_REG_ADMIN' ||
-                  userTypeUpper.contains('SUB ADMIN') ||
-                  userTypeUpper.contains('ORG_ADMIN') ||
-                  userTypeUpper.contains('BRANCH_ADMIN') ||
-                  userTypeUpper.contains('SPOT REG ADMIN');
-
-              isJury =
-                  userTypeUpper == 'JURY' || userTypeUpper.contains('JURY');
-
-              // Redirect JURY users to jury scoring screen FIRST
-              // Allow only: login, signup, splash, and the jury scoring route itself
-              if (isJury &&
-                  location != AppRoutes.juryScoring &&
-                  location != AppRoutes.login &&
-                  location != AppRoutes.signUp &&
-                  location != AppRoutes.splash) {
-                // Redirect from any route (including home) to jury scoring
-                print(
-                  'Redirecting JURY user from $location to ${AppRoutes.juryScoring}',
-                );
-                return AppRoutes.juryScoring;
-              }
-            }
-          } catch (e) {
-            print('Error getting user from UserManagementController: $e');
-            // Fallback to AuthController if UserManagementController not available
-            final authController = Get.find<AuthController>();
-            isAdmin = authController.isAdmin;
-            final roleName = authController.currentUser.value?.roleName ?? '';
-            isJury = roleName.toUpperCase().contains('JURY');
-
-            // Redirect JURY users to jury scoring screen FIRST
-            // Allow only: login, signup, splash, and the jury scoring route itself
-            if (isJury &&
-                location != AppRoutes.juryScoring &&
-                location != AppRoutes.login &&
-                location != AppRoutes.signUp &&
-                location != AppRoutes.splash) {
-              // Redirect from any route (including home) to jury scoring
-              print(
-                'Redirecting JURY user (fallback) from $location to ${AppRoutes.juryScoring}',
-              );
-              return AppRoutes.juryScoring;
-            }
+          // If jury user, force them to jury scoring screen (unless on public/auth routes).
+          if (isJury &&
+              location != AppRoutes.juryScoring &&
+              location != AppRoutes.login &&
+              location != AppRoutes.signUp &&
+              location != AppRoutes.splash &&
+              !isPublicRoute &&
+              !isHomeRoute &&
+              !isRegister) {
+            return AppRoutes.juryScoring;
           }
 
-          // Admin-only routes (not accessible to judges)
-          final adminOnlyRoutes = [
-            AppRoutes.adminDashboard,
-            AppRoutes.createCompetition,
-            AppRoutes.userManagement,
-            AppRoutes.usersList,
-            AppRoutes.participantManagement,
-            AppRoutes.reports,
-            AppRoutes.sponsors,
-          ];
-
-          // Routes accessible to admin, judges, and juries
-          final adminJudgeJuryRoutes = [AppRoutes.juryScoring];
-
-          final isAdminOnlyRoute = adminOnlyRoutes.any(
-            (route) => location == route || location.startsWith(route),
-          );
-
-          final isAdminJudgeJuryRoute = adminJudgeJuryRoutes.any(
-            (route) => location == route || location.startsWith(route),
-          );
-
-          // If trying to access admin-only route but not admin
-          if (isAdminOnlyRoute && !isAdmin) {
-            // Redirect JURY users to jury scoring, others to home
-            return isJury ? AppRoutes.juryScoring : AppRoutes.home;
+          // Permission-based route access
+          List<String>? requiredKeys;
+          if (location == AppRoutes.adminDashboard ||
+              location.startsWith(AppRoutes.adminDashboard)) {
+            // Allow dashboard for any admin menu permission
+            requiredKeys = const [
+              'MENU_DASHBOARD',
+              'MENU_COMPETITIONS',
+              'MENU_USERS',
+              'MENU_PARTICIPANTS',
+              'MENU_INSTITUTIONS',
+              'MENU_REPORTS',
+              'MENU_SETTINGS',
+              'MENU_SPONSORS',
+            ];
+          } else if (location == AppRoutes.createCompetition ||
+              location.startsWith('/admin/competitions')) {
+            requiredKeys = const ['MENU_COMPETITIONS'];
+          } else if (location == AppRoutes.userManagement ||
+              location.startsWith('/admin/users')) {
+            requiredKeys = const ['MENU_USERS'];
+          } else if (location == AppRoutes.participantManagement ||
+              location.startsWith('/admin/participants')) {
+            requiredKeys = const ['MENU_PARTICIPANTS'];
+          } else if (location == AppRoutes.schoolsList ||
+              location.startsWith('/admin/schools')) {
+            requiredKeys = const ['MENU_INSTITUTIONS'];
+          } else if (location == AppRoutes.reports ||
+              location.startsWith('/admin/reports')) {
+            requiredKeys = const ['MENU_REPORTS'];
+          } else if (location == AppRoutes.settings ||
+              location.startsWith('/admin/settings')) {
+            requiredKeys = const ['MENU_SETTINGS'];
+          } else if (location == AppRoutes.sponsors ||
+              location.startsWith('/admin/sponsors')) {
+            requiredKeys = const ['MENU_SPONSORS'];
+          } else if (location == AppRoutes.juryScoring ||
+              location.startsWith('/jury/')) {
+            requiredKeys = const ['SHOW_JURY_SCREEN'];
           }
 
-          // If trying to access admin/judge/jury route, allow if admin, judge, or jury
-          if (isAdminJudgeJuryRoute && !isAdmin && !isJury) {
+          if (requiredKeys != null && !requiredKeys.any(hasKey)) {
+            // If user doesn't have permission for the route, send them home.
             return AppRoutes.home;
           }
         } catch (e) {
@@ -250,6 +222,11 @@ class AppRouter {
         path: AppRoutes.reports,
         name: 'reports',
         builder: (context, state) => const ReportsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settings,
+        name: 'settings',
+        builder: (context, state) => const SettingsScreen(),
       ),
       GoRoute(
         path: AppRoutes.sponsors,

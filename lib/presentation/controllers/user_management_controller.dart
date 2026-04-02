@@ -12,7 +12,7 @@ import '../../data/models/user_type_model.dart';
 import '../../data/models/competition_option_model.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/storage_service.dart';
-import '../../../core/constants/app_constants.dart' show BaseUrl, EndPoints;
+import '../../../core/utils/permission_store.dart';
 
 class UserManagementController extends GetxController {
   final UserManagementRepository _repository = UserManagementRepository();
@@ -844,6 +844,9 @@ class UserManagementController extends GetxController {
         final user = data['user'] as UserManagementModel?;
         if (user != null) {
           currentUser.value = user;
+          if (Get.isRegistered<PermissionStore>()) {
+            Get.find<PermissionStore>().setKeys(user.permissions);
+          }
         }
         isLoading.value = false;
         return true;
@@ -870,11 +873,17 @@ class UserManagementController extends GetxController {
       if (response.success) {
         // Clear current user
         currentUser.value = null;
+        if (Get.isRegistered<PermissionStore>()) {
+          Get.find<PermissionStore>().setKeys(const []);
+        }
         isLoading.value = false;
         return true;
       } else {
         // Clear current user even if API call fails
         currentUser.value = null;
+        if (Get.isRegistered<PermissionStore>()) {
+          Get.find<PermissionStore>().setKeys(const []);
+        }
         errorMessage.value = response.message ?? 'Logout failed';
         isLoading.value = false;
         return false;
@@ -882,6 +891,9 @@ class UserManagementController extends GetxController {
     } catch (e) {
       // Clear current user on error
       currentUser.value = null;
+      if (Get.isRegistered<PermissionStore>()) {
+        Get.find<PermissionStore>().setKeys(const []);
+      }
       errorMessage.value = 'Error during logout: ${e.toString()}';
       isLoading.value = false;
       return false;

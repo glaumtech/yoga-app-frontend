@@ -13,6 +13,8 @@ import 'competition_controller.dart';
 import 'school_controller.dart';
 import 'reports_controller.dart';
 import 'organization_setup_controller.dart';
+import 'settings_controller.dart';
+import '../../core/utils/permission_store.dart';
 
 class AuthController extends GetxController {
   final AuthRepository _authRepository = AuthRepository();
@@ -384,6 +386,9 @@ class AuthController extends GetxController {
     // Clear any remaining cached/local app data
     // (some screens store additional keys beyond token/user/role)
     await StorageService.clear();
+    if (Get.isRegistered<PermissionStore>()) {
+      Get.find<PermissionStore>().setKeys(const []);
+    }
 
     // Dispose/reset other feature controllers so lists/forms don't leak
     // into the next login session.
@@ -420,6 +425,11 @@ class AuthController extends GetxController {
       try {
         if (Get.isRegistered<OrganizationSetupController>()) {
           Get.delete<OrganizationSetupController>(force: true);
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<SettingsController>()) {
+          Get.delete<SettingsController>(force: true);
         }
       } catch (_) {}
     });

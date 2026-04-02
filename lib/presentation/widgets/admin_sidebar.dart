@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 import '../controllers/auth_controller.dart';
+import '../../../core/utils/permission_store.dart';
 
 /// Admin and Sub-Admin persistent sidebar
 /// Menu not needed for Juries
@@ -13,6 +14,9 @@ class AdminSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
+    final permissionStore = Get.isRegistered<PermissionStore>()
+        ? Get.find<PermissionStore>()
+        : Get.put(PermissionStore());
     final currentUser = authController.currentUser.value;
     final currentLocation = GoRouterState.of(context).uri.path;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -150,56 +154,72 @@ class AdminSidebar extends StatelessWidget {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  _buildMenuItem(
-                    context,
-                    title: 'COMPETITIONS',
-                    icon: Icons.event,
-                    route: AppRoutes.createCompetition,
-                    currentLocation: currentLocation,
-                    onTap: () {
-                      context.push(AppRoutes.createCompetition);
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'USERS',
-                    icon: Icons.person_add,
-                    route: AppRoutes.userManagement,
-                    currentLocation: currentLocation,
-                    onTap: () {
-                      context.push(AppRoutes.userManagement);
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'PARTICIPANT REGISTRATION',
-                    icon: Icons.person_add_alt_1,
-                    route: AppRoutes.participantManagement,
-                    currentLocation: currentLocation,
-                    onTap: () {
-                      context.push(AppRoutes.participantManagement);
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'SCHOOLS & COLLEGE LIST',
-                    icon: Icons.school,
-                    route: AppRoutes.schoolsList,
-                    currentLocation: currentLocation,
-                    onTap: () {
-                      context.push(AppRoutes.schoolsList);
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'REPORTS',
-                    icon: Icons.assessment,
-                    route: AppRoutes.reports,
-                    currentLocation: currentLocation,
-                    onTap: () {
-                      context.push(AppRoutes.reports);
-                    },
-                  ),
+                  if (permissionStore.has('MENU_COMPETITIONS'))
+                    _buildMenuItem(
+                      context,
+                      title: 'COMPETITIONS',
+                      icon: Icons.event,
+                      route: AppRoutes.createCompetition,
+                      currentLocation: currentLocation,
+                      onTap: () {
+                        context.push(AppRoutes.createCompetition);
+                      },
+                    ),
+                  if (permissionStore.has('MENU_USERS'))
+                    _buildMenuItem(
+                      context,
+                      title: 'USERS',
+                      icon: Icons.person_add,
+                      route: AppRoutes.userManagement,
+                      currentLocation: currentLocation,
+                      onTap: () {
+                        context.push(AppRoutes.userManagement);
+                      },
+                    ),
+                  if (permissionStore.has('MENU_PARTICIPANTS'))
+                    _buildMenuItem(
+                      context,
+                      title: 'PARTICIPANT REGISTRATION',
+                      icon: Icons.person_add_alt_1,
+                      route: AppRoutes.participantManagement,
+                      currentLocation: currentLocation,
+                      onTap: () {
+                        context.push(AppRoutes.participantManagement);
+                      },
+                    ),
+                  if (permissionStore.has('MENU_INSTITUTIONS'))
+                    _buildMenuItem(
+                      context,
+                      title: 'SCHOOLS & COLLEGE LIST',
+                      icon: Icons.school,
+                      route: AppRoutes.schoolsList,
+                      currentLocation: currentLocation,
+                      onTap: () {
+                        context.push(AppRoutes.schoolsList);
+                      },
+                    ),
+                  if (permissionStore.has('MENU_REPORTS'))
+                    _buildMenuItem(
+                      context,
+                      title: 'REPORTS',
+                      icon: Icons.assessment,
+                      route: AppRoutes.reports,
+                      currentLocation: currentLocation,
+                      onTap: () {
+                        context.push(AppRoutes.reports);
+                      },
+                    ),
+                  if (permissionStore.has('MENU_SETTINGS'))
+                    _buildMenuItem(
+                      context,
+                      title: 'SETTINGS',
+                      icon: Icons.settings,
+                      route: AppRoutes.settings,
+                      currentLocation: currentLocation,
+                      onTap: () {
+                        context.push(AppRoutes.settings);
+                      },
+                    ),
                   // SPONSORS menu hidden for now
                   // _buildMenuItem(
                   //   context,
@@ -252,6 +272,8 @@ class AdminSidebar extends StatelessWidget {
         (route == AppRoutes.createCompetition &&
             currentLocation.contains('/admin/competitions')) ||
         (route == AppRoutes.reports && currentLocation.contains('/reports')) ||
+        (route == AppRoutes.settings &&
+            currentLocation.contains('/admin/settings')) ||
         (route == AppRoutes.sponsors && currentLocation.contains('/sponsors'));
 
     final screenWidth = MediaQuery.of(context).size.width;

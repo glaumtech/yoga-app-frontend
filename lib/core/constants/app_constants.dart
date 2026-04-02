@@ -8,6 +8,7 @@ class AppConstants {
   static const String tokenKey = 'token_key';
   static const String userKey = 'user_data';
   static const String roleKey = 'user_role';
+  static const String permissionKeysKey = 'permission_keys';
 
   // User Roles
   static const String roleUser = 'user';
@@ -168,4 +169,8 @@ class EndPoints {
 
   /// ORGANIZATION / BRANCH SETUP
   static String organizationSetup = '/organization/setup';
+
+  /// PERMISSIONS (app-level permission definitions)
+  static String permission = '/permission';
+  static String permissionById(String id) => '/permission/$id';
 }

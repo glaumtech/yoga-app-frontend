@@ -9,6 +9,7 @@ import '../../controllers/competition_controller.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/layout/home_layout.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../../routes/app_routes.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/primary_button.dart';
@@ -160,31 +161,18 @@ class HomeScreen extends StatelessWidget {
                     ),
                     // Action Buttons
                     Obx(() {
-                      final currentUser = userController.currentUser.value;
                       final isAuthenticated = userController.isAuthenticated;
-                      final userTypeName =
-                          currentUser?.userTypeName ?? currentUser?.type ?? '';
-                      final userTypeUpper = userTypeName.toUpperCase();
+                      final permissionStore =
+                          Get.isRegistered<PermissionStore>()
+                          ? Get.find<PermissionStore>()
+                          : Get.put(PermissionStore());
 
-                      // Check specific user types: SUB_ADMIN and SPOT_REG_ADMIN have admin access
-                      final userIsAdmin =
-                          userTypeUpper == 'SUB_ADMIN' ||
-                          userTypeUpper == 'SPOT_REG_ADMIN' ||
-                          userTypeUpper.contains('SUB ADMIN') ||
-                          userTypeUpper.contains('ORG_ADMIN') ||
-                          userTypeUpper.contains('BRANCH_ADMIN') ||
-                          userTypeUpper.contains('SPOT REG ADMIN');
-
-                      // JURY has judge/jury access
-                      final userIsJudge =
-                          userTypeUpper == 'JURY' ||
-                          userTypeUpper.contains('JURY') ||
-                          userTypeUpper.contains('JUDGE');
-
-                      // Debug logging
-                      debugPrint('User type: $userTypeName');
-                      debugPrint('Is Judge: $userIsJudge');
-                      debugPrint('Is Admin: $userIsAdmin');
+                      final isAdminLoggedIn = permissionStore.has(
+                        'SHOW_DASHBOARD_ICON_ON_HOME_SCREEN',
+                      );
+                      final isJuryLoggedIn = permissionStore.has(
+                        'SHOW_JURY_SCREEN',
+                      );
 
                       if (!isAuthenticated) {
                         // Login Button
@@ -216,14 +204,7 @@ class HomeScreen extends StatelessWidget {
                         return Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (!userIsAdmin && !userIsJudge)
-                              IconButton(
-                                icon: const Icon(Icons.dashboard),
-                                color: Colors.white,
-                                tooltip: 'Dashboard',
-                                onPressed: () => context.push(AppRoutes.home),
-                              ),
-                            if (userIsAdmin)
+                            if (isAdminLoggedIn)
                               IconButton(
                                 icon: const Icon(Icons.admin_panel_settings),
                                 color: Colors.white,
@@ -255,21 +236,13 @@ class HomeScreen extends StatelessWidget {
                               onSelected: (value) async {
                                 switch (value) {
                                   case 'profile':
-                                    final u = userController.currentUser.value;
-                                    final typeStr =
-                                        (u?.userTypeName ?? u?.type ?? '')
-                                            .toUpperCase();
-                                    // JURY / JURY(S): open scoring (not plain JUDGE unless type string includes JURY)
-                                    final isJuryUser =
-                                        typeStr == 'JURY' ||
-                                        typeStr.contains('JURY');
                                     if (!context.mounted) break;
                                     // Admins: user creation / management screen
-                                    if (userIsAdmin) {
+                                    if (isAdminLoggedIn) {
                                       context.push(AppRoutes.userManagement);
                                       break;
                                     }
-                                    if (isJuryUser) {
+                                    if (isJuryLoggedIn) {
                                       context.go(AppRoutes.juryScoring);
                                       break;
                                     }
@@ -679,19 +652,13 @@ class HomeScreen extends StatelessWidget {
                             // Action Buttons
                             Builder(
                               builder: (context) {
-                                final userCtrl =
-                                    Get.find<UserManagementController>();
-                                final currentUser = userCtrl.currentUser.value;
-                                final userTypeName =
-                                    currentUser?.userTypeName ??
-                                    currentUser?.type ??
-                                    '';
-                                final userTypeUpper = userTypeName
-                                    .toUpperCase();
-                                final userIsJudge =
-                                    userTypeUpper == 'JURY' ||
-                                    userTypeUpper.contains('JURY') ||
-                                    userTypeUpper.contains('JUDGE');
+                                final permissionStore =
+                                    Get.isRegistered<PermissionStore>()
+                                    ? Get.find<PermissionStore>()
+                                    : Get.put(PermissionStore());
+                                final showJuryScreen = permissionStore.has(
+                                  'SHOW_ADD_SCORE',
+                                );
 
                                 if (isNarrow) {
                                   // Full-width buttons on small screens (parent gives bounded width)
@@ -746,7 +713,7 @@ class HomeScreen extends StatelessWidget {
                                             ),
                                           ],
                                         ),
-                                        if (userIsJudge) ...[
+                                        if (showJuryScreen) ...[
                                           const SizedBox(height: 12),
                                           PrimaryButton(
                                             text: 'Add Score',
@@ -804,7 +771,7 @@ class HomeScreen extends StatelessWidget {
                                             ),
                                           ),
                                         ),
-                                        if (userIsJudge) ...[
+                                        if (showJuryScreen) ...[
                                           const SizedBox(width: 16),
                                           // Add Score Button (Judge only)
                                           PrimaryButton(

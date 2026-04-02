@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../controllers/users_list_controller.dart';
@@ -355,15 +356,12 @@ class UsersListScreen extends StatelessWidget {
                   if (user.updatedAt != null)
                     _buildUserInfoRow('Updated', _buildUpdatedCell(user)),
                   Obx(() {
-                    final typeName =
-                        (controller.currentUser.value?.userTypeName ??
-                                controller.currentUser.value?.type ??
-                                '')
-                            .trim()
-                            .toUpperCase()
-                            .replaceAll(' ', '_');
-                    final canViewPassword =
-                        typeName == 'SUB_ADMIN' || typeName == 'BRANCH_ADMIN';
+                    final permissionStore = Get.isRegistered<PermissionStore>()
+                        ? Get.find<PermissionStore>()
+                        : Get.put(PermissionStore());
+                    final canViewPassword = permissionStore.has(
+                      'SHOW_USER_PASSWORD',
+                    );
 
                     if (canViewPassword &&
                         (user.confirmPassword != null ||
@@ -498,6 +496,10 @@ class UsersListScreen extends StatelessWidget {
     UserManagementController controller,
     bool isTablet,
   ) {
+    final permissionStore = Get.isRegistered<PermissionStore>()
+        ? Get.find<PermissionStore>()
+        : Get.put(PermissionStore());
+
     return RefreshIndicator(
       onRefresh: () {
         final eventId = controller.selectedEventId.value.isNotEmpty
@@ -515,15 +517,9 @@ class UsersListScreen extends StatelessWidget {
               child: SizedBox(
                 width: tableWidth,
                 child: Obx(() {
-                  final typeName =
-                      (controller.currentUser.value?.userTypeName ??
-                              controller.currentUser.value?.type ??
-                              '')
-                          .trim()
-                          .toUpperCase()
-                          .replaceAll(' ', '_');
-                  final canViewPassword =
-                      typeName == 'SUB_ADMIN' || typeName == 'BRANCH_ADMIN';
+                  final canViewPassword = permissionStore.has(
+                    'SHOW_USER_PASSWORD',
+                  );
 
                   return Table(
                     border: TableBorder.all(color: Colors.grey[300]!, width: 1),

@@ -8,6 +8,7 @@ import 'presentation/controllers/participant_controller.dart';
 import 'presentation/controllers/competition_controller.dart';
 import 'routes/app_router.dart';
 import 'core/constants/app_constants.dart';
+import 'core/utils/permission_store.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,7 @@ void main() async {
   Get.put(AuthController(), permanent: true);
   Get.put(ParticipantController(), permanent: true);
   Get.put(CompetitionController(), permanent: true);
+  await Get.put(PermissionStore(), permanent: true).init();
 
   runApp(const MyApp());
 }

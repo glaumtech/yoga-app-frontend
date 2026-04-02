@@ -15,6 +15,7 @@ import '../../widgets/buttons.dart';
 import '../../../core/utils/date_utils.dart' as app_date_utils;
 import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../../data/models/school_model.dart';
 import '../schools/school_create_screen.dart';
 
@@ -103,13 +104,30 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                           isTablet,
                         ),
                         SizedBox(height: isMobile ? 20 : 24),
-                        _buildSpotRegistrationField(
-                          context,
-                          participantController,
-                          isMobile,
-                          isTablet,
+                        Builder(
+                          builder: (context) {
+                            final permissionStore =
+                                Get.isRegistered<PermissionStore>()
+                                ? Get.find<PermissionStore>()
+                                : Get.put(PermissionStore());
+                            final showSpot = permissionStore.has(
+                              'SHOW_SPOT_REGISTRATION_OPTION',
+                            );
+                            if (!showSpot) return const SizedBox.shrink();
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildSpotRegistrationField(
+                                  context,
+                                  participantController,
+                                  isMobile,
+                                  isTablet,
+                                ),
+                                SizedBox(height: isMobile ? 20 : 24),
+                              ],
+                            );
+                          },
                         ),
-                        SizedBox(height: isMobile ? 20 : 24),
                         _buildCategoryField(
                           context,
                           participantController,
@@ -255,13 +273,34 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                       isTablet,
                                     ),
                                     SizedBox(height: isMobile ? 20 : 24),
-                                    _buildSpotRegistrationField(
-                                      context,
-                                      participantController,
-                                      isMobile,
-                                      isTablet,
+                                    Builder(
+                                      builder: (context) {
+                                        final permissionStore =
+                                            Get.isRegistered<PermissionStore>()
+                                            ? Get.find<PermissionStore>()
+                                            : Get.put(PermissionStore());
+                                        final showSpot = permissionStore.has(
+                                          'SHOW_SPOT_REGISTRATION_OPTION',
+                                        );
+                                        if (!showSpot) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            _buildSpotRegistrationField(
+                                              context,
+                                              participantController,
+                                              isMobile,
+                                              isTablet,
+                                            ),
+                                            SizedBox(
+                                              height: isMobile ? 20 : 24,
+                                            ),
+                                          ],
+                                        );
+                                      },
                                     ),
-                                    SizedBox(height: isMobile ? 20 : 24),
                                     _buildGroupField(
                                       context,
                                       participantController,

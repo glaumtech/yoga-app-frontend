@@ -68,6 +68,23 @@ class StorageService {
     }
   }
 
+  static Future<void> setStringList(String key, List<String> value) async {
+    await _instance.write(key, value);
+  }
+
+  static List<String> getStringList(String key) {
+    try {
+      final v = _instance.read(key);
+      if (v is List) {
+        return v.map((e) => e.toString()).toList();
+      }
+      return const [];
+    } catch (e) {
+      print('Error reading string list from storage: $e');
+      return const [];
+    }
+  }
+
   static Future<void> remove(String key) async {
     await _instance.remove(key);
   }
