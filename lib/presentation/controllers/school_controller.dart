@@ -31,6 +31,22 @@ class SchoolController extends GetxController {
   final emailController = TextEditingController();
   final searchController = TextEditingController();
 
+  /// Create form (school create screen): state/city autocomplete controllers.
+  final TextEditingController createFormStateTextController =
+      TextEditingController();
+  final FocusNode createFormStateFocusNode = FocusNode();
+  final TextEditingController createFormCityTextController =
+      TextEditingController();
+  final FocusNode createFormCityFocusNode = FocusNode();
+
+  /// List filters (school list screen): separate from create form to avoid clashes.
+  final TextEditingController listFilterStateTextController =
+      TextEditingController();
+  final FocusNode listFilterStateFocusNode = FocusNode();
+  final TextEditingController listFilterCityTextController =
+      TextEditingController();
+  final FocusNode listFilterCityFocusNode = FocusNode();
+
   // Observable state
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
@@ -240,6 +256,86 @@ class SchoolController extends GetxController {
     }
   }
 
+  /// Create form: state autocomplete selection (id 0 = clear).
+  Future<void> setCreateFormState(int stateId) async {
+    selectedCity.value = '';
+    pincodeController.clear();
+    createFormCityTextController.clear();
+
+    if (stateId <= 0) {
+      selectedState.value = '';
+      selectedStateId.value = 0;
+      cities.clear();
+      createFormStateTextController.clear();
+      return;
+    }
+
+    final st = states.firstWhereOrNull((s) => s.id == stateId);
+    if (st != null) {
+      selectedState.value = st.stateName;
+      selectedStateId.value = st.id;
+      createFormStateTextController.text = st.stateName;
+    }
+
+    await loadCitiesByStateId(stateId);
+  }
+
+  /// Create form: city autocomplete selection (id 0 = clear).
+  void setCreateFormCity(int cityId) {
+    if (cityId <= 0) {
+      selectedCity.value = '';
+      createFormCityTextController.clear();
+      return;
+    }
+    final c = cities.firstWhereOrNull((x) => x.id == cityId);
+    if (c != null) {
+      selectedCity.value = c.cityName;
+      createFormCityTextController.text = c.cityName;
+      pincodeController.text = c.pincode;
+    }
+  }
+
+  /// List filter: state (id 0 = clear); reloads schools.
+  Future<void> setListFilterState(int stateId) async {
+    reportDistrict.value = '';
+    listFilterCityTextController.clear();
+
+    if (stateId <= 0) {
+      reportState.value = '';
+      selectedStateId.value = 0;
+      cities.clear();
+      listFilterStateTextController.clear();
+      await loadSchools(resetPage: true);
+      return;
+    }
+
+    final st = states.firstWhereOrNull((s) => s.id == stateId);
+    if (st != null) {
+      reportState.value = st.stateName;
+      selectedStateId.value = st.id;
+      listFilterStateTextController.text = st.stateName;
+    }
+
+    await loadCitiesByStateId(stateId);
+    await loadSchools(resetPage: true);
+  }
+
+  /// List filter: city/district label uses city name for API (id 0 = clear).
+  void setListFilterCity(int cityId) {
+    if (cityId <= 0) {
+      reportDistrict.value = '';
+      listFilterCityTextController.clear();
+      loadSchools(resetPage: true);
+      return;
+    }
+    final c = cities.firstWhereOrNull((x) => x.id == cityId);
+    if (c != null) {
+      reportDistrict.value = c.cityName;
+      listFilterCityTextController.text = c.cityName;
+    }
+    loadSchools(resetPage: true);
+  }
+
   // Load cities by state ID
   Future<void> loadCitiesByStateId(int stateId) async {
     try {
@@ -269,6 +365,14 @@ class SchoolController extends GetxController {
     pincodeController.dispose();
     emailController.dispose();
     searchController.dispose();
+    createFormStateTextController.dispose();
+    createFormStateFocusNode.dispose();
+    createFormCityTextController.dispose();
+    createFormCityFocusNode.dispose();
+    listFilterStateTextController.dispose();
+    listFilterStateFocusNode.dispose();
+    listFilterCityTextController.dispose();
+    listFilterCityFocusNode.dispose();
     super.onClose();
   }
 
@@ -781,6 +885,9 @@ class SchoolController extends GetxController {
           );
         }
 
+        createFormStateTextController.text = selectedState.value;
+        createFormCityTextController.text = selectedCity.value;
+
         print(
           'Form populated - State: ${selectedState.value}, City: ${selectedCity.value}',
         );
@@ -956,6 +1063,8 @@ class SchoolController extends GetxController {
     pincodeController.clear();
     emailController.clear();
     cities.clear();
+    createFormStateTextController.clear();
+    createFormCityTextController.clear();
     errorMessage.value = '';
     isEditMode.value = false;
     editingSchoolId.value = null;

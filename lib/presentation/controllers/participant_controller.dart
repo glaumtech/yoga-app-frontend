@@ -8,10 +8,14 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import '../../data/repositories/participant_repository.dart';
 import '../../data/repositories/school_repository.dart';
+import '../../data/repositories/location_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/api_response.dart';
 import '../../data/models/score_response_model.dart';
 import '../../data/models/school_model.dart';
+import '../../data/models/state_model.dart';
+import '../../data/models/city_model.dart';
+import '../../data/models/institution_type_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/constants/app_constants.dart';
@@ -24,6 +28,7 @@ import 'dart:html' as html show AnchorElement, Blob, Url;
 class ParticipantController extends GetxController {
   final ParticipantRepository _participantRepository = ParticipantRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
+  final LocationRepository _locationRepository = LocationRepository();
   final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
@@ -86,6 +91,26 @@ class ParticipantController extends GetxController {
   final RxBool isLoadingInstitutions = false.obs;
   final RxnString selectedInstitutionId = RxnString();
 
+  /// Optional filters for institution autocomplete (registration form).
+  final RxInt institutionSearchFilterStateId = 0.obs;
+  final RxInt institutionSearchFilterCityId = 0.obs;
+  final RxInt institutionSearchFilterTypeId = 0.obs;
+  final RxList<StateModel> institutionSearchStates = <StateModel>[].obs;
+  final RxList<CityModel> institutionSearchCities = <CityModel>[].obs;
+  final RxList<InstitutionTypeModel> institutionSearchTypes =
+      <InstitutionTypeModel>[].obs;
+  final RxBool isLoadingInstitutionSearchLocations = false.obs;
+  final RxBool isLoadingInstitutionSearchCities = false.obs;
+  Future<void>? _institutionSearchFilterDataFuture;
+
+  /// Owned by this controller; passed to [StateSearchField] / [CitySearchField] (stateless).
+  final TextEditingController institutionFilterStateTextController =
+      TextEditingController();
+  final FocusNode institutionFilterStateFocusNode = FocusNode();
+  final TextEditingController institutionFilterCityTextController =
+      TextEditingController();
+  final FocusNode institutionFilterCityFocusNode = FocusNode();
+
   // Store institutionId from API response for edit mode
   final RxnString participantInstitutionId = RxnString();
 
@@ -99,6 +124,17 @@ class ParticipantController extends GetxController {
   final RxString bulkCategory = ''.obs;
   final RxList<BulkRegistrationRow> bulkRegistrationRows =
       <BulkRegistrationRow>[].obs;
+
+  // Registration success state for the public competition registration flow.
+  // Used to hide the form after successful save and show details instead.
+  final RxBool registrationSaved = false.obs;
+  final Rxn<ParticipantModel> lastRegisteredParticipant =
+      Rxn<ParticipantModel>();
+
+  void clearRegistrationConfirmation() {
+    registrationSaved.value = false;
+    lastRegisteredParticipant.value = null;
+  }
 
   /// Get participant image URL using the participantImage API endpoint
   String? getParticipantImageUrl(String? participantId) {
@@ -137,8 +173,93 @@ class ParticipantController extends GetxController {
     return cacheBuster != null ? '$baseUrl?t=$cacheBuster' : baseUrl;
   }
 
+  Future<void> ensureInstitutionSearchFiltersLoaded() {
+    _institutionSearchFilterDataFuture ??= _loadInstitutionSearchFilterData();
+    return _institutionSearchFilterDataFuture!;
+  }
+
+  Future<void> _loadInstitutionSearchFilterData() async {
+    isLoadingInstitutionSearchLocations.value = true;
+    try {
+      final statesRes = await _locationRepository.getAllStates();
+      final typesRes = await _schoolRepository.getAllInstitutionTypes();
+      if (statesRes.success && statesRes.data != null) {
+        institutionSearchStates.assignAll(statesRes.data!);
+        institutionSearchStates.sort(
+          (a, b) => a.stateName.compareTo(b.stateName),
+        );
+      }
+      if (typesRes.success && typesRes.data != null) {
+        institutionSearchTypes.assignAll(typesRes.data!);
+        institutionSearchTypes.sort(
+          (a, b) => a.displayName.compareTo(b.displayName),
+        );
+      }
+    } finally {
+      isLoadingInstitutionSearchLocations.value = false;
+    }
+  }
+
+  Future<void> setInstitutionSearchFilterState(int stateId) async {
+    institutionSearchFilterStateId.value = stateId;
+    institutionSearchFilterCityId.value = 0;
+    institutionSearchCities.clear();
+    institutionFilterCityTextController.clear();
+
+    if (stateId <= 0) {
+      institutionFilterStateTextController.clear();
+      return;
+    }
+
+    final st = institutionSearchStates.firstWhereOrNull((s) => s.id == stateId);
+    if (st != null) {
+      institutionFilterStateTextController.text = st.stateName;
+    }
+
+    isLoadingInstitutionSearchCities.value = true;
+    try {
+      final res = await _locationRepository.getCitiesByStateId(stateId);
+      if (res.success && res.data != null) {
+        institutionSearchCities.assignAll(res.data!);
+        institutionSearchCities.sort(
+          (a, b) => a.cityName.compareTo(b.cityName),
+        );
+      }
+    } finally {
+      isLoadingInstitutionSearchCities.value = false;
+    }
+  }
+
+  void setInstitutionSearchFilterCity(int cityId) {
+    institutionSearchFilterCityId.value = cityId;
+    if (cityId <= 0) {
+      institutionFilterCityTextController.clear();
+      return;
+    }
+    final c = institutionSearchCities.firstWhereOrNull((x) => x.id == cityId);
+    if (c != null) {
+      institutionFilterCityTextController.text = c.cityName;
+    }
+  }
+
+  void _resetInstitutionSearchFilters() {
+    institutionSearchFilterStateId.value = 0;
+    institutionSearchFilterCityId.value = 0;
+    institutionSearchFilterTypeId.value = 0;
+    institutionSearchCities.clear();
+    institutionFilterStateTextController.clear();
+    institutionFilterCityTextController.clear();
+  }
+
+  void setInstitutionSearchFilterType(int typeId) {
+    institutionSearchFilterTypeId.value = typeId;
+  }
+
   // Search institutions
-  Future<void> searchInstitutions(String query) async {
+  Future<void> searchInstitutions(
+    String query, {
+    bool useInstitutionSearchFilters = true,
+  }) async {
     if (query.trim().isEmpty) {
       institutionSuggestions.clear();
       return;
@@ -153,6 +274,18 @@ class ParticipantController extends GetxController {
       isLoadingInstitutions.value = true;
       final response = await _schoolRepository.searchInstitutions(
         query: query.trim(),
+        stateId: useInstitutionSearchFilters &&
+                institutionSearchFilterStateId.value > 0
+            ? institutionSearchFilterStateId.value
+            : null,
+        cityId: useInstitutionSearchFilters &&
+                institutionSearchFilterCityId.value > 0
+            ? institutionSearchFilterCityId.value
+            : null,
+        institutionTypeId: useInstitutionSearchFilters &&
+                institutionSearchFilterTypeId.value > 0
+            ? institutionSearchFilterTypeId.value
+            : null,
       );
 
       if (response.success && response.data != null) {
@@ -324,6 +457,10 @@ class ParticipantController extends GetxController {
     bulkYogaTeacherNameController.dispose();
     bulkYogaTeacherCellController.dispose();
     bulkInstitutionNameController.dispose();
+    institutionFilterStateTextController.dispose();
+    institutionFilterStateFocusNode.dispose();
+    institutionFilterCityTextController.dispose();
+    institutionFilterCityFocusNode.dispose();
     for (final row in bulkRegistrationRows) {
       row.dispose();
     }
@@ -541,7 +678,8 @@ class ParticipantController extends GetxController {
       createdBy: reg['createdBy']?.toString(),
       updatedBy: reg['updatedBy']?.toString(),
       eventId: reg['competitionId']?.toString(),
-      isSpotRegistration: _parseRegBool(reg['isSpotRegistration']) ||
+      isSpotRegistration:
+          _parseRegBool(reg['isSpotRegistration']) ||
           _parseRegBool(reg['is_spot_registration']) ||
           _parseRegBool(reg['spotRegistration']),
     );
@@ -943,6 +1081,7 @@ class ParticipantController extends GetxController {
     selectedInstitutionId.value = null;
     participantInstitutionId.value = null;
     institutionSuggestions.clear(); // Clear institution suggestions
+    _resetInstitutionSearchFilters();
 
     // Clear all text controllers - set to empty string explicitly
     nameController.text = '';
@@ -1040,6 +1179,7 @@ class ParticipantController extends GetxController {
     addressController.clear();
     yogaMasterNameController.clear();
     yogaMasterContactController.clear();
+    _resetInstitutionSearchFilters();
     dateOfBirth.value = null;
     gender.value = '';
     isSpotRegistration.value = false;
@@ -1296,7 +1436,10 @@ class ParticipantController extends GetxController {
       // Note: This is async and might complete after widget disposal, so we check if still needed
       if (participant.schoolName.isNotEmpty) {
         // Search for the institution and set the ID
-        searchInstitutions(participant.schoolName)
+        searchInstitutions(
+              participant.schoolName,
+              useInstitutionSearchFilters: false,
+            )
             .then((_) {
               // Check if we're still in edit mode and the value hasn't been set
               if (participantToEdit.value?.id == participant.id &&
@@ -1662,7 +1805,10 @@ class ParticipantController extends GetxController {
       // If institution name is provided but ID is not set, try to find it
       if (schoolNameController.text.trim().isNotEmpty) {
         // Search for the institution by name
-        await searchInstitutions(schoolNameController.text.trim());
+        await searchInstitutions(
+          schoolNameController.text.trim(),
+          useInstitutionSearchFilters: false,
+        );
 
         // Check if we found a matching institution
         final matchingInstitution = institutionSuggestions.firstWhereOrNull(
@@ -1701,6 +1847,11 @@ class ParticipantController extends GetxController {
     if (competitionId == null) {
       errorMessage.value = 'Invalid competition ID';
       return false;
+    }
+
+    // Keep selected competition in sync for UI flows (public registration screen).
+    if (selectedEventId.value.isEmpty) {
+      selectedEventId.value = eventId;
     }
 
     final categoryName = selectedCategories.first;
@@ -1790,9 +1941,15 @@ class ParticipantController extends GetxController {
           if (selectedEventId.value.isNotEmpty) {
             await loadParticipantsByEventId(
               selectedEventId.value,
-              resetPage: false,
+              resetPage: true,
             );
           }
+
+          // Store the latest registered/updated participant for UI flows.
+          if (participants.isNotEmpty) {
+            lastRegisteredParticipant.value = participants.first;
+          }
+          registrationSaved.value = true;
 
           // Reset form immediately after successful update
           resetForm();
@@ -1820,9 +1977,15 @@ class ParticipantController extends GetxController {
           if (selectedEventId.value.isNotEmpty) {
             await loadParticipantsByEventId(
               selectedEventId.value,
-              resetPage: false,
+              resetPage: true,
             );
           }
+
+          // Store the latest registered participant for UI flows.
+          if (participants.isNotEmpty) {
+            lastRegisteredParticipant.value = participants.first;
+          }
+          registrationSaved.value = true;
 
           // Reset form immediately after successful save
           resetForm();

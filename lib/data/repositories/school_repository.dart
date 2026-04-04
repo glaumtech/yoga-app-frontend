@@ -431,10 +431,28 @@ class SchoolRepository {
   // Search institutions by name
   Future<ApiResponse<SchoolsListResponse>> searchInstitutions({
     required String query,
+    int? stateId,
+    int? cityId,
+    int? institutionTypeId,
   }) async {
     try {
+      final queryParameters = <String, String>{'q': query};
+      if (stateId != null && stateId > 0) {
+        queryParameters['stateId'] = '$stateId';
+      }
+      if (cityId != null && cityId > 0) {
+        queryParameters['cityId'] = '$cityId';
+      }
+      if (institutionTypeId != null && institutionTypeId > 0) {
+        queryParameters['institutionTypeId'] = '$institutionTypeId';
+      }
+      final searchPath = Uri(
+        path: EndPoints.institutionSearch,
+        queryParameters: queryParameters,
+      ).toString();
+
       final response = await _apiService.getResponse<dynamic>(
-        url: '${EndPoints.institutionSearch}?q=$query',
+        url: searchPath,
         apiType: APIType.aGet,
         fromJson: (json) => json,
       );

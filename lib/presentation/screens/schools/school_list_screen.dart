@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/location/city_search_field.dart';
+import '../../widgets/location/state_search_field.dart';
 import '../../../data/models/school_model.dart';
 
 class SchoolListScreen extends StatelessWidget {
@@ -66,69 +68,180 @@ class SchoolListScreen extends StatelessWidget {
     );
   }
 
+  InputDecoration _schoolListFilterDecoration(
+    bool isMobile,
+    String labelText, {
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 16,
+        vertical: 12,
+      ),
+      filled: true,
+      fillColor: Colors.white,
+      suffixIcon: suffixIcon,
+    );
+  }
+
+  Widget _buildSchoolListStateFilter(
+    SchoolController controller,
+    bool isMobile,
+  ) {
+    return Obx(() {
+      if (controller.isLoadingStates.value) {
+        return TextFormField(
+          readOnly: true,
+          style: TextStyle(fontSize: isMobile ? 14 : 16),
+          decoration: _schoolListFilterDecoration(
+            isMobile,
+            'Filter by State',
+            suffixIcon: const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ).copyWith(hintText: 'Loading...'),
+        );
+      }
+      return StateSearchField(
+        textEditingController: controller.listFilterStateTextController,
+        focusNode: controller.listFilterStateFocusNode,
+        states: List.from(controller.states),
+        decorationBuilder: ({Widget? suffixIcon}) =>
+            _schoolListFilterDecoration(
+              isMobile,
+              'Filter by State',
+              suffixIcon: suffixIcon,
+            ),
+        isMobile: isMobile,
+        hintText: 'Search state',
+        onStateId: controller.setListFilterState,
+      );
+    });
+  }
+
+  Widget _buildSchoolListCityFilter(
+    SchoolController controller,
+    bool isMobile,
+  ) {
+    return Obx(() {
+      if (controller.isLoadingCities.value) {
+        return TextFormField(
+          readOnly: true,
+          style: TextStyle(fontSize: isMobile ? 14 : 16),
+          decoration: _schoolListFilterDecoration(
+            isMobile,
+            'Filter by City',
+            suffixIcon: const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ).copyWith(hintText: 'Loading...'),
+        );
+      }
+      if (controller.reportState.value.isEmpty) {
+        return TextFormField(
+          readOnly: true,
+          style: TextStyle(fontSize: isMobile ? 14 : 16),
+          decoration: _schoolListFilterDecoration(
+            isMobile,
+            'Filter by City',
+          ).copyWith(hintText: 'Select state first'),
+        );
+      }
+      final cityList =
+          controller.cities
+              .where((c) => c.stateId == controller.selectedStateId.value)
+              .toList()
+            ..sort((a, b) => a.cityName.compareTo(b.cityName));
+      return CitySearchField(
+        textEditingController: controller.listFilterCityTextController,
+        focusNode: controller.listFilterCityFocusNode,
+        cities: cityList,
+        decorationBuilder: ({Widget? suffixIcon}) =>
+            _schoolListFilterDecoration(
+              isMobile,
+              'Filter by City',
+              suffixIcon: suffixIcon,
+            ),
+        isMobile: isMobile,
+        hintText: 'Search city',
+        onCityId: controller.setListFilterCity,
+      );
+    });
+  }
+
   Widget _buildReportGenerationSection(
     BuildContext context,
     SchoolController controller,
     bool isMobile,
     bool isTablet,
   ) {
-    return Obx(
-      () => isMobile
-          ? Column(
-              children: [
-                // Filter by State
-                _buildStringDropdown(
-                  value: controller.reportState.value,
-                  items: controller.states.map((s) => s.stateName).toList(),
-                  hint: 'Select State',
-                  selectAllLabel: 'Select State',
-                  labelText: 'Filter by State',
-                  onChanged: (value) async {
-                    controller.reportState.value = value ?? '';
-                    controller.reportDistrict.value = '';
-
-                    // Load cities for selected state
-                    if (value != null && value.isNotEmpty) {
-                      final selectedState = controller.states.firstWhereOrNull(
-                        (s) => s.stateName == value,
+    // Do not wrap this whole section in Obx: the layout only uses non-reactive
+    // `isMobile` / `isTablet`. State/city/type each use their own Obx where
+    // `.obs` values are read (GetX requires every Obx builder to touch an observable).
+    return isMobile
+        ? Column(
+            children: [
+              _buildSchoolListStateFilter(controller, isMobile),
+              SizedBox(height: isMobile ? 12 : 16),
+              _buildSchoolListCityFilter(controller, isMobile),
+              SizedBox(height: isMobile ? 12 : 16),
+              Obx(() {
+                String? currentValue;
+                if (controller.reportInstitutionTypeId.value > 0) {
+                  final selectedType = controller.institutionTypes
+                      .firstWhereOrNull(
+                        (t) => t.id == controller.reportInstitutionTypeId.value,
                       );
-                      if (selectedState != null) {
-                        controller.selectedStateId.value = selectedState.id;
-                        await controller.loadCitiesByStateId(selectedState.id);
-                      }
-                    } else {
-                      controller.selectedStateId.value = 0;
-                      controller.cities.clear();
-                    }
+                  currentValue = selectedType?.displayName;
+                }
 
-                    controller.loadSchools(resetPage: true);
-                  },
-                  isMobile: isMobile,
-                  isLoading: controller.isLoadingStates.value,
-                ),
-                SizedBox(height: isMobile ? 12 : 16),
-                // Filter by City
-                _buildStringDropdown(
-                  value: controller.reportDistrict.value,
-                  items: controller.reportState.value.isNotEmpty
-                      ? controller.getDistrictsForState(
-                          controller.reportState.value,
-                        )
-                      : [],
-                  hint: 'Select District',
-                  selectAllLabel: 'Select City',
-                  labelText: 'Filter by City',
+                return _buildStringDropdown(
+                  value: currentValue,
+                  items: controller.institutionTypes
+                      .map((t) => t.displayName)
+                      .toList(),
+                  hint: 'Select Institution Type',
+                  selectAllLabel: 'Select Type',
+                  labelText: 'Filter by Type',
                   onChanged: (value) {
-                    controller.reportDistrict.value = value ?? '';
+                    if (value == null || value.isEmpty) {
+                      controller.reportInstitutionTypeId.value = 0;
+                    } else {
+                      final selectedType = controller.institutionTypes
+                          .firstWhereOrNull((t) => t.displayName == value);
+                      controller.reportInstitutionTypeId.value =
+                          selectedType?.id ?? 0;
+                    }
                     controller.loadSchools(resetPage: true);
                   },
                   isMobile: isMobile,
-                  isLoading: controller.isLoadingCities.value,
-                ),
-                SizedBox(height: isMobile ? 12 : 16),
-                // Filter by Type
-                Obx(() {
-                  // Get current display name from ID
+                  isLoading: controller.isLoadingInstitutionTypes.value,
+                );
+              }),
+            ],
+          )
+        : Row(
+            children: [
+              Expanded(
+                child: _buildSchoolListStateFilter(controller, isMobile),
+              ),
+              SizedBox(width: isTablet ? 12 : 16),
+              Expanded(child: _buildSchoolListCityFilter(controller, isMobile)),
+              SizedBox(width: isTablet ? 12 : 16),
+              Expanded(
+                child: Obx(() {
                   String? currentValue;
                   if (controller.reportInstitutionTypeId.value > 0) {
                     final selectedType = controller.institutionTypes
@@ -162,104 +275,9 @@ class SchoolListScreen extends StatelessWidget {
                     isLoading: controller.isLoadingInstitutionTypes.value,
                   );
                 }),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  child: _buildStringDropdown(
-                    value: controller.reportState.value,
-                    items: controller.states.map((s) => s.stateName).toList(),
-                    hint: 'Select State',
-                    selectAllLabel: 'Select State',
-                    labelText: 'Filter by State',
-                    onChanged: (value) async {
-                      controller.reportState.value = value ?? '';
-                      controller.reportDistrict.value = '';
-
-                      // Load cities for selected state
-                      if (value != null && value.isNotEmpty) {
-                        final selectedState = controller.states
-                            .firstWhereOrNull((s) => s.stateName == value);
-                        if (selectedState != null) {
-                          controller.selectedStateId.value = selectedState.id;
-                          await controller.loadCitiesByStateId(
-                            selectedState.id,
-                          );
-                        }
-                      } else {
-                        controller.selectedStateId.value = 0;
-                        controller.cities.clear();
-                      }
-
-                      controller.loadSchools(resetPage: true);
-                    },
-                    isMobile: isMobile,
-                    isLoading: controller.isLoadingStates.value,
-                  ),
-                ),
-                SizedBox(width: isTablet ? 12 : 16),
-                Expanded(
-                  child: _buildStringDropdown(
-                    value: controller.reportDistrict.value,
-                    items: controller.reportState.value.isNotEmpty
-                        ? controller.getDistrictsForState(
-                            controller.reportState.value,
-                          )
-                        : [],
-                    hint: 'Select District',
-                    selectAllLabel: 'Select City',
-                    labelText: 'Filter by City',
-                    onChanged: (value) {
-                      controller.reportDistrict.value = value ?? '';
-                      controller.loadSchools(resetPage: true);
-                    },
-                    isMobile: isMobile,
-                    isLoading: controller.isLoadingCities.value,
-                  ),
-                ),
-                SizedBox(width: isTablet ? 12 : 16),
-                Expanded(
-                  child: Obx(() {
-                    // Get current display name from ID
-                    String? currentValue;
-                    if (controller.reportInstitutionTypeId.value > 0) {
-                      final selectedType = controller.institutionTypes
-                          .firstWhereOrNull(
-                            (t) =>
-                                t.id ==
-                                controller.reportInstitutionTypeId.value,
-                          );
-                      currentValue = selectedType?.displayName;
-                    }
-
-                    return _buildStringDropdown(
-                      value: currentValue,
-                      items: controller.institutionTypes
-                          .map((t) => t.displayName)
-                          .toList(),
-                      hint: 'Select Institution Type',
-                      selectAllLabel: 'Select Type',
-                      labelText: 'Filter by Type',
-                      onChanged: (value) {
-                        if (value == null || value.isEmpty) {
-                          controller.reportInstitutionTypeId.value = 0;
-                        } else {
-                          final selectedType = controller.institutionTypes
-                              .firstWhereOrNull((t) => t.displayName == value);
-                          controller.reportInstitutionTypeId.value =
-                              selectedType?.id ?? 0;
-                        }
-                        controller.loadSchools(resetPage: true);
-                      },
-                      isMobile: isMobile,
-                      isLoading: controller.isLoadingInstitutionTypes.value,
-                    );
-                  }),
-                ),
-              ],
-            ),
-    );
+              ),
+            ],
+          );
   }
 
   /// Reusable string-based dropdown
@@ -407,6 +425,8 @@ class SchoolListScreen extends StatelessWidget {
                 controller.reportInstitutionTypeId.value = 0;
                 controller.selectedStateId.value = 0;
                 controller.cities.clear();
+                controller.listFilterStateTextController.clear();
+                controller.listFilterCityTextController.clear();
                 controller.searchQuery.value = '';
                 controller.searchController.clear();
                 // Reload schools with cleared filters

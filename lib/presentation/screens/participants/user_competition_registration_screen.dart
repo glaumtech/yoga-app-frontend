@@ -6,11 +6,13 @@ import '../../../core/utils/competition_brochure_banner_url.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/competition_controller.dart';
 import '../../../data/models/competition_model.dart';
+import '../../../data/models/participant_model.dart';
+import '../../controllers/participant_controller.dart';
 import 'participant_registration_form_screen.dart';
 
 /// Public registration screen for unknown/unauthenticated users.
 /// Left: competition details. Right: registration form.
-class UserCompetitionRegistrationScreen extends StatelessWidget {
+class UserCompetitionRegistrationScreen extends StatefulWidget {
   final String competitionId;
 
   const UserCompetitionRegistrationScreen({
@@ -19,8 +21,29 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
   });
 
   @override
+  State<UserCompetitionRegistrationScreen> createState() =>
+      _UserCompetitionRegistrationScreenState();
+}
+
+class _UserCompetitionRegistrationScreenState
+    extends State<UserCompetitionRegistrationScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final participantController = Get.isRegistered<ParticipantController>()
+          ? Get.find<ParticipantController>()
+          : Get.put(ParticipantController());
+      participantController.clearRegistrationConfirmation();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final competitionController = Get.put(CompetitionController());
+    final participantController = Get.isRegistered<ParticipantController>()
+        ? Get.find<ParticipantController>()
+        : Get.put(ParticipantController());
 
     // Load public competitions (no auth required)
     if (competitionController.homeCompetitions.isEmpty &&
@@ -50,14 +73,25 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
         ),
       ),
       body: isMobile
-          ? _buildMobileLayout(context, competitionController, isMobile)
-          : _buildDesktopLayout(context, competitionController, isMobile),
+          ? _buildMobileLayout(
+              context,
+              competitionController,
+              participantController,
+              isMobile,
+            )
+          : _buildDesktopLayout(
+              context,
+              competitionController,
+              participantController,
+              isMobile,
+            ),
     );
   }
 
   Widget _buildMobileLayout(
     BuildContext context,
     CompetitionController competitionController,
+    ParticipantController participantController,
     bool isMobile,
   ) {
     return SingleChildScrollView(
@@ -70,15 +104,25 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
               () => _buildCompetitionDetailsContent(
                 context,
                 competitionController,
+                participantController,
                 isMobile,
               ),
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            child: ParticipantRegistrationFormScreen(
-              initialCompetitionId: competitionId,
-            ),
+            child: Obx(() {
+              if (participantController.registrationSaved.value) {
+                return _buildRegistrationSuccessPanel(
+                  context,
+                  participantController.lastRegisteredParticipant.value,
+                );
+              }
+              return ParticipantRegistrationFormScreen(
+                initialCompetitionId: widget.competitionId,
+                showCompetitionDropdown: false,
+              );
+            }),
           ),
         ],
       ),
@@ -88,6 +132,7 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
   Widget _buildDesktopLayout(
     BuildContext context,
     CompetitionController competitionController,
+    ParticipantController participantController,
     bool isMobile,
   ) {
     return Row(
@@ -102,6 +147,7 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
               () => _buildCompetitionDetailsContent(
                 context,
                 competitionController,
+                participantController,
                 isMobile,
               ),
             ),
@@ -111,13 +157,22 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
         Expanded(
           flex: 3,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 32, 24),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 960),
-                child: ParticipantRegistrationFormScreen(
-                  initialCompetitionId: competitionId,
-                ),
+                constraints: const BoxConstraints(maxWidth: double.infinity),
+                child: Obx(() {
+                  if (participantController.registrationSaved.value) {
+                    return _buildRegistrationSuccessPanel(
+                      context,
+                      participantController.lastRegisteredParticipant.value,
+                    );
+                  }
+                  return ParticipantRegistrationFormScreen(
+                    initialCompetitionId: widget.competitionId,
+                    showCompetitionDropdown: false,
+                  );
+                }),
               ),
             ),
           ),
@@ -126,9 +181,95 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildRegistrationSuccessPanel(
+    BuildContext context,
+    ParticipantModel? participant,
+  ) {
+    final hasParticipant = participant != null;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Registration Successful',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primaryColor,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            hasParticipant
+                ? 'Your registration details are below.'
+                : 'Saved successfully.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
+          ),
+          if (participant != null) ...[
+            const SizedBox(height: 16),
+            _infoRow('Registration No', participant.registrationNo ?? 'N/A'),
+            _infoRow('Participant Name', participant.participantName),
+            _infoRow('Gender', participant.gender),
+            _infoRow('Category', participant.category),
+            _infoRow('Standard/Group', participant.standard),
+            _infoRow('School', participant.schoolName),
+            _infoRow('Yoga Master', participant.yogaMasterName),
+            _infoRow(
+              'Spot Registration',
+              participant.isSpotRegistration ? 'YES' : 'NO',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 160,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black87),
+              softWrap: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCompetitionDetailsContent(
     BuildContext context,
     CompetitionController competitionController,
+    ParticipantController participantController,
     bool isMobile,
   ) {
     Widget content;
@@ -140,10 +281,15 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
       );
     } else {
       final competition = competitionController.homeCompetitions
-          .firstWhereOrNull((c) => c.idStr == competitionId);
+          .firstWhereOrNull((c) => c.idStr == widget.competitionId);
       content = competition == null
           ? _buildDetailsPlaceholder(context, isMobile)
-          : _buildCompetitionDetailsPanel(context, competition, isMobile);
+          : _buildCompetitionDetailsPanel(
+              context,
+              competition,
+              participantController,
+              isMobile,
+            );
     }
     return Container(
       width: double.infinity,
@@ -167,6 +313,7 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
   Widget _buildCompetitionDetailsPanel(
     BuildContext context,
     HomeCompetitionModel competition,
+    ParticipantController participantController,
     bool isMobile,
   ) {
     final startDate = competition.eventStartDate != null
@@ -299,6 +446,29 @@ class UserCompetitionRegistrationScreen extends StatelessWidget {
             }).toList(),
           ),
         ],
+        const SizedBox(height: 18),
+        Obx(() {
+          if (!participantController.registrationSaved.value) {
+            return const SizedBox.shrink();
+          }
+          return SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                participantController.clearRegistrationConfirmation();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('REGISTER NOW'),
+            ),
+          );
+        }),
       ],
     );
   }

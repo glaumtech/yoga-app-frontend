@@ -3,7 +3,8 @@ import 'package:get/get.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
-import '../../../data/models/city_model.dart';
+import '../../widgets/location/city_search_field.dart';
+import '../../widgets/location/state_search_field.dart';
 import '../../../data/models/institution_category_model.dart';
 
 class SchoolCreateScreen extends StatelessWidget {
@@ -388,6 +389,22 @@ class SchoolCreateScreen extends StatelessWidget {
     );
   }
 
+  InputDecoration _schoolLocationDecoration(
+    bool isMobile, {
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 16,
+        vertical: 12,
+      ),
+      filled: true,
+      fillColor: Colors.white,
+      suffixIcon: suffixIcon,
+    );
+  }
+
   Widget _buildStateField(
     BuildContext context,
     SchoolController controller,
@@ -407,85 +424,34 @@ class SchoolCreateScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Obx(() {
           if (controller.isLoadingStates.value) {
-            return DropdownButtonFormField<String>(
-              value: null,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: isMobile ? 12 : 16,
-                  vertical: 12,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                suffixIcon: Padding(
-                  padding: const EdgeInsets.all(12.0),
+            return TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: _schoolLocationDecoration(
+                isMobile,
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.all(12),
                   child: SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              ),
-              hint: Text(
-                'Loading states...',
-                style: TextStyle(fontSize: isMobile ? 14 : 16),
-              ),
-              items: [],
-              onChanged: null,
+              ).copyWith(hintText: 'Loading states...'),
             );
           }
 
-          return DropdownButtonFormField<String>(
-            value: controller.selectedState.value.isNotEmpty
-                ? controller.selectedState.value
-                : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 12,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            hint: Text(
-              'Select State',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
-            isExpanded: true,
-            menuMaxHeight: 250,
-            items: controller.states.map((state) {
-              return DropdownMenuItem<String>(
-                value: state.stateName,
-                child: Text(
-                  state.stateName,
-                  style: TextStyle(fontSize: isMobile ? 14 : 16),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
-            onChanged: (value) async {
-              if (value != null) {
-                final selectedState = controller.states.firstWhere(
-                  (s) => s.stateName == value,
-                );
-                controller.selectedState.value = value;
-                controller.selectedStateId.value = selectedState.id;
-                controller.selectedCity.value = '';
-                controller.pincodeController.clear();
-                controller.cities.clear();
-
-                // Load cities for selected state
-                await controller.loadCitiesByStateId(selectedState.id);
-              }
-            },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
+          return StateSearchField(
+            textEditingController: controller.createFormStateTextController,
+            focusNode: controller.createFormStateFocusNode,
+            states: List.from(controller.states),
+            decorationBuilder: ({Widget? suffixIcon}) =>
+                _schoolLocationDecoration(isMobile, suffixIcon: suffixIcon),
+            isMobile: isMobile,
+            hintText: 'Search or select state',
+            onStateId: controller.setCreateFormState,
+            validator: (_) {
+              if (controller.selectedStateId.value <= 0) {
                 return 'Please select state';
               }
               return null;
@@ -515,101 +481,53 @@ class SchoolCreateScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Obx(() {
           if (controller.isLoadingCities.value) {
-            return DropdownButtonFormField<String>(
-              value: null,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: isMobile ? 12 : 16,
-                  vertical: 12,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                suffixIcon: Padding(
-                  padding: const EdgeInsets.all(12.0),
+            return TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: _schoolLocationDecoration(
+                isMobile,
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.all(12),
                   child: SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              ),
-              hint: Text(
-                'Loading cities...',
-                style: TextStyle(fontSize: isMobile ? 14 : 16),
-              ),
-              items: [],
-              onChanged: null,
+              ).copyWith(hintText: 'Loading cities...'),
             );
           }
 
-          // Get all cities for the selected state
-          List<CityModel> availableCities = [];
-          if (controller.selectedStateId.value > 0) {
-            availableCities = controller.cities
-                .where(
-                  (city) => city.stateId == controller.selectedStateId.value,
-                )
-                .toList();
-            availableCities.sort((a, b) => a.cityName.compareTo(b.cityName));
+          if (controller.selectedStateId.value <= 0) {
+            return TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: _schoolLocationDecoration(
+                isMobile,
+              ).copyWith(hintText: 'Select state first'),
+            );
           }
 
-          return DropdownButtonFormField<String>(
-            value: controller.selectedCity.value.isNotEmpty
-                ? controller.selectedCity.value
-                : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 12,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            hint: Text(
-              controller.selectedState.value.isEmpty
-                  ? 'Select State first'
-                  : 'Select City',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
-            isExpanded: true,
-            menuMaxHeight: 250,
-            items: availableCities.map((city) {
-              return DropdownMenuItem<String>(
-                value: city.cityName,
-                child: Text(
-                  city.cityName,
-                  style: TextStyle(fontSize: isMobile ? 14 : 16),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
-            onChanged: controller.selectedState.value.isEmpty
-                ? null
-                : (value) {
-                    if (value != null) {
-                      final selectedCity = availableCities.firstWhereOrNull(
-                        (city) => city.cityName == value,
-                      );
-                      if (selectedCity != null) {
-                        controller.selectedCity.value = value;
-                        // Auto-populate pincode
-                        controller.pincodeController.text =
-                            selectedCity.pincode;
-                      }
-                    }
-                  },
-            validator: (value) {
-              if (controller.selectedState.value.isEmpty) {
+          final availableCities =
+              controller.cities
+                  .where((c) => c.stateId == controller.selectedStateId.value)
+                  .toList()
+                ..sort((a, b) => a.cityName.compareTo(b.cityName));
+
+          return CitySearchField(
+            textEditingController: controller.createFormCityTextController,
+            focusNode: controller.createFormCityFocusNode,
+            cities: availableCities,
+            decorationBuilder: ({Widget? suffixIcon}) =>
+                _schoolLocationDecoration(isMobile, suffixIcon: suffixIcon),
+            isMobile: isMobile,
+            hintText: 'Search or select city',
+            onCityId: controller.setCreateFormCity,
+            validator: (_) {
+              if (controller.selectedStateId.value <= 0) {
                 return 'Please select state first';
               }
-              if (value == null || value.isEmpty) {
+              if (controller.selectedCity.value.isEmpty) {
                 return 'Please select city';
               }
               return null;
