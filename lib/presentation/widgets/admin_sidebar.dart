@@ -5,6 +5,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 import '../controllers/auth_controller.dart';
 import '../../../core/utils/permission_store.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/storage_service.dart';
 
 /// Admin and Sub-Admin persistent sidebar
 /// Menu not needed for Juries
@@ -22,6 +24,11 @@ class AdminSidebar extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
+    final isLoggedIn =
+        (StorageService.getString(AppConstants.tokenKey) ?? '').isNotEmpty;
+    final displayName = (currentUser?.name ?? '').trim().isEmpty
+        ? null
+        : currentUser!.name.trim();
 
     return Container(
       width: isMobile ? double.infinity : (isTablet ? 120 : 250),
@@ -81,17 +88,18 @@ class AdminSidebar extends StatelessWidget {
                               ),
                           textAlign: TextAlign.center,
                         ),
-                        Text(
-                          (currentUser?.name ?? 'admin').toLowerCase(),
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 10,
-                              ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
+                        if (isLoggedIn && displayName != null)
+                          Text(
+                            displayName.toLowerCase(),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontSize: 10,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
                       ],
                     )
                   : Row(
@@ -132,16 +140,17 @@ class AdminSidebar extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              Text(
-                                (currentUser?.name ?? 'admin').toLowerCase(),
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: Colors.white.withOpacity(0.9),
-                                      fontSize: isMobile ? 11 : 12,
-                                    ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              if (isLoggedIn && displayName != null)
+                                Text(
+                                  displayName.toLowerCase(),
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: Colors.white.withOpacity(0.9),
+                                        fontSize: isMobile ? 11 : 12,
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                             ],
                           ),
                         ),
@@ -235,19 +244,20 @@ class AdminSidebar extends StatelessWidget {
               ),
             ),
 
-            // Logout Button
-            Container(
-              margin: const EdgeInsets.all(16),
-              child: _buildLogoutButton(
-                context,
-                onTap: () async {
-                  await authController.signOut();
-                  if (context.mounted) {
-                    context.go(AppRoutes.login);
-                  }
-                },
+            // Logout Button (only when logged in)
+            if (isLoggedIn)
+              Container(
+                margin: const EdgeInsets.all(16),
+                child: _buildLogoutButton(
+                  context,
+                  onTap: () async {
+                    await authController.signOut();
+                    if (context.mounted) {
+                      context.go(AppRoutes.login);
+                    }
+                  },
+                ),
               ),
-            ),
           ],
         ),
       ),

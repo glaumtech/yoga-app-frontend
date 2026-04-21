@@ -46,6 +46,10 @@ class AppRouter {
       // Public competition registration route is allowed without auth.
       final isRegister = location.startsWith('/register/');
 
+      // School screens should be accessible without login (public).
+      // Covers list/create/edit/delete under the same prefix.
+      final isPublicSchools = location.startsWith('/admin/schools');
+
       // Always allow navigation to auth routes (login/signup)
       if (location == AppRoutes.login || location == AppRoutes.signUp) {
         return null;
@@ -54,7 +58,11 @@ class AppRouter {
       // If not logged in and trying to access protected routes
       // Note: home is treated as public for unauthenticated users
       final isHomeRoute = location == AppRoutes.home;
-      if (token == null && !isPublicRoute && !isHomeRoute && !isRegister) {
+      if (token == null &&
+          !isPublicRoute &&
+          !isHomeRoute &&
+          !isRegister &&
+          !isPublicSchools) {
         return AppRoutes.login;
       }
 
@@ -79,7 +87,8 @@ class AppRouter {
               location != AppRoutes.splash &&
               !isPublicRoute &&
               !isHomeRoute &&
-              !isRegister) {
+              !isRegister &&
+              !isPublicSchools) {
             return AppRoutes.juryScoring;
           }
 
@@ -109,7 +118,8 @@ class AppRouter {
             requiredKeys = const ['MENU_PARTICIPANTS'];
           } else if (location == AppRoutes.schoolsList ||
               location.startsWith('/admin/schools')) {
-            requiredKeys = const ['MENU_INSTITUTIONS'];
+            // Schools are public (no login required), so skip permission guard.
+            requiredKeys = null;
           } else if (location == AppRoutes.reports ||
               location.startsWith('/admin/reports')) {
             requiredKeys = const ['MENU_REPORTS'];
