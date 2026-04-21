@@ -6,17 +6,28 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../data/models/api_response.dart';
+import '../../data/models/app_permission_record_model.dart';
 import '../../data/models/organization_setup_model.dart';
 import '../../data/repositories/organization_setup_repository.dart';
+import '../../data/repositories/permission_repository.dart';
 
 class OrganizationSetupController extends GetxController {
   final OrganizationSetupRepository _repo = OrganizationSetupRepository();
+  final PermissionRepository _permissionRepo = PermissionRepository();
   final ImagePicker _imagePicker = ImagePicker();
 
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
   final Rx<OrganizationSetupResponseModel?> lastResult =
       Rx<OrganizationSetupResponseModel?>(null);
+
+  final RxBool isLoadingPermissions = false.obs;
+  final RxString permissionsError = ''.obs;
+  final RxList<AppPermissionRecord> permissions = <AppPermissionRecord>[].obs;
+
+  // Selected permission IDs for each admin type (saved as user-type permissions for the created branch).
+  final RxSet<int> orgAdminPermissionIds = <int>{}.obs;
+  final RxSet<int> branchAdminPermissionIds = <int>{}.obs;
 
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
@@ -60,6 +71,12 @@ class OrganizationSetupController extends GetxController {
   // Logo
   final Rx<Uint8List?> logoBytes = Rx<Uint8List?>(null);
   final RxString logoFileName = ''.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    loadPermissions();
+  }
 
   @override
   void onClose() {
@@ -148,7 +165,29 @@ class OrganizationSetupController extends GetxController {
 
     clearLogo();
 
+    orgAdminPermissionIds.clear();
+    branchAdminPermissionIds.clear();
+
     errorMessage.value = '';
+  }
+
+  Future<void> loadPermissions() async {
+    if (isLoadingPermissions.value) return;
+    try {
+      isLoadingPermissions.value = true;
+      permissionsError.value = '';
+      final res = await _permissionRepo.getAllPermissions();
+      if (res.success && res.data != null) {
+        permissions.assignAll(res.data!);
+      } else {
+        permissionsError.value =
+            res.message ?? 'Failed to load permissions';
+      }
+    } catch (e) {
+      permissionsError.value = 'Failed to load permissions: ${e.toString()}';
+    } finally {
+      isLoadingPermissions.value = false;
+    }
   }
 
   OrganizationSetupRequestModel buildRequestFromForm() {
@@ -196,6 +235,8 @@ class OrganizationSetupController extends GetxController {
       branch: branch,
       orgAdminUser: orgAdmin,
       branchAdminUser: branchAdmin,
+      orgAdminPermissionIds: orgAdminPermissionIds.toList()..sort(),
+      branchAdminPermissionIds: branchAdminPermissionIds.toList()..sort(),
     );
   }
 

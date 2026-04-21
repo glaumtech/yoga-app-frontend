@@ -88,12 +88,16 @@ class OrganizationSetupRequestModel {
   final BranchRequestModel branch;
   final SetupAdminUserRequestModel orgAdminUser;
   final SetupAdminUserRequestModel branchAdminUser;
+  final List<int>? orgAdminPermissionIds;
+  final List<int>? branchAdminPermissionIds;
 
   OrganizationSetupRequestModel({
     required this.organization,
     required this.branch,
     required this.orgAdminUser,
     required this.branchAdminUser,
+    this.orgAdminPermissionIds,
+    this.branchAdminPermissionIds,
   });
 
   Map<String, dynamic> toJson() => {
@@ -101,6 +105,10 @@ class OrganizationSetupRequestModel {
     'branch': branch.toJson(),
     'orgAdminUser': orgAdminUser.toJson(),
     'branchAdminUser': branchAdminUser.toJson(),
+    if (orgAdminPermissionIds != null)
+      'orgAdminPermissionIds': orgAdminPermissionIds,
+    if (branchAdminPermissionIds != null)
+      'branchAdminPermissionIds': branchAdminPermissionIds,
   };
 
   /// Convenience for multipart `data` field.

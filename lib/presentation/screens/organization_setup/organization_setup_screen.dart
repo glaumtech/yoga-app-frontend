@@ -2,10 +2,159 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/app_permission_record_model.dart';
 import '../../controllers/organization_setup_controller.dart';
 
 class OrganizationSetupScreen extends StatelessWidget {
   const OrganizationSetupScreen({super.key});
+
+  String _permLabel(AppPermissionRecord p) {
+    final name = p.permissionName.trim();
+    final key = (p.permissionKey ?? '').trim();
+    if (key.isEmpty) return name;
+    if (name.isEmpty) return key;
+    return '$name ($key)';
+  }
+
+  Future<void> _openPermissionPicker({
+    required BuildContext context,
+    required String title,
+    required List<AppPermissionRecord> allPermissions,
+    required Set<int> initialSelectedIds,
+    required void Function(Set<int> next) onApply,
+  }) async {
+    final selected = {...initialSelectedIds};
+    String query = '';
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            final filtered = allPermissions.where((p) {
+              final s = '${p.permissionName} ${p.permissionKey ?? ''} ${p.menu ?? ''} ${p.subMenu ?? ''} ${p.tab ?? ''}'
+                  .toLowerCase();
+              return query.trim().isEmpty ||
+                  s.contains(query.trim().toLowerCase());
+            }).toList()
+              ..sort((a, b) => _permLabel(a).compareTo(_permLabel(b)));
+
+            final allIds = allPermissions
+                .map((p) => p.id)
+                .whereType<int>()
+                .where((id) => id != 0)
+                .toSet();
+            final selectedAllCount = selected.intersection(allIds).length;
+            final bool? selectAllValue = allIds.isEmpty
+                ? false
+                : (selectedAllCount == 0
+                    ? false
+                    : (selectedAllCount == allIds.length ? true : null));
+
+            return AlertDialog(
+              title: Text(title),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Search permissions...',
+                      ),
+                      onChanged: (v) => setState(() => query = v),
+                    ),
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      dense: true,
+                      tristate: true,
+                      value: selectAllValue,
+                      title: Text(
+                        'Select all (${allIds.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: selectedAllCount == 0
+                          ? null
+                          : Text('Selected: $selectedAllCount'),
+                      onChanged: allIds.isEmpty
+                          ? null
+                          : (v) {
+                              setState(() {
+                                if (v == true) {
+                                  selected.addAll(allIds);
+                                } else {
+                                  selected.removeAll(allIds);
+                                }
+                              });
+                            },
+                      controlAffinity: ListTileControlAffinity.trailing,
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (ctx, i) {
+                          final p = filtered[i];
+                          final id = p.id ?? 0;
+                          final checked = id != 0 && selected.contains(id);
+                          return CheckboxListTile(
+                            dense: true,
+                            value: checked,
+                            title: Text(_permLabel(p)),
+                            subtitle: (p.menu ?? '').trim().isEmpty &&
+                                    (p.tab ?? '').trim().isEmpty
+                                ? null
+                                : Text(
+                                    [
+                                      if ((p.menu ?? '').trim().isNotEmpty)
+                                        'Menu: ${p.menu}',
+                                      if ((p.subMenu ?? '').trim().isNotEmpty)
+                                        'Sub: ${p.subMenu}',
+                                      if ((p.tab ?? '').trim().isNotEmpty)
+                                        'Tab: ${p.tab}',
+                                    ].join('  •  '),
+                                  ),
+                            onChanged: id == 0
+                                ? null
+                                : (v) {
+                                    setState(() {
+                                      if (v == true) {
+                                        selected.add(id);
+                                      } else {
+                                        selected.remove(id);
+                                      }
+                                    });
+                                  },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Cancel'),
+                ),
+                OutlinedButton(
+                  onPressed: () => setState(() => selected.clear()),
+                  child: const Text('Clear'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    onApply(selected);
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +257,106 @@ class OrganizationSetupScreen extends StatelessWidget {
             children.expand((w) => [w, const SizedBox(height: 16)]).toList()
               ..removeLast(),
       );
+    }
+
+    Widget permissionMultiSelect({
+      required String label,
+      required RxSet<int> selectedIds,
+    }) {
+      return Obx(() {
+        final all = c.permissions.toList();
+        final selected = selectedIds.toSet();
+        final selectedPerms = all
+            .where((p) => p.id != null && selected.contains(p.id))
+            .toList()
+          ..sort((a, b) => _permLabel(a).compareTo(_permLabel(b)));
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey[300]!, width: 1.2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          selected.isEmpty
+                              ? 'No permissions selected'
+                              : '${selected.length} permission(s) selected',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: c.isLoadingPermissions.value
+                            ? null
+                            : () async {
+                                if (c.permissions.isEmpty) {
+                                  await c.loadPermissions();
+                                }
+                                if (!context.mounted) return;
+                                await _openPermissionPicker(
+                                  context: context,
+                                  title: label,
+                                  allPermissions: c.permissions,
+                                  initialSelectedIds: selected,
+                                  onApply: (next) {
+                                    selectedIds
+                                      ..clear()
+                                      ..addAll(next);
+                                  },
+                                );
+                              },
+                        icon: const Icon(Icons.playlist_add_check),
+                        label: const Text('Select'),
+                      ),
+                    ],
+                  ),
+                  if (c.permissionsError.value.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        c.permissionsError.value,
+                        style: TextStyle(color: Colors.red[700]),
+                      ),
+                    ),
+                  if (selectedPerms.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: selectedPerms.map((p) {
+                        final id = p.id ?? 0;
+                        return Chip(
+                          label: Text(p.permissionName),
+                          onDeleted: id == 0
+                              ? null
+                              : () => selectedIds.remove(id),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        );
+      });
     }
 
     Future<void> onSubmit() async {
@@ -459,6 +708,10 @@ class OrganizationSetupScreen extends StatelessWidget {
                                 icon: Icons.lock_outline,
                               ),
                             ),
+                            permissionMultiSelect(
+                              label: 'Org Admin Permissions',
+                              selectedIds: c.orgAdminPermissionIds,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 18),
@@ -501,6 +754,10 @@ class OrganizationSetupScreen extends StatelessWidget {
                                 label: 'Password',
                                 icon: Icons.lock_outline,
                               ),
+                            ),
+                            permissionMultiSelect(
+                              label: 'Branch Admin Permissions',
+                              selectedIds: c.branchAdminPermissionIds,
                             ),
                           ],
                         ),
