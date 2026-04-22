@@ -3,12 +3,14 @@ class InstitutionCategoryModel {
   final String categoryName;
   final String displayName;
   final int institutionTypeId;
+  final int displayOrder;
 
   InstitutionCategoryModel({
     required this.id,
     required this.categoryName,
     required this.displayName,
     required this.institutionTypeId,
+    required this.displayOrder,
   });
 
   factory InstitutionCategoryModel.fromJson(Map<String, dynamic> json) {
@@ -21,6 +23,9 @@ class InstitutionCategoryModel {
       institutionTypeId: json['institutionTypeId'] is int
           ? json['institutionTypeId'] as int
           : int.tryParse(json['institutionTypeId'].toString()) ?? 0,
+      displayOrder: json['displayOrder'] is int
+          ? json['displayOrder'] as int
+          : int.tryParse(json['displayOrder']?.toString() ?? '') ?? 0,
     );
   }
 
@@ -30,6 +35,7 @@ class InstitutionCategoryModel {
       'categoryName': categoryName,
       'displayName': displayName,
       'institutionTypeId': institutionTypeId,
+      'displayOrder': displayOrder,
     };
   }
 }

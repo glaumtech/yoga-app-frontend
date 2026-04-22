@@ -199,7 +199,7 @@ class AdminSidebar extends StatelessWidget {
                   if (permissionStore.has('MENU_INSTITUTIONS'))
                     _buildMenuItem(
                       context,
-                      title: 'SCHOOLS & COLLEGE LIST',
+                      title: 'INSTITUTIONS',
                       icon: Icons.school,
                       route: AppRoutes.schoolsList,
                       currentLocation: currentLocation,

@@ -59,17 +59,29 @@ class AdminSidebarLayout extends StatelessWidget {
                               ),
                             ),
 
-                          // Center title
-                          Center(
-                            child: Text(
-                              title!,
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: isMobile ? 18 : 20,
-                                  ),
-                              textAlign: TextAlign.center,
+                          // Left-aligned title (leaves space for mobile menu button)
+                          Positioned.fill(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  left: isMobile ? 56 : 16,
+                                  right:
+                                      120, // keep clear of right-side user info
+                                ),
+                                child: Text(
+                                  title!,
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: isMobile ? 18 : 20,
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.left,
+                                ),
+                              ),
                             ),
                           ),
 

@@ -16,6 +16,7 @@ class SchoolModel {
   institutionType; // 'PRIVATE_SCHOOL', 'GOVT_AIDED_SCHOOL', etc. or UI format
   final String? institutionTypeDisplayName;
   final String? institutionCategoryDisplayName;
+  final List<int> institutionCategoryIds;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -38,6 +39,7 @@ class SchoolModel {
     required this.institutionType,
     this.institutionTypeDisplayName,
     this.institutionCategoryDisplayName,
+    this.institutionCategoryIds = const [],
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -45,6 +47,19 @@ class SchoolModel {
   });
 
   factory SchoolModel.fromJson(Map<String, dynamic> json) {
+    final rawCategoryIds =
+        json['institutionCategoryIds'] ?? json['institution_category_ids'];
+    final parsedCategoryIds = <int>[];
+    if (rawCategoryIds is List) {
+      for (final v in rawCategoryIds) {
+        if (v is int) {
+          parsedCategoryIds.add(v);
+        } else if (v is String) {
+          final n = int.tryParse(v);
+          if (n != null) parsedCategoryIds.add(n);
+        }
+      }
+    }
     return SchoolModel(
       id: json['id']?.toString() ?? json['_id']?.toString(),
       institutionName:
@@ -78,6 +93,7 @@ class SchoolModel {
           ?.toString(),
       institutionCategoryDisplayName: json['institutionCategoryDisplayName']
           ?.toString(),
+      institutionCategoryIds: parsedCategoryIds,
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])
@@ -132,6 +148,7 @@ class SchoolModel {
     String? institutionType,
     String? institutionTypeDisplayName,
     String? institutionCategoryDisplayName,
+    List<int>? institutionCategoryIds,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -156,6 +173,8 @@ class SchoolModel {
           institutionTypeDisplayName ?? this.institutionTypeDisplayName,
       institutionCategoryDisplayName:
           institutionCategoryDisplayName ?? this.institutionCategoryDisplayName,
+      institutionCategoryIds:
+          institutionCategoryIds ?? this.institutionCategoryIds,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,

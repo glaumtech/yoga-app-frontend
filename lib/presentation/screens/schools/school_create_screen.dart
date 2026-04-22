@@ -38,7 +38,7 @@ class SchoolCreateScreen extends StatelessWidget {
                 children: [
                   // Title
                   FormTitle(
-                    text: 'SCHOOLS & COLLEGES LIST',
+                    text: 'Institutions',
                     isMobile: isMobile,
                     isTablet: isTablet,
                   ),
@@ -626,6 +626,7 @@ class SchoolCreateScreen extends StatelessWidget {
                         // Clear category selection
                         controller.selectedInstitutionCategoryId.value = 0;
                         controller.selectedInstitutionCategory.value = '';
+                        controller.selectedInstitutionCategoryIds.clear();
                         // Load categories for this institution type
                         await controller.loadInstitutionCategoriesByTypeId(
                           value,
@@ -701,6 +702,12 @@ class SchoolCreateScreen extends StatelessWidget {
             );
           }
 
+          final selectedType = controller.institutionTypes.firstWhereOrNull(
+            (t) => t.id == controller.selectedInstitutionTypeId.value,
+          );
+          final isYogaCenter =
+              (selectedType?.typeName.toUpperCase() == 'YOGA_CENTER');
+
           final categoryList = categories
               .whereType<InstitutionCategoryModel>()
               .toList();
@@ -717,22 +724,61 @@ class SchoolCreateScreen extends StatelessWidget {
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Radio<int>(
-                      value: category.id,
-                      groupValue:
-                          controller.selectedInstitutionCategoryId.value > 0
-                          ? controller.selectedInstitutionCategoryId.value
-                          : 0,
-                      onChanged: (value) {
-                        if (value != null) {
+                    if (isYogaCenter)
+                      Checkbox(
+                        value: controller.selectedInstitutionCategoryIds
+                            .contains(category.id),
+                        onChanged: (checked) {
+                          if (checked == true) {
+                            controller.selectedInstitutionCategoryIds
+                                .add(category.id);
+                          } else {
+                            controller.selectedInstitutionCategoryIds
+                                .remove(category.id);
+                          }
+                          // Keep legacy single-selection fields in sync with
+                          // "first selected" so existing save code still works
+                          // until backend is updated for multi-select.
+                          final firstId = controller
+                              .selectedInstitutionCategoryIds
+                              .isNotEmpty
+                              ? controller.selectedInstitutionCategoryIds
+                                  .first
+                              : 0;
                           controller.selectedInstitutionCategoryId.value =
-                              value;
+                              firstId;
+                          final names = categoryList
+                              .where(
+                                (c) => controller.selectedInstitutionCategoryIds
+                                    .contains(c.id),
+                              )
+                              .map((c) => c.displayName)
+                              .toList();
                           controller.selectedInstitutionCategory.value =
-                              category.displayName;
-                        }
-                      },
-                      activeColor: Colors.green,
-                    ),
+                              names.join(', ');
+                        },
+                        activeColor: Colors.green,
+                      )
+                    else
+                      Radio<int>(
+                        value: category.id,
+                        groupValue:
+                            controller.selectedInstitutionCategoryId.value > 0
+                            ? controller.selectedInstitutionCategoryId.value
+                            : 0,
+                        onChanged: (value) {
+                          if (value != null) {
+                            controller.selectedInstitutionCategoryId.value =
+                                value;
+                            controller.selectedInstitutionCategory.value =
+                                category.displayName;
+                            controller.selectedInstitutionCategoryIds
+                              ..clear()
+                              ..add(value);
+                          }
+                        },
+                        activeColor: Colors.green,
+                      ),
                     Text(
                       category.displayName,
                       style: TextStyle(fontSize: isMobile ? 14 : 16),
@@ -797,6 +843,7 @@ class SchoolCreateScreen extends StatelessWidget {
                       onPressed: () {
                         controller.selectedInstitutionCategory.value = '';
                         controller.selectedInstitutionCategoryId.value = 0;
+                        controller.selectedInstitutionCategoryIds.clear();
                       },
                       tooltip: 'Clear selection',
                     ),

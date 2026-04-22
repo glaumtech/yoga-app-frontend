@@ -141,10 +141,14 @@ class EndPoints {
 
   /// INSTITUTION TYPES & CATEGORIES
   static String institutionTypeList = '/institution-type';
+  static String institutionTypeById(int id) => '/institution-type/$id';
+  static String institutionTypeReorder = '/institution-type/reorder';
   static String institutionCategoryList = '/institution-category';
   static String institutionCategoryCreate = '/institution-category';
   static String institutionCategoryByType(int typeId) =>
       '/institution-category/type/$typeId';
+  static String institutionCategoryById(int id) => '/institution-category/$id';
+  static String institutionCategoryReorder = '/institution-category/reorder';
 
   /// REPORTS
   static String competitionReportSummary(int competitionId) =>

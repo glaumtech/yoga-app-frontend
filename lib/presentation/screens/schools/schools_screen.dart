@@ -7,8 +7,8 @@ import '../../controllers/school_controller.dart';
 import 'school_create_screen.dart';
 import 'school_list_screen.dart';
 
-/// Schools & Colleges Screen
-/// Manages schools and colleges list
+/// Institutions Screen
+/// Manages institutions list
 class SchoolsScreen extends StatelessWidget {
   const SchoolsScreen({super.key});
 
@@ -20,7 +20,7 @@ class SchoolsScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
 
     return AdminSidebarLayout(
-      title: 'SCHOOLS & COLLEGES LIST',
+      title: 'Institutions',
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -49,7 +49,9 @@ class SchoolsScreen extends StatelessWidget {
                   () => ToggleButtonGroup(
                     options: [
                       ToggleButtonOption(
-                        label: controller.isEditMode.value ? 'EDIT' : '+ CREATE',
+                        label: controller.isEditMode.value
+                            ? 'EDIT'
+                            : '+ CREATE',
                       ),
                       const ToggleButtonOption(label: '≡ LIST'),
                     ],
@@ -73,4 +75,3 @@ class SchoolsScreen extends StatelessWidget {
     );
   }
 }
-

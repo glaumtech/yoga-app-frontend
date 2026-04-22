@@ -178,6 +178,13 @@ class ParticipantController extends GetxController {
     return _institutionSearchFilterDataFuture!;
   }
 
+  /// Force reload of institution search filter data (types/states/cities).
+  /// Useful when institution types/categories are updated in Settings.
+  Future<void> refreshInstitutionSearchFilters() async {
+    _institutionSearchFilterDataFuture = null;
+    await ensureInstitutionSearchFiltersLoaded();
+  }
+
   Future<void> _loadInstitutionSearchFilterData() async {
     isLoadingInstitutionSearchLocations.value = true;
     try {
@@ -191,9 +198,7 @@ class ParticipantController extends GetxController {
       }
       if (typesRes.success && typesRes.data != null) {
         institutionSearchTypes.assignAll(typesRes.data!);
-        institutionSearchTypes.sort(
-          (a, b) => a.displayName.compareTo(b.displayName),
-        );
+        // Keep API response order (backend sorts by displayOrder).
       }
     } finally {
       isLoadingInstitutionSearchLocations.value = false;
@@ -274,15 +279,18 @@ class ParticipantController extends GetxController {
       isLoadingInstitutions.value = true;
       final response = await _schoolRepository.searchInstitutions(
         query: query.trim(),
-        stateId: useInstitutionSearchFilters &&
+        stateId:
+            useInstitutionSearchFilters &&
                 institutionSearchFilterStateId.value > 0
             ? institutionSearchFilterStateId.value
             : null,
-        cityId: useInstitutionSearchFilters &&
+        cityId:
+            useInstitutionSearchFilters &&
                 institutionSearchFilterCityId.value > 0
             ? institutionSearchFilterCityId.value
             : null,
-        institutionTypeId: useInstitutionSearchFilters &&
+        institutionTypeId:
+            useInstitutionSearchFilters &&
                 institutionSearchFilterTypeId.value > 0
             ? institutionSearchFilterTypeId.value
             : null,

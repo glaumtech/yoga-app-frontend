@@ -25,7 +25,7 @@ class SchoolRepository {
     required int stateId,
     required int cityId,
     required int institutionTypeId,
-    int? institutionCategoryId,
+    List<int>? institutionCategoryIds,
     required String pincode,
     String? emailId,
   }) async {
@@ -42,8 +42,8 @@ class SchoolRepository {
       if (institutionShortName != null && institutionShortName.isNotEmpty) {
         requestBody['institutionShortName'] = institutionShortName;
       }
-      if (institutionCategoryId != null && institutionCategoryId > 0) {
-        requestBody['institutionCategoryId'] = institutionCategoryId;
+      if (institutionCategoryIds != null && institutionCategoryIds.isNotEmpty) {
+        requestBody['institutionCategoryIds'] = institutionCategoryIds;
       }
       if (emailId != null && emailId.isNotEmpty) {
         requestBody['emailId'] = emailId;
@@ -325,7 +325,7 @@ class SchoolRepository {
     int? stateId,
     int? cityId,
     int? institutionTypeId,
-    int? institutionCategoryId,
+    List<int>? institutionCategoryIds,
     String? pincode,
   }) async {
     try {
@@ -352,8 +352,8 @@ class SchoolRepository {
       if (institutionTypeId != null && institutionTypeId > 0) {
         requestBody['institutionTypeId'] = institutionTypeId;
       }
-      if (institutionCategoryId != null && institutionCategoryId > 0) {
-        requestBody['institutionCategoryId'] = institutionCategoryId;
+      if (institutionCategoryIds != null && institutionCategoryIds.isNotEmpty) {
+        requestBody['institutionCategoryIds'] = institutionCategoryIds;
       }
       if (pincode != null) {
         requestBody['pincode'] = pincode;

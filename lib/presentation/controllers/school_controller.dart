@@ -14,6 +14,7 @@ import '../../data/repositories/location_repository.dart';
 import '../../data/repositories/school_repository.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/storage_service.dart';
+import '../../../core/navigation/root_scaffold_messenger_key.dart';
 
 // Conditional import for web
 import 'dart:html' as html show AnchorElement, Blob, Url;
@@ -80,6 +81,7 @@ class SchoolController extends GetxController {
   // Sub-category fields (using category ID and display name)
   final RxInt selectedInstitutionCategoryId = 0.obs;
   final RxString selectedInstitutionCategory = ''.obs;
+  final RxSet<int> selectedInstitutionCategoryIds = <int>{}.obs;
   final RxString customCategory = ''.obs;
 
   // Report generation fields
@@ -111,8 +113,7 @@ class SchoolController extends GetxController {
       final response = await _schoolRepository.getAllInstitutionTypes();
       if (response.success && response.data != null) {
         institutionTypes.value = response.data!;
-        // Sort by display name
-        institutionTypes.sort((a, b) => a.displayName.compareTo(b.displayName));
+        // Keep API response order (backend already sorts by displayOrder).
       } else {
         errorMessage.value =
             response.message ?? 'Failed to load institution types';
@@ -132,16 +133,14 @@ class SchoolController extends GetxController {
       institutionCategories.clear();
       selectedInstitutionCategoryId.value = 0;
       selectedInstitutionCategory.value = '';
+      selectedInstitutionCategoryIds.clear();
 
       final response = await _schoolRepository.getInstitutionCategoriesByType(
         typeId,
       );
       if (response.success && response.data != null) {
         institutionCategories.value = response.data!;
-        // Sort by display name
-        institutionCategories.sort(
-          (a, b) => a.displayName.compareTo(b.displayName),
-        );
+        // Keep API response order (backend already sorts by displayOrder).
       } else {
         errorMessage.value =
             response.message ?? 'Failed to load institution categories';
@@ -582,10 +581,23 @@ class SchoolController extends GetxController {
 
     // If categories exist for this type, validate category selection
     if (institutionCategories.isNotEmpty) {
-      if (selectedInstitutionCategoryId.value == 0 &&
-          selectedInstitutionCategory.value.isEmpty) {
-        errorMessage.value = 'Please select or add a category';
-        return;
+      final selectedType = institutionTypes.firstWhereOrNull(
+        (t) => t.id == selectedInstitutionTypeId.value,
+      );
+      final isYogaCenter =
+          (selectedType?.typeName.toUpperCase() == 'YOGA_CENTER');
+
+      if (isYogaCenter) {
+        if (selectedInstitutionCategoryIds.isEmpty) {
+          errorMessage.value = 'Please select at least one category';
+          return;
+        }
+      } else {
+        if (selectedInstitutionCategoryId.value == 0 &&
+            selectedInstitutionCategory.value.isEmpty) {
+          errorMessage.value = 'Please select or add a category';
+          return;
+        }
       }
     }
 
@@ -615,9 +627,8 @@ class SchoolController extends GetxController {
       final pincode = pincodeController.text.trim();
       final emailId = emailController.text.trim();
 
-      // Get category ID if selected
-      final categoryId = selectedInstitutionCategoryId.value > 0
-          ? selectedInstitutionCategoryId.value
+      final categoryIds = selectedInstitutionCategoryIds.isNotEmpty
+          ? selectedInstitutionCategoryIds.toList()
           : null;
 
       print('Submitting institution:');
@@ -629,7 +640,7 @@ class SchoolController extends GetxController {
       print('  City ID: $cityId');
       print('  Pincode: $pincode');
       print('  Institution Type ID: ${selectedInstitutionTypeId.value}');
-      print('  Institution Category ID: ${categoryId ?? 'null'}');
+      print('  Institution Category IDs: ${categoryIds ?? 'null'}');
 
       ApiResponse<SchoolModel> response;
 
@@ -648,7 +659,7 @@ class SchoolController extends GetxController {
           stateId: selectedStateId.value,
           cityId: cityId,
           institutionTypeId: selectedInstitutionTypeId.value,
-          institutionCategoryId: categoryId,
+          institutionCategoryIds: categoryIds,
           pincode: pincode,
         );
       } else {
@@ -663,7 +674,7 @@ class SchoolController extends GetxController {
           stateId: selectedStateId.value,
           cityId: cityId,
           institutionTypeId: selectedInstitutionTypeId.value,
-          institutionCategoryId: categoryId,
+          institutionCategoryIds: categoryIds,
           pincode: pincode,
         );
       }
@@ -795,21 +806,26 @@ class SchoolController extends GetxController {
           // Load categories for this type
           await loadInstitutionCategoriesByTypeId(type.id);
 
-          // Set category if available
-          if (school.institutionCategoryDisplayName != null &&
-              school.institutionCategoryDisplayName!.isNotEmpty) {
-            // Wait for categories to load
-            await Future.delayed(const Duration(milliseconds: 300));
-            final category = institutionCategories.firstWhereOrNull(
-              (c) => c.displayName == school.institutionCategoryDisplayName,
-            );
-            if (category != null) {
-              selectedInstitutionCategoryId.value = category.id;
-              selectedInstitutionCategory.value = category.displayName;
-              print(
-                'Institution category set: ${category.displayName} (ID: ${category.id})',
-              );
-            }
+          // Wait for categories to load
+          await Future.delayed(const Duration(milliseconds: 300));
+
+          // Pre-populate categories from IDs (backend now returns institutionCategoryIds)
+          if (school.institutionCategoryIds.isNotEmpty) {
+            selectedInstitutionCategoryIds
+              ..clear()
+              ..addAll(school.institutionCategoryIds);
+
+            final names = institutionCategories
+                .where((c) => selectedInstitutionCategoryIds.contains(c.id))
+                .map((c) => c.displayName)
+                .toList();
+            selectedInstitutionCategory.value = names.join(', ');
+
+            // For single-select UI types, pick the first category ID
+            selectedInstitutionCategoryId.value =
+                selectedInstitutionCategoryIds.isNotEmpty
+                    ? selectedInstitutionCategoryIds.first
+                    : 0;
           }
         } else {
           print(
@@ -928,36 +944,48 @@ class SchoolController extends GetxController {
       final response = await _schoolRepository.deleteInstitution(id);
 
       if (response.success) {
-        Get.snackbar(
-          'Success',
-          'School/College deleted successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-        );
+        rootScaffoldMessengerKey.currentState
+          ?..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              content: const Text('School/College deleted successfully'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+              margin: const EdgeInsets.all(12),
+            ),
+          );
 
         // Reload schools list
         await loadSchools();
       } else {
         errorMessage.value = response.message ?? 'Failed to delete institution';
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        rootScaffoldMessengerKey.currentState
+          ?..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(errorMessage.value),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+              margin: const EdgeInsets.all(12),
+            ),
+          );
       }
     } catch (e) {
       errorMessage.value = 'Error deleting institution: ${e.toString()}';
       print('Error in deleteSchool: $e');
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      rootScaffoldMessengerKey.currentState
+        ?..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(errorMessage.value),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+            margin: const EdgeInsets.all(12),
+          ),
+        );
     } finally {
       isLoading.value = false;
     }
@@ -1055,6 +1083,7 @@ class SchoolController extends GetxController {
     selectedInstitutionTypeId.value = 0;
     selectedInstitutionCategory.value = '';
     selectedInstitutionCategoryId.value = 0;
+    selectedInstitutionCategoryIds.clear();
     customCategory.value = '';
     institutionCategories.clear();
     institutionNameController.clear();
