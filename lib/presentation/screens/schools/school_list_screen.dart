@@ -506,12 +506,15 @@ class SchoolListScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _buildSchoolIcon(school, 50),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               school.institutionName,
@@ -1070,6 +1073,8 @@ class SchoolListScreen extends StatelessWidget {
   }
 
   Widget _buildInstitutionTypeChip(String type) {
+    if (type.trim().isEmpty) return const SizedBox.shrink();
+
     // Format the type for display (handle sub-categories)
     String displayType = type;
     if (type.contains('|')) {
@@ -1091,6 +1096,8 @@ class SchoolListScreen extends StatelessWidget {
           .replaceAll('YOGA', 'Yoga')
           .replaceAll('CENTER', 'Center');
     }
+
+    if (displayType.trim().isEmpty) return const SizedBox.shrink();
 
     Color chipColor;
     if (type.contains('Private') || type.contains('PRIVATE')) {

@@ -102,26 +102,6 @@ class SchoolCreateScreen extends StatelessWidget {
                                 return null;
                               },
                             ),
-                            SizedBox(height: isMobile ? 20 : 24),
-                            _buildTextField(
-                              context,
-                              label: 'Address :',
-                              controller: controller.addressController,
-                              isMobile: isMobile,
-                              maxLines: 3,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter address';
-                                }
-                                if (value.trim().length < 10) {
-                                  return 'Address must be at least 10 characters';
-                                }
-                                if (value.trim().length > 2000) {
-                                  return 'Address must not exceed 2000 characters';
-                                }
-                                return null;
-                              },
-                            ),
                           ],
                         )
                       : Row(
