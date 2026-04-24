@@ -559,8 +559,12 @@ class SchoolController extends GetxController {
     isListView.value = isList;
     if (isList) {
       // Exit edit mode when switching to list
-      isEditMode.value = false;
-      editingSchoolId.value = null;
+      resetForm();
+      // Keep list mode active (resetForm sets isEditMode/isListView)
+      isListView.value = true;
+    } else {
+      // When switching back to create, always start fresh
+      resetForm();
     }
   }
 

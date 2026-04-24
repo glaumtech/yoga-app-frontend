@@ -644,10 +644,11 @@ class SchoolCreateScreen extends StatelessWidget {
             }).toList(),
           );
         }),
-        // Show sub-category selection if categories are available
+        // Show sub-category selection (keep visible while loading to avoid layout jump)
         Obx(() {
           if (controller.selectedInstitutionTypeId.value > 0 &&
-              controller.institutionCategories.isNotEmpty) {
+              (controller.isLoadingInstitutionCategories.value ||
+                  controller.institutionCategories.isNotEmpty)) {
             final selectedType = controller.institutionTypes.firstWhereOrNull(
               (t) => t.id == controller.selectedInstitutionTypeId.value,
             );
@@ -684,20 +685,62 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: isMobile ? 14 : 16,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: isMobile ? 14 : 16,
+              ),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              onPressed: controller.isLoadingInstitutionCategories.value
+                  ? null
+                  : () => _showAddCategoryDialog(context, controller),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add New'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.green[700],
+                side: BorderSide(color: Colors.green[700]!),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 12 : 14,
+                  vertical: isMobile ? 10 : 10,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Obx(() {
           if (controller.isLoadingInstitutionCategories.value) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: CircularProgressIndicator(),
+            // Keep the layout stable: show a disabled field with a small loader
+            final field = InputDecorator(
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              child: Row(
+                children: const [
+                  Expanded(child: Text('Loading categories...')),
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ],
+              ),
+            );
+
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isMobile ? double.infinity : 520,
+                ),
+                child: field,
               ),
             );
           }
@@ -716,96 +759,161 @@ class SchoolCreateScreen extends StatelessWidget {
             return const SizedBox.shrink();
           }
 
-          return Wrap(
-            spacing: isMobile ? 12 : 16,
-            runSpacing: isMobile ? 8 : 12,
-            children: [
-              ...categoryList.map((category) {
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isYogaCenter)
-                      Checkbox(
-                        value: controller.selectedInstitutionCategoryIds
-                            .contains(category.id),
-                        onChanged: (checked) {
-                          if (checked == true) {
-                            controller.selectedInstitutionCategoryIds
-                                .add(category.id);
-                          } else {
-                            controller.selectedInstitutionCategoryIds
-                                .remove(category.id);
-                          }
-                          // Keep legacy single-selection fields in sync with
-                          // "first selected" so existing save code still works
-                          // until backend is updated for multi-select.
-                          final firstId = controller
-                              .selectedInstitutionCategoryIds
-                              .isNotEmpty
-                              ? controller.selectedInstitutionCategoryIds
-                                  .first
-                              : 0;
-                          controller.selectedInstitutionCategoryId.value =
-                              firstId;
-                          final names = categoryList
-                              .where(
-                                (c) => controller.selectedInstitutionCategoryIds
-                                    .contains(c.id),
-                              )
-                              .map((c) => c.displayName)
-                              .toList();
-                          controller.selectedInstitutionCategory.value =
-                              names.join(', ');
-                        },
-                        activeColor: Colors.green,
-                      )
-                    else
-                      Radio<int>(
-                        value: category.id,
-                        groupValue:
-                            controller.selectedInstitutionCategoryId.value > 0
-                            ? controller.selectedInstitutionCategoryId.value
-                            : 0,
-                        onChanged: (value) {
-                          if (value != null) {
-                            controller.selectedInstitutionCategoryId.value =
-                                value;
-                            controller.selectedInstitutionCategory.value =
-                                category.displayName;
-                            controller.selectedInstitutionCategoryIds
-                              ..clear()
-                              ..add(value);
-                          }
-                        },
-                        activeColor: Colors.green,
-                      ),
-                    Text(
-                      category.displayName,
-                      style: TextStyle(fontSize: isMobile ? 14 : 16),
+          void syncSelectedNames() {
+            final names = categoryList
+                .where(
+                  (c) =>
+                      controller.selectedInstitutionCategoryIds.contains(c.id),
+                )
+                .map((c) => c.displayName)
+                .toList();
+            controller.selectedInstitutionCategory.value = names.join(', ');
+            controller.selectedInstitutionCategoryId.value =
+                controller.selectedInstitutionCategoryIds.isNotEmpty
+                ? controller.selectedInstitutionCategoryIds.first
+                : 0;
+          }
+
+          if (!isYogaCenter) {
+            final selectedId =
+                controller.selectedInstitutionCategoryIds.isNotEmpty
+                ? controller.selectedInstitutionCategoryIds.first
+                : (controller.selectedInstitutionCategoryId.value > 0
+                      ? controller.selectedInstitutionCategoryId.value
+                      : null);
+
+            final dropdown = DropdownButtonFormField<int>(
+              value: selectedId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+              ),
+              hint: const Text('Select Category'),
+              items: categoryList
+                  .map(
+                    (c) => DropdownMenuItem<int>(
+                      value: c.id,
+                      child: Text(c.displayName),
                     ),
-                  ],
-                );
-              }).toList(),
-            ],
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                controller.selectedInstitutionCategoryIds
+                  ..clear()
+                  ..add(value);
+                syncSelectedNames();
+              },
+            );
+
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isMobile ? double.infinity : 520,
+                ),
+                child: dropdown,
+              ),
+            );
+          }
+
+          // Yoga Center: multi-select dropdown (dialog)
+          final displayText =
+              controller.selectedInstitutionCategory.value.trim().isEmpty
+              ? 'Select Categories'
+              : controller.selectedInstitutionCategory.value.trim();
+
+          final multiSelectField = InkWell(
+            onTap: () async {
+              final temp = controller.selectedInstitutionCategoryIds.toSet();
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) {
+                  return AlertDialog(
+                    title: const Text('Select Categories'),
+                    content: SizedBox(
+                      width: 420,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: categoryList.map((c) {
+                            final checked = temp.contains(c.id);
+                            return CheckboxListTile(
+                              value: checked,
+                              onChanged: (v) {
+                                if (v == true) {
+                                  temp.add(c.id);
+                                } else {
+                                  temp.remove(c.id);
+                                }
+                                (dialogContext as Element).markNeedsBuild();
+                              },
+                              title: Text(c.displayName),
+                              dense: true,
+                              controlAffinity: ListTileControlAffinity.leading,
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  );
+                },
+              );
+
+              if (ok == true) {
+                controller.selectedInstitutionCategoryIds
+                  ..clear()
+                  ..addAll(temp);
+                syncSelectedNames();
+              }
+            },
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      displayText,
+                      style: TextStyle(fontSize: isMobile ? 14 : 16),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_drop_down),
+                ],
+              ),
+            ),
+          );
+
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isMobile ? double.infinity : 520,
+              ),
+              child: multiSelectField,
+            ),
           );
         }),
-        const SizedBox(height: 12),
-        // Add new category button
-        OutlinedButton.icon(
-          onPressed: controller.isLoadingInstitutionCategories.value
-              ? null
-              : () => _showAddCategoryDialog(context, controller),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add New Category'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.green[700],
-            side: BorderSide(color: Colors.green[700]!),
-            padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 16 : 20,
-              vertical: isMobile ? 12 : 14,
-            ),
-          ),
-        ),
         // Show custom category if selected
         Obx(() {
           if (controller.selectedInstitutionCategory.value.isNotEmpty &&
