@@ -78,7 +78,8 @@ class EndPoints {
       '/participant-registration/$id';
   static String participantRegistrationForScoring =
       '/participant-registration/for-scoring';
-  static String participantRegistrationImport = '/participant-registration/import';
+  static String participantRegistrationImport =
+      '/participant-registration/import';
   static String juryScoring = '/jury-scoring';
 
   /// SCORING
