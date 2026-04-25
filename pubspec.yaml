@@ -69,6 +69,10 @@ dependencies:
   # Cached Network Image
   cached_network_image: ^3.3.1
 
+  # File Picker (Excel import)
+  file_picker: ^11.0.2
+  http_parser: ^4.1.2
+
   # URL Launcher
   url_launcher: ^6.2.5
 

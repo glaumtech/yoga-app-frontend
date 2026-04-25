@@ -5,6 +5,7 @@ import '../../controllers/settings_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import 'permissions/permissions_tab.dart';
 import 'institutions/institution_config_tab.dart';
+import 'imports/imports_tab.dart';
 
 /// Settings area with tabbed sections (same pattern as [ReportsScreen]).
 class SettingsScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return AdminSidebarLayout(
       title: 'Settings',
       child: DefaultTabController(
-        length: 2,
+        length: 3,
         child: Column(
           children: [
             Padding(
@@ -41,7 +42,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Expanded(
               child: TabBarView(
-                children: [SettingsPermissionsTab(), InstitutionConfigTab()],
+                children: [
+                  SettingsPermissionsTab(),
+                  InstitutionConfigTab(),
+                  SettingsImportsTab(),
+                ],
               ),
             ),
           ],
@@ -93,6 +98,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 15),
               child: Text('Institution Config'),
+            ),
+          ),
+          Tab(
+            height: isMobile ? 30 : 34,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 15),
+              child: Text('Imports'),
             ),
           ),
         ],

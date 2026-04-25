@@ -1,5 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
@@ -21,6 +24,56 @@ class ParticipantsForScoringResponse {
 
 class ParticipantRepository {
   final APIService _apiService = APIService();
+
+  Future<ApiResponse<Map<String, dynamic>>> importParticipantRegistrationsExcel({
+    required int competitionId,
+    required String filename,
+    Uint8List? bytes,
+    String? filePath,
+  }) async {
+    try {
+      final fields = <String, String>{'competitionId': competitionId.toString()};
+      final lower = filename.toLowerCase();
+      final contentType = lower.endsWith('.xls')
+          ? MediaType('application', 'vnd.ms-excel')
+          : MediaType(
+              'application',
+              'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            );
+      http.MultipartFile multipartFile;
+
+      if (!kIsWeb && filePath != null && filePath.trim().isNotEmpty) {
+        multipartFile = await http.MultipartFile.fromPath(
+          'file',
+          filePath,
+          filename: filename,
+          contentType: contentType,
+        );
+      } else {
+        final safeBytes = bytes ?? Uint8List(0);
+        multipartFile = http.MultipartFile.fromBytes(
+          'file',
+          safeBytes,
+          filename: filename,
+          contentType: contentType,
+        );
+      }
+
+      final response = await _apiService.postMultipart<Map<String, dynamic>>(
+        url: EndPoints.participantRegistrationImport,
+        fields: fields,
+        file: multipartFile,
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      return response;
+    } catch (e) {
+      return ApiResponse<Map<String, dynamic>>(
+        success: false,
+        message: 'Import failed: ${e.toString()}',
+      );
+    }
+  }
 
   Future<ApiResponse<ParticipantModel>> createParticipant({
     required ParticipantModel participant,
