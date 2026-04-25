@@ -8,17 +8,28 @@ import '../../data/models/participant_model.dart';
 import '../../data/models/jury_assignment_model.dart';
 import '../../data/repositories/user_management_repository.dart';
 import '../../data/repositories/participant_repository.dart';
+import '../../data/repositories/school_repository.dart';
+import '../../data/models/school_model.dart';
 import '../../routes/app_routes.dart';
 import 'user_management_controller.dart';
 
 class JuryScoringController extends GetxController {
   final UserManagementRepository _repository = UserManagementRepository();
   final ParticipantRepository _participantRepository = ParticipantRepository();
+  final SchoolRepository _schoolRepository = SchoolRepository();
 
   // Selection dropdowns (single selection, not checkboxes)
   final RxString selectedStage = ''.obs;
   final RxString selectedCategory = ''.obs;
   final RxString selectedGroup = ''.obs;
+
+  // Institution search (optional)
+  final TextEditingController institutionSearchController =
+      TextEditingController();
+  final RxString institutionSearchText = ''.obs;
+  final RxList<SchoolModel> institutionSuggestions = <SchoolModel>[].obs;
+  final RxBool isLoadingInstitutions = false.obs;
+  final RxnString selectedInstitutionId = RxnString();
 
   // Selection panel expand/collapse state
   /// SELECT filter section starts expanded so Stage/Category/Group are visible on load.
@@ -143,6 +154,10 @@ class JuryScoringController extends GetxController {
     selectedStage.value = '';
     selectedCategory.value = '';
     selectedGroup.value = '';
+    institutionSearchController.text = '';
+    institutionSearchText.value = '';
+    institutionSuggestions.clear();
+    selectedInstitutionId.value = null;
 
     // Clear checkboxes
     selectedParticipantCheckboxes.clear();
@@ -160,6 +175,34 @@ class JuryScoringController extends GetxController {
     hasScoresEntered.value = false;
     canSubmitScores.value = false;
     submittedAsanas.clear();
+  }
+
+  Future<void> searchInstitutions(String query) async {
+    if (query.trim().length < 2) {
+      institutionSuggestions.clear();
+      return;
+    }
+    try {
+      isLoadingInstitutions.value = true;
+      final res = await _schoolRepository.searchInstitutions(
+        query: query.trim(),
+      );
+      if (res.success && res.data != null) {
+        institutionSuggestions.assignAll(res.data!.institutions);
+      } else {
+        institutionSuggestions.clear();
+      }
+    } finally {
+      isLoadingInstitutions.value = false;
+    }
+  }
+
+  void selectInstitution(SchoolModel inst) {
+    institutionSearchController.text = inst.institutionName;
+    institutionSearchText.value = inst.institutionName;
+    selectedInstitutionId.value = inst.id;
+    institutionSuggestions.clear();
+    _checkAndCallApiIfAllSelected();
   }
 
   Future<void> loadInitialData() async {
@@ -394,6 +437,7 @@ class JuryScoringController extends GetxController {
         stageId: stageId,
         categoryId: categoryId,
         groupId: groupId,
+        institutionId: selectedInstitutionId.value,
         replaceParticipantIds:
             replaceParticipantIds != null && replaceParticipantIds.isNotEmpty
             ? replaceParticipantIds
@@ -751,7 +795,8 @@ class JuryScoringController extends GetxController {
         final participantScores = scoreValues[participant.id!];
         if (participantScores == null) {
           currentAsanaFilled = false;
-          missingScoreInfo = 'Missing scores for ${participant.participantName}';
+          missingScoreInfo =
+              'Missing scores for ${participant.participantName}';
           break;
         }
         final score = participantScores[asanaNum];
@@ -1180,9 +1225,7 @@ class JuryScoringController extends GetxController {
   }) {
     final safeTitle = title.trim();
     final safeMessage = message.trim();
-    final body = safeTitle.isEmpty
-        ? safeMessage
-        : '$safeTitle\n$safeMessage';
+    final body = safeTitle.isEmpty ? safeMessage : '$safeTitle\n$safeMessage';
     if (body.isEmpty) return;
 
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -1252,6 +1295,8 @@ class JuryScoringController extends GetxController {
 
   @override
   void onClose() {
+    institutionSearchController.dispose();
+
     // Dispose all score controllers for all participants and asanas
     for (final participantControllers in scoreControllers.values) {
       for (final controller in participantControllers.values) {

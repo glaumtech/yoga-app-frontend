@@ -5,6 +5,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../controllers/jury_scoring_controller.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/institution/institution_name_autocomplete_field.dart';
 
 class JuryScoringScreen extends StatelessWidget {
   const JuryScoringScreen({super.key});
@@ -646,6 +647,8 @@ class JuryScoringScreen extends StatelessWidget {
                               isMobile: isMobile,
                               isTablet: isTablet,
                             ),
+                            const SizedBox(height: 12),
+                            _buildInstitutionDropdown(context, controller),
                           ],
                         )
                       : Row(
@@ -697,12 +700,47 @@ class JuryScoringScreen extends StatelessWidget {
                                 isTablet: isTablet,
                               ),
                             ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildInstitutionDropdown(
+                                context,
+                                controller,
+                                dense: true,
+                              ),
+                            ),
                           ],
                         );
                 }),
               ),
           ],
         ),
+      );
+    });
+  }
+
+  Widget _buildInstitutionDropdown(
+    BuildContext context,
+    JuryScoringController controller, {
+    bool dense = false,
+  }) {
+    return Obx(() {
+      return InstitutionNameAutocompleteField(
+        autocompleteKey:
+            'jury-institution-${controller.selectedStage.value}-${controller.selectedCategory.value}-${controller.selectedGroup.value}',
+        formTextController: controller.institutionSearchController,
+        onSearch: (q) => controller.searchInstitutions(q),
+        suggestions: controller.institutionSuggestions,
+        isLoading: controller.isLoadingInstitutions,
+        onInstitutionSelected: controller.selectInstitution,
+        onClear: () {
+          controller.institutionSearchText.value = '';
+          controller.selectedInstitutionId.value = null;
+          controller.institutionSuggestions.clear();
+        },
+        isViewMode: controller.hasScoresEntered,
+        minQueryLength: 3,
+        hintText: 'Search institution (optional)',
+        optionsMaxHeight: 260,
       );
     });
   }

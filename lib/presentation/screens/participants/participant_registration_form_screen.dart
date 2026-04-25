@@ -1583,6 +1583,10 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             suggestions: controller.institutionSuggestions,
             isLoading: controller.isLoadingInstitutions,
             onInstitutionSelected: controller.selectInstitution,
+            onClear: () {
+              controller.selectedInstitutionId.value = null;
+              controller.participantInstitutionId.value = null;
+            },
             isViewMode: controller.isViewMode,
             validator: !controller.isViewMode.value
                 ? (value) {

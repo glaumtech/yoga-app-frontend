@@ -22,6 +22,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
     required this.isViewMode,
     this.validator,
     this.onAddNewInstitution,
+    this.onClear,
     this.minQueryLength = 3,
     this.hintText = 'Search or type institution name',
     this.optionsMaxHeight = 200,
@@ -38,6 +39,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
   final String? Function(String? value)? validator;
   final void Function(BuildContext context, String searchText)?
       onAddNewInstitution;
+  final VoidCallback? onClear;
   final int minQueryLength;
   final String hintText;
   final double optionsMaxHeight;
@@ -72,7 +74,19 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
           }
           return list;
         },
-        onSelected: onInstitutionSelected,
+        onSelected: (inst) {
+          // Keep the outer form controller in sync so the selected value
+          // remains visible even if the Autocomplete rebuilds.
+          if (formTextController.text != inst.institutionName) {
+            formTextController.value = TextEditingValue(
+              text: inst.institutionName,
+              selection: TextSelection.collapsed(
+                offset: inst.institutionName.length,
+              ),
+            );
+          }
+          onInstitutionSelected(inst);
+        },
         fieldViewBuilder: (
           BuildContext context,
           TextEditingController textEditingController,
@@ -80,6 +94,10 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
           VoidCallback onFieldSubmitted,
         ) {
           return Obx(() {
+            if (textEditingController.text != formTextController.text) {
+              textEditingController.value = formTextController.value;
+            }
+            final hasText = textEditingController.text.trim().isNotEmpty;
             return TextFormField(
               controller: textEditingController,
               readOnly: isViewMode.value,
@@ -109,7 +127,19 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
-                    : const Icon(Icons.search),
+                    : (hasText
+                        ? IconButton(
+                            tooltip: 'Clear',
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              textEditingController.clear();
+                              formTextController.clear();
+                              suggestions.clear();
+                              FocusScope.of(context).unfocus();
+                              onClear?.call();
+                            },
+                          )
+                        : const Icon(Icons.search)),
                 hintText: hintText,
                 filled: true,
                 fillColor: isViewMode.value ? Colors.grey[200] : Colors.white,
