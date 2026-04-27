@@ -624,20 +624,22 @@ class SchoolCreateScreen extends StatelessWidget {
                       children: [
                         Radio<int>(
                           value: type.id,
-                          groupValue: controller.selectedInstitutionTypeId.value,
+                          groupValue:
+                              controller.selectedInstitutionTypeId.value,
                           onChanged: (value) async {
                             if (value != null) {
-                              controller.selectedInstitutionTypeId.value = value;
+                              controller.selectedInstitutionTypeId.value =
+                                  value;
                               controller.selectedInstitutionType.value =
                                   type.displayName;
                               // Clear category selection
-                              controller.selectedInstitutionCategoryId.value = 0;
+                              controller.selectedInstitutionCategoryId.value =
+                                  0;
                               controller.selectedInstitutionCategory.value = '';
                               controller.selectedInstitutionCategoryIds.clear();
                               // Load categories for this institution type
-                              await controller.loadInstitutionCategoriesByTypeId(
-                                value,
-                              );
+                              await controller
+                                  .loadInstitutionCategoriesByTypeId(value);
                             }
                           },
                           activeColor: Colors.green,
@@ -762,11 +764,12 @@ class SchoolCreateScreen extends StatelessWidget {
           }
 
           if (!isYogaCenter) {
-            final selectedId = controller.selectedInstitutionCategoryIds.isNotEmpty
+            final selectedId =
+                controller.selectedInstitutionCategoryIds.isNotEmpty
                 ? controller.selectedInstitutionCategoryIds.first
                 : (controller.selectedInstitutionCategoryId.value > 0
-                    ? controller.selectedInstitutionCategoryId.value
-                    : 0);
+                      ? controller.selectedInstitutionCategoryId.value
+                      : 0);
 
             return Wrap(
               spacing: isMobile ? 14 : 18,
@@ -804,8 +807,8 @@ class SchoolCreateScreen extends StatelessWidget {
             spacing: isMobile ? 14 : 18,
             runSpacing: isMobile ? 8 : 10,
             children: categoryList.map((c) {
-              final checked =
-                  controller.selectedInstitutionCategoryIds.contains(c.id);
+              final checked = controller.selectedInstitutionCategoryIds
+                  .contains(c.id);
               return InkWell(
                 onTap: () {
                   if (checked) {
@@ -824,7 +827,9 @@ class SchoolCreateScreen extends StatelessWidget {
                         if (v == true) {
                           controller.selectedInstitutionCategoryIds.add(c.id);
                         } else {
-                          controller.selectedInstitutionCategoryIds.remove(c.id);
+                          controller.selectedInstitutionCategoryIds.remove(
+                            c.id,
+                          );
                         }
                         syncSelectedNames();
                       },

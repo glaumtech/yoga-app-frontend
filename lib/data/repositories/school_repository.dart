@@ -434,6 +434,7 @@ class SchoolRepository {
     int? stateId,
     int? cityId,
     int? institutionTypeId,
+    String? pincode,
   }) async {
     try {
       final queryParameters = <String, String>{'q': query};
@@ -445,6 +446,9 @@ class SchoolRepository {
       }
       if (institutionTypeId != null && institutionTypeId > 0) {
         queryParameters['institutionTypeId'] = '$institutionTypeId';
+      }
+      if (pincode != null && pincode.trim().isNotEmpty) {
+        queryParameters['pincode'] = pincode.trim();
       }
       final searchPath = Uri(
         path: EndPoints.institutionSearch,

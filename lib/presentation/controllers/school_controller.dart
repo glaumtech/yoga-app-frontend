@@ -703,6 +703,11 @@ class SchoolController extends GetxController {
 
         // Reload schools list
         await loadSchools();
+
+        // After update, navigate back to list screen for better UX.
+        if (wasEditMode) {
+          toggleViewMode(true);
+        }
       } else {
         errorMessage.value =
             response.message ??
