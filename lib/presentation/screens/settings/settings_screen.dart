@@ -63,10 +63,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 5),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 12 : 5,
+                    ),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: _buildTabs(isMobile, tabs.map((t) => t.label).toList()),
+                      child: _buildTabs(
+                        isMobile,
+                        tabs.map((t) => t.label).toList(),
+                      ),
                     ),
                   ),
                   Expanded(
