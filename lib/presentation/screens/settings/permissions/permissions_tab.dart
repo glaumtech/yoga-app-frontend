@@ -173,10 +173,15 @@ class _CreatePermissionTab extends StatelessWidget {
                       ),
                     ),
                     SizedBox(height: isMobile ? 16 : 20),
-                    Form(
-                      key: controller.formKey,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
+                    Obx(() {
+                      // Force rebuild after update/reset so field state is cleared.
+                      final trigger = controller.formResetTrigger.value;
+                      return KeyedSubtree(
+                        key: ValueKey('permission_form_$trigger'),
+                        child: Form(
+                          key: controller.formKey,
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
                           final w = constraints.maxWidth;
                           final cols = isMobile
                               ? 1
@@ -333,9 +338,11 @@ class _CreatePermissionTab extends StatelessWidget {
                               desc,
                             ],
                           );
-                        },
-                      ),
-                    ),
+                            },
+                          ),
+                        ),
+                      );
+                    }),
                     Obx(
                       () => controller.errorMessage.value.isNotEmpty
                           ? Padding(

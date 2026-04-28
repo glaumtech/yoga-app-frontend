@@ -150,7 +150,11 @@ class _InstitutionPrecheckAndCreateState
   void _startCreateFlow(BuildContext context, SchoolController controller) {
     final name = _precheckNameController.text.trim();
     final pin = _precheckPincodeController.text.trim();
-    if (name.isEmpty || name.length < 3) {
+    // Allow create flow when either:
+    // - name has >= 3 chars, OR
+    // - pincode is valid (6 digits). Name can be filled in the create form.
+    final pinReady = _isValidPincode(pin) && pin.length == 6;
+    if ((name.isEmpty || name.length < 3) && !pinReady) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -176,7 +180,9 @@ class _InstitutionPrecheckAndCreateState
     }
 
     controller.resetForm();
-    controller.institutionNameController.text = name;
+    if (name.length >= 3) {
+      controller.institutionNameController.text = name;
+    }
     if (pin.isNotEmpty) {
       controller.pincodeController.text = pin;
     }
@@ -229,8 +235,9 @@ class _InstitutionPrecheckAndCreateState
         padding: EdgeInsets.all(isMobile ? 16 : 16),
         child: Card(
           elevation: 4,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: ConstrainedBox(
@@ -238,121 +245,124 @@ class _InstitutionPrecheckAndCreateState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                Text(
-                  'Check Institution Before Create',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                isMobile
-                    ? Column(
-                        children: [
-                          _buildNameField(isMobile),
-                          const SizedBox(height: 14),
-                          _buildPincodeField(isMobile),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _buildNameField(isMobile)),
-                          SizedBox(width: isTablet ? 12 : 16),
-                          Expanded(child: _buildPincodeField(isMobile)),
-                        ],
-                      ),
-                const SizedBox(height: 14),
-                // Found results list (each row has only an edit icon)
-                Obx(() {
-                  if (_isSearching.value) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-
-                  final list = _suggestions;
-                  if (list.isEmpty) return const SizedBox.shrink();
-
-                  return Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey[200]!),
+                  Text(
+                    'Check Institution Before Create',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 260),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: list.length,
-                        separatorBuilder: (_, __) =>
-                            Divider(height: 1, color: Colors.grey[200]),
-                        itemBuilder: (context, index) {
-                          final inst = list[index];
-                          final subtitleParts = <String>[];
-                          if (inst.cityName != null &&
-                              inst.cityName!.trim().isNotEmpty) {
-                            subtitleParts.add(inst.cityName!.trim());
-                          }
-                          if (inst.stateName != null &&
-                              inst.stateName!.trim().isNotEmpty) {
-                            subtitleParts.add(inst.stateName!.trim());
-                          }
-                          if (inst.pincode.trim().isNotEmpty) {
-                            subtitleParts.add(inst.pincode.trim());
-                          }
-                          final subtitle = subtitleParts.join(' • ');
+                  ),
+                  const SizedBox(height: 12),
+                  isMobile
+                      ? Column(
+                          children: [
+                            _buildNameField(isMobile),
+                            const SizedBox(height: 14),
+                            _buildPincodeField(isMobile),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _buildNameField(isMobile)),
+                            SizedBox(width: isTablet ? 12 : 16),
+                            Expanded(child: _buildPincodeField(isMobile)),
+                          ],
+                        ),
+                  const SizedBox(height: 14),
+                  // Found results list (each row has only an edit icon)
+                  Obx(() {
+                    if (_isSearching.value) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
 
-                          return ListTile(
-                            dense: true,
-                            title: Text(
-                              inst.institutionName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
+                    final list = _suggestions;
+                    if (list.isEmpty) return const SizedBox.shrink();
+
+                    return Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey[200]!),
+                      ),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 260),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: list.length,
+                          separatorBuilder: (_, __) =>
+                              Divider(height: 1, color: Colors.grey[200]),
+                          itemBuilder: (context, index) {
+                            final inst = list[index];
+                            final subtitleParts = <String>[];
+                            if (inst.cityName != null &&
+                                inst.cityName!.trim().isNotEmpty) {
+                              subtitleParts.add(inst.cityName!.trim());
+                            }
+                            if (inst.stateName != null &&
+                                inst.stateName!.trim().isNotEmpty) {
+                              subtitleParts.add(inst.stateName!.trim());
+                            }
+                            if (inst.pincode.trim().isNotEmpty) {
+                              subtitleParts.add(inst.pincode.trim());
+                            }
+                            final subtitle = subtitleParts.join(' • ');
+
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                inst.institutionName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                            subtitle: subtitle.isEmpty ? null : Text(subtitle),
-                            trailing: IconButton(
-                              tooltip: 'Edit',
-                              icon: const Icon(Icons.edit),
-                              onPressed: () async {
-                                if (inst.id == null || inst.id!.isEmpty) return;
-                                await controller.loadSchoolForEdit(inst.id!);
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 14),
-                Obx(() {
-                  final searching = _isSearching.value;
-                  // Always enable create (requested). Disable only while searching.
-                  final canCreate = !searching;
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: canCreate
-                            ? () => _startCreateFlow(context, controller)
-                            : null,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Create New Institution'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 12,
-                          ),
+                              subtitle: subtitle.isEmpty
+                                  ? null
+                                  : Text(subtitle),
+                              trailing: IconButton(
+                                tooltip: 'Edit',
+                                icon: const Icon(Icons.edit),
+                                onPressed: () async {
+                                  if (inst.id == null || inst.id!.isEmpty)
+                                    return;
+                                  await controller.loadSchoolForEdit(inst.id!);
+                                },
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    ],
-                  );
-                }),
+                    );
+                  }),
+                  const SizedBox(height: 14),
+                  Obx(() {
+                    final searching = _isSearching.value;
+                    // Always enable create (requested). Disable only while searching.
+                    final canCreate = !searching;
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: canCreate
+                              ? () => _startCreateFlow(context, controller)
+                              : null,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Create New Institution'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
                 ],
               ),
             ),
@@ -378,10 +388,23 @@ class _InstitutionPrecheckAndCreateState
           controller: _precheckNameController,
           onChanged: (value) {
             final q = value.trim();
-            // Search when query is long enough; clear results otherwise.
+            final pin = _precheckPincodeController.text.trim();
+            final pinReady = _isValidPincode(pin) && pin.length == 6;
+
+            // Search when either:
+            // - name is long enough (>=3), OR
+            // - pincode is ready (6 digits) even if name is empty/short.
             if (q.length >= 3) {
               _searchInstitutions(q);
-            } else if (q.isEmpty) {
+              return;
+            }
+            if (pinReady) {
+              _searchInstitutions('');
+              return;
+            }
+
+            // If neither field is usable, clear results.
+            if (q.isEmpty) {
               _suggestions.clear();
             }
           },

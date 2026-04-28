@@ -33,6 +33,7 @@ class SettingsController extends GetxController {
   final subMenuController = TextEditingController();
   final tabController = TextEditingController();
   final formKey = GlobalKey<FormState>();
+  final RxInt formResetTrigger = 0.obs;
 
   @override
   void onReady() {
@@ -187,7 +188,15 @@ class SettingsController extends GetxController {
     tabController.clear();
 
     errorMessage.value = '';
+    // Reset form state now and also next frame so any lingering validation
+    // errors and TextFormField internal state are cleared.
     formKey.currentState?.reset();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      formKey.currentState?.reset();
+    });
+
+    // Force the permission form subtree to rebuild (clears any cached field state).
+    formResetTrigger.value = formResetTrigger.value + 1;
   }
 
   Future<void> submitCreatePermission() async {

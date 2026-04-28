@@ -20,7 +20,7 @@ class AdminSidebarLayout extends StatelessWidget {
         : Get.put(UserManagementController());
 
     return Scaffold(
-      drawer: isMobile
+      drawer: isMobile && userController.isAuthenticated
           ? Drawer(
               width: 280, // Reduced width for mobile drawer
               child: const AdminSidebar(),
@@ -29,7 +29,7 @@ class AdminSidebarLayout extends StatelessWidget {
       body: Row(
         children: [
           // Persistent Sidebar (hidden on mobile, shown on tablet/desktop)
-          if (!isMobile) const AdminSidebar(),
+          if (!isMobile && userController.isAuthenticated) const AdminSidebar(),
           // Main Content Area
           Expanded(
             child: Column(
@@ -45,7 +45,7 @@ class AdminSidebarLayout extends StatelessWidget {
                         alignment: Alignment.center,
                         children: [
                           // Menu button for mobile
-                          if (isMobile)
+                          if (isMobile && userController.isAuthenticated)
                             Positioned(
                               left: 0,
                               child: IconButton(
@@ -58,6 +58,16 @@ class AdminSidebarLayout extends StatelessWidget {
                                 },
                               ),
                             ),
+                          // Yoga icon when not logged in (no drawer)
+                          if (isMobile && !userController.isAuthenticated)
+                            const Positioned(
+                              left: 8,
+                              child: Icon(
+                                Icons.self_improvement,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                            ),
 
                           // Left-aligned title (leaves space for mobile menu button)
                           Positioned.fill(
@@ -65,7 +75,11 @@ class AdminSidebarLayout extends StatelessWidget {
                               alignment: Alignment.centerLeft,
                               child: Padding(
                                 padding: EdgeInsets.only(
-                                  left: isMobile ? 56 : 16,
+                                  left: isMobile
+                                      ? (userController.isAuthenticated
+                                            ? 56
+                                            : 44)
+                                      : 16,
                                   right:
                                       120, // keep clear of right-side user info
                                 ),
