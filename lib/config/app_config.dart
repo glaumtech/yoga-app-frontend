@@ -12,7 +12,7 @@ class AppConfig {
       case Environment.qa:
         return 'https://ghopon.com/yogatest'; // Update with your QA server URL
       case Environment.prod:
-        return 'https://ghopon.com/school'; // Update with your production server URL
+        return 'https://yogacompetition.in/yogaprod'; // Update with your production server URL
       case Environment.dev:
         return 'http://localhost:8080'; // Development server URL
     }
