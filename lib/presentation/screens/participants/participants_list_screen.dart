@@ -140,10 +140,22 @@ class ParticipantsListScreen extends StatelessWidget {
                 }
 
                 if (isMobile) {
-                  return _buildMobileList(
-                    context,
-                    participants,
-                    participantController,
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: _buildMobileList(
+                          context,
+                          participants,
+                          participantController,
+                        ),
+                      ),
+                      _buildPaginationControls(
+                        context,
+                        participantController,
+                        isMobile,
+                        isTablet,
+                      ),
+                    ],
                   );
                 } else {
                   return Column(
@@ -523,6 +535,44 @@ class ParticipantsListScreen extends StatelessWidget {
                       'Teacher Cell',
                       participant.yogaMasterContact,
                     ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          controller.initializeFormFromModel(participant);
+                          controller.toggleViewMode(false);
+                        },
+                        icon: Icon(
+                          Icons.edit,
+                          size: 16,
+                          color: AppTheme.primaryColor,
+                        ),
+                        label: Text(
+                          'Edit',
+                          style: TextStyle(color: AppTheme.primaryColor),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          if (participant.id != null) {
+                            _showDeleteDialog(context, controller, participant);
+                          }
+                        },
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 16,
+                          color: Colors.red,
+                        ),
+                        label: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

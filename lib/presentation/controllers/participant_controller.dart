@@ -505,6 +505,7 @@ class ParticipantController extends GetxController {
     String eventId, {
     ParticipantFilterRequest? filter,
     bool resetPage = false,
+    bool replaceItems = false,
   }) async {
     try {
       isLoading.value = true;
@@ -554,7 +555,12 @@ class ParticipantController extends GetxController {
             return _mapRegistrationToParticipant(reg as Map<String, dynamic>);
           }).toList();
 
-          if (resetPage || currentPage.value == 1) {
+          // When navigating with explicit pagination controls, we want to replace the list
+          // with the selected page's items (not append like infinite scroll).
+          final shouldReplace =
+              resetPage || replaceItems || currentPage.value == 1;
+
+          if (shouldReplace) {
             participants.value = participantList;
           } else {
             // Append for pagination
@@ -654,7 +660,9 @@ class ParticipantController extends GetxController {
       participantName: reg['participantName'] as String? ?? '',
       dateOfBirth: dob,
       age: reg['age'] as int? ?? 0,
-      gender: reg['sex'] as String? ?? reg['gender'] as String? ?? '',
+      gender: _normalizeGender(
+        reg['sex'] as String? ?? reg['gender'] as String?,
+      ),
       category:
           reg['categoryName'] as String? ?? reg['category'] as String? ?? '',
       standard: reg['groupName'] as String? ?? reg['standard'] as String? ?? '',
@@ -693,6 +701,29 @@ class ParticipantController extends GetxController {
     );
   }
 
+  /// Normalize API/UI gender variants into values used by the form radio group.
+  /// The form expects exactly 'MALE' or 'FEMALE' (empty string means "not selected").
+  String _normalizeGender(String? raw) {
+    if (raw == null) return '';
+    final v = raw.trim();
+    if (v.isEmpty) return '';
+    final upper = v.toUpperCase();
+
+    // Common backend variants
+    if (upper == 'MALE' || upper == 'M' || upper == 'BOY' || upper == 'B') {
+      return 'MALE';
+    }
+    if (upper == 'FEMALE' || upper == 'F' || upper == 'GIRL' || upper == 'G') {
+      return 'FEMALE';
+    }
+
+    // Handle title-case variants like "Male"/"Female"
+    if (upper.startsWith('MALE')) return 'MALE';
+    if (upper.startsWith('FEMALE')) return 'FEMALE';
+
+    return '';
+  }
+
   bool _parseRegBool(dynamic value) {
     if (value == null) return false;
     if (value is bool) return value;
@@ -717,7 +748,7 @@ class ParticipantController extends GetxController {
       currentPage.value++;
       final eventId = selectedEventId.value;
       if (eventId.isNotEmpty) {
-        loadParticipantsByEventId(eventId, resetPage: false);
+        loadParticipantsByEventId(eventId, replaceItems: true);
       }
     }
   }
@@ -727,7 +758,7 @@ class ParticipantController extends GetxController {
       currentPage.value--;
       final eventId = selectedEventId.value;
       if (eventId.isNotEmpty) {
-        loadParticipantsByEventId(eventId, resetPage: false);
+        loadParticipantsByEventId(eventId, replaceItems: true);
       }
     }
   }
@@ -737,7 +768,7 @@ class ParticipantController extends GetxController {
       currentPage.value = page;
       final eventId = selectedEventId.value;
       if (eventId.isNotEmpty) {
-        loadParticipantsByEventId(eventId, resetPage: false);
+        loadParticipantsByEventId(eventId, replaceItems: true);
       }
     }
   }
@@ -1050,7 +1081,7 @@ class ParticipantController extends GetxController {
   }
 
   void setGender(String? value) {
-    gender.value = value ?? '';
+    gender.value = _normalizeGender(value);
   }
 
   void toggleCategory(String categoryValue) {
@@ -1297,7 +1328,7 @@ class ParticipantController extends GetxController {
       }
       addressController.text = participant.address;
       standard.value = participant.standard;
-      gender.value = participant.gender;
+      gender.value = _normalizeGender(participant.gender);
       isSpotRegistration.value = participant.isSpotRegistration;
       dateOfBirth.value = participant.dateOfBirth;
 
@@ -1477,7 +1508,7 @@ class ParticipantController extends GetxController {
     }
     addressController.text = participant.address;
     standard.value = participant.standard;
-    gender.value = participant.gender;
+    gender.value = _normalizeGender(participant.gender);
     isSpotRegistration.value = participant.isSpotRegistration;
     dateOfBirth.value = participant.dateOfBirth;
 
