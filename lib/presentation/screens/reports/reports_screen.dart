@@ -248,41 +248,62 @@ class _ReportsScreenState extends State<ReportsScreen> {
           final competitions = controller.competitions;
           final selectedId = controller.selectedCompetitionId.value;
 
-          return Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: selectedId,
-                  decoration: InputDecoration(
-                    labelText: 'Competition',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
+          final dropdown = DropdownButtonFormField<String>(
+            value: selectedId,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Competition',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: isMobile ? 10 : 12,
+              ),
+            ),
+            items: competitions
+                .map(
+                  (CompetitionModel c) => DropdownMenuItem<String>(
+                    value: c.id,
+                    child: Text(
+                      c.competitionName,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
-                  items: competitions
-                      .map(
-                        (CompetitionModel c) => DropdownMenuItem<String>(
-                          value: c.id,
-                          child: Text(
-                            c.competitionName,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => controller.setSelectedCompetition(v),
-                ),
-              ),
+                )
+                .toList(),
+            onChanged: (v) => controller.setSelectedCompetition(v),
+          );
+
+          final refreshButton = IconButton(
+            tooltip: 'Refresh',
+            onPressed: () => controller.loadCompetitionsAndMaybeReport(),
+            icon: const Icon(Icons.refresh, color: AppTheme.primaryColor),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            constraints: BoxConstraints(
+              minWidth: isMobile ? 36 : 40,
+              minHeight: isMobile ? 36 : 40,
+            ),
+          );
+
+          if (isMobile) {
+            return Row(
+              children: [
+                Expanded(child: dropdown),
+                const SizedBox(width: 8),
+                refreshButton,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: dropdown),
               const SizedBox(width: 12),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: () => controller.loadCompetitionsAndMaybeReport(),
-                icon: const Icon(Icons.refresh, color: AppTheme.primaryColor),
-              ),
+              refreshButton,
             ],
           );
         }),
@@ -539,6 +560,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
       );
     }
 
+    // Group blocks by stage so mobile UI can use tabs per stage.
+    final stageNames =
+        blocks
+            .map((b) => ((b as Map)['stageName'] ?? '').toString().trim())
+            .where((s) => s.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final Map<String, List<Map<String, dynamic>>> blocksByStage = {};
+    for (final b in blocks) {
+      final m = (b as Map).cast<String, dynamic>();
+      final stage = (m['stageName'] ?? '').toString().trim();
+      final key = stage.isNotEmpty ? stage : 'Stage';
+      blocksByStage.putIfAbsent(key, () => []).add(m);
+    }
+
+    // Stable ordering inside each stage: categoryName then stageName then groupName.
+    for (final e in blocksByStage.entries) {
+      e.value.sort((a, b) {
+        final ac = (a['categoryName'] ?? '').toString();
+        final bc = (b['categoryName'] ?? '').toString();
+        final as = (a['stageName'] ?? '').toString();
+        final bs = (b['stageName'] ?? '').toString();
+        final ag = (a['groupName'] ?? '').toString();
+        final bg = (b['groupName'] ?? '').toString();
+        final c = ac.toLowerCase().compareTo(bc.toLowerCase());
+        if (c != 0) return c;
+        final s = as.toLowerCase().compareTo(bs.toLowerCase());
+        if (s != 0) return s;
+        return ag.toLowerCase().compareTo(bg.toLowerCase());
+      });
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -553,240 +608,369 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ],
         ),
         const SizedBox(height: 10),
-        ...blocks.map((b) {
-          final block = (b as Map).cast<String, dynamic>();
-          final stageName = (block['stageName'] ?? '').toString();
-          final categoryName = (block['categoryName'] ?? '').toString();
-          final winners = (block['winners'] as List?)?.cast() ?? [];
-
-          final title =
-              '${categoryName.isNotEmpty ? categoryName : 'Category'}'
-              '  •  ${stageName.isNotEmpty ? 'Stage $stageName' : 'Stage'}';
-
-          return Card(
-            elevation: 2,
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+        if (stageNames.length >= 2)
+          DefaultTabController(
+            length: stageNames.length,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: TabBar(
+                    isScrollable: true,
+                    dividerColor: Colors.transparent,
+                    labelPadding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 10 : 12,
+                    ),
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.grey[800],
+                    labelStyle: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: isMobile ? 12 : 13,
+                    ),
+                    unselectedLabelStyle: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: isMobile ? 12 : 13,
+                    ),
+                    indicator: BoxDecoration(
+                      color: AppTheme.primaryColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    tabs: stageNames
+                        .map(
+                          (s) => Tab(
+                            height: isMobile ? 30 : 34,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: Text('Stage $s'),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // In a ListView already; use a fixed height for TabBarView.
+                SizedBox(
+                  height: isMobile ? 700 : 520,
+                  child: TabBarView(
+                    children: stageNames.map((stage) {
+                      final stageBlocks =
+                          blocksByStage[stage]?.cast<Map<String, dynamic>>() ??
+                          const <Map<String, dynamic>>[];
+                      return ListView(
+                        padding: EdgeInsets.zero,
+                        children: stageBlocks
+                            .map(
+                              (block) =>
+                                  _buildPrizeWinnersBlock(block, isMobile),
+                            )
+                            .toList(),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
             ),
-            child: Padding(
-              padding: EdgeInsets.all(isMobile ? 12 : 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+          )
+        else
+          ...blocksByStage.values
+              .expand((list) => list)
+              .map((block) => _buildPrizeWinnersBlock(block, isMobile)),
+      ],
+    );
+  }
+
+  Widget _buildPrizeWinnersBlock(Map<String, dynamic> block, bool isMobile) {
+    final stageName = (block['stageName'] ?? '').toString();
+    final categoryName = (block['categoryName'] ?? '').toString();
+    final winners = (block['winners'] as List?)?.cast() ?? [];
+
+    final title =
+        '${categoryName.isNotEmpty ? categoryName : 'Category'}'
+        '  •  ${stageName.isNotEmpty ? 'Stage $stageName' : 'Stage'}';
+
+    String _normSex(dynamic v) {
+      final s = (v ?? '').toString().trim().toUpperCase();
+      if (s.isEmpty) return '';
+      if (s == 'MALE' || s == 'M' || s == 'BOY' || s == 'B') return 'MALE';
+      if (s == 'FEMALE' || s == 'F' || s == 'GIRL' || s == 'G') {
+        return 'FEMALE';
+      }
+      if (s.startsWith('MALE')) return 'MALE';
+      if (s.startsWith('FEMALE')) return 'FEMALE';
+      return '';
+    }
+
+    final maleWinners = winners.where((w) {
+      final m = (w as Map).cast<String, dynamic>();
+      return _normSex(m['sex'] ?? m['gender']) == 'MALE';
+    }).toList();
+
+    final femaleWinners = winners.where((w) {
+      final m = (w as Map).cast<String, dynamic>();
+      return _normSex(m['sex'] ?? m['gender']) == 'FEMALE';
+    }).toList();
+
+    final bool canSplitBySex =
+        winners.isNotEmpty &&
+        (maleWinners.isNotEmpty || femaleWinners.isNotEmpty);
+
+    Widget _renderWinners(List<dynamic> list) {
+      return Column(
+        children: list.map((w) {
+          final m = (w as Map).cast<String, dynamic>();
+          final prizeName = (m['prizeName'] ?? '').toString();
+          final participantName = (m['participantName'] ?? '').toString();
+          final regNo = (m['registrationNo'] ?? '').toString();
+          final stageIdNum = (block['stageId'] as num?)?.toInt();
+          final categoryIdNum = (block['categoryId'] as num?)?.toInt();
+          final participantRegIdNum = (m['participantRegistrationId'] as num?)
+              ?.toInt();
+          final prizeRankNum = (m['prizeRank'] as num?)?.toInt();
+          final inst = (m['institutionName'] ?? '').toString();
+          final winnerGroupName = (m['groupName'] ?? '').toString();
+          final avg = (m['avgScore'] ?? 0).toString();
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    prizeName.isNotEmpty ? prizeName : 'Rank',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 6,
-                        height: isMobile ? 18 : 20,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            participantName.isNotEmpty
+                                ? participantName
+                                : 'Unknown',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          if (regNo.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              regNo,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          title,
+                      if (winnerGroupName.isNotEmpty || inst.isNotEmpty)
+                        Text(
+                          [
+                            if (winnerGroupName.isNotEmpty) winnerGroupName,
+                            if (inst.isNotEmpty) inst,
+                          ].join(' - '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: isMobile ? 13 : 14,
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                      Text(
-                        '${winners.length} winner${winners.length == 1 ? '' : 's'}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
-                        ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  if (winners.isEmpty)
-                    _buildInfoCard(
-                      'No winners found for this block.',
-                      icon: Icons.emoji_events_outlined,
-                    )
-                  else
-                    Column(
-                      children: winners.map((w) {
-                        final m = (w as Map).cast<String, dynamic>();
-                        final prizeName = (m['prizeName'] ?? '').toString();
-                        final participantName = (m['participantName'] ?? '')
-                            .toString();
-                        final regNo = (m['registrationNo'] ?? '').toString();
-                        final stageIdNum = (block['stageId'] as num?)?.toInt();
-                        final categoryIdNum = (block['categoryId'] as num?)
-                            ?.toInt();
-                        final participantRegIdNum =
-                            (m['participantRegistrationId'] as num?)?.toInt();
-                        final prizeRankNum = (m['prizeRank'] as num?)?.toInt();
-                        final inst = (m['institutionName'] ?? '').toString();
-                        final winnerGroupName = (m['groupName'] ?? '')
-                            .toString();
-                        final avg = (m['avgScore'] ?? 0).toString();
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.grey[200]!),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryColor,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  prizeName.isNotEmpty ? prizeName : 'Rank',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          participantName.isNotEmpty
-                                              ? participantName
-                                              : 'Unknown',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        if (regNo.isNotEmpty) ...[
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            regNo,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[700],
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    if (winnerGroupName.isNotEmpty ||
-                                        inst.isNotEmpty)
-                                      Text(
-                                        [
-                                          if (winnerGroupName.isNotEmpty)
-                                            winnerGroupName,
-                                          if (inst.isNotEmpty) inst,
-                                        ].join(' - '),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[700],
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Download certificate',
-                                padding: EdgeInsets.zero,
-                                visualDensity: VisualDensity.compact,
-                                constraints: const BoxConstraints(
-                                  minWidth: 40,
-                                  minHeight: 40,
-                                ),
-                                icon: Icon(
-                                  Icons.workspace_premium_outlined,
-                                  color: AppTheme.primaryColor,
-                                  size: isMobile ? 22 : 24,
-                                ),
-                                onPressed: () async {
-                                  final cid = int.tryParse(
-                                    controller.selectedCompetitionId.value ??
-                                        '',
-                                  );
-                                  if (cid == null ||
-                                      stageIdNum == null ||
-                                      categoryIdNum == null ||
-                                      participantRegIdNum == null) {
-                                    Get.snackbar(
-                                      'Error',
-                                      'Cannot download certificate: missing data',
-                                      backgroundColor: Colors.red,
-                                      colorText: Colors.white,
-                                    );
-                                    return;
-                                  }
-                                  await _downloadPrizeWinnerCertificate(
-                                    competitionId: cid,
-                                    stageId: stageIdNum,
-                                    categoryId: categoryIdNum,
-                                    participantRegistrationId:
-                                        participantRegIdNum,
-                                    prizeRank: prizeRankNum,
-                                    regNoForFilename: regNo,
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 4),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    'AVG',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.grey[700],
-                                    ),
-                                  ),
-                                  Text(
-                                    avg,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppTheme.primaryColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
+                ),
+                IconButton(
+                  tooltip: 'Download certificate',
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                  icon: Icon(
+                    Icons.workspace_premium_outlined,
+                    color: AppTheme.primaryColor,
+                    size: isMobile ? 22 : 24,
+                  ),
+                  onPressed: () async {
+                    final cid = int.tryParse(
+                      controller.selectedCompetitionId.value ?? '',
+                    );
+                    if (cid == null ||
+                        stageIdNum == null ||
+                        categoryIdNum == null ||
+                        participantRegIdNum == null) {
+                      Get.snackbar(
+                        'Error',
+                        'Cannot download certificate: missing data',
+                        backgroundColor: Colors.red,
+                        colorText: Colors.white,
+                      );
+                      return;
+                    }
+                    await _downloadPrizeWinnerCertificate(
+                      competitionId: cid,
+                      stageId: stageIdNum,
+                      categoryId: categoryIdNum,
+                      participantRegistrationId: participantRegIdNum,
+                      prizeRank: prizeRankNum,
+                      regNoForFilename: regNo,
+                    );
+                  },
+                ),
+                const SizedBox(width: 4),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'AVG',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey[700],
+                      ),
                     ),
-                ],
-              ),
+                    Text(
+                      avg,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           );
-        }),
-      ],
+        }).toList(),
+      );
+    }
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: isMobile ? 18 : 20,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: isMobile ? 13 : 14,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${winners.length} winner${winners.length == 1 ? '' : 's'}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (winners.isEmpty)
+              _buildInfoCard(
+                'No winners found for this block.',
+                icon: Icons.emoji_events_outlined,
+              )
+            else
+              canSplitBySex
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (maleWinners.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              'BOYS',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.grey[800],
+                                fontSize: 12,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ),
+                          _renderWinners(maleWinners),
+                          if (femaleWinners.isNotEmpty)
+                            const SizedBox(height: 6),
+                        ],
+                        if (femaleWinners.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              'GIRLS',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.grey[800],
+                                fontSize: 12,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ),
+                          _renderWinners(femaleWinners),
+                        ],
+                      ],
+                    )
+                  : _renderWinners(winners),
+          ],
+        ),
+      ),
     );
   }
 
