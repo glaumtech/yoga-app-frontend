@@ -8,6 +8,54 @@ import '../../core/utils/storage_service.dart';
 class ReportsRepository {
   final APIService _apiService = APIService();
 
+  /// Query string for participant report endpoints (multi stage/category/group/gender).
+  static String participantReportQuery({
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    List<String>? genders,
+  }) {
+    final segments = <String>[];
+    if (stageIds != null) {
+      for (final id in stageIds) {
+        segments.add('stageId=${Uri.encodeQueryComponent(id.toString())}');
+      }
+    }
+    if (categoryIds != null) {
+      for (final id in categoryIds) {
+        segments.add('categoryId=${Uri.encodeQueryComponent(id.toString())}');
+      }
+    }
+    if (groupIds != null) {
+      for (final id in groupIds) {
+        segments.add('groupId=${Uri.encodeQueryComponent(id.toString())}');
+      }
+    }
+    if (stateId != null) {
+      segments.add('stateId=${Uri.encodeQueryComponent(stateId.toString())}');
+    }
+    if (cityId != null) {
+      segments.add('cityId=${Uri.encodeQueryComponent(cityId.toString())}');
+    }
+    if (institutionId != null) {
+      segments.add(
+        'institutionId=${Uri.encodeQueryComponent(institutionId.toString())}',
+      );
+    }
+    if (genders != null) {
+      for (final g in genders) {
+        if (g.isNotEmpty) {
+          segments.add('gender=${Uri.encodeQueryComponent(g)}');
+        }
+      }
+    }
+    if (segments.isEmpty) return '';
+    return '?${segments.join('&')}';
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> getCompetitionReportSummary(
     int competitionId,
   ) async {
@@ -30,19 +78,28 @@ class ReportsRepository {
 
   Future<ApiResponse<Map<String, dynamic>>> getCompetitionParticipantScores(
     int competitionId, {
-    int? stageId,
-    int? categoryId,
-    int? groupId,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    List<String>? genders,
   }) async {
-    final params = <String>[];
-    if (stageId != null) params.add('stageId=$stageId');
-    if (categoryId != null) params.add('categoryId=$categoryId');
-    if (groupId != null) params.add('groupId=$groupId');
+    final q = participantReportQuery(
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      genders: genders,
+    );
 
     final response = await _apiService.getResponse<Map<String, dynamic>>(
-      url: params.isEmpty
+      url: q.isEmpty
           ? EndPoints.competitionParticipantScores(competitionId)
-          : '${EndPoints.competitionParticipantScores(competitionId)}?${params.join('&')}',
+          : '${EndPoints.competitionParticipantScores(competitionId)}$q',
       apiType: APIType.aGet,
       fromJson: (json) => json as Map<String, dynamic>,
     );
@@ -156,19 +213,27 @@ class ReportsRepository {
 
   Future<ApiResponse<Uint8List>> getCompetitionParticipantsPrintPdf(
     int competitionId, {
-    int? stageId,
-    int? categoryId,
-    int? groupId,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    List<String>? genders,
   }) async {
     try {
-      final params = <String>[];
-      if (stageId != null) params.add('stageId=$stageId');
-      if (categoryId != null) params.add('categoryId=$categoryId');
-      if (groupId != null) params.add('groupId=$groupId');
+      final q = participantReportQuery(
+        stageIds: stageIds,
+        categoryIds: categoryIds,
+        groupIds: groupIds,
+        stateId: stateId,
+        cityId: cityId,
+        institutionId: institutionId,
+        genders: genders,
+      );
 
       final path = EndPoints.competitionParticipantsPrint(competitionId);
-      final url =
-          params.isEmpty ? (BaseUrl.baseUrl + path) : (BaseUrl.baseUrl + path + '?${params.join('&')}');
+      final url = BaseUrl.baseUrl + path + q;
 
       final uri = Uri.parse(url);
 
@@ -207,20 +272,27 @@ class ReportsRepository {
 
   Future<ApiResponse<Uint8List>> getCompetitionParticipantsExcel(
     int competitionId, {
-    int? stageId,
-    int? categoryId,
-    int? groupId,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    List<String>? genders,
   }) async {
     try {
-      final params = <String>[];
-      if (stageId != null) params.add('stageId=$stageId');
-      if (categoryId != null) params.add('categoryId=$categoryId');
-      if (groupId != null) params.add('groupId=$groupId');
+      final q = participantReportQuery(
+        stageIds: stageIds,
+        categoryIds: categoryIds,
+        groupIds: groupIds,
+        stateId: stateId,
+        cityId: cityId,
+        institutionId: institutionId,
+        genders: genders,
+      );
 
       final path = EndPoints.competitionParticipantsExcel(competitionId);
-      final url = params.isEmpty
-          ? (BaseUrl.baseUrl + path)
-          : (BaseUrl.baseUrl + path + '?${params.join('&')}');
+      final url = BaseUrl.baseUrl + path + q;
 
       final uri = Uri.parse(url);
 

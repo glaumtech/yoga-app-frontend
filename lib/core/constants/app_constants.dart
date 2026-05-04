@@ -176,6 +176,9 @@ class EndPoints {
   /// ORGANIZATION / BRANCH SETUP
   static String organizationSetup = '/organization/setup';
 
+  /// Global prize-winner certificate branding (GET/PUT body = template DTO).
+  static String certificateTemplate = '/settings/certificate-template';
+
   /// PERMISSIONS (app-level permission definitions)
   static String permission = '/permission';
   static String permissionById(String id) => '/permission/$id';

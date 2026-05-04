@@ -7,6 +7,7 @@ import '../../widgets/admin_sidebar_layout.dart';
 import 'permissions/permissions_tab.dart';
 import 'institutions/institution_config_tab.dart';
 import 'imports/imports_tab.dart';
+import 'certificate/certificate_template_tab.dart';
 
 /// Settings area with tabbed sections (same pattern as [ReportsScreen]).
 class SettingsScreen extends StatefulWidget {
@@ -40,6 +41,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       (
         label: 'Institution Config',
         view: const InstitutionConfigTab(),
+        requiredKey: 'SHOW_INSTITUTION_CONFIG_TAB',
+      ),
+      (
+        label: 'Certificate template',
+        view: const CertificateTemplateTab(),
         requiredKey: 'SHOW_INSTITUTION_CONFIG_TAB',
       ),
       (
