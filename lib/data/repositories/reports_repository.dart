@@ -124,6 +124,7 @@ class ReportsRepository {
   }) async {
     try {
       final params = <String>[
+        'competitionId=$competitionId',
         'stageId=$stageId',
         'categoryId=$categoryId',
         'participantRegistrationId=$participantRegistrationId',
@@ -132,7 +133,7 @@ class ReportsRepository {
         params.add('prizeRank=$prizeRank');
       }
       final url = BaseUrl.baseUrl +
-          EndPoints.competitionPrizeWinnerCertificate(competitionId) +
+          EndPoints.winnerCertificateFromTemplate +
           '?${params.join('&')}';
       final uri = Uri.parse(url);
 

@@ -163,9 +163,10 @@ class EndPoints {
   static String competitionPrizeWinnersPrint(int competitionId) =>
       '/reports/competition/$competitionId/print/prize-winners';
 
-  /// Single prize-winner certificate PDF (query: stageId, categoryId, participantRegistrationId, optional prizeRank)
-  static String competitionPrizeWinnerCertificate(int competitionId) =>
-      '/reports/competition/$competitionId/print/prize-winner-certificate';
+  /// Winner certificate PDF generated from certificate-template design.
+  /// Query params: competitionId, stageId, categoryId, participantRegistrationId, optional prizeRank
+  static String winnerCertificateFromTemplate =
+      '/settings/certificate-templates/winner-certificate/download';
 
   static String competitionParticipantsPrint(int competitionId) =>
       '/reports/competition/$competitionId/print/participants';
@@ -176,8 +177,11 @@ class EndPoints {
   /// ORGANIZATION / BRANCH SETUP
   static String organizationSetup = '/organization/setup';
 
-  /// Global prize-winner certificate branding (GET/PUT body = template DTO).
-  static String certificateTemplate = '/settings/certificate-template';
+  /// Branch-level certificate template CRUD.
+  static String certificateTemplates = '/settings/certificate-templates';
+  static String certificateTemplateById(int id) => '/settings/certificate-templates/$id';
+  static String certificateTemplateSetDefault(int id) =>
+      '/settings/certificate-templates/$id/default';
 
   /// PERMISSIONS (app-level permission definitions)
   static String permission = '/permission';

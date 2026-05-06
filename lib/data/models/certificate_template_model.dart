@@ -1,6 +1,12 @@
 /// Global prize-winner certificate branding (server PDF / Thymeleaf).
 /// Field names match the planned Spring DTO (`camelCase`).
 class CertificateTemplateModel {
+  final int? id;
+  final int? branchId;
+  final String templateGender;
+  final bool isActive;
+  final bool deleted;
+  final bool isDefault;
   final String subtitle;
   final String organizedByLine;
   final String organizerAssociationLine;
@@ -42,6 +48,12 @@ class CertificateTemplateModel {
   final String templateBody;
 
   const CertificateTemplateModel({
+    this.id,
+    this.branchId,
+    this.templateGender = 'MALE',
+    this.isActive = true,
+    this.deleted = false,
+    this.isDefault = false,
     this.subtitle = '',
     this.organizedByLine = '',
     this.organizerAssociationLine = '',
@@ -73,6 +85,12 @@ class CertificateTemplateModel {
   });
 
   CertificateTemplateModel copyWith({
+    int? id,
+    int? branchId,
+    String? templateGender,
+    bool? isActive,
+    bool? deleted,
+    bool? isDefault,
     String? subtitle,
     String? organizedByLine,
     String? organizerAssociationLine,
@@ -103,6 +121,12 @@ class CertificateTemplateModel {
     String? templateBody,
   }) {
     return CertificateTemplateModel(
+      id: id ?? this.id,
+      branchId: branchId ?? this.branchId,
+      templateGender: templateGender ?? this.templateGender,
+      isActive: isActive ?? this.isActive,
+      deleted: deleted ?? this.deleted,
+      isDefault: isDefault ?? this.isDefault,
       subtitle: subtitle ?? this.subtitle,
       organizedByLine: organizedByLine ?? this.organizedByLine,
       organizerAssociationLine:
@@ -155,6 +179,14 @@ class CertificateTemplateModel {
     String readStr(String key) => json[key]?.toString() ?? '';
 
     return CertificateTemplateModel(
+      id: (json['id'] as num?)?.toInt(),
+      branchId: (json['branchId'] as num?)?.toInt(),
+      templateGender: readStr('templateGender').isEmpty
+          ? 'MALE'
+          : readStr('templateGender').toUpperCase(),
+      isActive: readBool(json['isActive'], true),
+      deleted: readBool(json['isDeleted'] ?? json['deleted'], false),
+      isDefault: readBool(json['defaultTemplate'] ?? json['isDefault'], false),
       subtitle: readStr('subtitle'),
       organizedByLine: readStr('organizedByLine'),
       organizerAssociationLine: readStr('organizerAssociationLine'),
@@ -192,33 +224,12 @@ class CertificateTemplateModel {
 
   Map<String, dynamic> toJson() {
     return {
-      'subtitle': subtitle,
-      'organizedByLine': organizedByLine,
-      'organizerAssociationLine': organizerAssociationLine,
-      'coordinatedIntro': coordinatedIntro,
-      'coordinatedName': coordinatedName,
-      'signatureLabel1': signatureLabel1,
-      'signatureLabel2': signatureLabel2,
-      'signatureLabel3': signatureLabel3,
-      'signatureLabel4': signatureLabel4,
-      'footerText': footerText,
-      'subjectPronounMale': subjectPronounMale,
-      'subjectPronounFemale': subjectPronounFemale,
-      'subjectPronounOther': subjectPronounOther,
-      'subjectPronounDefault': subjectPronounDefault,
-      'possessivePronounMale': possessivePronounMale,
-      'possessivePronounFemale': possessivePronounFemale,
-      'possessivePronounOther': possessivePronounOther,
-      'possessivePronounDefault': possessivePronounDefault,
-      'includeStageInWinLine': includeStageInWinLine,
-      'showDedicatedStageLine': showDedicatedStageLine,
-      'stageLinePrefix': stageLinePrefix,
-      'backgroundPreset': backgroundPreset,
-      'backgroundImageUrl': backgroundImageUrl,
-      'accentColorHex': accentColorHex,
-      'logoImageUrl': logoImageUrl,
+      'id': id,
+      'branchId': branchId,
+      'isActive': isActive,
+      'isDeleted': deleted,
+      'defaultTemplate': isDefault,
       'templateName': templateName,
-      'certificateType': certificateType,
       'templateBody': templateBody,
     };
   }
