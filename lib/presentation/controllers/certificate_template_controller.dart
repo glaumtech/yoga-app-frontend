@@ -186,7 +186,8 @@ class CertificateTemplateController extends GetxController {
     logoImageUrl.text = m.logoImageUrl;
 
     templateName.text = m.templateName;
-    certificateType.value = kCertificateTypes.any((e) => e.value == m.certificateType)
+    certificateType.value =
+        kCertificateTypes.any((e) => e.value == m.certificateType)
         ? m.certificateType
         : 'prize_winner';
     if (m.templateGender.toUpperCase() == 'FEMALE') {
@@ -197,7 +198,9 @@ class CertificateTemplateController extends GetxController {
   }
 
   CertificateTemplateModel _readModel() {
-    final selected = _firstTemplateWhere((t) => t.id == selectedTemplateId.value);
+    final selected = _firstTemplateWhere(
+      (t) => t.id == selectedTemplateId.value,
+    );
     return CertificateTemplateModel(
       id: selectedTemplateId.value,
       branchId: selected?.branchId,
@@ -231,8 +234,7 @@ class CertificateTemplateController extends GetxController {
       logoImageUrl: logoImageUrl.text.trim(),
       templateName: templateName.text.trim(),
       certificateType: certificateType.value,
-      templateGender:
-          subjectPronounDefault.text.trim().toLowerCase() == 'she'
+      templateGender: subjectPronounDefault.text.trim().toLowerCase() == 'she'
           ? 'FEMALE'
           : 'MALE',
       templateBody: templateBody.text,
@@ -257,9 +259,8 @@ class CertificateTemplateController extends GetxController {
         _applyModel(const CertificateTemplateModel());
         return;
       }
-      final selected = _firstTemplateWhere(
-            (t) => t.id == selectedTemplateId.value,
-          ) ??
+      final selected =
+          _firstTemplateWhere((t) => t.id == selectedTemplateId.value) ??
           _firstTemplateWhere((t) => t.isDefault) ??
           templates.first;
       if (selected.id != null) {
@@ -299,9 +300,11 @@ class CertificateTemplateController extends GetxController {
         _applyModel(saved);
       }
       await load();
-      _toastOk(selectedTemplateId.value == null
-          ? 'Certificate template created.'
-          : 'Certificate template saved.');
+      _toastOk(
+        selectedTemplateId.value == null
+            ? 'Certificate template created.'
+            : 'Certificate template saved.',
+      );
     } catch (e) {
       final msg = e.toString();
       error.value = msg;
@@ -368,9 +371,7 @@ class CertificateTemplateController extends GetxController {
   Future<void> setSelectedAsDefault() async {
     final id = selectedTemplateId.value;
     if (id == null) return;
-    final res = await _repo.setDefaultTemplate(
-      templateId: id,
-    );
+    final res = await _repo.setDefaultTemplate(templateId: id);
     if (!res.success) {
       _toastError(res.message ?? 'Failed to set default template');
       return;

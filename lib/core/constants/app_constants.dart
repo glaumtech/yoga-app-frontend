@@ -179,7 +179,8 @@ class EndPoints {
 
   /// Branch-level certificate template CRUD.
   static String certificateTemplates = '/settings/certificate-templates';
-  static String certificateTemplateById(int id) => '/settings/certificate-templates/$id';
+  static String certificateTemplateById(int id) =>
+      '/settings/certificate-templates/$id';
   static String certificateTemplateSetDefault(int id) =>
       '/settings/certificate-templates/$id/default';
 

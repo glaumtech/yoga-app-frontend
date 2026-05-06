@@ -132,7 +132,8 @@ class ReportsRepository {
       if (prizeRank != null) {
         params.add('prizeRank=$prizeRank');
       }
-      final url = BaseUrl.baseUrl +
+      final url =
+          BaseUrl.baseUrl +
           EndPoints.winnerCertificateFromTemplate +
           '?${params.join('&')}';
       final uri = Uri.parse(url);
@@ -146,8 +147,9 @@ class ReportsRepository {
         headers['Authorization'] = 'Bearer $token';
       }
 
-      final response =
-          await http.get(uri, headers: headers).timeout(BaseUrl.apiTimeout);
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
 
       if (response.statusCode == 200) {
         return ApiResponse(
@@ -176,7 +178,9 @@ class ReportsRepository {
     int competitionId,
   ) async {
     try {
-      final url = BaseUrl.baseUrl + EndPoints.competitionPrizeWinnersPrint(competitionId);
+      final url =
+          BaseUrl.baseUrl +
+          EndPoints.competitionPrizeWinnersPrint(competitionId);
       final uri = Uri.parse(url);
 
       final token = StorageService.getString(AppConstants.tokenKey);
@@ -188,7 +192,9 @@ class ReportsRepository {
         headers['Authorization'] = 'Bearer $token';
       }
 
-      final response = await http.get(uri, headers: headers).timeout(BaseUrl.apiTimeout);
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
 
       if (response.statusCode == 200) {
         return ApiResponse(
@@ -200,7 +206,8 @@ class ReportsRepository {
 
       return ApiResponse(
         success: false,
-        message: 'Failed to generate Prize Winners PDF (status ${response.statusCode})',
+        message:
+            'Failed to generate Prize Winners PDF (status ${response.statusCode})',
         statusCode: response.statusCode,
       );
     } catch (e) {
@@ -247,7 +254,9 @@ class ReportsRepository {
         headers['Authorization'] = 'Bearer $token';
       }
 
-      final response = await http.get(uri, headers: headers).timeout(BaseUrl.apiTimeout);
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
 
       if (response.statusCode == 200) {
         return ApiResponse(
@@ -259,7 +268,8 @@ class ReportsRepository {
 
       return ApiResponse(
         success: false,
-        message: 'Failed to generate Participants PDF (status ${response.statusCode})',
+        message:
+            'Failed to generate Participants PDF (status ${response.statusCode})',
         statusCode: response.statusCode,
       );
     } catch (e) {
@@ -299,14 +309,17 @@ class ReportsRepository {
 
       final token = StorageService.getString(AppConstants.tokenKey);
       final headers = <String, String>{
-        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Accept':
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Type': 'application/json',
       };
       if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
       }
 
-      final response = await http.get(uri, headers: headers).timeout(BaseUrl.apiTimeout);
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
 
       if (response.statusCode == 200) {
         return ApiResponse(

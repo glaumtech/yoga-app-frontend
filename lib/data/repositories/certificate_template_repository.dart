@@ -27,7 +27,10 @@ class CertificateTemplateRepository {
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
-        .map((e) => CertificateTemplateModel.fromJson(Map<String, dynamic>.from(e)))
+        .map(
+          (e) =>
+              CertificateTemplateModel.fromJson(Map<String, dynamic>.from(e)),
+        )
         .toList();
   }
 
@@ -199,9 +202,6 @@ class CertificateTemplateRepository {
         statusCode: res.statusCode,
       );
     }
-    return ApiResponse(
-      success: true,
-      statusCode: res.statusCode,
-    );
+    return ApiResponse(success: true, statusCode: res.statusCode);
   }
 }

@@ -85,8 +85,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
 
   bool get _isMultiMoveMode => _multiMoveMode ?? false;
 
-  Set<String> get _selectedLayerIds =>
-      _multiSelectedLayerIds ??= <String>{};
+  Set<String> get _selectedLayerIds => _multiSelectedLayerIds ??= <String>{};
 
   int _selectedLayerIndex = 2;
   int _idSeq = 12;
@@ -337,7 +336,8 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       final restoredFromHtml = _applyTemplateHtml(body);
       if (!restoredFromHtml) {
         _syncBackgroundFromBackend(c);
-        final hasBackground = (_backgroundImageBytes != null &&
+        final hasBackground =
+            (_backgroundImageBytes != null &&
                 _backgroundImageBytes!.isNotEmpty) ||
             (_backgroundImageUrl != null &&
                 _backgroundImageUrl!.trim().isNotEmpty);
@@ -436,34 +436,44 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       final fontWeight = _styleInt(style, 'font-weight') ?? 700;
       final lineHeight = _styleDouble(style, 'line-height') ?? 1.2;
       final letterSpacing = _styleDouble(style, 'letter-spacing') ?? 0;
-      final fontFamily = _styleString(style, 'font-family')
-              ?.split(',')
-              .first
-              .replaceAll("'", '')
-              .replaceAll('"', '')
-              .trim() ??
+      final fontFamily =
+          _styleString(
+            style,
+            'font-family',
+          )?.split(',').first.replaceAll("'", '').replaceAll('"', '').trim() ??
           'Inter';
-      final textAlign =
-          _textAlignFromString(_styleString(style, 'text-align') ?? 'left');
+      final textAlign = _textAlignFromString(
+        _styleString(style, 'text-align') ?? 'left',
+      );
       final colorCss = _styleString(style, 'color');
       final color = _colorFromCss(colorCss) ?? const Color(0xFF1F2A44);
-      final hasBoldTag = RegExp(r'<\s*b\s*>', caseSensitive: false).hasMatch(raw);
-      final hasItalicTag =
-          RegExp(r'<\s*em\s*>', caseSensitive: false).hasMatch(raw);
-      final hasUnderlineTag =
-          RegExp(r'<\s*u\s*>', caseSensitive: false).hasMatch(raw);
+      final hasBoldTag = RegExp(
+        r'<\s*b\s*>',
+        caseSensitive: false,
+      ).hasMatch(raw);
+      final hasItalicTag = RegExp(
+        r'<\s*em\s*>',
+        caseSensitive: false,
+      ).hasMatch(raw);
+      final hasUnderlineTag = RegExp(
+        r'<\s*u\s*>',
+        caseSensitive: false,
+      ).hasMatch(raw);
 
-      final isItalic = (_styleString(style, 'font-style') ?? 'normal')
-          .toLowerCase()
-          .contains('italic') ||
+      final isItalic =
+          (_styleString(style, 'font-style') ?? 'normal')
+              .toLowerCase()
+              .contains('italic') ||
           hasItalicTag;
-      final isUnderlined = (_styleString(style, 'text-decoration') ?? 'none')
-          .toLowerCase()
-          .contains('underline') ||
+      final isUnderlined =
+          (_styleString(style, 'text-decoration') ?? 'none')
+              .toLowerCase()
+              .contains('underline') ||
           hasUnderlineTag;
-      final hasDashedBottomBorder =
-          (RegExp(r'border-bottom\s*:\s*[^;]*dashed', caseSensitive: false)
-              .hasMatch(style));
+      final hasDashedBottomBorder = (RegExp(
+        r'border-bottom\s*:\s*[^;]*dashed',
+        caseSensitive: false,
+      ).hasMatch(style));
 
       final layerText = _htmlUnescape(
         raw
@@ -483,13 +493,13 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
 
       parsed.add(
         _TemplateLayer(
-          id: 'layer_${_idSeq++}',
-          kind: _LayerKind.text,
-          name: layerName.isEmpty ? 'Text layer' : layerName,
-          offset: Offset(left, top),
-          text: layerText,
-          fontSize: fontSize,
-        )
+            id: 'layer_${_idSeq++}',
+            kind: _LayerKind.text,
+            name: layerName.isEmpty ? 'Text layer' : layerName,
+            offset: Offset(left, top),
+            text: layerText,
+            fontSize: fontSize,
+          )
           ..fontWeight = _fontWeightFromInt(hasBoldTag ? 700 : fontWeight)
           ..isItalic = isItalic
           ..isUnderlined = isUnderlined
@@ -849,32 +859,38 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     final heightPx = _portrait ? longSide : shortSide;
     final bgUrl = _backgroundImageDataUrl();
 
-    final layerHtml = _layers.map((layer) {
-      final left = layer.offset.dx.toStringAsFixed(2);
-      final top = layer.offset.dy.toStringAsFixed(2);
-      if (layer.kind == _LayerKind.image) {
-        if (layer.imageBytes == null || layer.imageBytes!.isEmpty) return '';
-        final imgData = 'data:image/png;base64,${base64Encode(layer.imageBytes!)}';
-        return '''
+    final layerHtml = _layers
+        .map((layer) {
+          final left = layer.offset.dx.toStringAsFixed(2);
+          final top = layer.offset.dy.toStringAsFixed(2);
+          if (layer.kind == _LayerKind.image) {
+            if (layer.imageBytes == null || layer.imageBytes!.isEmpty)
+              return '';
+            final imgData =
+                'data:image/png;base64,${base64Encode(layer.imageBytes!)}';
+            return '''
 <img src="$imgData" alt="${_htmlEscape(layer.name)}" style="position:absolute;left:${left}px;top:${top}px;width:100px;height:72px;object-fit:cover;" />''';
-      }
-      final text = _resolveTemplateText(layer.text ?? '').replaceAll('\n', '<br/>');
-      final fw = _fontWeightToInt(layer.fontWeight);
-      final fs = layer.fontSize.toStringAsFixed(2);
-      final lh = layer.lineHeight.toStringAsFixed(2);
-      final ls = layer.letterSpacing.toStringAsFixed(2);
-      final ta = _textAlignToString(layer.textAlign);
-      final color = _colorToCss(layer.textColor);
-      final ff = _htmlEscape(layer.fontFamily);
-      final tw = layer.textBoxWidth.toStringAsFixed(2);
-      final italic = layer.isItalic ? 'italic' : 'normal';
-      final decoration = layer.isUnderlined ? 'underline' : 'none';
-      final borderBottom = layer.hasDashedBottomBorder
-          ? 'border-bottom:1px dashed $color;'
-          : '';
-      return '''
+          }
+          final text = _resolveTemplateText(
+            layer.text ?? '',
+          ).replaceAll('\n', '<br/>');
+          final fw = _fontWeightToInt(layer.fontWeight);
+          final fs = layer.fontSize.toStringAsFixed(2);
+          final lh = layer.lineHeight.toStringAsFixed(2);
+          final ls = layer.letterSpacing.toStringAsFixed(2);
+          final ta = _textAlignToString(layer.textAlign);
+          final color = _colorToCss(layer.textColor);
+          final ff = _htmlEscape(layer.fontFamily);
+          final tw = layer.textBoxWidth.toStringAsFixed(2);
+          final italic = layer.isItalic ? 'italic' : 'normal';
+          final decoration = layer.isUnderlined ? 'underline' : 'none';
+          final borderBottom = layer.hasDashedBottomBorder
+              ? 'border-bottom:1px dashed $color;'
+              : '';
+          return '''
 <div style="position:absolute;left:${left}px;top:${top}px;width:${tw}px;font-size:${fs}px;font-weight:${fw};font-style:$italic;text-decoration:$decoration;text-align:$ta;line-height:$lh;letter-spacing:${ls}px;color:$color;font-family:'$ff',sans-serif;$borderBottom">$text</div>''';
-    }).join('\n');
+        })
+        .join('\n');
 
     final backgroundCss = bgUrl == null
         ? 'background:#ffffff;'
@@ -1008,7 +1024,11 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     final possessivePronoun = _selectedTemplateGender == 'Female'
         ? 'Her'
         : 'His';
-    final dateOnly = DateTime.now().toLocal().toIso8601String().split('T').first;
+    final dateOnly = DateTime.now()
+        .toLocal()
+        .toIso8601String()
+        .split('T')
+        .first;
     return value
         .replaceAll('{{date}}', dateOnly)
         .replaceAll('{{subjectPronoun}}', subjectPronoun)
@@ -1161,7 +1181,8 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
         ? selection.end
         : selection.start;
     final selected = text.substring(start, end);
-    final updated = text.substring(0, start) +
+    final updated =
+        text.substring(0, start) +
         openTag +
         selected +
         closeTag +
@@ -1198,12 +1219,18 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       if (tag.startsWith('<br')) {
         spans.add(TextSpan(text: '\n', style: stack.last));
       } else if (tag == '<b>' || tag == '<strong>') {
-        stack.add(stack.last.merge(const TextStyle(fontWeight: FontWeight.w900)));
+        stack.add(
+          stack.last.merge(const TextStyle(fontWeight: FontWeight.w900)),
+        );
       } else if (tag == '<i>' || tag == '<em>') {
-        stack.add(stack.last.merge(const TextStyle(fontStyle: FontStyle.italic)));
+        stack.add(
+          stack.last.merge(const TextStyle(fontStyle: FontStyle.italic)),
+        );
       } else if (tag == '<u>') {
         stack.add(
-          stack.last.merge(const TextStyle(decoration: TextDecoration.underline)),
+          stack.last.merge(
+            const TextStyle(decoration: TextDecoration.underline),
+          ),
         );
       } else if (tag == '</b>' ||
           tag == '</strong>' ||
@@ -1240,27 +1267,28 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     if (source == null) return;
 
     final id = 'layer_${_idSeq++}';
-    final duplicate = _TemplateLayer(
-      id: id,
-      kind: source.kind,
-      name: '${source.name} copy',
-      offset: Offset(source.offset.dx + 16, source.offset.dy + 16),
-      text: source.text,
-      imageBytes: source.imageBytes == null
-          ? null
-          : Uint8List.fromList(source.imageBytes!),
-      fontSize: source.fontSize,
-    )
-      ..textColor = source.textColor
-      ..fontWeight = source.fontWeight
-      ..isItalic = source.isItalic
-      ..isUnderlined = source.isUnderlined
-      ..hasDashedBottomBorder = source.hasDashedBottomBorder
-      ..textAlign = source.textAlign
-      ..lineHeight = source.lineHeight
-      ..letterSpacing = source.letterSpacing
-      ..fontFamily = source.fontFamily
-      ..textBoxWidth = source.textBoxWidth;
+    final duplicate =
+        _TemplateLayer(
+            id: id,
+            kind: source.kind,
+            name: '${source.name} copy',
+            offset: Offset(source.offset.dx + 16, source.offset.dy + 16),
+            text: source.text,
+            imageBytes: source.imageBytes == null
+                ? null
+                : Uint8List.fromList(source.imageBytes!),
+            fontSize: source.fontSize,
+          )
+          ..textColor = source.textColor
+          ..fontWeight = source.fontWeight
+          ..isItalic = source.isItalic
+          ..isUnderlined = source.isUnderlined
+          ..hasDashedBottomBorder = source.hasDashedBottomBorder
+          ..textAlign = source.textAlign
+          ..lineHeight = source.lineHeight
+          ..letterSpacing = source.letterSpacing
+          ..fontFamily = source.fontFamily
+          ..textBoxWidth = source.textBoxWidth;
 
     setState(() {
       _layers.add(duplicate);
@@ -1839,8 +1867,8 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                                 bottom: 0,
                                 child: LayoutBuilder(
                                   builder: (context, constraints) {
-                                    final count =
-                                        (constraints.maxWidth / 8).floor();
+                                    final count = (constraints.maxWidth / 8)
+                                        .floor();
                                     return Row(
                                       children: List.generate(count, (i) {
                                         return Container(
@@ -1998,7 +2026,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                     decoration: _darkFieldDecoration(),
                     style: const TextStyle(color: Colors.white),
                     selectedItemBuilder: (context) {
-                      final rows = c.templates.where((t) => t.id != null).toList();
+                      final rows = c.templates
+                          .where((t) => t.id != null)
+                          .toList();
                       return rows
                           .map(
                             (t) => Align(
@@ -2392,9 +2422,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                             ),
                             trailing: _isMultiMoveMode
                                 ? Checkbox(
-                                    value: _selectedLayerIds.contains(
-                                      layer.id,
-                                    ),
+                                    value: _selectedLayerIds.contains(layer.id),
                                     onChanged: (_) =>
                                         _toggleMultiLayerSelection(layer),
                                   )
@@ -2474,9 +2502,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                                   _layers[i],
                                   canvasSize,
                                   i == _selectedLayerIndex ||
-                                      _selectedLayerIds.contains(
-                                        _layers[i].id,
-                                      ),
+                                      _selectedLayerIds.contains(_layers[i].id),
                                 ),
                             ],
                           ),
