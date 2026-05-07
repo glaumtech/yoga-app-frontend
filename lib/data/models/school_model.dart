@@ -12,6 +12,11 @@ class SchoolModel {
   final String? state; // Legacy field for backward compatibility
   final String pincode;
   final String? email;
+  final String? website;
+  final String? landLine;
+  final String? mobile;
+  final String? contributorName;
+  final String? contributorMobileNo;
   final String
   institutionType; // 'PRIVATE_SCHOOL', 'GOVT_AIDED_SCHOOL', etc. or UI format
   final String? institutionTypeDisplayName;
@@ -36,6 +41,11 @@ class SchoolModel {
     this.state,
     required this.pincode,
     this.email,
+    this.website,
+    this.landLine,
+    this.mobile,
+    this.contributorName,
+    this.contributorMobileNo,
     required this.institutionType,
     this.institutionTypeDisplayName,
     this.institutionCategoryDisplayName,
@@ -85,6 +95,19 @@ class SchoolModel {
       state: json['stateName']?.toString() ?? json['state']?.toString(),
       pincode: json['pincode']?.toString() ?? '',
       email: json['email']?.toString() ?? json['emailId']?.toString(),
+      website: json['website']?.toString() ?? json['websiteUrl']?.toString(),
+      landLine:
+          json['landLine']?.toString() ??
+          json['landline']?.toString() ??
+          json['landLineNo']?.toString(),
+      mobile:
+          json['mobile']?.toString() ??
+          json['mobileNo']?.toString() ??
+          json['institutionMobile']?.toString(),
+      contributorName: json['contributorName']?.toString(),
+      contributorMobileNo:
+          json['contributorMobileNo']?.toString() ??
+          json['contributorMobile']?.toString(),
       institutionType:
           json['institutionType']?.toString() ??
           json['institution_type']?.toString() ??
@@ -123,6 +146,12 @@ class SchoolModel {
       if (cityId != null) 'cityId': cityId,
       'pincode': pincode,
       if (email != null) 'email': email,
+      if (website != null) 'website': website,
+      if (landLine != null) 'landLine': landLine,
+      if (mobile != null) 'mobile': mobile,
+      if (contributorName != null) 'contributorName': contributorName,
+      if (contributorMobileNo != null)
+        'contributorMobileNo': contributorMobileNo,
       'institutionType': institutionType,
       if (includeMetadata && createdAt != null)
         'createdAt': createdAt!.toIso8601String(),
@@ -145,6 +174,11 @@ class SchoolModel {
     String? state,
     String? pincode,
     String? email,
+    String? website,
+    String? landLine,
+    String? mobile,
+    String? contributorName,
+    String? contributorMobileNo,
     String? institutionType,
     String? institutionTypeDisplayName,
     String? institutionCategoryDisplayName,
@@ -168,6 +202,11 @@ class SchoolModel {
       state: state ?? this.state,
       pincode: pincode ?? this.pincode,
       email: email ?? this.email,
+      website: website ?? this.website,
+      landLine: landLine ?? this.landLine,
+      mobile: mobile ?? this.mobile,
+      contributorName: contributorName ?? this.contributorName,
+      contributorMobileNo: contributorMobileNo ?? this.contributorMobileNo,
       institutionType: institutionType ?? this.institutionType,
       institutionTypeDisplayName:
           institutionTypeDisplayName ?? this.institutionTypeDisplayName,

@@ -30,6 +30,11 @@ class SchoolController extends GetxController {
   final addressController = TextEditingController();
   final pincodeController = TextEditingController();
   final emailController = TextEditingController();
+  final websiteController = TextEditingController();
+  final landLineController = TextEditingController();
+  final mobileController = TextEditingController();
+  final contributorNameController = TextEditingController();
+  final contributorMobileController = TextEditingController();
   final searchController = TextEditingController();
 
   /// Create form (school create screen): state/city autocomplete controllers.
@@ -363,6 +368,11 @@ class SchoolController extends GetxController {
     addressController.dispose();
     pincodeController.dispose();
     emailController.dispose();
+    websiteController.dispose();
+    landLineController.dispose();
+    mobileController.dispose();
+    contributorNameController.dispose();
+    contributorMobileController.dispose();
     searchController.dispose();
     createFormStateTextController.dispose();
     createFormStateFocusNode.dispose();
@@ -630,6 +640,11 @@ class SchoolController extends GetxController {
       final address = addressController.text.trim();
       final pincode = pincodeController.text.trim();
       final emailId = emailController.text.trim();
+      final website = websiteController.text.trim();
+      final landLine = landLineController.text.trim();
+      final mobile = mobileController.text.trim();
+      final contributorName = contributorNameController.text.trim();
+      final contributorMobileNo = contributorMobileController.text.trim();
 
       final categoryIds = selectedInstitutionCategoryIds.isNotEmpty
           ? selectedInstitutionCategoryIds.toList()
@@ -640,6 +655,11 @@ class SchoolController extends GetxController {
       print('  Short Name: $institutionShortName');
       print('  Address: $address');
       print('  Email ID: $emailId');
+      print('  Website: $website');
+      print('  Land line: $landLine');
+      print('  Mobile: $mobile');
+      print('  Contributor Name: $contributorName');
+      print('  Contributor Mobile No: $contributorMobileNo');
       print('  State ID: ${selectedStateId.value}');
       print('  City ID: $cityId');
       print('  Pincode: $pincode');
@@ -665,6 +685,11 @@ class SchoolController extends GetxController {
           institutionTypeId: selectedInstitutionTypeId.value,
           institutionCategoryIds: categoryIds,
           pincode: pincode,
+          website: website,
+          landLine: landLine,
+          mobile: mobile,
+          contributorName: contributorName,
+          contributorMobileNo: contributorMobileNo,
         );
       } else {
         // Create new institution
@@ -680,6 +705,13 @@ class SchoolController extends GetxController {
           institutionTypeId: selectedInstitutionTypeId.value,
           institutionCategoryIds: categoryIds,
           pincode: pincode,
+          website: website.isNotEmpty ? website : null,
+          landLine: landLine.isNotEmpty ? landLine : null,
+          mobile: mobile.isNotEmpty ? mobile : null,
+          contributorName: contributorName.isNotEmpty ? contributorName : null,
+          contributorMobileNo: contributorMobileNo.isNotEmpty
+              ? contributorMobileNo
+              : null,
         );
       }
 
@@ -782,6 +814,11 @@ class SchoolController extends GetxController {
         addressController.text = school.address;
         pincodeController.text = school.pincode;
         emailController.text = school.email ?? '';
+        websiteController.text = school.website ?? '';
+        landLineController.text = school.landLine ?? '';
+        mobileController.text = school.mobile ?? '';
+        contributorNameController.text = school.contributorName ?? '';
+        contributorMobileController.text = school.contributorMobileNo ?? '';
 
         // Find and set institution type ID - prefer displayName from API if available
         InstitutionTypeModel? type;
@@ -1100,6 +1137,11 @@ class SchoolController extends GetxController {
     addressController.clear();
     pincodeController.clear();
     emailController.clear();
+    websiteController.clear();
+    landLineController.clear();
+    mobileController.clear();
+    contributorNameController.clear();
+    contributorMobileController.clear();
     cities.clear();
     createFormStateTextController.clear();
     createFormCityTextController.clear();

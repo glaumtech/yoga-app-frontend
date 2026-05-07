@@ -289,7 +289,7 @@ class _InstitutionPrecheckAndCreateState
                         border: Border.all(color: Colors.grey[200]!),
                       ),
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 260),
+                        constraints: const BoxConstraints(maxHeight: 300),
                         child: ListView.separated(
                           shrinkWrap: true,
                           itemCount: list.length,

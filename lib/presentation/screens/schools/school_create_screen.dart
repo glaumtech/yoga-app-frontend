@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/location/city_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
+import '../../widgets/mandatory_aware_label.dart';
 import '../../../data/models/institution_category_model.dart';
 
 class SchoolCreateScreen extends StatelessWidget {
@@ -58,7 +60,7 @@ class SchoolCreateScreen extends StatelessWidget {
                           children: [
                             _buildTextField(
                               context,
-                              label: 'Institution Name :',
+                              label: 'Institution Name * :',
                               controller: controller.institutionNameController,
                               isMobile: isMobile,
                               validator: (value) {
@@ -110,7 +112,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
-                                label: 'Institution Name :',
+                                label: 'Institution Name * :',
                                 controller:
                                     controller.institutionNameController,
                                 isMobile: isMobile,
@@ -163,10 +165,123 @@ class SchoolCreateScreen extends StatelessWidget {
                         ),
                   SizedBox(height: isMobile ? 20 : 24),
 
+                  // Website / Land line / Mobile
+                  isMobile
+                      ? Column(
+                          children: [
+                            _buildTextField(
+                              context,
+                              label: 'Website :',
+                              controller: controller.websiteController,
+                              isMobile: isMobile,
+                              keyboardType: TextInputType.url,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildTextField(
+                              context,
+                              label: 'Land line :',
+                              controller: controller.landLineController,
+                              isMobile: isMobile,
+                              maxLength: 10,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              validator: (value) {
+                                final v = (value ?? '').trim();
+                                if (v.isEmpty) return null;
+                                if (v.length != 10) {
+                                  return 'Land line must be 10 digits';
+                                }
+                                return null;
+                              },
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildTextField(
+                              context,
+                              label: 'Mobile :',
+                              controller: controller.mobileController,
+                              isMobile: isMobile,
+                              maxLength: 10,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              validator: (value) {
+                                final v = (value ?? '').trim();
+                                if (v.isEmpty) return null;
+                                if (v.length != 10) {
+                                  return 'Mobile must be 10 digits';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                label: 'Website :',
+                                controller: controller.websiteController,
+                                isMobile: isMobile,
+                                keyboardType: TextInputType.url,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                label: 'Land line :',
+                                controller: controller.landLineController,
+                                isMobile: isMobile,
+                                maxLength: 10,
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                validator: (value) {
+                                  final v = (value ?? '').trim();
+                                  if (v.isEmpty) return null;
+                                  if (v.length != 10) {
+                                    return 'Land line must be 10 digits';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                label: 'Mobile :',
+                                controller: controller.mobileController,
+                                isMobile: isMobile,
+                                maxLength: 10,
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                validator: (value) {
+                                  final v = (value ?? '').trim();
+                                  if (v.isEmpty) return null;
+                                  if (v.length != 10) {
+                                    return 'Mobile must be 10 digits';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                  SizedBox(height: isMobile ? 20 : 24),
+
                   // Address field
                   _buildTextField(
                     context,
-                    label: 'Address :',
+                    label: 'Address * :',
                     controller: controller.addressController,
                     isMobile: isMobile,
                     maxLines: isMobile ? 3 : 1,
@@ -241,6 +356,86 @@ class SchoolCreateScreen extends StatelessWidget {
                                 controller,
                                 isMobile,
                                 isTablet,
+                              ),
+                            ),
+                          ],
+                        ),
+                  SizedBox(height: isMobile ? 20 : 24),
+
+                  // Contributor details (last section)
+                  Text(
+                    "Contributor's Details",
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: isMobile ? 15 : 17,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  isMobile
+                      ? Column(
+                          children: [
+                            _buildTextField(
+                              context,
+                              label: "Contributor's Name :",
+                              controller: controller.contributorNameController,
+                              isMobile: isMobile,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildTextField(
+                              context,
+                              label: 'Mobile No :',
+                              controller:
+                                  controller.contributorMobileController,
+                              isMobile: isMobile,
+                              maxLength: 10,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              validator: (value) {
+                                final v = (value ?? '').trim();
+                                if (v.isEmpty) return null;
+                                if (v.length != 10) {
+                                  return 'Mobile No must be 10 digits';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                label: "Contributor's Name :",
+                                controller:
+                                    controller.contributorNameController,
+                                isMobile: isMobile,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                label: 'Mobile No :',
+                                controller:
+                                    controller.contributorMobileController,
+                                isMobile: isMobile,
+                                maxLength: 10,
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                validator: (value) {
+                                  final v = (value ?? '').trim();
+                                  if (v.isEmpty) return null;
+                                  if (v.length != 10) {
+                                    return 'Mobile No must be 10 digits';
+                                  }
+                                  return null;
+                                },
                               ),
                             ),
                           ],
@@ -333,15 +528,17 @@ class SchoolCreateScreen extends StatelessWidget {
     required TextEditingController controller,
     required bool isMobile,
     int maxLines = 1,
+    int? maxLength,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     void Function(String?)? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
+        MandatoryAwareLabel(
+          label: label,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -351,7 +548,9 @@ class SchoolCreateScreen extends StatelessWidget {
         TextFormField(
           controller: controller,
           maxLines: maxLines,
+          maxLength: maxLength,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: EdgeInsets.symmetric(
@@ -360,6 +559,7 @@ class SchoolCreateScreen extends StatelessWidget {
             ),
             filled: true,
             fillColor: Colors.white,
+            counterText: maxLength != null ? '' : null,
           ),
           style: TextStyle(fontSize: isMobile ? 14 : 16),
           validator: validator,
@@ -394,8 +594,8 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'State :',
+        MandatoryAwareLabel(
+          label: 'State * :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -451,8 +651,8 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'City :',
+        MandatoryAwareLabel(
+          label: 'City * :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -527,8 +727,8 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Pincode :',
+        MandatoryAwareLabel(
+          label: 'Pincode * :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -577,8 +777,8 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Institution Type :',
+        MandatoryAwareLabel(
+          label: 'Institution Type * :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,

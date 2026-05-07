@@ -325,6 +325,12 @@ class CertificateTemplateController extends GetxController {
     );
   }
 
+  void createDuplicateTemplateDraft({String? sourceName}) {
+    final baseName = (sourceName ?? templateName.text).trim();
+    selectedTemplateId.value = null;
+    templateName.text = baseName.isEmpty ? 'Template Copy' : '$baseName Copy';
+  }
+
   Future<void> selectTemplateById(int id) async {
     final res = await _repo.getTemplateById(id);
     if (res.success && res.data != null) {

@@ -514,7 +514,7 @@ class ReportsParticipantsTab extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'AVG TOTAL',
+                    'TOTAL',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,

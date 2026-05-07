@@ -28,6 +28,11 @@ class SchoolRepository {
     List<int>? institutionCategoryIds,
     required String pincode,
     String? emailId,
+    String? website,
+    String? landLine,
+    String? mobile,
+    String? contributorName,
+    String? contributorMobileNo,
   }) async {
     try {
       final requestBody = <String, dynamic>{
@@ -47,6 +52,21 @@ class SchoolRepository {
       }
       if (emailId != null && emailId.isNotEmpty) {
         requestBody['emailId'] = emailId;
+      }
+      if (website != null && website.isNotEmpty) {
+        requestBody['website'] = website;
+      }
+      if (landLine != null && landLine.isNotEmpty) {
+        requestBody['landLine'] = landLine;
+      }
+      if (mobile != null && mobile.isNotEmpty) {
+        requestBody['mobile'] = mobile;
+      }
+      if (contributorName != null && contributorName.isNotEmpty) {
+        requestBody['contributorName'] = contributorName;
+      }
+      if (contributorMobileNo != null && contributorMobileNo.isNotEmpty) {
+        requestBody['contributorMobileNo'] = contributorMobileNo;
       }
 
       print('Creating institution with data: ${requestBody}');
@@ -327,6 +347,11 @@ class SchoolRepository {
     int? institutionTypeId,
     List<int>? institutionCategoryIds,
     String? pincode,
+    String? website,
+    String? landLine,
+    String? mobile,
+    String? contributorName,
+    String? contributorMobileNo,
   }) async {
     try {
       final requestBody = <String, dynamic>{};
@@ -342,6 +367,21 @@ class SchoolRepository {
       }
       if (emailId != null && emailId.isNotEmpty) {
         requestBody['emailId'] = emailId;
+      }
+      if (website != null) {
+        requestBody['website'] = website;
+      }
+      if (landLine != null) {
+        requestBody['landLine'] = landLine;
+      }
+      if (mobile != null) {
+        requestBody['mobile'] = mobile;
+      }
+      if (contributorName != null) {
+        requestBody['contributorName'] = contributorName;
+      }
+      if (contributorMobileNo != null) {
+        requestBody['contributorMobileNo'] = contributorMobileNo;
       }
       if (stateId != null && stateId > 0) {
         requestBody['stateId'] = stateId;

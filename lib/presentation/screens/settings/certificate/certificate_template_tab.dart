@@ -63,17 +63,17 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   final TextEditingController _layerTextController = TextEditingController();
   final FocusNode _inlineEditFocusNode = FocusNode();
   final TextEditingController _customWidthMmController = TextEditingController(
-    text: '210',
+    text: '1123',
   );
   final TextEditingController _customHeightMmController = TextEditingController(
-    text: '297',
+    text: '794',
   );
 
-  String _selectedPaper = 'A4 (794x1123 px)';
+  String _selectedPaper = 'Custom';
   String _selectedTemplateGender = 'Male';
   bool _portrait = false;
-  double _customWidthMm = 210;
-  double _customHeightMm = 297;
+  double _customWidthMm = 1123;
+  double _customHeightMm = 794;
   String? _backgroundImageUrl;
   Uint8List? _backgroundImageBytes;
 
@@ -93,130 +93,131 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     _TemplateLayer(
         id: 'layer_1',
         kind: _LayerKind.text,
-        name: 'Main title',
-        text: '{{headline}}',
-        offset: const Offset(180, 52),
-        fontSize: 54,
+        name: '{{competitionName}}',
+        text: '{{competitionName}}',
+        offset: const Offset(290, 12),
+        fontSize: 48,
       )
       ..fontWeight = FontWeight.w800
       ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF1C2C7A)
-      ..textBoxWidth = 760,
+      ..textColor = const Color(0xFF111827)
+      ..textBoxWidth = 560,
     _TemplateLayer(
         id: 'layer_2',
         kind: _LayerKind.text,
-        name: 'Sub title',
-        text: 'Yogasana Championship {{date}}',
-        offset: const Offset(220, 125),
-        fontSize: 42,
-      )
-      ..fontWeight = FontWeight.w800
-      ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF1C2C7A)
-      ..textBoxWidth = 680,
-    _TemplateLayer(
-        id: 'layer_3',
-        kind: _LayerKind.text,
-        name: 'Organized by',
+        name: 'Organized by details',
         text:
-            'Organized by\n{{organizerAssociationLine}}\nCo-organized by\n{{coordinatedName}}',
-        offset: const Offset(260, 205),
-        fontSize: 22,
+            'Organized by\nTamilNadu Professionally Qualified Registered Yoga Teachers Welfare Association,\nCo-organized by\n{{branchName}},{{branchCity}}',
+        offset: const Offset(260, 86),
+        fontSize: 18,
       )
       ..fontWeight = FontWeight.w700
       ..lineHeight = 1.4
       ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF7A1F24)
-      ..textBoxWidth = 600,
+      ..textColor = const Color(0xFF111827)
+      ..textBoxWidth = 620,
     _TemplateLayer(
-        id: 'layer_4',
+        id: 'layer_3',
         kind: _LayerKind.text,
-        name: 'Category ribbon',
-        text: 'CHAMPION OF CHAMPIONS',
-        offset: const Offset(325, 330),
-        fontSize: 30,
+        name: '{{winnerCategory}} Prize',
+        text: '{{winnerCategory}} Prize',
+        offset: const Offset(350, 238),
+        fontSize: 45,
       )
       ..fontWeight = FontWeight.w800
       ..textAlign = TextAlign.center
-      ..textColor = Colors.white
-      ..textBoxWidth = 500,
+      ..textColor = const Color(0xFF111827)
+      ..textBoxWidth = 420,
     _TemplateLayer(
-        id: 'layer_5',
+        id: 'layer_4',
         kind: _LayerKind.text,
         name: 'Body line 1',
         text:
-            'This certificate is proudly presented to {{participantName}} of {{schoolName}}.',
-        offset: const Offset(110, 430),
-        fontSize: 28,
+            'This certificate is proudly presented to Selvan/Selvi {{participantName}} of',
+        offset: const Offset(84, 368),
+        fontSize: 18,
       )
       ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 980,
+      ..textBoxWidth = 930,
+    _TemplateLayer(
+        id: 'layer_5',
+        kind: _LayerKind.text,
+        name: '{{participantName}}',
+        text: '{{participantName}}',
+        offset: const Offset(574, 364),
+        fontSize: 35,
+      )
+      ..fontWeight = FontWeight.w800
+      ..hasDashedBottomBorder = true
+      ..textColor = const Color(0xFF111827)
+      ..textBoxWidth = 246,
     _TemplateLayer(
         id: 'layer_6',
         kind: _LayerKind.text,
-        name: 'Body line 2',
-        text:
-            '{{subjectPronoun}} has won in {{category}} category, held on {{date}} at {{event}}.',
-        offset: const Offset(110, 482),
-        fontSize: 27,
+        name: '{{institutionName}}',
+        text: '{{institutionName}}',
+        offset: const Offset(390, 407),
+        fontSize: 34,
       )
+      ..fontWeight = FontWeight.w800
+      ..hasDashedBottomBorder = true
       ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 980,
+      ..textBoxWidth = 420,
     _TemplateLayer(
         id: 'layer_7',
         kind: _LayerKind.text,
-        name: 'Body line 3',
+        name: 'Body line 2',
         text:
-            '{{subjectPronoun}} is appreciated for {{possessivePronoun}} excellence in this competition.',
-        offset: const Offset(110, 535),
-        fontSize: 27,
+            'his/her participation in the {{competitionName}} held on {{date}} at {{competitionAddrss}}. He/She is appreciated for {{winnerCategory}} Category. He/She is appreciated for his/her Excellence in the Competition.',
+        offset: const Offset(76, 456),
+        fontSize: 18,
       )
       ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 980,
+      ..textBoxWidth = 960,
     _TemplateLayer(
         id: 'layer_8',
         kind: _LayerKind.text,
         name: 'Sign 1',
         text: 'Signature 1\nPresident',
-        offset: const Offset(110, 690),
-        fontSize: 22,
+        offset: const Offset(95, 675),
+        fontSize: 34,
       )
       ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF065F46)
-      ..textBoxWidth = 190,
+      ..textColor = const Color(0xFF111827)
+      ..textBoxWidth = 200,
     _TemplateLayer(
         id: 'layer_9',
         kind: _LayerKind.text,
         name: 'Sign 2',
         text: 'Signature 2\nSecretary',
-        offset: const Offset(345, 690),
-        fontSize: 22,
+        offset: const Offset(328, 675),
+        fontSize: 34,
       )
       ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF065F46)
-      ..textBoxWidth = 190,
+      ..textColor = const Color(0xFF111827)
+      ..textBoxWidth = 200,
     _TemplateLayer(
         id: 'layer_10',
         kind: _LayerKind.text,
         name: 'Sign 3',
         text: 'Signature 3\nCoordinator',
-        offset: const Offset(580, 690),
-        fontSize: 22,
+        offset: const Offset(560, 675),
+        fontSize: 34,
       )
       ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF065F46)
-      ..textBoxWidth = 190,
+      ..textColor = const Color(0xFF111827)
+      ..textBoxWidth = 220,
     _TemplateLayer(
         id: 'layer_11',
         kind: _LayerKind.text,
         name: 'Sign 4',
         text: 'Signature 4\nChief Guest',
-        offset: const Offset(815, 690),
-        fontSize: 22,
+        offset: const Offset(818, 675),
+        fontSize: 34,
       )
       ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF065F46)
-      ..textBoxWidth = 190,
+      ..textColor = const Color(0xFF111827)
+      ..textBoxWidth = 200,
   ];
 
   @override
@@ -323,7 +324,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
 
     final name = c.templateName.text.trim();
     if (name.isEmpty) {
-      c.templateName.text = 'Default Championship Template';
+      c.templateName.text = 'Winner Certificate for Female';
     }
     _canvasNameController.text = c.templateName.text;
 
@@ -2010,6 +2011,28 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: c.selectedTemplateId.value == null
+                        ? null
+                        : () {
+                            _persistDesignerToBackendModel(c);
+                            c.createDuplicateTemplateDraft(
+                              sourceName: _canvasNameController.text,
+                            );
+                            _canvasNameController.text = c.templateName.text;
+                            if (mounted) setState(() {});
+                          },
+                    icon: const Icon(Icons.copy_outlined, size: 16),
+                    label: const Text(
+                      'Duplicate',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(color: Colors.blueGrey.shade600),
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Text(
                     'SELECT TEMPLATE',
@@ -2086,64 +2109,6 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: BorderSide(color: Colors.blueGrey.shade600),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'TEMPLATE TYPE',
-                    style: TextStyle(
-                      color: Colors.blueGrey.shade300,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF182845),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () => setState(
-                              () => _selectedTemplateGender = 'Male',
-                            ),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              backgroundColor: _selectedTemplateGender == 'Male'
-                                  ? const Color(0xFF2E7AF4)
-                                  : Colors.transparent,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text(
-                              'Male',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () => setState(
-                              () => _selectedTemplateGender = 'Female',
-                            ),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              backgroundColor:
-                                  _selectedTemplateGender == 'Female'
-                                  ? const Color(0xFF2E7AF4)
-                                  : Colors.transparent,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text(
-                              'Female',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                   const SizedBox(height: 16),

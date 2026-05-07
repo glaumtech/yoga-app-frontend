@@ -408,7 +408,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     if (prefixAgeCounts.isEmpty) {
       return _buildInfoCard(
-        'No prefix/age data found (needs registrationNo + age).',
+        'No Age data found (needs registrationNo + age).',
         icon: Icons.group,
       );
     }
@@ -423,7 +423,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionTitle('Prefix + Age Counts'),
+            _sectionTitle('Age wise Participants'),
             const SizedBox(height: 10),
             ...prefixKeys.map((prefix) {
               final agesMap =
