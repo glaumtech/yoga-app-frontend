@@ -165,6 +165,12 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                             isTablet,
                           ),
                           SizedBox(height: isMobile ? 20 : 24),
+                          _buildEcoCertificateOptInField(
+                            context,
+                            participantController,
+                            isMobile,
+                          ),
+                          SizedBox(height: isMobile ? 20 : 24),
                           Builder(
                             builder: (context) {
                               final permissionStore =
@@ -359,6 +365,12 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                   participantController,
                                   isMobile,
                                   isTablet,
+                                ),
+                                SizedBox(height: isMobile ? 20 : 24),
+                                _buildEcoCertificateOptInField(
+                                  context,
+                                  participantController,
+                                  isMobile,
                                 ),
                                 SizedBox(height: isMobile ? 20 : 24),
                                 Builder(
@@ -1072,6 +1084,37 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEcoCertificateOptInField(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(label: 'E-Certificate :', bottomSpacing: 8),
+        Obx(
+          () => IgnorePointer(
+            ignoring: controller.isViewMode.value,
+            child: CheckboxListTile(
+              value: controller.optForECertificate.value,
+              onChanged: (value) {
+                controller.optForECertificate.value = value ?? false;
+              },
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              activeColor: Colors.green,
+              title: Text(
+                'Save Trees. Go Green. Opt for a Downloadable E-Certificate',
+                style: TextStyle(fontSize: isMobile ? 12 : 13),
+              ),
+            ),
           ),
         ),
       ],
