@@ -957,6 +957,80 @@ class UserManagementScreen extends StatelessWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              Text(
+                                'GENDER OPTIONS :',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: isTablet ? 15 : 16,
+                                    ),
+                              ),
+                              const SizedBox(height: 8),
+                              Obx(
+                                () => Wrap(
+                                  spacing: 16,
+                                  runSpacing: 8,
+                                  children: [
+                                    InkWell(
+                                      onTap: () => controller.selectedMale.value =
+                                          !controller.selectedMale.value,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Checkbox(
+                                            value: controller.selectedMale.value,
+                                            onChanged: (value) =>
+                                                controller.selectedMale.value =
+                                                    value ?? false,
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize.shrinkWrap,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Boys',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 12 : 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    InkWell(
+                                      onTap: () =>
+                                          controller.selectedFemale.value =
+                                              !controller.selectedFemale.value,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Checkbox(
+                                            value: controller.selectedFemale.value,
+                                            onChanged: (value) =>
+                                                controller.selectedFemale.value =
+                                                    value ?? false,
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize.shrinkWrap,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Girls',
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 12 : 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Row(
                                 children: [
                                   Text(
@@ -1232,6 +1306,63 @@ class UserManagementScreen extends StatelessWidget {
 
         // Allot Stages (for JURY(S)) - Mobile only
         if (isMobile && controller.selectedType.value == 'JURY(S)') ...[
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'GENDER OPTIONS :',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: isMobile ? 14 : (isTablet ? 15 : 16),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Obx(
+                () => Row(
+                  children: [
+                    InkWell(
+                      onTap: () => controller.selectedMale.value =
+                          !controller.selectedMale.value,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Checkbox(
+                            value: controller.selectedMale.value,
+                            onChanged: (value) =>
+                                controller.selectedMale.value = value ?? false,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          const SizedBox(width: 4),
+                          const Text('Boys', style: TextStyle(fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    InkWell(
+                      onTap: () => controller.selectedFemale.value =
+                          !controller.selectedFemale.value,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Checkbox(
+                            value: controller.selectedFemale.value,
+                            onChanged: (value) =>
+                                controller.selectedFemale.value = value ?? false,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          const SizedBox(width: 4),
+                          const Text('Girls', style: TextStyle(fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
