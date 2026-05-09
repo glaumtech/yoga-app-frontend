@@ -39,6 +39,8 @@ class _TemplateLayer {
   double letterSpacing = 0;
   String fontFamily = 'Inter';
   double textBoxWidth = 360;
+  double imageWidth = 100;
+  double imageHeight = 72;
 }
 
 /// Settings: certificate template designer (layout similar to admin “create template” UIs).
@@ -332,7 +334,20 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     final envelope = CertificateDesignerEnvelope.tryDecode(body);
     if (envelope != null) {
       _applyDesignerJson(envelope.designer);
-      _syncBackgroundFromBackend(c);
+      final hasBackground =
+          (_backgroundImageBytes != null && _backgroundImageBytes!.isNotEmpty) ||
+          (_backgroundImageUrl != null && _backgroundImageUrl!.trim().isNotEmpty);
+      if (!hasBackground) {
+        _syncBackgroundFromBackend(c);
+        final hasBackendBackground =
+            (_backgroundImageBytes != null &&
+                _backgroundImageBytes!.isNotEmpty) ||
+            (_backgroundImageUrl != null &&
+                _backgroundImageUrl!.trim().isNotEmpty);
+        if (!hasBackendBackground) {
+          _syncBackgroundFromTemplateBody(body);
+        }
+      }
     } else {
       final restoredFromHtml = _applyTemplateHtml(body);
       if (!restoredFromHtml) {
@@ -406,6 +421,8 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       final style = m.group(2) ?? '';
       final left = _styleDouble(style, 'left') ?? 0;
       final top = _styleDouble(style, 'top') ?? 0;
+      final width = (_styleDouble(style, 'width') ?? 100).clamp(40.0, 1400.0);
+      final height = (_styleDouble(style, 'height') ?? 72).clamp(24.0, 1200.0);
       Uint8List? bytes;
       final data = _tryParseDataImageUrl(src);
       if (data != null) {
@@ -418,7 +435,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
           name: 'Image',
           offset: Offset(left, top),
           imageBytes: bytes,
-        ),
+        )
+          ..imageWidth = width
+          ..imageHeight = height,
       );
     }
 
@@ -692,13 +711,17 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   }
 
   void _applyDesignerJson(Map<String, dynamic> d) {
-    final paper = d['paper']?.toString();
+    final paper = (d['selectedPaper'] ?? d['paper'])?.toString();
     if (paper != null && paper.isNotEmpty) {
       _selectedPaper = _normalizedPaper(paper);
     }
     _portrait = d['portrait'] == true;
-    final cw = (d['customWidthPx'] as num?)?.toDouble();
-    final ch = (d['customHeightPx'] as num?)?.toDouble();
+    final cw =
+        ((d['customWidthMm'] as num?) ?? (d['customWidthPx'] as num?))
+            ?.toDouble();
+    final ch =
+        ((d['customHeightMm'] as num?) ?? (d['customHeightPx'] as num?))
+            ?.toDouble();
     if (cw != null && cw > 0) {
       _customWidthMm = cw;
       _customWidthMmController.text = _fmtNum(cw);
@@ -713,15 +736,16 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     }
 
     final bg = d['background'];
-    if (bg is Map) {
-      final b64 = bg['base64']?.toString();
-      if (b64 != null && b64.isNotEmpty) {
-        try {
-          _backgroundImageBytes = base64Decode(b64);
-          _backgroundImageUrl = null;
-        } catch (_) {
-          _backgroundImageBytes = null;
-        }
+    String? b64 = d['backgroundImageBase64']?.toString();
+    if ((b64 == null || b64.isEmpty) && bg is Map) {
+      b64 = bg['base64']?.toString();
+    }
+    if (b64 != null && b64.isNotEmpty) {
+      try {
+        _backgroundImageBytes = base64Decode(b64);
+        _backgroundImageUrl = null;
+      } catch (_) {
+        _backgroundImageBytes = null;
       }
     } else {
       _backgroundImageBytes = null;
@@ -791,7 +815,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
         name: name,
         imageBytes: bytes,
         offset: Offset(dx, dy),
-      );
+      )
+        ..imageWidth = (m['imageWidth'] as num?)?.toDouble() ?? 100
+        ..imageHeight = (m['imageHeight'] as num?)?.toDouble() ?? 72;
     }
 
     final layer =
@@ -832,14 +858,19 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   }
 
   String _colorToCss(Color c) {
-    final r = c.r.round().toRadixString(16).padLeft(2, '0');
-    final g = c.g.round().toRadixString(16).padLeft(2, '0');
-    final b = c.b.round().toRadixString(16).padLeft(2, '0');
-    final a = c.a;
+    final argb = c.toARGB32();
+    final aInt = (argb >> 24) & 0xFF;
+    final rInt = (argb >> 16) & 0xFF;
+    final gInt = (argb >> 8) & 0xFF;
+    final bInt = argb & 0xFF;
+    final r = rInt.toRadixString(16).padLeft(2, '0');
+    final g = gInt.toRadixString(16).padLeft(2, '0');
+    final b = bInt.toRadixString(16).padLeft(2, '0');
+    final a = aInt / 255.0;
     if (a >= 0.999) {
       return '#$r$g$b';
     }
-    return 'rgba(${c.r.round()}, ${c.g.round()}, ${c.b.round()}, ${a.toStringAsFixed(3)})';
+    return 'rgba($rInt, $gInt, $bInt, ${a.toStringAsFixed(3)})';
   }
 
   String? _backgroundImageDataUrl() {
@@ -869,8 +900,10 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
               return '';
             final imgData =
                 'data:image/png;base64,${base64Encode(layer.imageBytes!)}';
+            final iw = layer.imageWidth.clamp(40.0, 1400.0).toStringAsFixed(2);
+            final ih = layer.imageHeight.clamp(24.0, 1200.0).toStringAsFixed(2);
             return '''
-<img src="$imgData" alt="${_htmlEscape(layer.name)}" style="position:absolute;left:${left}px;top:${top}px;width:100px;height:72px;object-fit:cover;" />''';
+<img src="$imgData" alt="${_htmlEscape(layer.name)}" style="position:absolute;left:${left}px;top:${top}px;width:${iw}px;height:${ih}px;object-fit:cover;" />''';
           }
           final text = _resolveTemplateText(
             layer.text ?? '',
@@ -893,9 +926,10 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
         })
         .join('\n');
 
-    final backgroundCss = bgUrl == null
-        ? 'background:#ffffff;'
-        : 'background-image:url(${_htmlEscape(bgUrl)});background-size:cover;background-position:center;background-repeat:no-repeat;';
+    final backgroundCss = 'background:#ffffff;';
+    final backgroundLayerHtml = bgUrl == null
+        ? ''
+        : '<img src="${_htmlEscape(bgUrl)}" alt="Background" style="position:absolute;left:0;top:0;width:${widthPx.toStringAsFixed(2)}px;height:${heightPx.toStringAsFixed(2)}px;object-fit:cover;" />';
 
     return '''
 <!DOCTYPE html>
@@ -907,6 +941,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
 </head>
 <body style="margin:0;padding:0;">
   <div style="position:relative;width:${widthPx.toStringAsFixed(2)}px;height:${heightPx.toStringAsFixed(2)}px;$backgroundCss">
+    $backgroundLayerHtml
     $layerHtml
   </div>
 </body>
@@ -914,9 +949,63 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
 ''';
   }
 
+  Map<String, dynamic> _buildDesignerSnapshot() {
+    final designer = <String, dynamic>{
+      'selectedPaper': _selectedPaper,
+      'portrait': _portrait,
+      'customWidthMm': _customWidthMm,
+      'customHeightMm': _customHeightMm,
+      'layers': _layers.map((layer) {
+        final map = <String, dynamic>{
+          'id': layer.id,
+          'kind': layer.kind == _LayerKind.image ? 'image' : 'text',
+          'name': layer.name,
+          'offset': {
+            'dx': layer.offset.dx,
+            'dy': layer.offset.dy,
+          },
+        };
+        if (layer.kind == _LayerKind.image) {
+          map['imageBase64'] = layer.imageBytes == null
+              ? null
+              : base64Encode(layer.imageBytes!);
+          map['imageWidth'] = layer.imageWidth;
+          map['imageHeight'] = layer.imageHeight;
+        } else {
+          map['text'] = layer.text;
+          map['fontSize'] = layer.fontSize;
+          map['fontWeight'] = _fontWeightToInt(layer.fontWeight);
+          map['isItalic'] = layer.isItalic;
+          map['isUnderlined'] = layer.isUnderlined;
+          map['hasDashedBottomBorder'] = layer.hasDashedBottomBorder;
+          map['textAlign'] = _textAlignToString(layer.textAlign);
+          map['lineHeight'] = layer.lineHeight;
+          map['letterSpacing'] = layer.letterSpacing;
+          map['fontFamily'] = layer.fontFamily;
+          map['textColor'] = layer.textColor.toARGB32();
+          map['textBoxWidth'] = layer.textBoxWidth;
+        }
+        return map;
+      }).toList(),
+    };
+
+    if (_backgroundImageBytes != null && _backgroundImageBytes!.isNotEmpty) {
+      designer['backgroundImageBase64'] = base64Encode(_backgroundImageBytes!);
+    } else if (_backgroundImageUrl != null &&
+        _backgroundImageUrl!.trim().isNotEmpty) {
+      designer['backgroundImageUrl'] = _backgroundImageUrl!.trim();
+    }
+    return designer;
+  }
+
   void _persistDesignerToBackendModel(CertificateTemplateController c) {
     c.templateName.text = _canvasNameController.text.trim();
-    c.templateBody.text = _buildTemplateHtml();
+    final html = _buildTemplateHtml();
+    final wrapped = <String, dynamic>{
+      'templateBody': html,
+      'designer': _buildDesignerSnapshot(),
+    };
+    c.templateBody.text = jsonEncode(wrapped);
 
     if (_backgroundImageBytes != null && _backgroundImageBytes!.isNotEmpty) {
       c.backgroundPreset.value = 'CUSTOM_IMAGE';
@@ -1289,7 +1378,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
           ..lineHeight = source.lineHeight
           ..letterSpacing = source.letterSpacing
           ..fontFamily = source.fontFamily
-          ..textBoxWidth = source.textBoxWidth;
+          ..textBoxWidth = source.textBoxWidth
+          ..imageWidth = source.imageWidth
+          ..imageHeight = source.imageHeight;
 
     setState(() {
       _layers.add(duplicate);
@@ -1745,10 +1836,12 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
 
   Widget _buildLayerItem(_TemplateLayer layer, Size canvasSize, bool selected) {
     final stroke = selected ? AppTheme.primaryColor : Colors.transparent;
-    final maxLeft = canvasSize.width > 60 ? canvasSize.width - 60 : 0.0;
-    final maxTop = canvasSize.height > 40 ? canvasSize.height - 40 : 0.0;
-    final dragMaxLeft = canvasSize.width > 50 ? canvasSize.width - 50 : 0.0;
-    final dragMaxTop = canvasSize.height > 28 ? canvasSize.height - 28 : 0.0;
+    final boxWidth = layer.kind == _LayerKind.image ? layer.imageWidth : 60.0;
+    final boxHeight = layer.kind == _LayerKind.image ? layer.imageHeight : 40.0;
+    final maxLeft = (canvasSize.width - boxWidth).clamp(0.0, canvasSize.width);
+    final maxTop = (canvasSize.height - boxHeight).clamp(0.0, canvasSize.height);
+    final dragMaxLeft = maxLeft;
+    final dragMaxTop = maxTop;
     return Positioned(
       left: layer.offset.dx.clamp(0.0, maxLeft),
       top: layer.offset.dy.clamp(0.0, maxTop),
@@ -1888,21 +1981,119 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                           ],
                         ),
                 )
-              : ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: Image.memory(
-                    layer.imageBytes ?? Uint8List(0),
-                    width: 100,
-                    height: 72,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 100,
-                      height: 72,
-                      color: Colors.grey.shade200,
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.broken_image_outlined, size: 20),
-                    ),
-                  ),
+              : Builder(
+                  builder: (_) {
+                    final imageWidth = layer.imageWidth.clamp(40.0, 1000.0);
+                    final imageHeight = layer.imageHeight.clamp(24.0, 700.0);
+                    const toolbarHeight = 34.0;
+                    final totalWidth = selected
+                        ? (imageWidth < 172 ? 172.0 : imageWidth)
+                        : imageWidth;
+                    final imageTop = selected ? toolbarHeight : 0.0;
+                    return SizedBox(
+                      width: totalWidth,
+                      height: imageHeight + imageTop,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: 0,
+                            top: imageTop,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: Image.memory(
+                                layer.imageBytes ?? Uint8List(0),
+                                width: imageWidth,
+                                height: imageHeight,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: imageWidth,
+                                  height: imageHeight,
+                                  color: Colors.grey.shade200,
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Icons.broken_image_outlined,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (selected)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xCC0E1D34),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF1F3353)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _styleIconButton(
+                                icon: Icons.width_normal,
+                                selected: false,
+                                onTap: () => setState(() {
+                                  layer.imageWidth = (layer.imageWidth - 10).clamp(
+                                    40,
+                                    1000,
+                                  );
+                                }),
+                              ),
+                              const SizedBox(width: 4),
+                              _styleIconButton(
+                                icon: Icons.height,
+                                selected: false,
+                                onTap: () => setState(() {
+                                  layer.imageHeight = (layer.imageHeight - 8)
+                                      .clamp(24, 700);
+                                }),
+                              ),
+                              const SizedBox(width: 4),
+                              _styleIconButton(
+                                icon: Icons.add,
+                                selected: false,
+                                onTap: () => setState(() {
+                                  layer.imageWidth = (layer.imageWidth + 10).clamp(
+                                    40,
+                                    1000,
+                                  );
+                                  layer.imageHeight = (layer.imageHeight + 8)
+                                      .clamp(24, 700);
+                                }),
+                              ),
+                              const SizedBox(width: 4),
+                              InkWell(
+                                onTap: _deleteSelectedLayer,
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  width: 34,
+                                  height: 28,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF3B1A1A),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Icon(
+                                    Icons.delete_outline,
+                                    size: 16,
+                                    color: Color(0xFFF87171),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
         ),
       ),
