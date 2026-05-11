@@ -1479,6 +1479,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           controller.isLoadingInstitutionSearchLocations.value;
       final stateId = controller.institutionSearchFilterStateId.value;
       final loadingCities = controller.isLoadingInstitutionSearchCities.value;
+      if (controller.institutionSearchFilterTypeId.value > 0) {
+        controller.setInstitutionSearchFilterType(0);
+      }
 
       final stateField = loadingLocations
           ? TextFormField(
@@ -1538,41 +1541,10 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     onCityId: controller.setInstitutionSearchFilterCity,
                   ));
 
-      final typeField = DropdownButtonFormField<int?>(
-        value: controller.institutionSearchFilterTypeId.value > 0
-            ? controller.institutionSearchFilterTypeId.value
-            : null,
-        decoration: filterDecoration(),
-        hint: const Text('Institution type (optional)'),
-        isExpanded: true,
-        menuMaxHeight: 280,
-        style: TextStyle(fontSize: isMobile ? 14 : 15),
-        items: [
-          const DropdownMenuItem<int?>(value: null, child: Text('Any type')),
-          ...controller.institutionSearchTypes.map(
-            (t) => DropdownMenuItem<int?>(
-              value: t.id,
-              child: Text(t.displayName, overflow: TextOverflow.ellipsis),
-            ),
-          ),
-        ],
-        onChanged: loadingLocations
-            ? null
-            : (v) {
-                controller.setInstitutionSearchFilterType(v ?? 0);
-              },
-      );
-
       final filterChildren = isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                stateField,
-                const SizedBox(height: 12),
-                cityField,
-                const SizedBox(height: 12),
-                typeField,
-              ],
+              children: [stateField, const SizedBox(height: 12), cityField],
             )
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1580,8 +1552,6 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 Expanded(child: stateField),
                 SizedBox(width: isTablet ? 10 : 12),
                 Expanded(child: cityField),
-                SizedBox(width: isTablet ? 10 : 12),
-                Expanded(child: typeField),
               ],
             );
 
@@ -1590,8 +1560,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         children: [
           FormLabelWithHint(
             label: 'Narrow search (optional)',
-            hintText:
-                'Search state & city by typing; pick institution type below',
+            hintText: 'Search state & city by typing',
             bottomSpacing: 8,
           ),
           filterChildren,
