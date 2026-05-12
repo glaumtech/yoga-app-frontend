@@ -14,7 +14,6 @@ import '../../data/models/api_response.dart';
 import '../../data/models/score_response_model.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
-import '../../data/models/city_model.dart';
 import '../../data/models/institution_type_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
@@ -94,23 +93,22 @@ class ParticipantController extends GetxController {
 
   /// Optional filters for institution autocomplete (registration form).
   final RxInt institutionSearchFilterStateId = 0.obs;
-  final RxInt institutionSearchFilterCityId = 0.obs;
   final RxInt institutionSearchFilterTypeId = 0.obs;
   final RxList<StateModel> institutionSearchStates = <StateModel>[].obs;
-  final RxList<CityModel> institutionSearchCities = <CityModel>[].obs;
+  final RxList<String> institutionSearchDistricts = <String>[].obs;
   final RxList<InstitutionTypeModel> institutionSearchTypes =
       <InstitutionTypeModel>[].obs;
   final RxBool isLoadingInstitutionSearchLocations = false.obs;
-  final RxBool isLoadingInstitutionSearchCities = false.obs;
+  final RxBool isLoadingInstitutionSearchDistricts = false.obs;
   Future<void>? _institutionSearchFilterDataFuture;
 
-  /// Owned by this controller; passed to [StateSearchField] / [CitySearchField] (stateless).
+  /// Owned by this controller; passed to [StateSearchField] / [DistrictSearchField] (stateless).
   final TextEditingController institutionFilterStateTextController =
       TextEditingController();
   final FocusNode institutionFilterStateFocusNode = FocusNode();
-  final TextEditingController institutionFilterCityTextController =
+  final TextEditingController institutionFilterDistrictTextController =
       TextEditingController();
-  final FocusNode institutionFilterCityFocusNode = FocusNode();
+  final FocusNode institutionFilterDistrictFocusNode = FocusNode();
 
   // Store institutionId from API response for edit mode
   final RxnString participantInstitutionId = RxnString();
@@ -179,7 +177,7 @@ class ParticipantController extends GetxController {
     return _institutionSearchFilterDataFuture!;
   }
 
-  /// Force reload of institution search filter data (types/states/cities).
+  /// Force reload of institution search filter data (types/states/districts source cities).
   /// Useful when institution types/categories are updated in Settings.
   Future<void> refreshInstitutionSearchFilters() async {
     _institutionSearchFilterDataFuture = null;
@@ -208,9 +206,8 @@ class ParticipantController extends GetxController {
 
   Future<void> setInstitutionSearchFilterState(int stateId) async {
     institutionSearchFilterStateId.value = stateId;
-    institutionSearchFilterCityId.value = 0;
-    institutionSearchCities.clear();
-    institutionFilterCityTextController.clear();
+    institutionSearchDistricts.clear();
+    institutionFilterDistrictTextController.clear();
 
     if (stateId <= 0) {
       institutionFilterStateTextController.clear();
@@ -222,39 +219,34 @@ class ParticipantController extends GetxController {
       institutionFilterStateTextController.text = st.stateName;
     }
 
-    isLoadingInstitutionSearchCities.value = true;
+    isLoadingInstitutionSearchDistricts.value = true;
     try {
-      final res = await _locationRepository.getCitiesByStateId(stateId);
+      final res = await _locationRepository.getDistrictsByStateId(stateId);
       if (res.success && res.data != null) {
-        institutionSearchCities.assignAll(res.data!);
-        institutionSearchCities.sort(
-          (a, b) => a.cityName.compareTo(b.cityName),
-        );
+        institutionSearchDistricts.assignAll(res.data!);
+      } else {
+        institutionSearchDistricts.clear();
       }
     } finally {
-      isLoadingInstitutionSearchCities.value = false;
+      isLoadingInstitutionSearchDistricts.value = false;
     }
   }
 
-  void setInstitutionSearchFilterCity(int cityId) {
-    institutionSearchFilterCityId.value = cityId;
-    if (cityId <= 0) {
-      institutionFilterCityTextController.clear();
-      return;
-    }
-    final c = institutionSearchCities.firstWhereOrNull((x) => x.id == cityId);
-    if (c != null) {
-      institutionFilterCityTextController.text = c.cityName;
-    }
+  /// Exact district string for API, or null if field empty / no exact match to known districts.
+  String? _resolvedInstitutionSearchDistrict() {
+    final typed = institutionFilterDistrictTextController.text.trim();
+    if (typed.isEmpty) return null;
+    return institutionSearchDistricts.firstWhereOrNull(
+      (d) => d.toLowerCase() == typed.toLowerCase(),
+    );
   }
 
   void _resetInstitutionSearchFilters() {
     institutionSearchFilterStateId.value = 0;
-    institutionSearchFilterCityId.value = 0;
     institutionSearchFilterTypeId.value = 0;
-    institutionSearchCities.clear();
+    institutionSearchDistricts.clear();
     institutionFilterStateTextController.clear();
-    institutionFilterCityTextController.clear();
+    institutionFilterDistrictTextController.clear();
   }
 
   void setInstitutionSearchFilterType(int typeId) {
@@ -278,6 +270,9 @@ class ParticipantController extends GetxController {
 
     try {
       isLoadingInstitutions.value = true;
+      final String? districtFilter = useInstitutionSearchFilters
+          ? _resolvedInstitutionSearchDistrict()
+          : null;
       final response = await _schoolRepository.searchInstitutions(
         query: query.trim(),
         stateId:
@@ -285,11 +280,9 @@ class ParticipantController extends GetxController {
                 institutionSearchFilterStateId.value > 0
             ? institutionSearchFilterStateId.value
             : null,
-        cityId:
-            useInstitutionSearchFilters &&
-                institutionSearchFilterCityId.value > 0
-            ? institutionSearchFilterCityId.value
-            : null,
+        cityId: null,
+        cityName: null,
+        district: districtFilter,
         institutionTypeId:
             useInstitutionSearchFilters &&
                 institutionSearchFilterTypeId.value > 0
@@ -468,8 +461,8 @@ class ParticipantController extends GetxController {
     bulkInstitutionNameController.dispose();
     institutionFilterStateTextController.dispose();
     institutionFilterStateFocusNode.dispose();
-    institutionFilterCityTextController.dispose();
-    institutionFilterCityFocusNode.dispose();
+    institutionFilterDistrictTextController.dispose();
+    institutionFilterDistrictFocusNode.dispose();
     for (final row in bulkRegistrationRows) {
       row.dispose();
     }

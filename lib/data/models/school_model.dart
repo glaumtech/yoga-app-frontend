@@ -9,6 +9,7 @@ class SchoolModel {
   final int? cityId;
   final String? cityName;
   final String? district;
+  final String? village;
   final String? state; // Legacy field for backward compatibility
   final String pincode;
   final String? email;
@@ -38,6 +39,7 @@ class SchoolModel {
     this.cityId,
     this.cityName,
     this.district,
+    this.village,
     this.state,
     required this.pincode,
     this.email,
@@ -92,6 +94,7 @@ class SchoolModel {
           : null,
       cityName: json['cityName']?.toString(),
       district: json['district']?.toString() ?? json['cityName']?.toString(),
+      village: json['village']?.toString(),
       state: json['stateName']?.toString() ?? json['state']?.toString(),
       pincode: json['pincode']?.toString() ?? '',
       email: json['email']?.toString() ?? json['emailId']?.toString(),
@@ -171,6 +174,7 @@ class SchoolModel {
     int? cityId,
     String? cityName,
     String? district,
+    String? village,
     String? state,
     String? pincode,
     String? email,
@@ -199,6 +203,7 @@ class SchoolModel {
       cityId: cityId ?? this.cityId,
       cityName: cityName ?? this.cityName,
       district: district ?? this.district,
+      village: village ?? this.village,
       state: state ?? this.state,
       pincode: pincode ?? this.pincode,
       email: email ?? this.email,

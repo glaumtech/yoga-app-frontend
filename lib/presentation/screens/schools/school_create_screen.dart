@@ -4,10 +4,30 @@ import 'package:get/get.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
-import '../../widgets/location/city_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../widgets/mandatory_aware_label.dart';
 import '../../../data/models/institution_category_model.dart';
+import '../../../data/models/city_model.dart';
+
+String _villageName(CityModel c) => (c.village ?? c.description ?? '').trim();
+
+/// Suggestion row: city • village • pincode (no labels).
+String _villageSuggestionLine(CityModel c) {
+  final v = _villageName(c);
+  if (v.isEmpty) {
+    return '${c.cityName} • ${c.pincode}';
+  }
+  return '${c.cityName} • $v • ${c.pincode}';
+}
+
+/// Text field after selection: city, village.
+String _villageSelectedDisplay(CityModel c) {
+  final v = _villageName(c);
+  if (v.isEmpty) {
+    return c.cityName;
+  }
+  return '${c.cityName}, $v';
+}
 
 class SchoolCreateScreen extends StatelessWidget {
   final bool hideButtons;
@@ -300,7 +320,7 @@ class SchoolCreateScreen extends StatelessWidget {
                   ),
                   SizedBox(height: isMobile ? 20 : 24),
 
-                  // State, City, Pincode in row (desktop) or column (mobile)
+                  // State, District, Village, Pincode in row (desktop) or column (mobile)
                   isMobile
                       ? Column(
                           children: [
@@ -311,7 +331,14 @@ class SchoolCreateScreen extends StatelessWidget {
                               isTablet,
                             ),
                             SizedBox(height: isMobile ? 20 : 24),
-                            _buildCityField(
+                            _buildDistrictField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildVillageSearchField(
                               context,
                               controller,
                               isMobile,
@@ -341,7 +368,17 @@ class SchoolCreateScreen extends StatelessWidget {
                             SizedBox(width: isTablet ? 8 : 12),
                             Expanded(
                               flex: 1,
-                              child: _buildCityField(
+                              child: _buildDistrictField(
+                                context,
+                                controller,
+                                isMobile,
+                                isTablet,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 8 : 12),
+                            Expanded(
+                              flex: 1,
+                              child: _buildVillageSearchField(
                                 context,
                                 controller,
                                 isMobile,
@@ -642,7 +679,7 @@ class SchoolCreateScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCityField(
+  Widget _buildDistrictField(
     BuildContext context,
     SchoolController controller,
     bool isMobile,
@@ -652,7 +689,7 @@ class SchoolCreateScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         MandatoryAwareLabel(
-          label: 'City * :',
+          label: 'District * :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -660,7 +697,13 @@ class SchoolCreateScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Obx(() {
-          if (controller.isLoadingCities.value) {
+          // Track committed district for async pre-fill / selection; do not
+          // mirror draft text here (typing would rebuild and drop focus).
+          // ignore: unused_local_variable
+          final committedDistrict = controller.selectedDistrict.value;
+          final districtListVersion = controller.stateDistrictList.length;
+
+          if (controller.isLoadingStateDistricts.value) {
             return TextFormField(
               readOnly: true,
               style: TextStyle(fontSize: isMobile ? 14 : 16),
@@ -674,7 +717,7 @@ class SchoolCreateScreen extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              ).copyWith(hintText: 'Loading cities...'),
+              ).copyWith(hintText: 'Loading districts...'),
             );
           }
 
@@ -688,29 +731,283 @@ class SchoolCreateScreen extends StatelessWidget {
             );
           }
 
-          final availableCities =
-              controller.cities
-                  .where((c) => c.stateId == controller.selectedStateId.value)
-                  .toList()
-                ..sort((a, b) => a.cityName.compareTo(b.cityName));
+          return Autocomplete<String>(
+            key: ValueKey(
+              'district_${controller.selectedStateId}_$districtListVersion',
+            ),
+            optionsBuilder: (TextEditingValue value) {
+              final q = value.text.trim().toLowerCase();
+              final availableDistricts = List<String>.from(
+                controller.stateDistrictList,
+              );
+              if (q.isEmpty) return availableDistricts;
+              return availableDistricts.where(
+                (d) => d.toLowerCase().contains(q),
+              );
+            },
+            onSelected: controller.setCreateFormDistrict,
+            fieldViewBuilder:
+                (context, textController, focusNode, onFieldSubmitted) {
+                  if (controller.createFormDistrictTextController.text !=
+                      textController.text) {
+                    textController.value = TextEditingValue(
+                      text: controller.createFormDistrictTextController.text,
+                      selection: TextSelection.collapsed(
+                        offset: controller
+                            .createFormDistrictTextController
+                            .text
+                            .length,
+                      ),
+                    );
+                  }
+                  return TextFormField(
+                    controller: textController,
+                    focusNode: focusNode,
+                    style: TextStyle(fontSize: isMobile ? 14 : 16),
+                    decoration: _schoolLocationDecoration(
+                      isMobile,
+                      suffixIcon: const Icon(Icons.search),
+                    ).copyWith(hintText: 'Search or select district'),
+                    onChanged: (value) {
+                      final nextDistrict = value.trim();
+                      final previousDistrict = controller.selectedDistrict.value
+                          .trim();
+                      controller.createFormDistrictTextController.text = value;
+                      if (nextDistrict.isEmpty) {
+                        controller.setCreateFormDistrict('');
+                      } else if (previousDistrict != nextDistrict &&
+                          controller.selectedCity.value.trim().isNotEmpty) {
+                        controller.selectedCity.value = '';
+                        controller.createFormCityTextController.clear();
+                        controller.pincodeController.clear();
+                      }
+                      controller.createFormDistrictDraftRevision.value++;
+                    },
+                    onFieldSubmitted: (_) =>
+                        controller.setCreateFormDistrict(textController.text),
+                    validator: (value) {
+                      if (controller.selectedStateId.value <= 0) {
+                        return 'Please select state first';
+                      }
+                      if ((value ?? '').trim().isEmpty) {
+                        return 'Please select district';
+                      }
+                      return null;
+                    },
+                  );
+                },
+            optionsViewBuilder: (context, onSelected, options) {
+              final opts = options.toList(growable: false);
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxHeight: 240,
+                      minWidth: 280,
+                    ),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: opts.length,
+                      itemBuilder: (context, index) {
+                        final option = opts[index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(option),
+                          onTap: () => onSelected(option),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        }),
+      ],
+    );
+  }
 
-          return CitySearchField(
-            textEditingController: controller.createFormCityTextController,
-            focusNode: controller.createFormCityFocusNode,
-            cities: availableCities,
-            decorationBuilder: ({Widget? suffixIcon}) =>
-                _schoolLocationDecoration(isMobile, suffixIcon: suffixIcon),
-            isMobile: isMobile,
-            hintText: 'Search or select city',
-            onCityId: controller.setCreateFormCity,
-            validator: (_) {
-              if (controller.selectedStateId.value <= 0) {
-                return 'Please select state first';
+  Widget _buildVillageSearchField(
+    BuildContext context,
+    SchoolController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MandatoryAwareLabel(
+          label: 'Village * :',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: isMobile ? 14 : 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Obx(() {
+          controller.createFormDistrictDraftRevision.value;
+          if (controller.selectedStateId.value <= 0) {
+            return TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: _schoolLocationDecoration(
+                isMobile,
+              ).copyWith(hintText: 'Select state first'),
+            );
+          }
+
+          final districtDraft = controller.createFormDistrictTextController.text
+              .trim();
+          final districtCommitted = controller.selectedDistrict.value.trim();
+          if (districtDraft.isEmpty && districtCommitted.isEmpty) {
+            return TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: _schoolLocationDecoration(
+                isMobile,
+              ).copyWith(hintText: 'Select district first'),
+            );
+          }
+
+          if (controller.isLoadingCreateFormVillages.value) {
+            return TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: _schoolLocationDecoration(
+                isMobile,
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ).copyWith(hintText: 'Loading villages...'),
+            );
+          }
+
+          final availableVillages = controller.createFormVillages.toList()
+            ..sort((a, b) => a.cityName.compareTo(b.cityName));
+
+          return Autocomplete<CityModel>(
+            optionsBuilder: (TextEditingValue value) {
+              final q = value.text.trim().toLowerCase();
+              if (q.isEmpty) {
+                return availableVillages;
               }
-              if (controller.selectedCity.value.isEmpty) {
-                return 'Please select city';
-              }
-              return null;
+              return availableVillages.where((c) {
+                final village = (c.village ?? c.description ?? '')
+                    .toLowerCase();
+                return c.cityName.toLowerCase().contains(q) ||
+                    village.contains(q) ||
+                    c.pincode.toLowerCase().contains(q);
+              });
+            },
+            displayStringForOption: _villageSelectedDisplay,
+            // Persists city row id as createFormSelectedCityId for save/update cityId.
+            onSelected: (CityModel city) =>
+                controller.setCreateFormCity(city.id),
+            fieldViewBuilder:
+                (context, textController, focusNode, onFieldSubmitted) {
+                  if (controller.createFormCityTextController.text !=
+                      textController.text) {
+                    textController.value = TextEditingValue(
+                      text: controller.createFormCityTextController.text,
+                      selection: TextSelection.collapsed(
+                        offset:
+                            controller.createFormCityTextController.text.length,
+                      ),
+                    );
+                  }
+
+                  return TextFormField(
+                    controller: textController,
+                    focusNode: focusNode,
+                    style: TextStyle(fontSize: isMobile ? 14 : 16),
+                    decoration: _schoolLocationDecoration(
+                      isMobile,
+                      suffixIcon: const Icon(Icons.search),
+                    ).copyWith(hintText: 'Search village or add new village'),
+                    onChanged: controller.setCreateFormCityName,
+                    onFieldSubmitted: controller.setCreateFormCityName,
+                    validator: (_) {
+                      if (controller.selectedStateId.value <= 0) {
+                        return 'Please select state first';
+                      }
+                      final dDraft = controller
+                          .createFormDistrictTextController
+                          .text
+                          .trim();
+                      final dCommitted = controller.selectedDistrict.value
+                          .trim();
+                      if (dDraft.isEmpty && dCommitted.isEmpty) {
+                        return 'Please select district first';
+                      }
+                      if (controller.selectedCity.value.trim().isEmpty) {
+                        return 'Please enter village';
+                      }
+                      return null;
+                    },
+                  );
+                },
+            optionsViewBuilder: (context, onSelected, options) {
+              final opts = options.toList(growable: false);
+              final query = controller.createFormCityTextController.text.trim();
+              final qLower = query.toLowerCase();
+              final hasExact =
+                  query.isNotEmpty &&
+                  opts.any((c) {
+                    final cityOnly = c.cityName.trim().toLowerCase() == qLower;
+                    final fullDisplay =
+                        _villageSelectedDisplay(c).toLowerCase() == qLower;
+                    return cityOnly || fullDisplay;
+                  });
+              final showAdd = query.isNotEmpty && !hasExact;
+
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxHeight: 280,
+                      minWidth: 360,
+                    ),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: opts.length + (showAdd ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (showAdd && index == 0) {
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.add, size: 18),
+                            title: Text('Add "$query" as village'),
+                            onTap: () {
+                              controller.setCreateFormCityName(query);
+                              FocusScope.of(context).unfocus();
+                            },
+                          );
+                        }
+
+                        final city = opts[showAdd ? index - 1 : index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            _villageSuggestionLine(city),
+                            style: TextStyle(fontSize: isMobile ? 13.5 : 14.5),
+                          ),
+                          onTap: () => onSelected(city),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
             },
           );
         }),

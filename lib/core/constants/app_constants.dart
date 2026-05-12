@@ -130,7 +130,12 @@ class EndPoints {
 
   /// LOCATIONS
   static String stateList = '/state';
+  static String cityCreate = '/city';
   static String cityListByState(int stateId) => '/city/state/$stateId';
+  static String districtListByState(int stateId) =>
+      '/city/districts/state/$stateId';
+  static String villageListByStateAndDistrict(int stateId, String district) =>
+      '/city/villages/state/$stateId/district/${Uri.encodeComponent(district)}';
 
   /// INSTITUTIONS
   static String institutionCreate = '/institution';

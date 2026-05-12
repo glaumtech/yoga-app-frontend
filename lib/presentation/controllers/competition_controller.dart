@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/repositories/competition_repository.dart';
@@ -984,6 +985,7 @@ class CompetitionController extends GetxController {
 
   // Load competitions list
   Future<void> loadCompetitions({bool resetPage = false}) async {
+    await _yieldPastBuildIfNeeded();
     try {
       isLoading.value = true;
       errorMessage.value = '';
@@ -1048,6 +1050,16 @@ class CompetitionController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  /// When [loadCompetitions] is started from [StatelessWidget.build], the HTTP
+  /// stack on web can resolve in the same frame; GetX then notifies [Obx]
+  /// during build ("markNeedsBuild called during build").
+  static Future<void> _yieldPastBuildIfNeeded() async {
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      return;
+    }
+    await SchedulerBinding.instance.endOfFrame;
   }
 
   // Go to next page

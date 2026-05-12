@@ -17,7 +17,7 @@ import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
-import '../../widgets/location/city_search_field.dart';
+import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../schools/school_create_screen.dart';
 
@@ -1478,7 +1478,10 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       final loadingLocations =
           controller.isLoadingInstitutionSearchLocations.value;
       final stateId = controller.institutionSearchFilterStateId.value;
-      final loadingCities = controller.isLoadingInstitutionSearchCities.value;
+      final loadingDistricts =
+          controller.isLoadingInstitutionSearchDistricts.value;
+      // Rebuild when cities for the state load (district list is derived).
+      final districtListVersion = controller.institutionSearchDistricts.length;
       if (controller.institutionSearchFilterTypeId.value > 0) {
         controller.setInstitutionSearchFilterType(0);
       }
@@ -1508,7 +1511,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               onStateId: controller.setInstitutionSearchFilterState,
             );
 
-      final cityField = loadingCities
+      final districtField = loadingDistricts
           ? TextFormField(
               readOnly: true,
               style: TextStyle(fontSize: isMobile ? 14 : 15),
@@ -1521,7 +1524,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              ).copyWith(hintText: 'Loading cities...'),
+              ).copyWith(hintText: 'Loading districts...'),
             )
           : (stateId <= 0
                 ? TextFormField(
@@ -1531,27 +1534,31 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       hintText: 'Select state first',
                     ),
                   )
-                : CitySearchField(
+                : DistrictSearchField(
+                    key: ValueKey(
+                      'inst_search_district_${stateId}_$districtListVersion',
+                    ),
                     textEditingController:
-                        controller.institutionFilterCityTextController,
-                    focusNode: controller.institutionFilterCityFocusNode,
-                    cities: List.from(controller.institutionSearchCities),
+                        controller.institutionFilterDistrictTextController,
+                    focusNode: controller.institutionFilterDistrictFocusNode,
+                    districts: List<String>.from(
+                      controller.institutionSearchDistricts,
+                    ),
                     decorationBuilder: filterDecoration,
                     isMobile: isMobile,
-                    onCityId: controller.setInstitutionSearchFilterCity,
                   ));
 
       final filterChildren = isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [stateField, const SizedBox(height: 12), cityField],
+              children: [stateField, const SizedBox(height: 12), districtField],
             )
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: stateField),
                 SizedBox(width: isTablet ? 10 : 12),
-                Expanded(child: cityField),
+                Expanded(child: districtField),
               ],
             );
 
@@ -1560,7 +1567,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         children: [
           FormLabelWithHint(
             label: 'Narrow search (optional)',
-            hintText: 'Search state & city by typing',
+            hintText: 'Search state & district by typing',
             bottomSpacing: 8,
           ),
           filterChildren,
