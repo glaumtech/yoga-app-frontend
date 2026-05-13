@@ -156,9 +156,12 @@ class UserManagementScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(16),
-        child: Form(
-          key: controller.formKey,
-          child: Column(
+        child: Obx(() {
+          // Rebuild [Form] when the controller issues a new GlobalKey (see [UserManagementController._refreshFormKey]).
+          final _ = controller.formKeyRevision.value;
+          return Form(
+            key: controller.formKey,
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Title
@@ -363,7 +366,8 @@ class UserManagementScreen extends StatelessWidget {
               }),
             ],
           ),
-        ),
+        );
+        }),
       ),
     );
   }

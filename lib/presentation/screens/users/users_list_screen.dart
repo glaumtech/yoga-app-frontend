@@ -26,15 +26,17 @@ class UsersListScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    return Card(
-      elevation: 4,
-      margin: EdgeInsets.symmetric(horizontal: isMobile ? 0 : 0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return SizedBox(
+      width: double.infinity,
+      child: Card(
+        elevation: 4,
+        margin: EdgeInsets.symmetric(horizontal: isMobile ? 0 : 0),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             // Search and Filter Section
             _buildSearchSection(
               context,
@@ -130,6 +132,7 @@ class UsersListScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -292,6 +295,7 @@ class UsersListScreen extends StatelessWidget {
         return controller.loadUsers(eventId: eventId);
       },
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(12),
         itemCount: users.length,
         itemBuilder: (context, index) {
@@ -507,12 +511,16 @@ class UsersListScreen extends StatelessWidget {
             : null;
         return controller.loadUsers(eventId: eventId);
       },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth - 32; // Account for padding
-          return SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: Padding(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            var maxW = constraints.maxWidth;
+            if (!maxW.isFinite || maxW <= 0) {
+              maxW = MediaQuery.sizeOf(context).width;
+            }
+            final tableWidth = (maxW - 32).clamp(200.0, double.infinity);
+            return Padding(
               padding: const EdgeInsets.all(16),
               child: SizedBox(
                 width: tableWidth,
@@ -638,9 +646,9 @@ class UsersListScreen extends StatelessWidget {
                   );
                 }),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
