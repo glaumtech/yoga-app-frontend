@@ -393,6 +393,64 @@ class ReportsRepository {
     }
   }
 
+  Future<ApiResponse<Uint8List>> getParticipantECertificatePdf(
+    int competitionId, {
+    required int participantRegistrationId,
+    required int stageId,
+    required int categoryId,
+    int? groupId,
+  }) async {
+    try {
+      final params = <String>[
+        'participantRegistrationId=$participantRegistrationId',
+        'stageId=$stageId',
+        'categoryId=$categoryId',
+      ];
+      if (groupId != null) {
+        params.add('groupId=$groupId');
+      }
+      final url =
+          BaseUrl.baseUrl +
+          EndPoints.competitionParticipantECertificatePrint(competitionId) +
+          '?${params.join('&')}';
+      final uri = Uri.parse(url);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept': 'application/pdf',
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to download e-certificate (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error downloading e-certificate: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
+  }
+
   Future<ApiResponse<Uint8List>> getCompetitionParticipantsPrintPdf(
     int competitionId, {
     List<int>? stageIds,
