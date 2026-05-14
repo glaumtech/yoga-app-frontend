@@ -16,6 +16,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
+    String? district,
     List<String>? genders,
   }) {
     final segments = <String>[];
@@ -45,6 +46,9 @@ class ReportsRepository {
         'institutionId=${Uri.encodeQueryComponent(institutionId.toString())}',
       );
     }
+    if (district != null && district.trim().isNotEmpty) {
+      segments.add('district=${Uri.encodeQueryComponent(district.trim())}');
+    }
     if (genders != null) {
       for (final g in genders) {
         if (g.isNotEmpty) {
@@ -53,6 +57,82 @@ class ReportsRepository {
       }
     }
     if (segments.isEmpty) return '';
+    return '?${segments.join('&')}';
+  }
+
+  /// Filters + pagination + optional name/reg search for participant scores table API.
+  static String participantScoresTableQuery({
+    required int page,
+    required int size,
+    String? search,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    String? district,
+    List<String>? genders,
+  }) {
+    final segments = <String>[];
+    final filter = participantReportQuery(
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      district: district,
+      genders: genders,
+    );
+    if (filter.isNotEmpty) {
+      segments.add(filter.substring(1));
+    }
+    segments.add('page=${Uri.encodeQueryComponent(page.toString())}');
+    segments.add('size=${Uri.encodeQueryComponent(size.toString())}');
+    if (search != null && search.trim().isNotEmpty) {
+      segments.add('search=${Uri.encodeQueryComponent(search.trim())}');
+    }
+    return '?${segments.join('&')}';
+  }
+
+  /// Report filters + row bucket ids for participant score details API.
+  static String participantScoreDetailsQuery({
+    required int participantRegistrationId,
+    required int rowStageId,
+    required int rowCategoryId,
+    int? rowGroupId,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    String? district,
+    List<String>? genders,
+  }) {
+    final segments = <String>[];
+    final filter = participantReportQuery(
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      district: district,
+      genders: genders,
+    );
+    if (filter.isNotEmpty) {
+      segments.add(filter.substring(1));
+    }
+    segments.add(
+      'participantRegistrationId=${Uri.encodeQueryComponent(participantRegistrationId.toString())}',
+    );
+    segments.add('rowStageId=${Uri.encodeQueryComponent(rowStageId.toString())}');
+    segments.add('rowCategoryId=${Uri.encodeQueryComponent(rowCategoryId.toString())}');
+    if (rowGroupId != null) {
+      segments.add('rowGroupId=${Uri.encodeQueryComponent(rowGroupId.toString())}');
+    }
     return '?${segments.join('&')}';
   }
 
@@ -84,6 +164,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
+    String? district,
     List<String>? genders,
   }) async {
     final q = participantReportQuery(
@@ -93,6 +174,7 @@ class ReportsRepository {
       stateId: stateId,
       cityId: cityId,
       institutionId: institutionId,
+      district: district,
       genders: genders,
     );
 
@@ -111,6 +193,98 @@ class ReportsRepository {
     return ApiResponse(
       success: false,
       message: response.message ?? 'Failed to load participant scores report',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> getCompetitionParticipantScoresTable(
+    int competitionId, {
+    required int page,
+    int size = 20,
+    String? search,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    String? district,
+    List<String>? genders,
+  }) async {
+    final q = participantScoresTableQuery(
+      page: page,
+      size: size,
+      search: search,
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      district: district,
+      genders: genders,
+    );
+
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: '${EndPoints.competitionParticipantScoresTable(competitionId)}$q',
+      apiType: APIType.aGet,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load participant scores table',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> getParticipantScoreDetails(
+    int competitionId, {
+    required int participantRegistrationId,
+    required int rowStageId,
+    required int rowCategoryId,
+    int? rowGroupId,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    String? district,
+    List<String>? genders,
+  }) async {
+    final q = participantScoreDetailsQuery(
+      participantRegistrationId: participantRegistrationId,
+      rowStageId: rowStageId,
+      rowCategoryId: rowCategoryId,
+      rowGroupId: rowGroupId,
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      district: district,
+      genders: genders,
+    );
+
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: '${EndPoints.competitionParticipantScoreDetails(competitionId)}$q',
+      apiType: APIType.aGet,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load participant score details',
       statusCode: response.statusCode,
     );
   }
@@ -227,6 +401,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
+    String? district,
     List<String>? genders,
   }) async {
     try {
@@ -237,6 +412,7 @@ class ReportsRepository {
         stateId: stateId,
         cityId: cityId,
         institutionId: institutionId,
+        district: district,
         genders: genders,
       );
 
@@ -289,6 +465,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
+    String? district,
     List<String>? genders,
   }) async {
     try {
@@ -299,6 +476,7 @@ class ReportsRepository {
         stateId: stateId,
         cityId: cityId,
         institutionId: institutionId,
+        district: district,
         genders: genders,
       );
 

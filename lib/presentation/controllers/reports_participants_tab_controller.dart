@@ -1,9 +1,10 @@
+import 'dart:async' show Timer, unawaited;
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../data/models/api_response.dart';
-import '../../data/models/city_model.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
 import '../../data/repositories/competition_repository.dart';
@@ -22,7 +23,18 @@ class ReportsParticipantsTabController extends GetxController {
 
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
-  final Rxn<Map<String, dynamic>> data = Rxn<Map<String, dynamic>>();
+
+  /// Paginated participant rows (no jury breakdown).
+  final RxList<Map<String, dynamic>> tableItems = <Map<String, dynamic>>[].obs;
+  final RxInt tablePage = 0.obs;
+  static const int tablePageSize = 20;
+  final RxInt tableTotalElements = 0.obs;
+  final RxInt tableTotalPages = 0.obs;
+  final RxString tableCompetitionName = ''.obs;
+
+  final RxBool isDetailsLoading = false.obs;
+
+  Timer? _searchDebounce;
 
   /// Empty lists mean "all" for that dimension.
   final RxList<int> selectedStageIds = <int>[].obs;
@@ -31,11 +43,14 @@ class ReportsParticipantsTabController extends GetxController {
   final RxList<String> selectedGenders = <String>[].obs;
 
   final RxnInt selectedStateId = RxnInt();
-  final RxnInt selectedCityId = RxnInt();
   final RxnInt selectedInstitutionId = RxnInt();
+  /// District name on institution's city (matches backend `cities.district`).
+  final Rxn<String> selectedDistrictFilter = Rxn<String>();
 
-  // UI-only search (filters current blocks in the Participants tab)
+  // Search is sent to the paginated table API (server-side).
   final RxString participantSearchQuery = ''.obs;
+  final TextEditingController participantSearchFieldController =
+      TextEditingController();
 
   /// Stage / category options from API (competition-scoped)
   final RxList<Map<String, dynamic>> stageOptions =
@@ -47,7 +62,7 @@ class ReportsParticipantsTabController extends GetxController {
 
   /// Populated when opening filters (location / institution pickers).
   final RxList<StateModel> filterStateOptions = <StateModel>[].obs;
-  final RxList<CityModel> filterCityOptions = <CityModel>[].obs;
+  final RxList<String> filterDistrictOptions = <String>[].obs;
   final RxList<SchoolModel> filterInstitutionOptions = <SchoolModel>[].obs;
 
   Worker? _competitionWatcher;
@@ -67,7 +82,12 @@ class ReportsParticipantsTabController extends GetxController {
             await load(id, refreshOptions: true);
           });
         } else {
-          data.value = null;
+          tableItems.clear();
+          tableTotalElements.value = 0;
+          tableTotalPages.value = 0;
+          tableCompetitionName.value = '';
+          participantSearchQuery.value = '';
+          participantSearchFieldController.clear();
           stageOptions.clear();
           categoryOptions.clear();
           groupOptions.clear();
@@ -76,8 +96,8 @@ class ReportsParticipantsTabController extends GetxController {
           selectedGroupIds.clear();
           selectedGenders.clear();
           selectedStateId.value = null;
-          selectedCityId.value = null;
           selectedInstitutionId.value = null;
+          selectedDistrictFilter.value = null;
         }
       },
     );
@@ -92,12 +112,6 @@ class ReportsParticipantsTabController extends GetxController {
     if (id != null) {
       load(id, refreshOptions: true);
     }
-  }
-
-  @override
-  void onClose() {
-    _competitionWatcher?.dispose();
-    super.onClose();
   }
 
   @override
@@ -116,9 +130,13 @@ class ReportsParticipantsTabController extends GetxController {
     selectedGroupIds.clear();
     selectedGenders.clear();
     selectedStateId.value = null;
-    selectedCityId.value = null;
     selectedInstitutionId.value = null;
+    selectedDistrictFilter.value = null;
     participantSearchQuery.value = '';
+    if (participantSearchFieldController.text.isNotEmpty) {
+      participantSearchFieldController.clear();
+    }
+    tablePage.value = 0;
   }
 
   int get activeFilterCount {
@@ -127,10 +145,19 @@ class ReportsParticipantsTabController extends GetxController {
     if (selectedCategoryIds.isNotEmpty) n++;
     if (selectedGroupIds.isNotEmpty) n++;
     if (selectedStateId.value != null) n++;
-    if (selectedCityId.value != null) n++;
+    if (selectedDistrictFilter.value != null &&
+        selectedDistrictFilter.value!.trim().isNotEmpty) {
+      n++;
+    }
     if (selectedInstitutionId.value != null) n++;
     if (selectedGenders.isNotEmpty) n++;
     return n;
+  }
+
+  String? _districtQueryParam() {
+    final d = selectedDistrictFilter.value?.trim();
+    if (d == null || d.isEmpty) return null;
+    return d;
   }
 
   Future<void> ensureFilterStatesLoaded() async {
@@ -143,15 +170,16 @@ class ReportsParticipantsTabController extends GetxController {
     }
   }
 
-  Future<void> reloadFilterCitiesForState(int? stateId) async {
-    filterCityOptions.clear();
+  /// Loads districts for autocomplete; clears when [stateId] is null. Call only after a state is chosen.
+  Future<void> reloadFilterDistrictsForState(int? stateId) async {
     filterInstitutionOptions.clear();
+    filterDistrictOptions.clear();
     if (stateId == null || stateId <= 0) return;
-    final r = await _locationRepository.getCitiesByStateId(stateId);
-    if (r.success && r.data != null) {
-      final list = List<CityModel>.from(r.data!)
-        ..sort((a, b) => a.cityName.compareTo(b.cityName));
-      filterCityOptions.assignAll(list);
+    final d = await _locationRepository.getDistrictsByStateId(stateId);
+    if (d.success && d.data != null) {
+      final list = List<String>.from(d.data!)
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      filterDistrictOptions.assignAll(list);
     }
   }
 
@@ -210,12 +238,25 @@ class ReportsParticipantsTabController extends GetxController {
     await ensureFilterStatesLoaded();
     final sid = selectedStateId.value;
     if (sid != null && sid > 0) {
-      await reloadFilterCitiesForState(sid);
-      await reloadFilterInstitutions(
-        stateId: sid,
-        cityId: selectedCityId.value,
-      );
+      await reloadFilterDistrictsForState(sid);
+      await reloadFilterInstitutions(stateId: sid, cityId: null);
     }
+  }
+
+  /// Resolves typed district against loaded [known] list; falls back to trimmed text.
+  String? resolveParticipantReportDistrict(
+    List<String> known,
+    String typed,
+  ) {
+    final t = typed.trim();
+    if (t.isEmpty) return null;
+    for (final d in known) {
+      if (d.toLowerCase() == t.toLowerCase()) return d;
+    }
+    final subs =
+        known.where((d) => d.toLowerCase().contains(t.toLowerCase())).toList();
+    if (subs.length == 1) return subs.first;
+    return t;
   }
 
   void applyFilters({
@@ -224,8 +265,8 @@ class ReportsParticipantsTabController extends GetxController {
     required List<int> groupIds,
     required List<String> genders,
     int? stateId,
-    int? cityId,
     int? institutionId,
+    String? district,
   }) {
     selectedStageIds
       ..clear()
@@ -240,13 +281,34 @@ class ReportsParticipantsTabController extends GetxController {
       ..clear()
       ..addAll(genders.toSet());
     selectedStateId.value = stateId;
-    selectedCityId.value = cityId;
     selectedInstitutionId.value = institutionId;
+    final dTrim = district?.trim();
+    selectedDistrictFilter.value =
+        (dTrim != null && dTrim.isNotEmpty) ? dTrim : null;
+    tablePage.value = 0;
     _reloadWithFilters();
   }
 
   void setParticipantSearchQuery(String value) {
     participantSearchQuery.value = value;
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      tablePage.value = 0;
+      final id = int.tryParse(
+        reportsController.selectedCompetitionId.value ?? '',
+      );
+      if (id != null) {
+        unawaited(load(id));
+      }
+    });
+  }
+
+  @override
+  void onClose() {
+    _searchDebounce?.cancel();
+    _competitionWatcher?.dispose();
+    participantSearchFieldController.dispose();
+    super.onClose();
   }
 
   Future<void> _reloadWithFilters() async {
@@ -311,8 +373,13 @@ class ReportsParticipantsTabController extends GetxController {
         await loadStageAndCategoryOptions(competitionId);
       }
 
-      final resp = await _reportsRepository.getCompetitionParticipantScores(
+      final resp = await _reportsRepository.getCompetitionParticipantScoresTable(
         competitionId,
+        page: tablePage.value,
+        size: tablePageSize,
+        search: participantSearchQuery.value.trim().isEmpty
+            ? null
+            : participantSearchQuery.value.trim(),
         stageIds:
             selectedStageIds.isEmpty ? null : List<int>.from(selectedStageIds),
         categoryIds: selectedCategoryIds.isEmpty
@@ -321,8 +388,9 @@ class ReportsParticipantsTabController extends GetxController {
         groupIds:
             selectedGroupIds.isEmpty ? null : List<int>.from(selectedGroupIds),
         stateId: selectedStateId.value,
-        cityId: selectedCityId.value,
+        cityId: null,
         institutionId: selectedInstitutionId.value,
+        district: _districtQueryParam(),
         genders: selectedGenders.isEmpty
             ? null
             : List<String>.from(selectedGenders),
@@ -331,16 +399,98 @@ class ReportsParticipantsTabController extends GetxController {
       if (!resp.success || resp.data == null) {
         errorMessage.value =
             resp.message ?? 'Failed to load participant scores';
-        data.value = null;
+        tableItems.clear();
+        tableTotalElements.value = 0;
+        tableTotalPages.value = 0;
         return;
       }
 
-      data.value = Map<String, dynamic>.from(resp.data!);
+      final d = Map<String, dynamic>.from(resp.data!);
+      final rawItems = (d['items'] as List?) ?? const [];
+      tableItems.assignAll(
+        rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+      );
+      tableTotalElements.value = (d['totalElements'] as num?)?.toInt() ?? 0;
+      tableTotalPages.value = (d['totalPages'] as num?)?.toInt() ?? 0;
+      tablePage.value = (d['page'] as num?)?.toInt() ?? 0;
+      tableCompetitionName.value =
+          (d['competitionName'] ?? '').toString();
     } catch (e) {
       errorMessage.value = 'Error loading participant scores: ${e.toString()}';
-      data.value = null;
+      tableItems.clear();
+      tableTotalElements.value = 0;
+      tableTotalPages.value = 0;
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  Future<void> goToTablePage(int page) async {
+    if (page < 0) return;
+    if (tableTotalPages.value > 0 && page >= tableTotalPages.value) {
+      return;
+    }
+    tablePage.value = page;
+    final id = int.tryParse(
+      reportsController.selectedCompetitionId.value ?? '',
+    );
+    if (id != null) {
+      await load(id);
+    }
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> fetchScoreDetails(
+    Map<String, dynamic> row,
+  ) async {
+    final competitionId = int.tryParse(
+      reportsController.selectedCompetitionId.value ?? '',
+    );
+    if (competitionId == null) {
+      return ApiResponse(
+        success: false,
+        message: 'Select a competition first',
+        statusCode: 0,
+      );
+    }
+    final pid = (row['participantRegistrationId'] as num?)?.toInt();
+    final rowStageId = (row['stageId'] as num?)?.toInt();
+    final rowCategoryId = (row['categoryId'] as num?)?.toInt();
+    final rowGroupId = row['groupId'] != null
+        ? (row['groupId'] as num?)?.toInt()
+        : null;
+    if (pid == null || rowStageId == null || rowCategoryId == null) {
+      return ApiResponse(
+        success: false,
+        message: 'Invalid row data',
+        statusCode: 0,
+      );
+    }
+
+    isDetailsLoading.value = true;
+    try {
+      return await _reportsRepository.getParticipantScoreDetails(
+        competitionId,
+        participantRegistrationId: pid,
+        rowStageId: rowStageId,
+        rowCategoryId: rowCategoryId,
+        rowGroupId: rowGroupId,
+        stageIds:
+            selectedStageIds.isEmpty ? null : List<int>.from(selectedStageIds),
+        categoryIds: selectedCategoryIds.isEmpty
+            ? null
+            : List<int>.from(selectedCategoryIds),
+        groupIds:
+            selectedGroupIds.isEmpty ? null : List<int>.from(selectedGroupIds),
+        stateId: selectedStateId.value,
+        cityId: null,
+        institutionId: selectedInstitutionId.value,
+        district: _districtQueryParam(),
+        genders: selectedGenders.isEmpty
+            ? null
+            : List<String>.from(selectedGenders),
+      );
+    } finally {
+      isDetailsLoading.value = false;
     }
   }
 
@@ -375,8 +525,9 @@ class ReportsParticipantsTabController extends GetxController {
           ? null
           : List<int>.from(selectedGroupIds),
       stateId: selectedStateId.value,
-      cityId: selectedCityId.value,
+      cityId: null,
       institutionId: selectedInstitutionId.value,
+      district: _districtQueryParam(),
       genders:
           selectedGenders.isEmpty ? null : List<String>.from(selectedGenders),
     );

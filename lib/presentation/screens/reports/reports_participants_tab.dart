@@ -1,4 +1,5 @@
 import 'dart:async' show Timer, unawaited;
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:html' as html show Blob, Url, AnchorElement;
 
@@ -8,11 +9,478 @@ import 'package:get/get.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/reports_participants_tab_controller.dart';
-import '../../../data/models/city_model.dart';
+import '../../widgets/location/district_search_field.dart';
 import '../../../data/models/school_model.dart';
 import '../../../data/models/state_model.dart';
 import '../../../data/repositories/reports_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+/// Mint header and grid styling for the participant scores table (reports).
+const Color _kParticipantTableHeaderBg = Color(0xFFE8F5E9);
+const Color _kParticipantTableBorder = Color(0xFFE0E0E0);
+/// Header label when not the active (green) sort column — dark blue-grey.
+const Color _kParticipantTableHeaderMuted = Color(0xFF37474F);
+
+enum _ParticipantHeaderSort {
+  /// No sort affordance (e.g. ICON, TYPE).
+  none,
+  /// Grey up/down icon (sortable look only).
+  inactive,
+  /// Green label + down arrow (active sort column look).
+  active,
+}
+
+List<int> _participantTablePageIndices(int currentPage, int totalPages) {
+  if (totalPages <= 0) return const <int>[];
+  if (totalPages <= 7) {
+    return List<int>.generate(totalPages, (i) => i);
+  }
+  const window = 5;
+  var start = currentPage - (window ~/ 2);
+  if (start < 0) start = 0;
+  if (start + window > totalPages) {
+    start = math.max(0, totalPages - window);
+  }
+  return List<int>.generate(
+    math.min(window, totalPages - start),
+    (i) => start + i,
+  );
+}
+
+String _participantSheetAvatarInitial(String? name) {
+  final t = (name ?? '').trim();
+  if (t.isEmpty) return '?';
+  return t.substring(0, 1).toUpperCase();
+}
+
+Future<void> _openParticipantScoreDetails(
+  BuildContext context,
+  ReportsParticipantsTabController tabController,
+  Map<String, dynamic> row,
+) async {
+  final resp = await tabController.fetchScoreDetails(row);
+  if (!context.mounted) return;
+  if (!resp.success || resp.data == null) {
+    Get.snackbar(
+      'Details',
+      resp.message ?? 'Could not load jury scores',
+      backgroundColor: Colors.red.shade700,
+      colorText: Colors.white,
+    );
+    return;
+  }
+  final d = Map<String, dynamic>.from(resp.data!);
+  final juryScores = (d['juryScores'] as List?)?.cast<dynamic>() ?? const [];
+
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) {
+      final total =
+          (double.tryParse((d['totalGrandTotal'] ?? 0).toString()) ?? 0.0)
+              .toStringAsFixed(2);
+      final pName = (d['participantName'] ?? 'Participant').toString();
+      final initial = _participantSheetAvatarInitial(pName);
+      final metaLine = [
+        if ((d['registrationNo'] ?? '').toString().isNotEmpty)
+          d['registrationNo'].toString(),
+        if ((d['institutionName'] ?? '').toString().isNotEmpty)
+          d['institutionName'].toString(),
+      ].join(' · ');
+      final bucketLine = [
+        (d['categoryName'] ?? '').toString(),
+        (d['stageName'] ?? '').toString(),
+        (d['groupName'] ?? '').toString(),
+      ].where((e) => e.isNotEmpty).join(' · ');
+      final juryCount = (d['juryCount'] ?? 0).toString();
+
+      final mq = MediaQuery.sizeOf(ctx);
+      final dialogWidth = math.min(520.0, mq.width - 40);
+      final maxDialogHeight = math.min(mq.height * 0.88, mq.height - 32);
+
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        clipBehavior: Clip.antiAlias,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: dialogWidth,
+            maxHeight: maxDialogHeight,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            physics: const ClampingScrollPhysics(),
+            padding: EdgeInsets.zero,
+            children: [
+              Material(
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 4, 2),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Score details',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF212121),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        icon: Icon(Icons.close, color: Colors.grey[800]),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Divider(height: 1, thickness: 1, color: Colors.grey[200]),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: _kParticipantTableHeaderBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _kParticipantTableBorder),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor: AppTheme.primaryColor,
+                                child: Text(
+                                  initial,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      pName,
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF212121),
+                                      ),
+                                    ),
+                                    if (metaLine.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        metaLine,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[800],
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                    ],
+                                    if (bucketLine.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          for (final part
+                                              in bucketLine.split(' · '))
+                                            if (part.isNotEmpty)
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                    color: Colors.grey[400]!,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  part,
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF424242),
+                                                  ),
+                                                ),
+                                              ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'TOTAL',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.6,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                  Text(
+                                    total,
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppTheme.primaryColor,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '$juryCount ${int.tryParse(juryCount) == 1 ? 'jury' : 'juries'}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Container(
+                            width: 3,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Jury score breakdown',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.grey[900],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (juryScores.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Text(
+                            'No jury scores.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      else
+                        ...juryScores.map((js) {
+                          final m = (js as Map).cast<String, dynamic>();
+                          final juryName =
+                              (m['juryName'] ?? '').toString().trim();
+                          final juryId = (m['juryId'] ?? '').toString();
+                          final juryLabel =
+                              juryName.isNotEmpty ? juryName : juryId;
+                          final jt = (double.tryParse(
+                                    (m['grandTotal'] ?? 0).toString(),
+                                  ) ??
+                                  0.0)
+                              .toStringAsFixed(2);
+                          final asanaScores =
+                              (m['asanaScores'] as Map?)
+                                  ?.cast<String, dynamic>() ??
+                              {};
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: _kParticipantTableBorder),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Container(
+                                        width: 4,
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            12,
+                                            10,
+                                            12,
+                                            10,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.how_to_reg_outlined,
+                                                    size: 18,
+                                                    color:
+                                                        AppTheme.primaryColor,
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Expanded(
+                                                    child: Text(
+                                                      juryLabel,
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                        fontSize: 14,
+                                                        color:
+                                                            Color(0xFF212121),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DecoratedBox(
+                                                    decoration: BoxDecoration(
+                                                      color: AppTheme
+                                                          .primaryColor
+                                                          .withValues(
+                                                        alpha: 0.1,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                        8,
+                                                      ),
+                                                    ),
+                                                    child: Padding(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6,
+                                                      ),
+                                                      child: Text(
+                                                        jt,
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          fontSize: 14,
+                                                          color: AppTheme
+                                                              .primaryColor,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              if (asanaScores.isNotEmpty) ...[
+                                                const SizedBox(height: 10),
+                                                Wrap(
+                                                  spacing: 6,
+                                                  runSpacing: 6,
+                                                  children: [
+                                                    for (final entry
+                                                        in asanaScores.entries)
+                                                      Container(
+                                                        padding: const EdgeInsets
+                                                            .symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 5,
+                                                        ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: const Color(
+                                                            0xFFF1F8E9,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                          border: Border.all(
+                                                            color: AppTheme
+                                                                .primaryColor
+                                                                .withValues(
+                                                              alpha: 0.35,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          '${entry.key}: ${entry.value}',
+                                                          style: const TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: Color(
+                                                              0xFF33691E,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
 
 class ReportsParticipantsTab extends StatelessWidget {
   const ReportsParticipantsTab({super.key});
@@ -84,8 +552,13 @@ class ReportsParticipantsTab extends StatelessWidget {
             ? null
             : List<int>.from(tabController.selectedGroupIds),
         stateId: tabController.selectedStateId.value,
-        cityId: tabController.selectedCityId.value,
+        cityId: null,
         institutionId: tabController.selectedInstitutionId.value,
+        district: (() {
+          final d = tabController.selectedDistrictFilter.value?.trim();
+          if (d == null || d.isEmpty) return null;
+          return d;
+        })(),
         genders: tabController.selectedGenders.isEmpty
             ? null
             : List<String>.from(tabController.selectedGenders),
@@ -168,25 +641,11 @@ class ReportsParticipantsTab extends StatelessWidget {
         );
       }
 
-      final payload = tabController.data.value;
-      final blocks = (payload?['blocks'] as List?)?.cast() ?? const [];
-      final query = tabController.participantSearchQuery.value
-          .trim()
-          .toLowerCase();
-      final visibleBlocks = query.isEmpty
-          ? blocks
-          : blocks.where((b) {
-              final block = (b as Map).cast<String, dynamic>();
-              final participants =
-                  (block['participants'] as List?)?.cast() ?? const [];
-              return participants.any((p) {
-                final m = (p as Map).cast<String, dynamic>();
-                final name = (m['participantName'] ?? '')
-                    .toString()
-                    .toLowerCase();
-                return name.contains(query);
-              });
-            }).toList();
+      final compSel =
+          tabController.reportsController.selectedCompetitionId.value ?? '';
+      final hasCompetition = compSel.isNotEmpty;
+      final items = tabController.tableItems;
+      final q = tabController.participantSearchQuery.value.trim();
 
       return RefreshIndicator(
         onRefresh: tabController.refresh,
@@ -202,97 +661,41 @@ class ReportsParticipantsTab extends StatelessWidget {
               onDownloadExcel: _downloadParticipantsExcel,
             ),
             const SizedBox(height: 12),
-            if (payload == null)
+            if (!hasCompetition)
               _infoCard('Select a competition to view participant scores.')
-            else if (blocks.isEmpty)
-              _infoCard('No participant scores found yet.')
-            else if (visibleBlocks.isEmpty)
-              _infoCard('No participants match your search.')
+            else if (items.isEmpty)
+              _infoCard(
+                q.isNotEmpty
+                    ? 'No participants match your search.'
+                    : 'No participant scores found yet.',
+              )
             else ...[
-              ...visibleBlocks.map((b) {
-                final block = (b as Map).cast<String, dynamic>();
-                final stageName = (block['stageName'] ?? '').toString();
-                final categoryName = (block['categoryName'] ?? '').toString();
-                final groupName = (block['groupName'] ?? '').toString();
-                final participants =
-                    (block['participants'] as List?)?.cast() ?? const [];
-
-                final filteredParticipants = participants.where((p) {
-                  final m = (p as Map).cast<String, dynamic>();
-                  final name = (m['participantName'] ?? '')
-                      .toString()
-                      .toLowerCase();
-                  if (query.isEmpty) return true;
-                  return name.contains(query);
-                }).toList();
-
-                final title =
-                    '${categoryName.isNotEmpty ? categoryName : 'Category'}'
-                    '  •  ${stageName.isNotEmpty ? 'Stage $stageName' : 'Stage'}'
-                    '  •  ${groupName.isNotEmpty ? groupName : 'Group'}';
-
-                return Card(
-                  elevation: 2,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(isMobile ? 12 : 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 6,
-                              height: isMobile ? 18 : 20,
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryColor,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: isMobile ? 13 : 14,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              '${filteredParticipants.length} participant${filteredParticipants.length == 1 ? '' : 's'}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (filteredParticipants.isEmpty)
-                          _infoCard(
-                            'No scored participants found for this block.',
-                          )
-                        else
-                          ...filteredParticipants.map((p) {
-                            final m = (p as Map).cast<String, dynamic>();
-                            return _participantCard(m, isMobile);
-                          }).toList(),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
+              _buildParticipantScoresStyledTable(
+                context,
+                tabController,
+                items,
+                isMobile,
+              ),
               const SizedBox(height: 8),
             ],
           ],
         ),
       );
     });
+  }
+
+  Widget _buildParticipantScoresStyledTable(
+    BuildContext context,
+    ReportsParticipantsTabController tabController,
+    List<Map<String, dynamic>> items,
+    bool isMobile,
+  ) {
+    return _ReportsParticipantScoresTable(
+      hostContext: context,
+      controller: tabController,
+      items: items,
+      isMobile: isMobile,
+    );
   }
 
   Widget _buildFilters(
@@ -356,6 +759,7 @@ class ReportsParticipantsTab extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
+                    controller: controller.participantSearchFieldController,
                     onChanged: controller.setParticipantSearchQuery,
                     decoration: InputDecoration(
                       prefixIcon: Icon(
@@ -437,7 +841,7 @@ class ReportsParticipantsTab extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Use Report filters for stage, category, group, state, city, institution, and gender.',
+              'Use Report filters for stage, category, group, state, district, institution, and gender.',
               style: TextStyle(
                 fontSize: isMobile ? 11 : 12,
                 color: Colors.grey[700],
@@ -446,193 +850,6 @@ class ReportsParticipantsTab extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _participantCard(Map<String, dynamic> p, bool isMobile) {
-    final name = (p['participantName'] ?? '').toString();
-    final regNo = (p['registrationNo'] ?? '').toString();
-    final inst = (p['institutionName'] ?? '').toString();
-    final juryCount = (p['juryCount'] ?? 0).toString();
-    final avgTotal =
-        (double.tryParse((p['avgGrandTotal'] ?? 0).toString()) ?? 0.0)
-            .toStringAsFixed(2);
-    final juryScores = (p['juryScores'] as List?)?.cast() ?? const [];
-
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Theme(
-        data: ThemeData().copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 12 : 14,
-            vertical: isMobile ? 6 : 8,
-          ),
-          childrenPadding: EdgeInsets.fromLTRB(
-            isMobile ? 12 : 14,
-            0,
-            isMobile ? 12 : 14,
-            isMobile ? 12 : 14,
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name.isNotEmpty ? name : 'Unknown participant',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: isMobile ? 13 : 14,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [
-                        if (regNo.isNotEmpty) regNo,
-                        if (inst.isNotEmpty) inst,
-                      ].join(' • '),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'TOTAL',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  Text(
-                    avgTotal,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                  Text(
-                    'Juries: $juryCount',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          children: [
-            if (juryScores.isEmpty)
-              Text(
-                'No jury scores.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[700],
-                  fontWeight: FontWeight.w600,
-                ),
-              )
-            else
-              ...juryScores.map((js) {
-                final m = (js as Map).cast<String, dynamic>();
-                final juryId = (m['juryId'] ?? '').toString();
-                final juryName = (m['juryName'] ?? '').toString().trim();
-                final juryLabel = juryName.isNotEmpty ? juryName : juryId;
-                final total =
-                    (double.tryParse((m['grandTotal'] ?? 0).toString()) ?? 0.0)
-                        .toStringAsFixed(2);
-                final asanaScores =
-                    (m['asanaScores'] as Map?)?.cast<String, dynamic>() ?? {};
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              juryLabel,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            'Total: $total',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final entry in asanaScores.entries)
-                            _pill(entry.key, (entry.value ?? 0).toString()),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _pill(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Text(
-        '$label: $value',
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -664,6 +881,525 @@ class ReportsParticipantsTab extends StatelessWidget {
   }
 }
 
+/// Dashboard-style grid table with mint header and numbered pagination.
+class _ReportsParticipantScoresTable extends StatelessWidget {
+  const _ReportsParticipantScoresTable({
+    required this.hostContext,
+    required this.controller,
+    required this.items,
+    required this.isMobile,
+  });
+
+  final BuildContext hostContext;
+  final ReportsParticipantsTabController controller;
+  final List<Map<String, dynamic>> items;
+  final bool isMobile;
+
+  static const BorderSide _cellBorderSide = BorderSide(
+    color: _kParticipantTableBorder,
+    width: 1,
+  );
+
+  static String _initialForName(String? name) {
+    final t = (name ?? '').trim();
+    if (t.isEmpty) return '?';
+    return t.substring(0, 1).toUpperCase();
+  }
+
+  static Widget _headerLabel(
+    String label, {
+    TextAlign align = TextAlign.left,
+    _ParticipantHeaderSort sort = _ParticipantHeaderSort.none,
+  }) {
+    final isActive = sort == _ParticipantHeaderSort.active;
+    final showSortIcon =
+        sort == _ParticipantHeaderSort.inactive || isActive;
+    final labelColor =
+        isActive ? AppTheme.primaryColor : _kParticipantTableHeaderMuted;
+
+    return Row(
+      mainAxisAlignment: align == TextAlign.right
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
+      children: [
+        Flexible(
+          child: Text(
+            label,
+            textAlign: align,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.35,
+              color: labelColor,
+            ),
+          ),
+        ),
+        if (showSortIcon) ...[
+          const SizedBox(width: 4),
+          Icon(
+            isActive ? Icons.arrow_downward : Icons.swap_vert,
+            size: 16,
+            color: isActive ? AppTheme.primaryColor : Colors.grey[600],
+          ),
+        ],
+      ],
+    );
+  }
+
+  static Widget _dataChip(String text) {
+    if (text.trim().isEmpty) return const SizedBox.shrink();
+    return Chip(
+      label: Text(
+        text.trim(),
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF424242),
+        ),
+      ),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: EdgeInsets.zero,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+      backgroundColor: const Color(0xFFEEEEEE),
+      side: BorderSide(color: Colors.grey[400]!),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+    );
+  }
+
+  Widget _headerCell({
+    required Widget child,
+    required double width,
+    bool last = false,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: _kParticipantTableHeaderBg,
+          border: Border(
+            right: last ? BorderSide.none : _cellBorderSide,
+            bottom: _cellBorderSide,
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _headerExpanded({
+    required Widget child,
+    required int flex,
+    bool last = false,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: _kParticipantTableHeaderBg,
+          border: Border(
+            right: last ? BorderSide.none : _cellBorderSide,
+            bottom: _cellBorderSide,
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _bodyCell({
+    required Widget child,
+    required double width,
+    bool last = false,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            right: last ? BorderSide.none : _cellBorderSide,
+            bottom: _cellBorderSide,
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _bodyExpanded({
+    required Widget child,
+    required int flex,
+    bool last = false,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            right: last ? BorderSide.none : _cellBorderSide,
+            bottom: _cellBorderSide,
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenW = MediaQuery.sizeOf(context).width;
+    final outerPad = isMobile ? 24.0 : 32.0;
+    final minTableWidth = math.max(920.0, screenW - outerPad);
+
+    return Card(
+      elevation: 1,
+      shadowColor: Colors.black26,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: _kParticipantTableBorder),
+      ),
+      child: Material(
+        color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: minTableWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _headerCell(
+                            width: 48,
+                            child: _headerLabel('ICON'),
+                          ),
+                          _headerExpanded(
+                            flex: 22,
+                            child: _headerLabel(
+                              'NAME & REG. NO.',
+                              sort: _ParticipantHeaderSort.inactive,
+                            ),
+                          ),
+                          _headerExpanded(
+                            flex: 22,
+                            child: _headerLabel('TYPE & CATEGORY'),
+                          ),
+                          _headerExpanded(
+                            flex: 30,
+                            child: _headerLabel('INSTITUTION'),
+                          ),
+                          _headerCell(
+                            width: 72,
+                            child: _headerLabel(
+                              'JURIES',
+                              align: TextAlign.right,
+                              sort: _ParticipantHeaderSort.inactive,
+                            ),
+                          ),
+                          _headerCell(
+                            width: 92,
+                            last: true,
+                            child: _headerLabel(
+                              'TOTAL',
+                              align: TextAlign.right,
+                              sort: _ParticipantHeaderSort.active,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    for (final row in items)
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            unawaited(
+                              _openParticipantScoreDetails(
+                                hostContext,
+                                controller,
+                                Map<String, dynamic>.from(row),
+                              ),
+                            );
+                          },
+                          hoverColor: AppTheme.primaryColor.withValues(
+                            alpha: 0.06,
+                          ),
+                          splashColor: AppTheme.primaryColor.withValues(
+                            alpha: 0.12,
+                          ),
+                          child: IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _bodyCell(
+                                  width: 48,
+                                  child: Align(
+                                    alignment: Alignment.center,
+                                    child: CircleAvatar(
+                                      radius: 14,
+                                      backgroundColor: AppTheme.primaryColor,
+                                      child: Text(
+                                        _initialForName(
+                                          row['participantName']?.toString(),
+                                        ),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                _bodyExpanded(
+                                  flex: 22,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        (row['participantName'] ?? '')
+                                            .toString()
+                                            .trim()
+                                            .isEmpty
+                                            ? '—'
+                                            : (row['participantName'] ?? '')
+                                                  .toString(),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                          color: Color(0xFF212121),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        (row['registrationNo'] ?? '')
+                                            .toString(),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                _bodyExpanded(
+                                  flex: 22,
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: [
+                                        _dataChip(
+                                          (row['categoryName'] ?? '')
+                                              .toString(),
+                                        ),
+                                        _dataChip(
+                                          (row['stageName'] ?? '').toString(),
+                                        ),
+                                        _dataChip(
+                                          (row['groupName'] ?? '').toString(),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                _bodyExpanded(
+                                  flex: 30,
+                                  child: Text(
+                                    (row['institutionName'] ?? '')
+                                        .toString()
+                                        .trim()
+                                        .isEmpty
+                                        ? '—'
+                                        : (row['institutionName'] ?? '')
+                                              .toString(),
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      height: 1.25,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                ),
+                                _bodyCell(
+                                  width: 72,
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      (row['juryCount'] ?? 0).toString(),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                _bodyCell(
+                                  width: 92,
+                                  last: true,
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      (double.tryParse(
+                                                (row['totalGrandTotal'] ?? 0)
+                                                    .toString(),
+                                              ) ??
+                                              0.0)
+                                          .toStringAsFixed(2),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13,
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFFAFAFA),
+                border: Border(
+                  top: BorderSide(color: _kParticipantTableBorder),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Obx(() {
+                final pg = controller.tablePage.value;
+                final tp = controller.tableTotalPages.value;
+                final te = controller.tableTotalElements.value;
+                final totalP = tp <= 0 ? 1 : tp;
+                final indices = _participantTablePageIndices(pg, totalP);
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Page ${pg + 1} of $totalP',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Total: $te participants',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Previous page',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: pg > 0
+                          ? () => controller.goToTablePage(pg - 1)
+                          : null,
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: pg > 0 ? Colors.grey[800] : Colors.grey[400],
+                      ),
+                    ),
+                    for (final i in indices)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: InkWell(
+                          onTap: i == pg
+                              ? null
+                              : () => controller.goToTablePage(i),
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: i == pg
+                                  ? AppTheme.primaryColor
+                                  : Colors.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${i + 1}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: i == pg
+                                    ? Colors.white
+                                    : Colors.grey[600],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    IconButton(
+                      tooltip: 'Next page',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: tp > 0 && pg < tp - 1
+                          ? () => controller.goToTablePage(pg + 1)
+                          : null,
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: tp > 0 && pg < tp - 1
+                            ? Colors.grey[800]
+                            : Colors.grey[400],
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ParticipantFiltersDialog extends StatefulWidget {
   const _ParticipantFiltersDialog({required this.controller});
 
@@ -680,7 +1416,6 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
   late Set<int> _groups;
   late Set<String> _genders;
   int? _state;
-  int? _city;
   int? _institution;
   bool _loadingLists = true;
 
@@ -688,40 +1423,34 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
   Worker? _filterInstitutionsRxWorker;
 
   final TextEditingController _stateSearchController = TextEditingController();
-  final TextEditingController _citySearchController = TextEditingController();
   final TextEditingController _institutionSearchController =
       TextEditingController();
+  final TextEditingController _districtSearchController =
+      TextEditingController();
   final FocusNode _stateFocus = FocusNode();
-  final FocusNode _cityFocus = FocusNode();
   final FocusNode _institutionFocus = FocusNode();
+  final FocusNode _districtFocus = FocusNode();
 
   /// Focus drops before ListTile [onTap] runs; panels keyed only on [hasFocus]
   /// disappear and swallow the tap. Keep panels mounted briefly after blur.
   Timer? _stateSuggestionsHideTimer;
-  Timer? _citySuggestionsHideTimer;
   Timer? _institutionSuggestionsHideTimer;
+  /// Avoids running state→district sync on every keystroke in the state field.
+  Timer? _stateSearchDebounce;
 
   bool _stateSuggestionsVisible = false;
-  bool _citySuggestionsVisible = false;
   bool _institutionSuggestionsVisible = false;
 
   static const Duration _locationSuggestionHideDelay = Duration(
     milliseconds: 220,
   );
+  static const Duration _stateSearchDebounceDelay = Duration(milliseconds: 450);
 
   void _scheduleHideStateSuggestions() {
     _stateSuggestionsHideTimer?.cancel();
     _stateSuggestionsHideTimer = Timer(_locationSuggestionHideDelay, () {
       if (!mounted || _stateFocus.hasFocus) return;
       setState(() => _stateSuggestionsVisible = false);
-    });
-  }
-
-  void _scheduleHideCitySuggestions() {
-    _citySuggestionsHideTimer?.cancel();
-    _citySuggestionsHideTimer = Timer(_locationSuggestionHideDelay, () {
-      if (!mounted || _cityFocus.hasFocus) return;
-      setState(() => _citySuggestionsVisible = false);
     });
   }
 
@@ -738,19 +1467,9 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
       _stateSuggestionsHideTimer?.cancel();
       setState(() => _stateSuggestionsVisible = true);
     } else {
+      _stateSearchDebounce?.cancel();
       _scheduleHideStateSuggestions();
       unawaited(_syncStateFromSearchQuery());
-    }
-    setState(() {});
-  }
-
-  void _onCityFocusChanged() {
-    if (_cityFocus.hasFocus) {
-      _citySuggestionsHideTimer?.cancel();
-      setState(() => _citySuggestionsVisible = true);
-    } else {
-      _scheduleHideCitySuggestions();
-      unawaited(_syncCityFromSearchQuery());
     }
     setState(() {});
   }
@@ -774,19 +1493,18 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
     );
   }
 
-  /// When the typed query matches exactly one state, commit selection and load cities.
+  /// When the typed query matches exactly one state, commit selection and load districts.
   Future<void> _syncStateFromSearchQuery() async {
     final q = _stateSearchController.text.trim().toLowerCase();
     if (q.isEmpty) {
       if (_state != null) {
         setState(() {
           _state = null;
-          _city = null;
           _institution = null;
-          _citySearchController.clear();
           _institutionSearchController.clear();
+          _districtSearchController.clear();
         });
-        await widget.controller.reloadFilterCitiesForState(null);
+        await widget.controller.reloadFilterDistrictsForState(null);
         if (mounted) setState(() {});
       }
       return;
@@ -798,67 +1516,28 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
     if (m.length != 1) return;
 
     final s = m.first;
-    if (_state == s.id &&
-        _stateSearchController.text.trim() == s.stateName.trim()) {
+    // Already committed to this state: normalize label only, do not refetch districts.
+    if (_state == s.id) {
+      if (_stateSearchController.text.trim() != s.stateName.trim()) {
+        setState(() {
+          _setFilterFieldText(_stateSearchController, s.stateName);
+        });
+      }
       return;
     }
 
     setState(() {
       _state = s.id;
       _setFilterFieldText(_stateSearchController, s.stateName);
-      _city = null;
       _institution = null;
-      _citySearchController.clear();
       _institutionSearchController.clear();
+      _districtSearchController.clear();
     });
 
-    await widget.controller.reloadFilterCitiesForState(s.id);
+    await widget.controller.reloadFilterDistrictsForState(s.id);
     await widget.controller.reloadFilterInstitutions(
       stateId: s.id,
       cityId: null,
-    );
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _syncCityFromSearchQuery() async {
-    if (_state == null || _state! <= 0) return;
-    final q = _citySearchController.text.trim().toLowerCase();
-    if (q.isEmpty) {
-      if (_city != null) {
-        setState(() {
-          _city = null;
-          _institution = null;
-          _institutionSearchController.clear();
-        });
-        await widget.controller.reloadFilterInstitutions(
-          stateId: _state,
-          cityId: null,
-        );
-        if (mounted) setState(() {});
-      }
-      return;
-    }
-
-    final m = widget.controller.filterCityOptions
-        .where((c) => c.cityName.toLowerCase().contains(q))
-        .toList();
-    if (m.length != 1) return;
-
-    final city = m.first;
-    if (_city == city.id &&
-        _citySearchController.text.trim() == city.cityName.trim()) {
-      return;
-    }
-
-    setState(() {
-      _city = city.id;
-      _setFilterFieldText(_citySearchController, city.cityName);
-      _institution = null;
-      _institutionSearchController.clear();
-    });
-    await widget.controller.reloadFilterInstitutions(
-      stateId: _state,
-      cityId: city.id,
     );
     if (mounted) setState(() {});
   }
@@ -903,10 +1582,8 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
     _groups = Set<int>.from(c.selectedGroupIds);
     _genders = Set<String>.from(c.selectedGenders);
     _state = c.selectedStateId.value;
-    _city = c.selectedCityId.value;
     _institution = c.selectedInstitutionId.value;
     _stateFocus.addListener(_onStateFocusChanged);
-    _cityFocus.addListener(_onCityFocusChanged);
     _institutionFocus.addListener(_onInstitutionFocusChanged);
     _filterInstitutionsRxWorker = ever(
       widget.controller.filterInstitutionOptions,
@@ -936,15 +1613,6 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
         }
       }
     }
-    final cid = _city;
-    if (cid != null) {
-      for (final c in widget.controller.filterCityOptions) {
-        if (c.id == cid) {
-          _setFilterFieldText(_citySearchController, c.cityName);
-          break;
-        }
-      }
-    }
     final iid = _institution;
     if (iid != null) {
       for (final inst in widget.controller.filterInstitutionOptions) {
@@ -958,23 +1626,26 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
         }
       }
     }
+    final dist = widget.controller.selectedDistrictFilter.value?.trim();
+    if (dist != null && dist.isNotEmpty) {
+      _setFilterFieldText(_districtSearchController, dist);
+    }
   }
 
   @override
   void dispose() {
+    _stateSearchDebounce?.cancel();
     _stateSuggestionsHideTimer?.cancel();
-    _citySuggestionsHideTimer?.cancel();
     _institutionSuggestionsHideTimer?.cancel();
     _filterInstitutionsRxWorker?.dispose();
     _stateFocus.removeListener(_onStateFocusChanged);
-    _cityFocus.removeListener(_onCityFocusChanged);
     _institutionFocus.removeListener(_onInstitutionFocusChanged);
     _stateSearchController.dispose();
-    _citySearchController.dispose();
     _institutionSearchController.dispose();
+    _districtSearchController.dispose();
     _stateFocus.dispose();
-    _cityFocus.dispose();
     _institutionFocus.dispose();
+    _districtFocus.dispose();
     super.dispose();
   }
 
@@ -983,13 +1654,6 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
     final all = widget.controller.filterStateOptions;
     if (q.isEmpty) return all.take(80);
     return all.where((s) => s.stateName.toLowerCase().contains(q)).take(100);
-  }
-
-  Iterable<CityModel> _filteredCities() {
-    final q = _citySearchController.text.trim().toLowerCase();
-    final all = widget.controller.filterCityOptions;
-    if (q.isEmpty) return all.take(100);
-    return all.where((c) => c.cityName.toLowerCase().contains(q)).take(100);
   }
 
   Iterable<SchoolModel> _filteredInstitutions() {
@@ -1014,18 +1678,6 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
         if (m.length == 1) {
           _state = m.first.id;
           _setFilterFieldText(_stateSearchController, m.first.stateName);
-        }
-      }
-    }
-    if (_state != null && _city == null) {
-      final q = _citySearchController.text.trim().toLowerCase();
-      if (q.isNotEmpty) {
-        final m = widget.controller.filterCityOptions
-            .where((c) => c.cityName.toLowerCase().contains(q))
-            .toList();
-        if (m.length == 1) {
-          _city = m.first.id;
-          _setFilterFieldText(_citySearchController, m.first.cityName);
         }
       }
     }
@@ -1144,7 +1796,14 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
                       focusNode: _stateFocus,
                       onChanged: (_) {
                         setState(() {});
-                        unawaited(_syncStateFromSearchQuery());
+                        _stateSearchDebounce?.cancel();
+                        _stateSearchDebounce = Timer(
+                          _stateSearchDebounceDelay,
+                          () {
+                            if (!mounted) return;
+                            unawaited(_syncStateFromSearchQuery());
+                          },
+                        );
                       },
                       decoration: InputDecoration(
                         hintText: 'Type to search states',
@@ -1170,48 +1829,26 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
                             shrinkWrap: true,
                             physics: const ClampingScrollPhysics(),
                             children: [
-                              ListTile(
-                                dense: true,
-                                title: const Text(
-                                  'All states',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                onTap: () async {
-                                  _stateSuggestionsHideTimer?.cancel();
-                                  setState(() {
-                                    _stateSuggestionsVisible = false;
-                                    _state = null;
-                                    _city = null;
-                                    _institution = null;
-                                    _stateSearchController.clear();
-                                    _citySearchController.clear();
-                                    _institutionSearchController.clear();
-                                  });
-                                  await widget.controller
-                                      .reloadFilterCitiesForState(null);
-                                  _stateFocus.unfocus();
-                                },
-                              ),
                               ..._filteredStates().map((s) {
                                 return ListTile(
                                   dense: true,
                                   title: Text(s.stateName),
                                   onTap: () async {
                                     _stateSuggestionsHideTimer?.cancel();
+                                    _stateSearchDebounce?.cancel();
                                     setState(() {
                                       _stateSuggestionsVisible = false;
                                       _state = s.id;
-                                      _city = null;
                                       _institution = null;
                                       _setFilterFieldText(
                                         _stateSearchController,
                                         s.stateName,
                                       );
-                                      _citySearchController.clear();
                                       _institutionSearchController.clear();
+                                      _districtSearchController.clear();
                                     });
                                     await widget.controller
-                                        .reloadFilterCitiesForState(s.id);
+                                        .reloadFilterDistrictsForState(s.id);
                                     await widget.controller
                                         .reloadFilterInstitutions(
                                           stateId: s.id,
@@ -1228,7 +1865,7 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
                       ),
                     const SizedBox(height: 10),
                     Text(
-                      'City (search)',
+                      'District (search)',
                       style: TextStyle(
                         fontSize: isMobile ? 12 : 13,
                         fontWeight: FontWeight.w700,
@@ -1236,97 +1873,51 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    TextField(
-                      key: const ValueKey('report_filter_city_field'),
-                      controller: _citySearchController,
-                      focusNode: _cityFocus,
-                      enabled: _state != null && _state! > 0,
-                      onChanged: (_) {
-                        setState(() {});
-                        unawaited(_syncCityFromSearchQuery());
-                      },
-                      decoration: InputDecoration(
-                        hintText: _state == null
-                            ? 'Select a state first'
-                            : 'Type to search cities',
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: AppTheme.primaryColor,
-                          size: 20,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        isDense: true,
-                      ),
-                    ),
-                    if (_state != null &&
-                        _state! > 0 &&
-                        _citySuggestionsVisible)
-                      SizedBox(
-                        height: 120,
-                        child: Material(
-                          elevation: 1,
-                          borderRadius: BorderRadius.circular(8),
-                          child: ListView(
-                            primary: false,
-                            shrinkWrap: true,
-                            physics: const ClampingScrollPhysics(),
-                            children: [
-                              ListTile(
-                                dense: true,
-                                title: const Text(
-                                  'All cities',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                onTap: () async {
-                                  _citySuggestionsHideTimer?.cancel();
-                                  setState(() {
-                                    _citySuggestionsVisible = false;
-                                    _city = null;
-                                    _institution = null;
-                                    _citySearchController.clear();
-                                    _institutionSearchController.clear();
-                                  });
-                                  await widget.controller
-                                      .reloadFilterInstitutions(
-                                        stateId: _state,
-                                        cityId: null,
-                                      );
-                                  _cityFocus.unfocus();
-                                  if (mounted) setState(() {});
-                                },
+                    _state == null || _state! <= 0
+                        ? TextField(
+                            key: const ValueKey('report_filter_district_disabled'),
+                            readOnly: true,
+                            controller: _districtSearchController,
+                            style: TextStyle(
+                              fontSize: isMobile ? 14 : 15,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Select a state first',
+                              prefixIcon: Icon(
+                                Icons.search,
+                                color: AppTheme.primaryColor,
+                                size: 20,
                               ),
-                              ..._filteredCities().map((c) {
-                                return ListTile(
-                                  dense: true,
-                                  title: Text(c.cityName),
-                                  onTap: () async {
-                                    _citySuggestionsHideTimer?.cancel();
-                                    setState(() {
-                                      _citySuggestionsVisible = false;
-                                      _city = c.id;
-                                      _institution = null;
-                                      _setFilterFieldText(
-                                        _citySearchController,
-                                        c.cityName,
-                                      );
-                                      _institutionSearchController.clear();
-                                    });
-                                    await widget.controller
-                                        .reloadFilterInstitutions(
-                                          stateId: _state,
-                                          cityId: c.id,
-                                        );
-                                    _cityFocus.unfocus();
-                                    if (mounted) setState(() {});
-                                  },
-                                );
-                              }),
-                            ],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              isDense: true,
+                            ),
+                          )
+                        : DistrictSearchField(
+                            key: ValueKey('report_filter_district_$_state'),
+                            textEditingController: _districtSearchController,
+                            focusNode: _districtFocus,
+                            districts: List<String>.from(
+                              widget.controller.filterDistrictOptions,
+                            ),
+                            decorationBuilder: ({Widget? suffixIcon}) =>
+                                InputDecoration(
+                              prefixIcon: IconTheme(
+                                data: IconThemeData(
+                                  color: AppTheme.primaryColor,
+                                  size: 20,
+                                ),
+                                child: suffixIcon ?? const Icon(Icons.search),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              isDense: true,
+                            ),
+                            isMobile: isMobile,
+                            hintText: 'Type to search district',
                           ),
-                        ),
-                      ),
                     const SizedBox(height: 10),
                     Text(
                       'Institution (search)',
@@ -1377,22 +1968,6 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
                             shrinkWrap: true,
                             physics: const ClampingScrollPhysics(),
                             children: [
-                              ListTile(
-                                dense: true,
-                                title: const Text(
-                                  'All institutions',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                onTap: () {
-                                  _institutionSuggestionsHideTimer?.cancel();
-                                  setState(() {
-                                    _institutionSuggestionsVisible = false;
-                                    _institution = null;
-                                    _institutionSearchController.clear();
-                                  });
-                                  _institutionFocus.unfocus();
-                                },
-                              ),
                               ..._filteredInstitutions().map((inst) {
                                 final id = int.tryParse(inst.id ?? '')!;
                                 return ListTile(
@@ -1430,19 +2005,32 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () {
+          onPressed: () async {
             setState(() {
               _resolveLocationSelectionsBeforeApply();
             });
+            final sid = _state;
+            if (sid != null && sid > 0) {
+              await widget.controller.reloadFilterDistrictsForState(sid);
+              await widget.controller.reloadFilterInstitutions(
+                stateId: sid,
+                cityId: null,
+              );
+            }
+            if (!context.mounted) return;
             widget.controller.applyFilters(
               stageIds: _stages.toList(),
               categoryIds: _categories.toList(),
               groupIds: _groups.toList(),
               genders: _genders.toList(),
               stateId: _state,
-              cityId: _city,
               institutionId: _institution,
+              district: widget.controller.resolveParticipantReportDistrict(
+                List<String>.from(widget.controller.filterDistrictOptions),
+                _districtSearchController.text,
+              ),
             );
+            if (!context.mounted) return;
             Navigator.of(context).pop();
           },
           child: const Text('Apply'),
