@@ -1203,37 +1203,61 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 (c) => c.id == controller.selectedEventId.value,
               );
 
-          // Get all groups from all stages with their stage information
-          final allGroupsWithStage = <String>[];
+          // Build stage + group pairs, then sort alphabetically by stage then group.
+          final groupStageEntries = <({String groupName, String stageName})>[];
           if (selectedCompetition != null &&
               selectedCompetition.stageGroups != null) {
-            selectedCompetition.stageGroups!.forEach((stageIdStr, groupIds) {
-              final stageId = int.tryParse(stageIdStr);
-              if (stageId != null) {
-                final stageName = competitionController.getStageNameById(
-                  stageId,
+            final sortedStageIds = selectedCompetition.stageGroups!.keys
+                .map((id) => int.tryParse(id))
+                .whereType<int>()
+                .toList()
+              ..sort((a, b) {
+                final stageA =
+                    competitionController.getStageNameById(a)?.toLowerCase() ??
+                    '';
+                final stageB =
+                    competitionController.getStageNameById(b)?.toLowerCase() ??
+                    '';
+                return stageA.compareTo(stageB);
+              });
+
+            for (final stageId in sortedStageIds) {
+              final stageName = competitionController.getStageNameById(stageId);
+              if (stageName == null) continue;
+
+              final groupIds = List<int>.from(
+                selectedCompetition.stageGroups![stageId.toString()] ?? const [],
+              )..sort((a, b) {
+                  final groupA =
+                      competitionController
+                          .getGroupNameById(a)
+                          ?.toLowerCase() ??
+                      '';
+                  final groupB =
+                      competitionController
+                          .getGroupNameById(b)
+                          ?.toLowerCase() ??
+                      '';
+                  return groupA.compareTo(groupB);
+                });
+
+              for (final groupId in groupIds) {
+                final groupName = competitionController.getGroupNameById(
+                  groupId,
                 );
-                if (stageName != null) {
-                  // Convert group IDs to names and format as "GroupName (GROUP StageName)"
-                  groupIds.forEach((groupId) {
-                    final groupName = competitionController.getGroupNameById(
-                      groupId,
-                    );
-                    if (groupName != null) {
-                      // Format: "II (GROUP A)" or "II (GROUP StageName)"
-                      allGroupsWithStage.add('$groupName (GROUP $stageName)');
-                    }
-                  });
+                if (groupName != null) {
+                  groupStageEntries.add((
+                    groupName: groupName,
+                    stageName: stageName,
+                  ));
                 }
               }
-            });
+            }
           }
-          // Sort by group name (extract before " (GROUP")
-          allGroupsWithStage.sort((a, b) {
-            final groupA = a.split(' (GROUP').first;
-            final groupB = b.split(' (GROUP').first;
-            return groupA.compareTo(groupB);
-          });
+
+          final allGroupsWithStage = groupStageEntries
+              .map((e) => '${e.groupName} (GROUP ${e.stageName})')
+              .toList();
 
           // Find current value - match by formatted string or group name
           String? currentValue;
