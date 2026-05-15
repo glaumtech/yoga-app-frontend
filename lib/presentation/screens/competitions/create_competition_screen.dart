@@ -126,14 +126,16 @@ class CreateCompetitionScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
-        child: Form(
-          key: controller.formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title
-              Obx(
-                () => FormTitle(
+        child: Obx(() {
+          final _ = controller.formKeyRevision.value;
+          return Form(
+            key: controller.formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title
+                Obx(
+                  () => FormTitle(
                   text: controller.isViewMode.value
                       ? 'VIEW COMPETITION'
                       : controller.isEditMode.value
@@ -610,7 +612,8 @@ class CreateCompetitionScreen extends StatelessWidget {
               SizedBox(height: isMobile ? 16 : 24),
             ],
           ),
-        ),
+        );
+        }),
       ),
     );
   }
@@ -995,6 +998,16 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  String? Function(DateTime?) _dateFieldValidator(
+    CompetitionController controller, {
+    required bool isStartDate,
+    required bool isDisplayAd,
+  }) {
+    if (isDisplayAd) return controller.validateDisplayAdFrom;
+    if (isStartDate) return controller.validateEventStartDate;
+    return controller.validateEventEndDate;
+  }
+
   Widget _buildDateField(
     BuildContext context,
     CompetitionController controller, {
@@ -1005,52 +1018,56 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isMobile = false,
     bool isTablet = false,
   }) {
+    final validateDate = _dateFieldValidator(
+      controller,
+      isStartDate: isStartDate,
+      isDisplayAd: isDisplayAd,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: label),
-        FormField<DateTime>(
-          initialValue: isStartDate
-              ? controller.eventStartDate.value
-              : isDisplayAd
-              ? controller.displayAdFrom.value
-              : controller.eventEndDate.value,
-          validator: isRequired
-              ? (value) {
-                  if (value == null) {
-                    return 'This field is required';
-                  }
-                  return null;
-                }
-              : null,
-          builder: (FormFieldState<DateTime> field) {
-            return Obx(() {
-              final currentDate = isStartDate
-                  ? controller.eventStartDate.value
-                  : isDisplayAd
-                  ? controller.displayAdFrom.value
-                  : controller.eventEndDate.value;
-
-              // Update field value when date changes
+        Obx(() {
+          final _ = controller.competitionDatesRevision.value;
+          return FormField<DateTime>(
+            initialValue: isStartDate
+                ? controller.eventStartDate.value
+                : isDisplayAd
+                ? controller.displayAdFrom.value
+                : controller.eventEndDate.value,
+            validator: isRequired ? validateDate : null,
+            builder: (FormFieldState<DateTime> field) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (field.value != currentDate) {
-                  field.didChange(currentDate);
-                  field.validate();
+                if (!field.mounted) return;
+                final syncedDate = isStartDate
+                    ? controller.eventStartDate.value
+                    : isDisplayAd
+                    ? controller.displayAdFrom.value
+                    : controller.eventEndDate.value;
+                if (field.value != syncedDate) {
+                  field.didChange(syncedDate);
                 }
+                field.validate();
               });
 
-              return InkWell(
-                onTap: controller.isViewMode.value
-                    ? null
-                    : () async {
-                        await _selectDate(
-                          context,
-                          controller,
-                          isStartDate: isStartDate,
-                          isDisplayAd: isDisplayAd,
-                        );
-                        // Trigger validation after date selection
-                        Future.delayed(const Duration(milliseconds: 100), () {
+              return Obx(() {
+                final displayedDate = isStartDate
+                    ? controller.eventStartDate.value
+                    : isDisplayAd
+                    ? controller.displayAdFrom.value
+                    : controller.eventEndDate.value;
+
+                return InkWell(
+                  onTap: controller.isViewMode.value
+                      ? null
+                      : () async {
+                          await _selectDate(
+                            context,
+                            controller,
+                            isStartDate: isStartDate,
+                            isDisplayAd: isDisplayAd,
+                          );
                           final updatedDate = isStartDate
                               ? controller.eventStartDate.value
                               : isDisplayAd
@@ -1058,10 +1075,10 @@ class CreateCompetitionScreen extends StatelessWidget {
                               : controller.eventEndDate.value;
                           field.didChange(updatedDate);
                           field.validate();
-                        });
-                      },
-                child: Obx(
-                  () => InputDecorator(
+                          controller.notifyCompetitionDatesChanged();
+                          controller.alertCompetitionDateValidationIssue();
+                        },
+                  child: InputDecorator(
                     decoration: InputDecoration(
                       hintText: 'Select date',
                       border: OutlineInputBorder(
@@ -1079,29 +1096,30 @@ class CreateCompetitionScreen extends StatelessWidget {
                       suffixIcon: controller.isViewMode.value
                           ? null
                           : const Icon(Icons.calendar_today),
-                      errorText: controller.hasAttemptedSubmit.value
-                          ? field.errorText
-                          : null,
+                      errorText: field.errorText,
                     ),
                     child: Text(
-                      currentDate != null
-                          ? DateFormat('yyyy-MM-dd').format(currentDate)
+                      displayedDate != null
+                          ? DateFormat('yyyy-MM-dd').format(displayedDate)
                           : '',
                       style: TextStyle(
-                        color: currentDate != null
+                        color: displayedDate != null
                             ? Colors.black
                             : Colors.grey[600],
                       ),
                     ),
                   ),
-                ),
-              );
-            });
-          },
-        ),
+                );
+              });
+            },
+          );
+        }),
       ],
     );
   }
+
+  static DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
 
   Future<void> _selectDate(
     BuildContext context,
@@ -1109,26 +1127,79 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isStartDate = false,
     bool isDisplayAd = false,
   }) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: isStartDate
-          ? controller.eventStartDate.value ?? DateTime.now()
-          : isDisplayAd
-          ? controller.displayAdFrom.value ?? DateTime.now()
-          : controller.eventEndDate.value ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
+    final today = _dateOnly(DateTime.now());
+    final start = controller.eventStartDate.value != null
+        ? _dateOnly(controller.eventStartDate.value!)
+        : null;
+    final end = controller.eventEndDate.value != null
+        ? _dateOnly(controller.eventEndDate.value!)
+        : null;
+    final displayAd = controller.displayAdFrom.value != null
+        ? _dateOnly(controller.displayAdFrom.value!)
+        : null;
 
-    if (picked != null) {
-      if (isStartDate) {
-        controller.eventStartDate.value = picked;
-      } else if (isDisplayAd) {
-        controller.displayAdFrom.value = picked;
-      } else {
-        controller.eventEndDate.value = picked;
+    final maxFuture = today.add(const Duration(days: 365 * 2));
+
+    late DateTime initialDate;
+    late DateTime firstDate;
+    late DateTime lastDate;
+
+    if (isStartDate) {
+      initialDate = start ?? today;
+      firstDate = today;
+      if (controller.isEditMode.value && start != null && start.isBefore(today)) {
+        firstDate = start;
+      }
+      lastDate = maxFuture;
+    } else if (isDisplayAd) {
+      initialDate = displayAd ?? start ?? today;
+      firstDate = today;
+      lastDate = start ?? maxFuture;
+      if (displayAd != null && start != null && displayAd.isAfter(start)) {
+        lastDate = displayAd;
+      }
+    } else {
+      initialDate = end ?? start ?? today;
+      firstDate = start ?? today;
+      lastDate = maxFuture;
+      if (end != null && start != null && end.isBefore(start)) {
+        firstDate = end;
       }
     }
+
+    if (firstDate.isAfter(lastDate)) {
+      firstDate = lastDate;
+    }
+    if (initialDate.isBefore(firstDate)) {
+      initialDate = firstDate;
+    }
+    if (initialDate.isAfter(lastDate)) {
+      initialDate = lastDate;
+    }
+
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+
+    if (picked == null) return;
+
+    final normalized = _dateOnly(picked);
+    if (isStartDate) {
+      controller.eventStartDate.value = normalized;
+      final currentEnd = controller.eventEndDate.value;
+      if (currentEnd != null &&
+          _dateOnly(currentEnd).isBefore(normalized)) {
+        controller.eventEndDate.value = null;
+      }
+    } else if (isDisplayAd) {
+      controller.displayAdFrom.value = normalized;
+    } else {
+      controller.eventEndDate.value = normalized;
+    }
+    controller.notifyCompetitionDatesChanged();
   }
 
   Widget _buildMarksField(

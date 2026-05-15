@@ -316,6 +316,25 @@ class CompetitionModel {
       updatedBy: updatedBy ?? this.updatedBy,
     );
   }
+
+  /// Whether [date] (calendar day) falls within [eventStartDate]..[eventEndDate].
+  bool containsEventDate(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final start = DateTime(
+      eventStartDate.year,
+      eventStartDate.month,
+      eventStartDate.day,
+    );
+    final end = DateTime(
+      eventEndDate.year,
+      eventEndDate.month,
+      eventEndDate.day,
+    );
+    return !day.isBefore(start) && !day.isAfter(end);
+  }
+
+  /// True when today's date is on or between event start and end (inclusive).
+  bool get isEventOngoing => containsEventDate(DateTime.now());
 }
 
 /// Lightweight model for public competition list (home screen).

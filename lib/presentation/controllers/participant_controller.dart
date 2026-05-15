@@ -15,6 +15,7 @@ import '../../data/models/score_response_model.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
 import '../../data/models/institution_type_model.dart';
+import '../../data/models/competition_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/constants/app_constants.dart';
@@ -90,6 +91,7 @@ class ParticipantController extends GetxController {
   final RxList<SchoolModel> institutionSuggestions = <SchoolModel>[].obs;
   final RxBool isLoadingInstitutions = false.obs;
   final RxnString selectedInstitutionId = RxnString();
+  final Rxn<SchoolModel> selectedInstitution = Rxn<SchoolModel>();
 
   /// Optional filters for institution autocomplete (registration form).
   final RxInt institutionSearchFilterStateId = 0.obs;
@@ -303,11 +305,139 @@ class ParticipantController extends GetxController {
     }
   }
 
+  static bool isPrivateInstitution(SchoolModel? school) {
+    if (school == null) return false;
+    final typeKey = school.institutionType.trim().toUpperCase();
+    if (typeKey.contains('PRIVATE')) return true;
+    final display =
+        (school.institutionTypeDisplayName ?? '').trim().toLowerCase();
+    return display.contains('private');
+  }
+
+  /// Bonafide upload applies only to Govt / Govt Aided **School** institutions.
+  static bool isGovtAidedSchoolInstitution(SchoolModel? school) {
+    if (school == null) return false;
+
+    final typeKey = school.institutionType.trim().toUpperCase();
+    if (typeKey == 'GOVT_SCHOOL' || typeKey == 'GOVT_AIDED_SCHOOL') {
+      return true;
+    }
+    if (typeKey.contains('GOVT') &&
+        typeKey.contains('SCHOOL') &&
+        !typeKey.contains('COLLEGE')) {
+      return true;
+    }
+
+    final display =
+        (school.institutionTypeDisplayName ?? '').trim().toLowerCase();
+    if (display.contains('govt') &&
+        display.contains('school') &&
+        !display.contains('college')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool get isBonafideCertificateApplicable {
+    return isGovtAidedSchoolInstitution(selectedInstitution.value);
+  }
+
+  CompetitionModel? selectedCompetition() {
+    if (!Get.isRegistered<CompetitionController>()) return null;
+    if (selectedEventId.value.isEmpty) return null;
+    return Get.find<CompetitionController>().competitions.firstWhereOrNull(
+      (c) => c.id == selectedEventId.value,
+    );
+  }
+
+  /// Spot registration is only allowed while the event is in progress.
+  bool get isSpotRegistrationOptionVisible {
+    final competition = selectedCompetition();
+    return competition != null && competition.isEventOngoing;
+  }
+
+  void applySpotRegistrationRulesForSelectedEvent() {
+    if (!isSpotRegistrationOptionVisible) {
+      isSpotRegistration.value = false;
+    }
+  }
+
+  void _clearBonafideCertificateFiles() {
+    bonafideFile.value = null;
+    bonafideImage.value = null;
+    existingCertificateUrl.value = '';
+  }
+
+  void _applyBonafideRulesForSelectedInstitution() {
+    if (!isBonafideCertificateApplicable) {
+      _clearBonafideCertificateFiles();
+    }
+  }
+
+  Future<void> _syncSelectedInstitutionFromId() async {
+    if (selectedInstitution.value != null) return;
+    final id = selectedInstitutionId.value;
+    if (id == null || id.isEmpty) return;
+
+    final fromSuggestions = institutionSuggestions.firstWhereOrNull(
+      (institution) => institution.id == id,
+    );
+    if (fromSuggestions != null) {
+      selectedInstitution.value = fromSuggestions;
+      _applyBonafideRulesForSelectedInstitution();
+      return;
+    }
+
+    try {
+      final response = await _schoolRepository.getInstitutionById(id);
+      if (response.success && response.data != null) {
+        selectedInstitution.value = response.data;
+        _applyBonafideRulesForSelectedInstitution();
+      }
+    } catch (e) {
+      print('Error loading institution details: $e');
+    }
+  }
+
+  Future<void> _loadSelectedInstitutionForEdit() async {
+    await _syncSelectedInstitutionFromId();
+  }
+
+  Future<bool> validateBonafideBeforeSave() async {
+    await _syncSelectedInstitutionFromId();
+
+    final school = selectedInstitution.value;
+    if (school == null) {
+      errorMessage.value = 'Please select an institution from the list';
+      return false;
+    }
+
+    if (!isGovtAidedSchoolInstitution(school)) {
+      _clearBonafideCertificateFiles();
+      return true;
+    }
+
+    final hasCertificate =
+        bonafideFile.value != null ||
+        bonafideImage.value != null ||
+        existingCertificateUrl.value.trim().isNotEmpty;
+    if (!hasCertificate) {
+      errorMessage.value =
+          'Bonafied certificate is required for Govt / Govt Aided School';
+      return false;
+    }
+
+    return true;
+  }
+
   // Select institution
   void selectInstitution(SchoolModel institution) {
     schoolNameController.text = institution.institutionName;
     selectedInstitutionId.value = institution.id;
+    selectedInstitution.value = institution;
     institutionSuggestions.clear();
+    _applyBonafideRulesForSelectedInstitution();
   }
 
   @override
@@ -1113,6 +1243,7 @@ class ParticipantController extends GetxController {
     existingPhotoUrl.value = '';
     existingCertificateUrl.value = '';
     selectedInstitutionId.value = null;
+    selectedInstitution.value = null;
     participantInstitutionId.value = null;
     institutionSuggestions.clear(); // Clear institution suggestions
     _resetInstitutionSearchFilters();
@@ -1224,8 +1355,13 @@ class ParticipantController extends GetxController {
     photoFile.value = null;
     selectedImage.value = null;
     errorMessage.value = '';
+    bonafideFile.value = null;
+    bonafideImage.value = null;
     existingPhotoUrl.value = '';
     existingCertificateUrl.value = '';
+    selectedInstitutionId.value = null;
+    selectedInstitution.value = null;
+    participantInstitutionId.value = null;
     isLoadingParticipant.value = false;
     participantToEdit.value = null;
     isViewMode.value = false;
@@ -1466,6 +1602,7 @@ class ParticipantController extends GetxController {
       print(
         'Set selectedInstitutionId from participantInstitutionId: ${selectedInstitutionId.value}',
       );
+      _loadSelectedInstitutionForEdit();
     } else {
       // If participantInstitutionId is not set, try to find it by name
       // Note: This is async and might complete after widget disposal, so we check if still needed
@@ -1490,6 +1627,8 @@ class ParticipantController extends GetxController {
                     matchingInstitution.id != null) {
                   selectedInstitutionId.value = matchingInstitution.id;
                   participantInstitutionId.value = matchingInstitution.id;
+                  selectedInstitution.value = matchingInstitution;
+                  _applyBonafideRulesForSelectedInstitution();
                   print(
                     'Found and set institution ID by name: ${selectedInstitutionId.value}',
                   );
@@ -1640,6 +1779,10 @@ class ParticipantController extends GetxController {
 
     if (standard.value.isEmpty) {
       errorMessage.value = 'Please select standard/group';
+      return false;
+    }
+
+    if (!await validateBonafideBeforeSave()) {
       return false;
     }
 
@@ -1853,8 +1996,9 @@ class ParticipantController extends GetxController {
         );
 
         if (matchingInstitution != null && matchingInstitution.id != null) {
-          // Set the institution ID
           selectedInstitutionId.value = matchingInstitution.id;
+          selectedInstitution.value = matchingInstitution;
+          _applyBonafideRulesForSelectedInstitution();
         } else {
           // If still not found, check if participantInstitutionId is available (from edit mode)
           if (participantInstitutionId.value != null &&
@@ -1869,6 +2013,10 @@ class ParticipantController extends GetxController {
         errorMessage.value = 'Please select an institution from the list';
         return false;
       }
+    }
+
+    if (!await validateBonafideBeforeSave()) {
+      return false;
     }
 
     final age = app_date_utils.AppDateUtils.calculateAge(dateOfBirth.value!);
@@ -1888,6 +2036,7 @@ class ParticipantController extends GetxController {
     if (selectedEventId.value.isEmpty) {
       selectedEventId.value = eventId;
     }
+    applySpotRegistrationRulesForSelectedEvent();
 
     final categoryName = selectedCategories.first;
     final categoryId = compController.getCategoryIdByName(categoryName);

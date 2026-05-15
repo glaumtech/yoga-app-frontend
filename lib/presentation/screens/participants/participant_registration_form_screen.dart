@@ -171,29 +171,13 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                             isMobile,
                           ),
                           SizedBox(height: isMobile ? 20 : 24),
-                          Builder(
-                            builder: (context) {
-                              final permissionStore =
-                                  Get.isRegistered<PermissionStore>()
-                                  ? Get.find<PermissionStore>()
-                                  : Get.put(PermissionStore());
-                              final showSpot = permissionStore.has(
-                                'SHOW_SPOT_REGISTRATION_OPTION',
-                              );
-                              if (!showSpot) return const SizedBox.shrink();
-                              return Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildSpotRegistrationField(
-                                    context,
-                                    participantController,
-                                    isMobile,
-                                    isTablet,
-                                  ),
-                                  SizedBox(height: isMobile ? 20 : 24),
-                                ],
-                              );
-                            },
+                          _buildSpotRegistrationSection(
+                            context,
+                            participantController,
+                            competitionController,
+                            isMobile,
+                            isTablet,
+                            includeBottomSpacing: true,
                           ),
                         ],
                       )
@@ -290,23 +274,6 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                             isTablet,
                                           ),
                                           SizedBox(height: isMobile ? 20 : 24),
-                                          Builder(
-                                            builder: (context) {
-                                              final permissionStore =
-                                                  Get.isRegistered<
-                                                    PermissionStore
-                                                  >()
-                                                  ? Get.find<PermissionStore>()
-                                                  : Get.put(PermissionStore());
-                                              final showSpot = permissionStore.has(
-                                                'SHOW_SPOT_REGISTRATION_OPTION',
-                                              );
-                                              if (!showSpot) {
-                                                return const SizedBox.shrink();
-                                              }
-                                              return const SizedBox.shrink();
-                                            },
-                                          ),
                                         ],
                                       ),
                                     ),
@@ -373,24 +340,12 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                   isMobile,
                                 ),
                                 SizedBox(height: isMobile ? 20 : 24),
-                                Builder(
-                                  builder: (context) {
-                                    final permissionStore =
-                                        Get.isRegistered<PermissionStore>()
-                                        ? Get.find<PermissionStore>()
-                                        : Get.put(PermissionStore());
-                                    final showSpot = permissionStore.has(
-                                      'SHOW_SPOT_REGISTRATION_OPTION',
-                                    );
-                                    if (!showSpot)
-                                      return const SizedBox.shrink();
-                                    return _buildSpotRegistrationField(
-                                      context,
-                                      participantController,
-                                      isMobile,
-                                      isTablet,
-                                    );
-                                  },
+                                _buildSpotRegistrationSection(
+                                  context,
+                                  participantController,
+                                  competitionController,
+                                  isMobile,
+                                  isTablet,
                                 ),
                               ],
                             ),
@@ -777,6 +732,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       controller.selectedCategories.clear();
                       controller.selectedStage.value = '';
                       controller.standard.value = '';
+                      controller.applySpotRegistrationRulesForSelectedEvent();
                     }
                   }
                 : null,
@@ -1040,6 +996,57 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     );
   }
 
+  bool _isSpotRegistrationOptionVisible(
+    PermissionStore permissionStore,
+    ParticipantController participantController,
+    CompetitionController competitionController,
+  ) {
+    if (!permissionStore.has('SHOW_SPOT_REGISTRATION_OPTION')) {
+      return false;
+    }
+    if (competitionController.competitions.isEmpty) {
+      return false;
+    }
+    return participantController.isSpotRegistrationOptionVisible;
+  }
+
+  Widget _buildSpotRegistrationSection(
+    BuildContext context,
+    ParticipantController participantController,
+    CompetitionController competitionController,
+    bool isMobile,
+    bool isTablet, {
+    bool includeBottomSpacing = false,
+  }) {
+    return Obx(() {
+      final permissionStore = Get.isRegistered<PermissionStore>()
+          ? Get.find<PermissionStore>()
+          : Get.put(PermissionStore());
+      final _ = competitionController.competitions.length;
+      final visible = _isSpotRegistrationOptionVisible(
+        permissionStore,
+        participantController,
+        competitionController,
+      );
+      if (!visible) {
+        return const SizedBox.shrink();
+      }
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSpotRegistrationField(
+            context,
+            participantController,
+            isMobile,
+            isTablet,
+          ),
+          if (includeBottomSpacing) SizedBox(height: isMobile ? 20 : 24),
+        ],
+      );
+    });
+  }
+
   Widget _buildSpotRegistrationField(
     BuildContext context,
     ParticipantController controller,
@@ -1207,39 +1214,46 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           final groupStageEntries = <({String groupName, String stageName})>[];
           if (selectedCompetition != null &&
               selectedCompetition.stageGroups != null) {
-            final sortedStageIds = selectedCompetition.stageGroups!.keys
-                .map((id) => int.tryParse(id))
-                .whereType<int>()
-                .toList()
-              ..sort((a, b) {
-                final stageA =
-                    competitionController.getStageNameById(a)?.toLowerCase() ??
-                    '';
-                final stageB =
-                    competitionController.getStageNameById(b)?.toLowerCase() ??
-                    '';
-                return stageA.compareTo(stageB);
-              });
+            final sortedStageIds =
+                selectedCompetition.stageGroups!.keys
+                    .map((id) => int.tryParse(id))
+                    .whereType<int>()
+                    .toList()
+                  ..sort((a, b) {
+                    final stageA =
+                        competitionController
+                            .getStageNameById(a)
+                            ?.toLowerCase() ??
+                        '';
+                    final stageB =
+                        competitionController
+                            .getStageNameById(b)
+                            ?.toLowerCase() ??
+                        '';
+                    return stageA.compareTo(stageB);
+                  });
 
             for (final stageId in sortedStageIds) {
               final stageName = competitionController.getStageNameById(stageId);
               if (stageName == null) continue;
 
-              final groupIds = List<int>.from(
-                selectedCompetition.stageGroups![stageId.toString()] ?? const [],
-              )..sort((a, b) {
-                  final groupA =
-                      competitionController
-                          .getGroupNameById(a)
-                          ?.toLowerCase() ??
-                      '';
-                  final groupB =
-                      competitionController
-                          .getGroupNameById(b)
-                          ?.toLowerCase() ??
-                      '';
-                  return groupA.compareTo(groupB);
-                });
+              final groupIds =
+                  List<int>.from(
+                    selectedCompetition.stageGroups![stageId.toString()] ??
+                        const [],
+                  )..sort((a, b) {
+                    final groupA =
+                        competitionController
+                            .getGroupNameById(a)
+                            ?.toLowerCase() ??
+                        '';
+                    final groupB =
+                        competitionController
+                            .getGroupNameById(b)
+                            ?.toLowerCase() ??
+                        '';
+                    return groupA.compareTo(groupB);
+                  });
 
               for (final groupId in groupIds) {
                 final groupName = competitionController.getGroupNameById(
@@ -1653,18 +1667,22 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isMobile,
     bool isTablet,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FormLabelWithHint(
-          label: 'Bonafied Certificate :',
-          hintText: '(Applicable only for Govt / Govt Aided)',
-          bottomSpacing: 8,
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return Obx(
-              () => _buildImagePreview(
+    return Obx(() {
+      if (!controller.isBonafideCertificateApplicable) {
+        return const SizedBox.shrink();
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FormLabelWithHint(
+            label: 'Bonafied Certificate :',
+            hintText: '(Applicable only for Govt / Govt Aided School)',
+            bottomSpacing: 8,
+          ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return _buildImagePreview(
                 controller.bonafideFile.value,
                 controller.bonafideImage.value,
                 controller.existingCertificateUrl.value,
@@ -1672,44 +1690,32 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 isMobile ? 150 : 200,
                 defaultIcon: Icons.description,
                 defaultText: 'No Certificate',
-              ),
-            );
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: Obx(() {
-            final hasCertificate =
-                controller.bonafideFile.value != null ||
-                controller.bonafideImage.value != null ||
-                (controller.existingCertificateUrl.value.isNotEmpty);
+              );
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Obx(() {
+              final hasCertificate =
+                  controller.bonafideFile.value != null ||
+                  controller.bonafideImage.value != null ||
+                  controller.existingCertificateUrl.value.isNotEmpty;
 
-            return Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: !controller.isViewMode.value
-                        ? () => _pickBonafideCertificate(controller, context)
-                        : null,
-                    icon: const Icon(Icons.upload_file, size: 16),
-                    label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      minimumSize: const Size(0, 36),
-                    ),
-                  ),
-                  if (hasCertificate && !controller.isViewMode.value) ...[
-                    const SizedBox(width: 8),
+              if (controller.isViewMode.value) {
+                return const SizedBox.shrink();
+              }
+
+              return Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
                     OutlinedButton.icon(
-                      onPressed: () => _removeBonafideCertificate(controller),
-                      icon: const Icon(Icons.delete_outline, size: 16),
+                      onPressed: () =>
+                          _pickBonafideCertificate(controller, context),
+                      icon: const Icon(Icons.upload_file, size: 16),
                       label: const Text(
-                        'REMOVE',
+                        'BROWSE',
                         style: TextStyle(fontSize: 12),
                       ),
                       style: OutlinedButton.styleFrom(
@@ -1718,18 +1724,36 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                           vertical: 8,
                         ),
                         minimumSize: const Size(0, 36),
-                        foregroundColor: Colors.red,
-                        side: BorderSide(color: Colors.red),
                       ),
                     ),
+                    if (hasCertificate) ...[
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => _removeBonafideCertificate(controller),
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text(
+                          'REMOVE',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          minimumSize: const Size(0, 36),
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
-              ),
-            );
-          }),
-        ),
-      ],
-    );
+                ),
+              );
+            }),
+          ),
+        ],
+      );
+    });
   }
 
   Future<void> _pickPhoto(

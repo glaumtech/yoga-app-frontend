@@ -32,10 +32,26 @@ class ParticipantRegistrationFormController extends GetxController {
       participantController.selectedEventId.value = initialCompetitionId!;
     }
 
+    _initSpotRegistrationRules();
+
     // Load competitions (full model needed for category/group/stage mapping)
     if (competitionController.competitions.isEmpty &&
         !competitionController.isLoading.value) {
-      competitionController.loadCompetitions();
+      competitionController.loadCompetitions().then((_) {
+        participantController.applySpotRegistrationRulesForSelectedEvent();
+      });
+    } else {
+      participantController.applySpotRegistrationRulesForSelectedEvent();
     }
+
+    ever(participantController.selectedEventId, (_) {
+      participantController.applySpotRegistrationRulesForSelectedEvent();
+    });
+  }
+
+  void _initSpotRegistrationRules() {
+    ever(competitionController.competitions, (_) {
+      participantController.applySpotRegistrationRulesForSelectedEvent();
+    });
   }
 }
