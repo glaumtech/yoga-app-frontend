@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 import 'competition_controller.dart';
 import 'participant_controller.dart';
 
+const String kParticipantRegistrationFormControllerTag =
+    'participant_registration_form';
+
 class ParticipantRegistrationFormController extends GetxController {
   final String? initialCompetitionId;
 
@@ -11,47 +14,58 @@ class ParticipantRegistrationFormController extends GetxController {
   late final ParticipantController participantController;
   late final CompetitionController competitionController;
 
-  bool _didInit = false;
+  bool _listenersBound = false;
 
   @override
   void onInit() {
     super.onInit();
-    participantController = Get.find<ParticipantController>();
-    competitionController = Get.put(CompetitionController());
+    participantController = Get.isRegistered<ParticipantController>()
+        ? Get.find<ParticipantController>()
+        : Get.put(ParticipantController());
+    competitionController = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
   }
 
   @override
   void onReady() {
     super.onReady();
-    if (_didInit) return;
-    _didInit = true;
+    _bindListeners();
+    _prepareRegistrationForm();
+  }
 
-    // Preselect competition when coming from a competition-specific route
-    if ((initialCompetitionId ?? '').isNotEmpty &&
-        participantController.selectedEventId.value.isEmpty) {
-      participantController.selectedEventId.value = initialCompetitionId!;
-    }
+  void _bindListeners() {
+    if (_listenersBound) return;
+    _listenersBound = true;
 
-    _initSpotRegistrationRules();
-
-    // Load competitions (full model needed for category/group/stage mapping)
-    if (competitionController.competitions.isEmpty &&
-        !competitionController.isLoading.value) {
-      competitionController.loadCompetitions().then((_) {
-        participantController.applySpotRegistrationRulesForSelectedEvent();
-      });
-    } else {
-      participantController.applySpotRegistrationRulesForSelectedEvent();
-    }
-
-    ever(participantController.selectedEventId, (_) {
+    ever(participantController.selectedEventId, (id) {
+      _loadCompetitionForRegistration(id);
+    });
+    ever(competitionController.competitions, (_) {
       participantController.applySpotRegistrationRulesForSelectedEvent();
     });
   }
 
-  void _initSpotRegistrationRules() {
-    ever(competitionController.competitions, (_) {
-      participantController.applySpotRegistrationRulesForSelectedEvent();
-    });
+  Future<void> _prepareRegistrationForm() async {
+    final id = (initialCompetitionId ?? '').isNotEmpty
+        ? initialCompetitionId!
+        : participantController.selectedEventId.value;
+    if (id.isNotEmpty) {
+      participantController.selectedEventId.value = id;
+    }
+
+    if (competitionController.homeCompetitions.isEmpty &&
+        !competitionController.isLoadingHomeCompetitions.value) {
+      await competitionController.loadCompetitionsForHome();
+    }
+
+    await _loadCompetitionForRegistration(participantController.selectedEventId.value);
+  }
+
+  Future<void> _loadCompetitionForRegistration(String competitionId) async {
+    await competitionController.ensureCompetitionLoadedForRegistration(
+      competitionId,
+    );
+    participantController.applySpotRegistrationRulesForSelectedEvent();
   }
 }

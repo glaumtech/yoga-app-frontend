@@ -22,6 +22,8 @@ class CompetitionModel {
   final List<int>? stageIds; // e.g., [1, 2, 3] - for API submission
   final Map<String, List<int>>?
   stageGroups; // e.g., {"1": [1, 2], "2": [3, 4]} - key is stage ID as string, value is list of group IDs
+  /// Display map from API `stageGroups`: stage name -> group names.
+  final Map<String, List<String>>? stageGroupLabels;
   final String? brochureUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -48,12 +50,42 @@ class CompetitionModel {
     this.stages,
     this.stageIds,
     this.stageGroups,
+    this.stageGroupLabels,
     this.brochureUrl,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
     this.updatedBy,
   });
+
+  static Map<String, List<String>>? _parseStageGroupLabelMap(dynamic raw) {
+    if (raw is! Map) return null;
+    final result = <String, List<String>>{};
+    for (final entry in raw.entries) {
+      final values = entry.value;
+      if (values is! List || values.isEmpty) continue;
+      final labels = <String>[];
+      var hasNonNumericLabel = false;
+      for (final item in values) {
+        if (item is String) {
+          final text = item.trim();
+          if (text.isEmpty) continue;
+          labels.add(text);
+          hasNonNumericLabel = true;
+        } else if (item is! int && int.tryParse(item.toString()) == null) {
+          final text = item.toString().trim();
+          if (text.isNotEmpty) {
+            labels.add(text);
+            hasNonNumericLabel = true;
+          }
+        }
+      }
+      if (hasNonNumericLabel && labels.isNotEmpty) {
+        result[entry.key.toString()] = labels;
+      }
+    }
+    return result.isEmpty ? null : result;
+  }
 
   factory CompetitionModel.fromJson(Map<String, dynamic> json) {
     return CompetitionModel(
@@ -177,6 +209,7 @@ class CompetitionModel {
               ),
             )
           : null,
+      stageGroupLabels: _parseStageGroupLabelMap(json['stageGroups']),
       categoryAmounts: json['categoryAmounts'] != null
           ? Map<String, double>.from(
               (json['categoryAmounts'] as Map).map(
@@ -283,6 +316,7 @@ class CompetitionModel {
     List<String>? stages,
     List<int>? stageIds,
     Map<String, List<int>>? stageGroups,
+    Map<String, List<String>>? stageGroupLabels,
     String? brochureUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -309,6 +343,7 @@ class CompetitionModel {
       stages: stages ?? this.stages,
       stageIds: stageIds ?? this.stageIds,
       stageGroups: stageGroups ?? this.stageGroups,
+      stageGroupLabels: stageGroupLabels ?? this.stageGroupLabels,
       brochureUrl: brochureUrl ?? this.brochureUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

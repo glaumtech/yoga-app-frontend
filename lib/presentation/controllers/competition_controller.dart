@@ -180,6 +180,99 @@ class CompetitionController extends GetxController {
     }
   }
 
+  final RxBool isLoadingRegistrationCompetition = false.obs;
+
+  /// Loads full competition data for the public/admin registration form.
+  /// Safe after logout: does not rely on a prior [loadCompetitions] admin list call.
+  Future<void> ensureCompetitionLoadedForRegistration(String competitionId) async {
+    final id = competitionId.trim();
+    if (id.isEmpty) return;
+
+    final existing = competitions.firstWhereOrNull((c) => c.id == id);
+    final hasGroupData = existing != null &&
+        ((existing.stageGroups != null && existing.stageGroups!.isNotEmpty) ||
+            (existing.stageGroupLabels != null &&
+                existing.stageGroupLabels!.isNotEmpty));
+    if (hasGroupData) {
+      return;
+    }
+
+    if (stageOptions.isEmpty || groupOptions.isEmpty) {
+      await loadOptions();
+    }
+
+    isLoadingRegistrationCompetition.value = true;
+    try {
+      final numericId = int.tryParse(id);
+      if (numericId != null) {
+        final response = await _repository.getCompetitionById(numericId);
+        if (response.success && response.data != null) {
+          _upsertCompetition(response.data!);
+          return;
+        }
+      }
+
+      final home = homeCompetitions.firstWhereOrNull(
+        (c) => c.id?.toString() == id,
+      );
+      if (home != null) {
+        _upsertCompetition(_competitionFromHome(home, existing));
+      }
+    } catch (e) {
+      print('Error loading competition for registration: $e');
+    } finally {
+      isLoadingRegistrationCompetition.value = false;
+    }
+  }
+
+  void _upsertCompetition(CompetitionModel competition) {
+    final compId = competition.id;
+    if (compId == null || compId.isEmpty) {
+      competitions.add(competition);
+    } else {
+      final index = competitions.indexWhere((c) => c.id == compId);
+      if (index >= 0) {
+        competitions[index] = competition;
+      } else {
+        competitions.add(competition);
+      }
+    }
+    competitions.refresh();
+  }
+
+  CompetitionModel _competitionFromHome(
+    HomeCompetitionModel home,
+    CompetitionModel? existing,
+  ) {
+    DateTime parseDate(String? value) {
+      if (value == null || value.isEmpty) return DateTime.now();
+      return DateTime.tryParse(value) ?? DateTime.now();
+    }
+
+    return CompetitionModel(
+      id: home.id?.toString(),
+      competitionName: home.competitionName,
+      description: home.description,
+      address: home.address,
+      eventStartDate: parseDate(home.eventStartDate),
+      eventEndDate: parseDate(home.eventEndDate),
+      displayAdFrom: home.displayAdFrom != null
+          ? parseDate(home.displayAdFrom)
+          : null,
+      categories: home.categories.isNotEmpty
+          ? List<String>.from(home.categories)
+          : existing?.categories,
+      categoryIds: existing?.categoryIds,
+      categoryAmounts: home.categoryAmounts.isNotEmpty
+          ? Map<String, double>.from(home.categoryAmounts)
+          : existing?.categoryAmounts,
+      stageGroups: existing?.stageGroups,
+      stageIds: existing?.stageIds,
+      stages: existing?.stages,
+      brochureUrl: home.brochureUrl ?? existing?.brochureUrl,
+    );
+  }
+
   void onInit() {
     super.onInit();
     // Initialize search controller text

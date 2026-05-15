@@ -8,6 +8,7 @@ import '../../data/models/user_model.dart';
 import '../../core/constants/app_constants.dart';
 import '../../routes/app_routes.dart';
 import 'participant_controller.dart';
+import 'participant_registration_form_controller.dart';
 import 'user_management_controller.dart';
 import 'competition_controller.dart';
 import 'school_controller.dart';
@@ -410,6 +411,16 @@ class AuthController extends GetxController {
       try {
         if (Get.isRegistered<ParticipantController>()) {
           Get.delete<ParticipantController>(force: true);
+        }
+      } catch (_) {}
+      try {
+        if (Get.isRegistered<ParticipantRegistrationFormController>(
+          tag: kParticipantRegistrationFormControllerTag,
+        )) {
+          Get.delete<ParticipantRegistrationFormController>(
+            tag: kParticipantRegistrationFormControllerTag,
+            force: true,
+          );
         }
       } catch (_) {}
       try {

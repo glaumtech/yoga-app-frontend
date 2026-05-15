@@ -7,11 +7,15 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
-import '../../controllers/participant_registration_form_controller.dart';
+import '../../controllers/participant_registration_form_controller.dart'
+    show
+        ParticipantRegistrationFormController,
+        kParticipantRegistrationFormControllerTag;
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_label_with_hint.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
+import '../../../data/models/competition_model.dart';
 import '../../../core/utils/date_utils.dart' as app_date_utils;
 import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
@@ -37,6 +41,97 @@ String? _eventIdForRegistrationSave(
   return null;
 }
 
+CompetitionModel? _competitionForRegistration(
+  ParticipantController participantController,
+  CompetitionController competitionController,
+) {
+  final id = participantController.selectedEventId.value;
+  if (id.isEmpty) return null;
+  return competitionController.competitions.firstWhereOrNull((c) => c.id == id);
+}
+
+List<String> _categoriesForRegistration(
+  ParticipantController participantController,
+  CompetitionController competitionController,
+) {
+  final competition = _competitionForRegistration(
+    participantController,
+    competitionController,
+  );
+  if (competition?.categories != null && competition!.categories!.isNotEmpty) {
+    return competition.categories!;
+  }
+
+  final id = participantController.selectedEventId.value;
+  final home = competitionController.homeCompetitions.firstWhereOrNull(
+    (c) => c.id?.toString() == id,
+  );
+  return home?.categories ?? const [];
+}
+
+List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
+  CompetitionModel? competition,
+  CompetitionController competitionController,
+) {
+  if (competition == null) return const [];
+
+  final entries = <({String groupName, String stageName})>[];
+
+  if (competition.stageGroups != null &&
+      competition.stageGroups!.isNotEmpty) {
+    final sortedStageIds =
+        competition.stageGroups!.keys
+            .map((id) => int.tryParse(id))
+            .whereType<int>()
+            .toList()
+          ..sort((a, b) {
+            final stageA =
+                competitionController.getStageNameById(a)?.toLowerCase() ?? '';
+            final stageB =
+                competitionController.getStageNameById(b)?.toLowerCase() ?? '';
+            return stageA.compareTo(stageB);
+          });
+
+    for (final stageId in sortedStageIds) {
+      final stageName = competitionController.getStageNameById(stageId);
+      if (stageName == null) continue;
+
+      final groupIds =
+          List<int>.from(
+            competition.stageGroups![stageId.toString()] ?? const [],
+          )..sort((a, b) {
+            final groupA =
+                competitionController.getGroupNameById(a)?.toLowerCase() ?? '';
+            final groupB =
+                competitionController.getGroupNameById(b)?.toLowerCase() ?? '';
+            return groupA.compareTo(groupB);
+          });
+
+      for (final groupId in groupIds) {
+        final groupName = competitionController.getGroupNameById(groupId);
+        if (groupName != null) {
+          entries.add((groupName: groupName, stageName: stageName));
+        }
+      }
+    }
+  }
+
+  if (entries.isEmpty && competition.stageGroupLabels != null) {
+    final sortedStages = competition.stageGroupLabels!.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    for (final stageName in sortedStages) {
+      final groups = List<String>.from(
+        competition.stageGroupLabels![stageName] ?? const [],
+      )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      for (final groupName in groups) {
+        entries.add((groupName: groupName, stageName: stageName));
+      }
+    }
+  }
+
+  return entries;
+}
+
 class ParticipantRegistrationFormScreen extends StatelessWidget {
   final String? initialCompetitionId;
 
@@ -52,11 +147,20 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Keep screen Stateless: init work happens in controller.onReady()
+    // Fresh controller each visit (e.g. after logout) so competition data reloads.
+    if (Get.isRegistered<ParticipantRegistrationFormController>(
+      tag: kParticipantRegistrationFormControllerTag,
+    )) {
+      Get.delete<ParticipantRegistrationFormController>(
+        tag: kParticipantRegistrationFormControllerTag,
+        force: true,
+      );
+    }
     Get.put(
       ParticipantRegistrationFormController(
         initialCompetitionId: initialCompetitionId,
       ),
+      tag: kParticipantRegistrationFormControllerTag,
     );
 
     // Public registration screen can be opened after logout.
@@ -1140,12 +1244,15 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       children: [
         FormLabelWithHint(label: 'Category :', bottomSpacing: 12),
         Obx(() {
-          final selectedCompetition = competitionController.competitions
-              .firstWhereOrNull(
-                (c) => c.id == controller.selectedEventId.value,
-              );
-          final availableCategories =
-              selectedCompetition?.categories ?? <String>[];
+          final _ = competitionController.competitions.length;
+          if (competitionController.isLoadingRegistrationCompetition.value) {
+            return const LinearProgressIndicator(minHeight: 2);
+          }
+
+          final availableCategories = _categoriesForRegistration(
+            controller,
+            competitionController,
+          );
 
           return DropdownButtonFormField<String>(
             value: controller.selectedCategories.isNotEmpty
@@ -1205,69 +1312,20 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       children: [
         FormLabelWithHint(label: 'Select Group :', bottomSpacing: 8),
         Obx(() {
-          final selectedCompetition = competitionController.competitions
-              .firstWhereOrNull(
-                (c) => c.id == controller.selectedEventId.value,
-              );
-
-          // Build stage + group pairs, then sort alphabetically by stage then group.
-          final groupStageEntries = <({String groupName, String stageName})>[];
-          if (selectedCompetition != null &&
-              selectedCompetition.stageGroups != null) {
-            final sortedStageIds =
-                selectedCompetition.stageGroups!.keys
-                    .map((id) => int.tryParse(id))
-                    .whereType<int>()
-                    .toList()
-                  ..sort((a, b) {
-                    final stageA =
-                        competitionController
-                            .getStageNameById(a)
-                            ?.toLowerCase() ??
-                        '';
-                    final stageB =
-                        competitionController
-                            .getStageNameById(b)
-                            ?.toLowerCase() ??
-                        '';
-                    return stageA.compareTo(stageB);
-                  });
-
-            for (final stageId in sortedStageIds) {
-              final stageName = competitionController.getStageNameById(stageId);
-              if (stageName == null) continue;
-
-              final groupIds =
-                  List<int>.from(
-                    selectedCompetition.stageGroups![stageId.toString()] ??
-                        const [],
-                  )..sort((a, b) {
-                    final groupA =
-                        competitionController
-                            .getGroupNameById(a)
-                            ?.toLowerCase() ??
-                        '';
-                    final groupB =
-                        competitionController
-                            .getGroupNameById(b)
-                            ?.toLowerCase() ??
-                        '';
-                    return groupA.compareTo(groupB);
-                  });
-
-              for (final groupId in groupIds) {
-                final groupName = competitionController.getGroupNameById(
-                  groupId,
-                );
-                if (groupName != null) {
-                  groupStageEntries.add((
-                    groupName: groupName,
-                    stageName: stageName,
-                  ));
-                }
-              }
-            }
+          final _ = competitionController.competitions.length;
+          if (competitionController.isLoadingRegistrationCompetition.value) {
+            return const LinearProgressIndicator(minHeight: 2);
           }
+
+          final selectedCompetition = _competitionForRegistration(
+            controller,
+            competitionController,
+          );
+
+          final groupStageEntries = _groupStageEntriesForRegistration(
+            selectedCompetition,
+            competitionController,
+          );
 
           final allGroupsWithStage = groupStageEntries
               .map((e) => '${e.groupName} (GROUP ${e.stageName})')

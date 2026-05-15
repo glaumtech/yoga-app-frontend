@@ -30,11 +30,24 @@ class _UserCompetitionRegistrationScreenState
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final competitionController = Get.isRegistered<CompetitionController>()
+          ? Get.find<CompetitionController>()
+          : Get.put(CompetitionController());
       final participantController = Get.isRegistered<ParticipantController>()
           ? Get.find<ParticipantController>()
           : Get.put(ParticipantController());
+
       participantController.clearRegistrationConfirmation();
+      participantController.selectedEventId.value = widget.competitionId;
+
+      if (competitionController.homeCompetitions.isEmpty &&
+          !competitionController.isLoadingHomeCompetitions.value) {
+        await competitionController.loadCompetitionsForHome();
+      }
+      await competitionController.ensureCompetitionLoadedForRegistration(
+        widget.competitionId,
+      );
     });
   }
 
