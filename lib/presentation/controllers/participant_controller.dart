@@ -81,6 +81,8 @@ class ParticipantController extends GetxController {
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
   final Rx<File?> bonafideFile = Rx<File?>(null);
   final Rx<XFile?> bonafideImage = Rx<XFile?>(null);
+  final Rx<Uint8List?> bonafideBytes = Rx<Uint8List?>(null);
+  final RxString bonafideFileName = ''.obs;
   final Rx<ParticipantModel?> participantToEdit = Rx<ParticipantModel?>(null);
   final RxString existingPhotoUrl = ''.obs;
   final RxString existingCertificateUrl = ''.obs;
@@ -366,7 +368,43 @@ class ParticipantController extends GetxController {
   void _clearBonafideCertificateFiles() {
     bonafideFile.value = null;
     bonafideImage.value = null;
+    bonafideBytes.value = null;
+    bonafideFileName.value = '';
     existingCertificateUrl.value = '';
+  }
+
+  bool get hasBonafideCertificateSelected =>
+      bonafideFile.value != null ||
+      bonafideImage.value != null ||
+      bonafideBytes.value != null ||
+      existingCertificateUrl.value.trim().isNotEmpty;
+
+  Future<bool> pickBonafideCertificate() async {
+    try {
+      final XFile? file = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (file == null) return false;
+
+      bonafideFileName.value = file.name;
+      existingCertificateUrl.value = '';
+
+      if (kIsWeb) {
+        bonafideBytes.value = await file.readAsBytes();
+        bonafideImage.value = file;
+        bonafideFile.value = null;
+      } else {
+        bonafideImage.value = file;
+        bonafideFile.value = File(file.path);
+        bonafideBytes.value = null;
+      }
+      return true;
+    } catch (e) {
+      errorMessage.value = 'Failed to pick certificate: ${e.toString()}';
+      return false;
+    }
   }
 
   void _applyBonafideRulesForSelectedInstitution() {
@@ -418,10 +456,7 @@ class ParticipantController extends GetxController {
       return true;
     }
 
-    final hasCertificate =
-        bonafideFile.value != null ||
-        bonafideImage.value != null ||
-        existingCertificateUrl.value.trim().isNotEmpty;
+    final hasCertificate = hasBonafideCertificateSelected;
     if (!hasCertificate) {
       errorMessage.value =
           'Bonafied certificate is required for Govt / Govt Aided School';
@@ -822,6 +857,9 @@ class ParticipantController extends GetxController {
           _parseRegBool(reg['isSpotRegistration']) ||
           _parseRegBool(reg['is_spot_registration']) ||
           _parseRegBool(reg['spotRegistration']),
+      optForECertificate:
+          _parseRegBool(reg['optForECertificate']) ||
+          _parseRegBool(reg['opt_for_e_certificate']),
     );
   }
 
@@ -1238,10 +1276,8 @@ class ParticipantController extends GetxController {
     standard.value = '';
     photoFile.value = null;
     selectedImage.value = null;
-    bonafideFile.value = null;
-    bonafideImage.value = null;
     existingPhotoUrl.value = '';
-    existingCertificateUrl.value = '';
+    _clearBonafideCertificateFiles();
     selectedInstitutionId.value = null;
     selectedInstitution.value = null;
     participantInstitutionId.value = null;
@@ -1355,10 +1391,8 @@ class ParticipantController extends GetxController {
     photoFile.value = null;
     selectedImage.value = null;
     errorMessage.value = '';
-    bonafideFile.value = null;
-    bonafideImage.value = null;
     existingPhotoUrl.value = '';
-    existingCertificateUrl.value = '';
+    _clearBonafideCertificateFiles();
     selectedInstitutionId.value = null;
     selectedInstitution.value = null;
     participantInstitutionId.value = null;
@@ -1462,6 +1496,7 @@ class ParticipantController extends GetxController {
       standard.value = participant.standard;
       gender.value = _normalizeGender(participant.gender);
       isSpotRegistration.value = participant.isSpotRegistration;
+      optForECertificate.value = participant.optForECertificate;
       dateOfBirth.value = participant.dateOfBirth;
 
       // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
@@ -1645,8 +1680,8 @@ class ParticipantController extends GetxController {
     standard.value = participant.standard;
     gender.value = _normalizeGender(participant.gender);
     isSpotRegistration.value = participant.isSpotRegistration;
+    optForECertificate.value = participant.optForECertificate;
     dateOfBirth.value = participant.dateOfBirth;
-
     // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
     // Otherwise, try to find the stage from competition data
     if (participant.standard.isNotEmpty) {

@@ -737,7 +737,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           final prizeRankNum = (m['prizeRank'] as num?)?.toInt();
           final inst = (m['institutionName'] ?? '').toString();
           final winnerGroupName = (m['groupName'] ?? '').toString();
-          final avg = (m['avgScore'] ?? 0).toString();
+          final totalScore = (m['totalScore'] ?? m['avgScore'] ?? 0).toString();
 
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
@@ -859,7 +859,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'AVG',
+                      'TOTAL',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -867,7 +867,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                     ),
                     Text(
-                      avg,
+                      totalScore,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w900,

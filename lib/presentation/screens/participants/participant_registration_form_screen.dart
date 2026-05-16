@@ -17,6 +17,7 @@ import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../core/utils/date_utils.dart' as app_date_utils;
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
@@ -562,13 +563,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                     // Clear error message on success
                                     participantController.errorMessage.value =
                                         '';
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Participant registered successfully',
-                                        ),
-                                        backgroundColor: Colors.green,
-                                      ),
+                                    SnackbarHelper.showSuccess(
+                                      context,
+                                      'Participant registered successfully',
                                     );
                                     // Form is already reset in submitRegistrationForm method
                                   }
@@ -620,15 +617,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                       // Clear error message on success
                                       participantController.errorMessage.value =
                                           '';
-                                      ScaffoldMessenger.of(
+                                      SnackbarHelper.showSuccess(
                                         context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: const Text(
-                                            'Participant registered successfully',
-                                          ),
-                                          backgroundColor: Colors.green,
-                                        ),
+                                        'Participant registered successfully',
                                       );
                                       // Form is already reset in submitRegistrationForm method
                                     }
@@ -742,13 +733,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                     // Clear error message on success
                                     participantController.errorMessage.value =
                                         '';
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Participant updated successfully',
-                                        ),
-                                        backgroundColor: Colors.green,
-                                      ),
+                                    SnackbarHelper.showSuccess(
+                                      context,
+                                      'Participant updated successfully',
                                     );
                                     // Redirect to list view after successful update
                                     participantController.resetForm();
@@ -1740,24 +1727,26 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           ),
           LayoutBuilder(
             builder: (context, constraints) {
-              return _buildImagePreview(
-                controller.bonafideFile.value,
-                controller.bonafideImage.value,
-                controller.existingCertificateUrl.value,
-                constraints.maxWidth,
-                isMobile ? 150 : 200,
-                defaultIcon: Icons.description,
-                defaultText: 'No Certificate',
+              return Obx(
+                () => _buildImagePreview(
+                  controller.bonafideFile.value,
+                  controller.bonafideImage.value,
+                  controller.existingCertificateUrl.value,
+                  constraints.maxWidth,
+                  isMobile ? 150 : 200,
+                  defaultIcon: Icons.description,
+                  defaultText: 'No Certificate',
+                  memoryBytes: controller.bonafideBytes.value,
+                  previewKey: controller.bonafideImage.value?.path ??
+                      controller.bonafideFileName.value,
+                ),
               );
             },
           ),
           Padding(
             padding: const EdgeInsets.only(top: 16),
             child: Obx(() {
-              final hasCertificate =
-                  controller.bonafideFile.value != null ||
-                  controller.bonafideImage.value != null ||
-                  controller.existingCertificateUrl.value.isNotEmpty;
+              final hasCertificate = controller.hasBonafideCertificateSelected;
 
               if (controller.isViewMode.value) {
                 return const SizedBox.shrink();
@@ -1836,11 +1825,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to pick image: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        SnackbarHelper.showError(
+          context,
+          'Failed to pick image: ${e.toString()}',
         );
       }
     }
@@ -1850,45 +1837,21 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     ParticipantController controller,
     BuildContext context,
   ) async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
+    final picked = await controller.pickBonafideCertificate();
+    if (!context.mounted) return;
 
-      if (file != null) {
-        controller.bonafideImage.value = file;
-        if (!kIsWeb) {
-          controller.bonafideFile.value = File(file.path);
-        }
-        // Clear existing certificate URL when a new certificate is selected
-        // This ensures the newly selected local image is shown instead of the old URL
-        controller.existingCertificateUrl.value = '';
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Bonafide certificate selected'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to pick certificate: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (picked) {
+      SnackbarHelper.showSuccess(context, 'Bonafide certificate selected');
+    } else if (controller.errorMessage.value.isNotEmpty) {
+      SnackbarHelper.showError(context, controller.errorMessage.value);
     }
   }
 
   void _removeBonafideCertificate(ParticipantController controller) {
     controller.bonafideFile.value = null;
     controller.bonafideImage.value = null;
+    controller.bonafideBytes.value = null;
+    controller.bonafideFileName.value = '';
     controller.existingCertificateUrl.value = '';
   }
 
@@ -1900,9 +1863,13 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     double height, {
     IconData defaultIcon = Icons.image,
     String defaultText = 'No Image',
+    Uint8List? memoryBytes,
+    Object? previewKey,
   }) {
-    final hasLocalImage =
-        (xFile != null) || (file != null && file.existsSync());
+    final hasMemoryImage = memoryBytes != null && memoryBytes.isNotEmpty;
+    final hasLocalImage = hasMemoryImage ||
+        (xFile != null) ||
+        (file != null && file.existsSync());
     final hasUrlImage = imageUrl != null && imageUrl.isNotEmpty;
 
     return Container(
@@ -1915,32 +1882,60 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: hasLocalImage
-            ? (kIsWeb
-                  ? (xFile != null
-                        ? FutureBuilder<Uint8List>(
-                            future: xFile.readAsBytes(),
-                            builder: (context, snapshot) {
-                              if (snapshot.hasData) {
-                                return Image.memory(
-                                  snapshot.data!,
-                                  fit: BoxFit.cover,
-                                );
-                              }
-                              return _buildDefaultPreview(
-                                defaultIcon,
-                                defaultText,
-                              );
-                            },
-                          )
-                        : _buildDefaultPreview(defaultIcon, defaultText))
-                  : (file != null && file.existsSync()
-                        ? Image.file(file, fit: BoxFit.cover)
-                        : _buildDefaultPreview(defaultIcon, defaultText)))
+            ? (hasMemoryImage
+                  ? Image.memory(
+                      memoryBytes,
+                      key: ValueKey(previewKey ?? memoryBytes.hashCode),
+                      fit: BoxFit.cover,
+                      width: width,
+                      height: height,
+                    )
+                  : _buildLocalImagePreview(
+                      file: file,
+                      xFile: xFile,
+                      defaultIcon: defaultIcon,
+                      defaultText: defaultText,
+                      previewKey: previewKey,
+                    ))
             : hasUrlImage
             ? _buildNetworkImage(imageUrl, defaultIcon, defaultText)
             : _buildDefaultPreview(defaultIcon, defaultText),
       ),
     );
+  }
+
+  Widget _buildLocalImagePreview({
+    required File? file,
+    required XFile? xFile,
+    required IconData defaultIcon,
+    required String defaultText,
+    Object? previewKey,
+  }) {
+    if (file != null && file.existsSync()) {
+      return Image.file(
+        file,
+        key: ValueKey(previewKey ?? file.path),
+        fit: BoxFit.cover,
+      );
+    }
+
+    if (xFile != null) {
+      return FutureBuilder<Uint8List>(
+        key: ValueKey(previewKey ?? xFile.path),
+        future: xFile.readAsBytes(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+          }
+          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+            return Image.memory(snapshot.data!, fit: BoxFit.cover);
+          }
+          return _buildDefaultPreview(defaultIcon, defaultText);
+        },
+      );
+    }
+
+    return _buildDefaultPreview(defaultIcon, defaultText);
   }
 
   Widget _buildDefaultPreview(IconData icon, String text) {
