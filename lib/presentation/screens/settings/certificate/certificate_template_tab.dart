@@ -70,6 +70,10 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   final TextEditingController _customHeightMmController = TextEditingController(
     text: '794',
   );
+  final ScrollController _previewHorizontalScrollController =
+      ScrollController();
+  final ScrollController _previewVerticalScrollController = ScrollController();
+  final ScrollController _sidebarScrollController = ScrollController();
 
   String _selectedPaper = 'Custom';
   String _selectedTemplateGender = 'Male';
@@ -249,6 +253,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     _inlineEditFocusNode.dispose();
     _customWidthMmController.dispose();
     _customHeightMmController.dispose();
+    _previewHorizontalScrollController.dispose();
+    _previewVerticalScrollController.dispose();
+    _sidebarScrollController.dispose();
     super.dispose();
   }
 
@@ -1093,20 +1100,14 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     }
   }
 
-  Size _paperCanvasSize({required bool mobile, required double screenWidth}) {
+  /// Full oriented canvas size in design pixels (scroll when larger than viewport).
+  Size _paperOrientedCanvasSize() {
     final base = _paperDimensionsPx();
     final shortSide = base.width < base.height ? base.width : base.height;
     final longSide = base.width > base.height ? base.width : base.height;
     final rawWidth = _portrait ? shortSide : longSide;
     final rawHeight = _portrait ? longSide : shortSide;
-
-    final sidebarWidth = mobile ? 220.0 : 300.0;
-    final availableWidth = (screenWidth - sidebarWidth - 56).clamp(
-      220.0,
-      1400.0,
-    );
-    final scale = rawWidth > availableWidth ? (availableWidth / rawWidth) : 1.0;
-    return Size(rawWidth * scale, rawHeight * scale);
+    return Size(rawWidth, rawHeight);
   }
 
   String _resolveTemplateText(String value) {
@@ -2112,10 +2113,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
         return const Center(child: CircularProgressIndicator());
       }
 
-      final canvasSize = _paperCanvasSize(
-        mobile: isMobile,
-        screenWidth: screenWidth,
-      );
+      final canvasSize = _paperOrientedCanvasSize();
       final selectedLayer = _selectedLayerOrNull;
       final ImageProvider<Object>? backgroundImageProvider =
           _backgroundImageBytes != null
@@ -2136,6 +2134,15 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Expanded(
+                    child: Scrollbar(
+                      controller: _sidebarScrollController,
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _sidebarScrollController,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
                   Text(
                     'TEMPLATE NAME',
                     style: TextStyle(
@@ -2501,7 +2508,12 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                     label: const Text('Upload Background'),
                     style: _darkButtonStyle(),
                   ),
-                  const SizedBox(height: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     'LAYERS',
                     style: TextStyle(
@@ -2610,69 +2622,90 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                     colors: [Color(0xFF071326), Color(0xFF0A1730)],
                   ),
                 ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (selectedLayer?.kind == _LayerKind.text) ...[
-                        Align(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (selectedLayer?.kind == _LayerKind.text) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+                        child: Align(
                           alignment: Alignment.topCenter,
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 1200),
                             child: _buildTextStylePanel(selectedLayer!),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                      ],
-                      Align(
-                        alignment: Alignment.topCenter,
-                        child: Container(
-                          width: canvasSize.width,
-                          height: canvasSize.height,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: const Color(0xFFCFD8DC),
-                              width: 1,
-                            ),
-                            boxShadow: const [
-                              BoxShadow(
-                                blurRadius: 24,
-                                color: Color(0x33000000),
-                                offset: Offset(0, 12),
-                              ),
-                            ],
-                            image: backgroundImageProvider == null
-                                ? null
-                                : DecorationImage(
-                                    image: backgroundImageProvider,
-                                    fit: BoxFit.cover,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    Expanded(
+                      child: Scrollbar(
+                        controller: _previewVerticalScrollController,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _previewVerticalScrollController,
+                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+                          child: Scrollbar(
+                            controller: _previewHorizontalScrollController,
+                            thumbVisibility: true,
+                            notificationPredicate: (notification) =>
+                                notification.depth == 1,
+                            child: SingleChildScrollView(
+                              controller: _previewHorizontalScrollController,
+                              scrollDirection: Axis.horizontal,
+                              child: Container(
+                                width: canvasSize.width,
+                                height: canvasSize.height,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: const Color(0xFFCFD8DC),
+                                    width: 1,
                                   ),
-                          ),
-                          child: Stack(
-                            children: [
-                              for (var i = 0; i < _layers.length; i++)
-                                _buildLayerItem(
-                                  _layers[i],
-                                  canvasSize,
-                                  i == _selectedLayerIndex ||
-                                      _selectedLayerIds.contains(_layers[i].id),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      blurRadius: 24,
+                                      color: Color(0x33000000),
+                                      offset: Offset(0, 12),
+                                    ),
+                                  ],
+                                  image: backgroundImageProvider == null
+                                      ? null
+                                      : DecorationImage(
+                                          image: backgroundImageProvider,
+                                          fit: BoxFit.cover,
+                                        ),
                                 ),
-                            ],
+                                child: Stack(
+                                  children: [
+                                    for (var i = 0; i < _layers.length; i++)
+                                      _buildLayerItem(
+                                        _layers[i],
+                                        canvasSize,
+                                        i == _selectedLayerIndex ||
+                                            _selectedLayerIds.contains(
+                                              _layers[i].id,
+                                            ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      _BottomActions(
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
+                      child: _BottomActions(
                         c: c,
                         onSave: _onSave,
                         onCancel: _onCancel,
                         primary: primary,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
