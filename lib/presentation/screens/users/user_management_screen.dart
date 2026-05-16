@@ -162,115 +162,165 @@ class UserManagementScreen extends StatelessWidget {
           return Form(
             key: controller.formKey,
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title
-              Obx(
-                () => FormTitle(
-                  text: controller.isEditMode ? 'EDIT USER' : 'CREATE USER',
-                  isMobile: isMobile,
-                  isTablet: isTablet,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title
+                Obx(
+                  () => FormTitle(
+                    text: controller.isEditMode ? 'EDIT USER' : 'CREATE USER',
+                    isMobile: isMobile,
+                    isTablet: isTablet,
+                  ),
                 ),
-              ),
-              // Competition and Type in same line (desktop)
-              isMobile
-                  ? Column(
-                      children: [
-                        _buildCompetitionField(
-                          context,
-                          controller,
-                          competitionController,
-                          isMobile,
-                          isTablet,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-                        _buildUserTypeField(
-                          context,
-                          controller,
-                          isMobile,
-                          isTablet,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildCompetitionField(
+                // Competition and Type in same line (desktop)
+                isMobile
+                    ? Column(
+                        children: [
+                          _buildCompetitionField(
                             context,
                             controller,
                             competitionController,
                             isMobile,
                             isTablet,
                           ),
-                        ),
-                        SizedBox(width: isTablet ? 16 : 24),
-                        Expanded(
-                          child: _buildUserTypeField(
+                          SizedBox(height: isMobile ? 20 : 24),
+                          _buildUserTypeField(
                             context,
                             controller,
                             isMobile,
                             isTablet,
                           ),
+                          SizedBox(height: isMobile ? 20 : 24),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _buildCompetitionField(
+                              context,
+                              controller,
+                              competitionController,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ),
+                          SizedBox(width: isTablet ? 16 : 24),
+                          Expanded(
+                            child: _buildUserTypeField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ),
+                        ],
+                      ),
+                SizedBox(height: isMobile ? 20 : 24),
+
+                // Conditional Form Fields
+                Obx(() {
+                  if (controller.selectedType.value == 'VOLUNTEERS') {
+                    return _buildVolunteersTable(context, controller, isMobile);
+                  } else {
+                    return _buildRegularUserForm(
+                      context,
+                      controller,
+                      isMobile,
+                      isTablet,
+                    );
+                  }
+                }),
+
+                SizedBox(height: isMobile ? 24 : 32),
+
+                // Error Message
+                if (controller.errorMessage.value.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            controller.errorMessage.value,
+                            style: TextStyle(color: Colors.red[700]),
+                          ),
                         ),
                       ],
                     ),
-              SizedBox(height: isMobile ? 20 : 24),
-
-              // Conditional Form Fields
-              Obx(() {
-                if (controller.selectedType.value == 'VOLUNTEERS') {
-                  return _buildVolunteersTable(context, controller, isMobile);
-                } else {
-                  return _buildRegularUserForm(
-                    context,
-                    controller,
-                    isMobile,
-                    isTablet,
-                  );
-                }
-              }),
-
-              SizedBox(height: isMobile ? 24 : 32),
-
-              // Error Message
-              if (controller.errorMessage.value.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          controller.errorMessage.value,
-                          style: TextStyle(color: Colors.red[700]),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
 
-              // Submit and Cancel Buttons
-              Obx(() {
-                if (controller.isLoading.value) {
-                  return const Center(
-                    child: CustomLoader(message: 'Processing...'),
-                  );
-                }
-                return isMobile
-                    ? Column(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: PrimaryButton(
+                // Submit and Cancel Buttons
+                Obx(() {
+                  if (controller.isLoading.value) {
+                    return const Center(
+                      child: CustomLoader(message: 'Processing...'),
+                    );
+                  }
+                  return isMobile
+                      ? Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: PrimaryButton(
+                                text: controller.isEditMode
+                                    ? 'UPDATE'
+                                    : (controller.selectedType.value ==
+                                              'VOLUNTEERS'
+                                          ? 'SAVE CHANGES'
+                                          : 'SUBMIT'),
+                                icon: Icons.save,
+                                onPressed: () async {
+                                  final success =
+                                      controller.selectedType.value ==
+                                          'VOLUNTEERS'
+                                      ? await controller.createVolunteers()
+                                      : await controller.createUser();
+
+                                  if (success && context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          controller.isEditMode
+                                              ? 'User updated successfully'
+                                              : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
+                                        ),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                    // Reset form and switch to list view after successful update
+                                    if (controller.isEditMode) {
+                                      controller.resetForm();
+                                      controller.toggleViewMode(true);
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
+                            if (controller.isEditMode) ...[
+                              const SizedBox(height: 12),
+                              cancelButton(
+                                onPressed: () {
+                                  controller.resetForm();
+                                  controller.toggleViewMode(true);
+                                },
+                                isFullWidth: true,
+                              ),
+                            ],
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            PrimaryButton(
                               text: controller.isEditMode
                                   ? 'UPDATE'
                                   : (controller.selectedType.value ==
@@ -304,69 +354,21 @@ class UserManagementScreen extends StatelessWidget {
                                 }
                               },
                             ),
-                          ),
-                          if (controller.isEditMode) ...[
-                            const SizedBox(height: 12),
-                            cancelButton(
-                              onPressed: () {
-                                controller.resetForm();
-                                controller.toggleViewMode(true);
-                              },
-                              isFullWidth: true,
-                            ),
-                          ],
-                        ],
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          PrimaryButton(
-                            text: controller.isEditMode
-                                ? 'UPDATE'
-                                : (controller.selectedType.value == 'VOLUNTEERS'
-                                      ? 'SAVE CHANGES'
-                                      : 'SUBMIT'),
-                            icon: Icons.save,
-                            onPressed: () async {
-                              final success =
-                                  controller.selectedType.value == 'VOLUNTEERS'
-                                  ? await controller.createVolunteers()
-                                  : await controller.createUser();
-
-                              if (success && context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      controller.isEditMode
-                                          ? 'User updated successfully'
-                                          : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
-                                    ),
-                                    backgroundColor: Colors.green,
-                                  ),
-                                );
-                                // Reset form and switch to list view after successful update
-                                if (controller.isEditMode) {
+                            if (controller.isEditMode) ...[
+                              const SizedBox(width: 16),
+                              cancelButton(
+                                onPressed: () {
                                   controller.resetForm();
                                   controller.toggleViewMode(true);
-                                }
-                              }
-                            },
-                          ),
-                          if (controller.isEditMode) ...[
-                            const SizedBox(width: 16),
-                            cancelButton(
-                              onPressed: () {
-                                controller.resetForm();
-                                controller.toggleViewMode(true);
-                              },
-                            ),
+                                },
+                              ),
+                            ],
                           ],
-                        ],
-                      );
-              }),
-            ],
-          ),
-        );
+                        );
+                }),
+              ],
+            ),
+          );
         }),
       ),
     );
@@ -506,109 +508,70 @@ class UserManagementScreen extends StatelessWidget {
             );
           }
 
-          return isMobile
-              ? Column(
-                  children: userTypes.map((type) {
-                    return InkWell(
-                      onTap: () {
-                        controller.selectedType.value = type;
-                        // Reset form when type changes
-                        if (type == 'VOLUNTEERS') {
-                          controller.volunteerRows.value = List.generate(
-                            4,
-                            (index) => VolunteerRow(),
-                          );
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            Radio<String>(
-                              value: type,
-                              groupValue: controller.selectedType.value,
-                              onChanged: (value) {
-                                if (value != null) {
-                                  controller.selectedType.value = value;
-                                  // Reset form when type changes
-                                  if (value == 'VOLUNTEERS') {
-                                    controller.volunteerRows.value =
-                                        List.generate(
-                                          4,
-                                          (index) => VolunteerRow(),
-                                        );
-                                  }
-                                }
-                              },
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                type,
-                                style: const TextStyle(fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                )
-              : Row(
-                  children: userTypes.map((type) {
-                    return Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          controller.selectedType.value = type;
-                          // Reset form when type changes
-                          if (type == 'VOLUNTEERS') {
-                            controller.volunteerRows.value = List.generate(
-                              4,
-                              (index) => VolunteerRow(),
-                            );
-                          }
-                        },
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Radio<String>(
-                              value: type,
-                              groupValue: controller.selectedType.value,
-                              onChanged: (value) {
-                                if (value != null) {
-                                  controller.selectedType.value = value;
-                                  // Reset form when type changes
-                                  if (value == 'VOLUNTEERS') {
-                                    controller.volunteerRows.value =
-                                        List.generate(
-                                          4,
-                                          (index) => VolunteerRow(),
-                                        );
-                                  }
-                                }
-                              },
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                type,
-                                style: TextStyle(fontSize: isTablet ? 12 : 14),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                );
+          return Wrap(
+            spacing: isMobile ? 0 : 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: userTypes.map((type) {
+              return _buildUserTypeRadioOption(
+                controller: controller,
+                type: type,
+                fontSize: isMobile ? 14 : (isTablet ? 13 : 14),
+              );
+            }).toList(),
+          );
         }),
       ],
+    );
+  }
+
+  Widget _buildPasswordAutoGeneratedHint({double fontSize = 12}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Text(
+        'Passwords will be auto generated',
+        style: TextStyle(fontSize: fontSize, color: Colors.grey[600]),
+      ),
+    );
+  }
+
+  Widget _buildUserTypeRadioOption({
+    required UserManagementController controller,
+    required String type,
+    required double fontSize,
+  }) {
+    void onTypeSelected(String value) {
+      controller.selectedType.value = value;
+      if (value == 'VOLUNTEERS') {
+        controller.volunteerRows.value = List.generate(
+          4,
+          (index) => VolunteerRow(),
+        );
+      }
+    }
+
+    return InkWell(
+      onTap: () => onTypeSelected(type),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Radio<String>(
+              value: type,
+              groupValue: controller.selectedType.value,
+              onChanged: (value) {
+                if (value != null) {
+                  onTypeSelected(value);
+                }
+              },
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+            Text(type, style: TextStyle(fontSize: fontSize)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -720,6 +683,9 @@ class UserManagementScreen extends StatelessWidget {
                           hintText: 'XXXXXXXX',
                           hintStyle: TextStyle(color: Colors.grey[400]),
                         ),
+                      ),
+                      _buildPasswordAutoGeneratedHint(
+                        fontSize: isMobile ? 12 : 13,
                       ),
                     ],
                   ),
@@ -850,6 +816,9 @@ class UserManagementScreen extends StatelessWidget {
                                       ),
                                     ),
                                   ),
+                                  _buildPasswordAutoGeneratedHint(
+                                    fontSize: isTablet ? 11 : 12,
+                                  ),
                                 ],
                               ),
                             ),
@@ -963,9 +932,7 @@ class UserManagementScreen extends StatelessWidget {
                             children: [
                               Text(
                                 'GENDER OPTIONS :',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
+                                style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       fontSize: isTablet ? 15 : 16,
@@ -978,18 +945,21 @@ class UserManagementScreen extends StatelessWidget {
                                   runSpacing: 8,
                                   children: [
                                     InkWell(
-                                      onTap: () => controller.selectedMale.value =
-                                          !controller.selectedMale.value,
+                                      onTap: () =>
+                                          controller.selectedMale.value =
+                                              !controller.selectedMale.value,
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Checkbox(
-                                            value: controller.selectedMale.value,
+                                            value:
+                                                controller.selectedMale.value,
                                             onChanged: (value) =>
                                                 controller.selectedMale.value =
                                                     value ?? false,
                                             materialTapTargetSize:
-                                                MaterialTapTargetSize.shrinkWrap,
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
@@ -1009,12 +979,16 @@ class UserManagementScreen extends StatelessWidget {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Checkbox(
-                                            value: controller.selectedFemale.value,
+                                            value:
+                                                controller.selectedFemale.value,
                                             onChanged: (value) =>
-                                                controller.selectedFemale.value =
+                                                controller
+                                                        .selectedFemale
+                                                        .value =
                                                     value ?? false,
                                             materialTapTargetSize:
-                                                MaterialTapTargetSize.shrinkWrap,
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
@@ -1352,7 +1326,8 @@ class UserManagementScreen extends StatelessWidget {
                           Checkbox(
                             value: controller.selectedFemale.value,
                             onChanged: (value) =>
-                                controller.selectedFemale.value = value ?? false,
+                                controller.selectedFemale.value =
+                                    value ?? false,
                             materialTapTargetSize:
                                 MaterialTapTargetSize.shrinkWrap,
                           ),

@@ -351,6 +351,8 @@ class SchoolCreateScreen extends StatelessWidget {
                               isMobile,
                               isTablet,
                             ),
+                            const SizedBox(height: 8),
+                            _buildLocationGroupHint(isMobile),
                           ],
                         )
                       : Row(
@@ -397,6 +399,10 @@ class SchoolCreateScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+                  if (!isMobile) ...[
+                    const SizedBox(height: 8),
+                    _buildLocationGroupHint(isMobile),
+                  ],
                   SizedBox(height: isMobile ? 20 : 24),
 
                   // Contributor details (last section)
@@ -679,6 +685,17 @@ class SchoolCreateScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildLocationGroupHint(bool isMobile) {
+    return Text(
+      '* At least one of District, City/Town/Village, or Pincode is required',
+      style: TextStyle(
+        fontSize: isMobile ? 11.5 : 12,
+        color: Colors.grey[600],
+        height: 1.3,
+      ),
+    );
+  }
+
   Widget _buildDistrictField(
     BuildContext context,
     SchoolController controller,
@@ -689,7 +706,7 @@ class SchoolCreateScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         MandatoryAwareLabel(
-          label: 'District * :',
+          label: 'District :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -785,15 +802,7 @@ class SchoolCreateScreen extends StatelessWidget {
                     },
                     onFieldSubmitted: (_) =>
                         controller.setCreateFormDistrict(textController.text),
-                    validator: (value) {
-                      if (controller.selectedStateId.value <= 0) {
-                        return 'Please select state first';
-                      }
-                      if ((value ?? '').trim().isEmpty) {
-                        return 'Please select district';
-                      }
-                      return null;
-                    },
+                    validator: (_) => controller.validateLocationGroupRequirement(),
                   );
                 },
             optionsViewBuilder: (context, onSelected, options) {
@@ -840,7 +849,7 @@ class SchoolCreateScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         MandatoryAwareLabel(
-          label: 'Village * :',
+          label: 'City/Town/Village :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -862,17 +871,10 @@ class SchoolCreateScreen extends StatelessWidget {
           final districtDraft = controller.createFormDistrictTextController.text
               .trim();
           final districtCommitted = controller.selectedDistrict.value.trim();
-          if (districtDraft.isEmpty && districtCommitted.isEmpty) {
-            return TextFormField(
-              readOnly: true,
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-              decoration: _schoolLocationDecoration(
-                isMobile,
-              ).copyWith(hintText: 'Select district first'),
-            );
-          }
+          final hasDistrict =
+              districtDraft.isNotEmpty || districtCommitted.isNotEmpty;
 
-          if (controller.isLoadingCreateFormVillages.value) {
+          if (hasDistrict && controller.isLoadingCreateFormVillages.value) {
             return TextFormField(
               readOnly: true,
               style: TextStyle(fontSize: isMobile ? 14 : 16),
@@ -890,7 +892,12 @@ class SchoolCreateScreen extends StatelessWidget {
             );
           }
 
-          final availableVillages = controller.createFormVillages.toList()
+          final availableVillages = (hasDistrict
+                  ? controller.createFormVillages
+                  : controller.cities.where(
+                      (c) => c.stateId == controller.selectedStateId.value,
+                    ))
+              .toList()
             ..sort((a, b) => a.cityName.compareTo(b.cityName));
 
           return Autocomplete<CityModel>(
@@ -931,27 +938,13 @@ class SchoolCreateScreen extends StatelessWidget {
                     decoration: _schoolLocationDecoration(
                       isMobile,
                       suffixIcon: const Icon(Icons.search),
-                    ).copyWith(hintText: 'Search village or add new village'),
+                    ).copyWith(
+                      hintText: 'Search or enter city/town/village',
+                    ),
                     onChanged: controller.setCreateFormCityName,
                     onFieldSubmitted: controller.setCreateFormCityName,
-                    validator: (_) {
-                      if (controller.selectedStateId.value <= 0) {
-                        return 'Please select state first';
-                      }
-                      final dDraft = controller
-                          .createFormDistrictTextController
-                          .text
-                          .trim();
-                      final dCommitted = controller.selectedDistrict.value
-                          .trim();
-                      if (dDraft.isEmpty && dCommitted.isEmpty) {
-                        return 'Please select district first';
-                      }
-                      if (controller.selectedCity.value.trim().isEmpty) {
-                        return 'Please enter village';
-                      }
-                      return null;
-                    },
+                    validator: (_) =>
+                        controller.validateLocationGroupRequirement(),
                   );
                 },
             optionsViewBuilder: (context, onSelected, options) {
@@ -986,7 +979,7 @@ class SchoolCreateScreen extends StatelessWidget {
                           return ListTile(
                             dense: true,
                             leading: const Icon(Icons.add, size: 18),
-                            title: Text('Add "$query" as village'),
+                            title: Text('Add "$query" as city/town/village'),
                             onTap: () {
                               controller.setCreateFormCityName(query);
                               FocusScope.of(context).unfocus();
@@ -1025,7 +1018,7 @@ class SchoolCreateScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         MandatoryAwareLabel(
-          label: 'Pincode * :',
+          label: 'Pincode :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -1048,18 +1041,7 @@ class SchoolCreateScreen extends StatelessWidget {
           style: TextStyle(fontSize: isMobile ? 14 : 16),
           keyboardType: TextInputType.number,
           maxLength: 6,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter pincode';
-            }
-            if (value.length != 6) {
-              return 'Pincode must be 6 digits';
-            }
-            if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
-              return 'Pincode must contain only numbers';
-            }
-            return null;
-          },
+          validator: controller.validatePincodeField,
         ),
       ],
     );

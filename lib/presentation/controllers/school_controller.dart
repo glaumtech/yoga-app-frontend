@@ -20,6 +20,9 @@ import '../../../core/navigation/root_scaffold_messenger_key.dart';
 import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class SchoolController extends GetxController {
+  static const String locationGroupRequiredMessage =
+      'Please fill at least one of District, City/Town/Village, or Pincode';
+
   final LocationRepository _locationRepository = LocationRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
 
@@ -191,23 +194,128 @@ class SchoolController extends GetxController {
     return baseType;
   }
 
+  bool get hasAnyLocationDetailFilled {
+    final district = _committedOrDraftDistrict();
+    final city = _committedOrDraftCityName();
+    final pincode = pincodeController.text.trim();
+    return district.isNotEmpty || city.isNotEmpty || pincode.isNotEmpty;
+  }
+
+  String _committedOrDraftDistrict() {
+    final committed = selectedDistrict.value.trim();
+    if (committed.isNotEmpty) return committed;
+    return createFormDistrictTextController.text.trim();
+  }
+
+  String _committedOrDraftCityName() {
+    final committed = selectedCity.value.trim();
+    if (committed.isNotEmpty) return committed;
+    return _parseCityNameFromDisplay(createFormCityTextController.text.trim());
+  }
+
+  String _parseCityNameFromDisplay(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    if (trimmed.contains(',')) {
+      return trimmed.split(',').first.trim();
+    }
+    return trimmed;
+  }
+
+  String? validateLocationGroupRequirement() {
+    if (selectedStateId.value <= 0) {
+      return 'Please select state first';
+    }
+    if (!hasAnyLocationDetailFilled) {
+      return locationGroupRequiredMessage;
+    }
+    return null;
+  }
+
+  String? validatePincodeField(String? value) {
+    final groupError = validateLocationGroupRequirement();
+    if (groupError != null) return groupError;
+
+    final pin = (value ?? '').trim();
+    if (pin.isEmpty) return null;
+    if (pin.length != 6) return 'Pincode must be 6 digits';
+    if (!RegExp(r'^[0-9]+$').hasMatch(pin)) {
+      return 'Pincode must contain only numbers';
+    }
+    return null;
+  }
+
+  List<CityModel> _citiesForSelectedState() {
+    final stateId = selectedStateId.value;
+    if (stateId <= 0) return [];
+    final byId = <int, CityModel>{};
+    for (final c in createFormVillages) {
+      if (c.stateId == stateId) byId[c.id] = c;
+    }
+    for (final c in cities) {
+      if (c.stateId == stateId) byId[c.id] = c;
+    }
+    return byId.values.toList();
+  }
+
+  Future<void> _ensureLocationCitiesLoaded() async {
+    if (selectedStateId.value <= 0) return;
+
+    final district = _committedOrDraftDistrict();
+    if (district.isNotEmpty && createFormVillages.isEmpty) {
+      if (selectedDistrict.value.trim() != district) {
+        selectedDistrict.value = district;
+      }
+      await loadCreateFormVillagesByDistrict();
+    }
+
+    if (cities.isEmpty) {
+      await loadCitiesByStateId(selectedStateId.value);
+    }
+  }
+
+  int? _findExistingCityId({
+    required String cityName,
+    String? district,
+    String? pincode,
+  }) {
+    final nameNorm = cityName.trim().toLowerCase();
+    if (nameNorm.isEmpty || selectedStateId.value <= 0) return null;
+
+    final districtNorm = (district ?? _committedOrDraftDistrict()).trim().toLowerCase();
+    final pinNorm = (pincode ?? pincodeController.text.trim()).trim();
+
+    var matches = _citiesForSelectedState().where((c) {
+      if (c.cityName.trim().toLowerCase() != nameNorm) return false;
+      if (districtNorm.isNotEmpty &&
+          c.district.trim().toLowerCase() != districtNorm) {
+        return false;
+      }
+      if (pinNorm.isNotEmpty && c.pincode.trim() != pinNorm) return false;
+      return true;
+    }).toList();
+
+    if (matches.isEmpty) {
+      matches = _citiesForSelectedState()
+          .where((c) => c.cityName.trim().toLowerCase() == nameNorm)
+          .toList();
+    }
+
+    if (matches.isEmpty) return null;
+    if (matches.length == 1) return matches.first.id;
+
+    if (pinNorm.isNotEmpty) {
+      final pinMatches =
+          matches.where((c) => c.pincode.trim() == pinNorm).toList();
+      if (pinMatches.length == 1) return pinMatches.first.id;
+    }
+
+    return matches.first.id;
+  }
+
   // Get city ID from selected city name (ambiguous if several villages share same cityName)
   int? _getCityIdFromName(String cityName) {
-    if (cityName.isEmpty || selectedStateId.value == 0) {
-      return null;
-    }
-    final cityNameNorm = cityName.trim().toLowerCase();
-    final districtNorm = selectedDistrict.value.trim().toLowerCase();
-    final source = createFormVillages.isNotEmpty ? createFormVillages : cities;
-    final city = source.firstWhereOrNull((c) {
-      final sameState = c.stateId == selectedStateId.value;
-      if (!sameState) return false;
-      final sameCity = c.cityName.trim().toLowerCase() == cityNameNorm;
-      if (!sameCity) return false;
-      if (districtNorm.isEmpty) return true;
-      return c.district.trim().toLowerCase() == districtNorm;
-    });
-    return city?.id;
+    return _findExistingCityId(cityName: cityName);
   }
 
   /// Same display as village field in [SchoolCreateScreen] after selection.
@@ -221,35 +329,20 @@ class SchoolController extends GetxController {
     return _getCityIdFromName(cityName);
   }
 
-  Future<int?> resolveOrCreateCityIdForCreateForm() async {
-    final explicitId = createFormSelectedCityId.value;
-    if (explicitId > 0) {
-      final row =
-          createFormVillages.firstWhereOrNull((c) => c.id == explicitId) ??
-          cities.firstWhereOrNull((c) => c.id == explicitId);
-      if (row != null && row.stateId == selectedStateId.value) {
-        final dNorm = selectedDistrict.value.trim().toLowerCase();
-        final rowD = row.district.trim().toLowerCase();
-        if (dNorm.isEmpty || rowD == dNorm) {
-          return explicitId;
-        }
-      }
-    }
+  Future<int?> _createCityRecord({
+    required String cityName,
+    required String district,
+    required String pincode,
+  }) async {
+    await _ensureLocationCitiesLoaded();
 
-    final cityName = selectedCity.value.trim();
-    if (cityName.isEmpty || selectedStateId.value == 0) {
-      return null;
-    }
-
-    final existingCityId = _getCityIdFromName(cityName);
-    if (existingCityId != null) {
-      return existingCityId;
-    }
-
-    final district = selectedDistrict.value.trim();
-    final pincode = pincodeController.text.trim();
-    if (district.isEmpty || pincode.isEmpty) {
-      return null;
+    final existingId = _findExistingCityId(
+      cityName: cityName,
+      district: district,
+      pincode: pincode,
+    );
+    if (existingId != null) {
+      return existingId;
     }
 
     final response = await _locationRepository.createCity(
@@ -261,7 +354,17 @@ class SchoolController extends GetxController {
     );
 
     if (!response.success || response.data == null) {
-      errorMessage.value = response.message ?? 'Failed to add city';
+      final message = response.message ?? '';
+      if (message.toLowerCase().contains('already exists')) {
+        await _ensureLocationCitiesLoaded();
+        final reusedId = _findExistingCityId(
+          cityName: cityName,
+          district: district,
+          pincode: pincode,
+        );
+        if (reusedId != null) return reusedId;
+      }
+      errorMessage.value = message.isNotEmpty ? message : 'Failed to add city';
       return null;
     }
 
@@ -284,17 +387,124 @@ class SchoolController extends GetxController {
     createFormVillages.refresh();
 
     createFormSelectedCityId.value = createdCity.id;
-    selectedDistrict.value = createdCity.district;
-    createFormDistrictTextController.text = createdCity.district;
+    if (createdCity.district.trim().isNotEmpty) {
+      selectedDistrict.value = createdCity.district;
+      createFormDistrictTextController.text = createdCity.district;
+    }
     selectedCity.value = createdCity.cityName;
     final createdV = (createdCity.village ?? createdCity.description ?? '')
         .trim();
     createFormCityTextController.text = createdV.isEmpty
         ? createdCity.cityName
         : '${createdCity.cityName}, $createdV';
-    pincodeController.text = createdCity.pincode;
+    if (createdCity.pincode.trim().isNotEmpty) {
+      pincodeController.text = createdCity.pincode;
+    }
 
     return createdCity.id;
+  }
+
+  Future<int?> resolveOrCreateCityIdForCreateForm() async {
+    if (selectedStateId.value <= 0) {
+      return null;
+    }
+
+    await _ensureLocationCitiesLoaded();
+
+    final explicitId = createFormSelectedCityId.value;
+    if (explicitId > 0) {
+      final row =
+          createFormVillages.firstWhereOrNull((c) => c.id == explicitId) ??
+          cities.firstWhereOrNull((c) => c.id == explicitId);
+      if (row != null && row.stateId == selectedStateId.value) {
+        final dNorm = _committedOrDraftDistrict().toLowerCase();
+        final rowD = row.district.trim().toLowerCase();
+        if (dNorm.isEmpty || rowD == dNorm) {
+          return explicitId;
+        }
+      }
+    }
+
+    final district = _committedOrDraftDistrict();
+    final pincode = pincodeController.text.trim();
+    final cityName = _committedOrDraftCityName();
+
+    if (!hasAnyLocationDetailFilled) {
+      errorMessage.value = locationGroupRequiredMessage;
+      return null;
+    }
+
+    if (cityName.isEmpty && pincode.isNotEmpty) {
+      final matches = _citiesForSelectedState()
+          .where((c) => c.pincode.trim() == pincode)
+          .toList();
+      if (matches.length == 1) return matches.first.id;
+      if (matches.length > 1) {
+        errorMessage.value =
+            'Multiple cities match this pincode. Please select City/Town/Village.';
+        return null;
+      }
+    }
+
+    if (cityName.isEmpty && district.isNotEmpty) {
+      final existingDistrictCityId = _findExistingCityId(
+        cityName: district,
+        district: district,
+        pincode: pincode,
+      );
+      if (existingDistrictCityId != null) return existingDistrictCityId;
+
+      final districtMatches = _citiesForSelectedState()
+          .where(
+            (c) => c.district.trim().toLowerCase() == district.toLowerCase(),
+          )
+          .toList();
+      if (districtMatches.length == 1) return districtMatches.first.id;
+      if (districtMatches.length > 1) {
+        if (pincode.isNotEmpty) {
+          final pinMatches = districtMatches
+              .where((c) => c.pincode.trim() == pincode)
+              .toList();
+          if (pinMatches.length == 1) return pinMatches.first.id;
+        }
+        final namedMatches = districtMatches
+            .where(
+              (c) => c.cityName.trim().toLowerCase() == district.toLowerCase(),
+            )
+            .toList();
+        if (namedMatches.length == 1) return namedMatches.first.id;
+        if (namedMatches.isNotEmpty) return namedMatches.first.id;
+      }
+      return _createCityRecord(
+        cityName: district,
+        district: district,
+        pincode: pincode,
+      );
+    }
+
+    if (cityName.isEmpty && pincode.isNotEmpty) {
+      return _createCityRecord(
+        cityName: pincode,
+        district: district,
+        pincode: pincode,
+      );
+    }
+
+    if (cityName.isEmpty) {
+      errorMessage.value = locationGroupRequiredMessage;
+      return null;
+    }
+
+    final existingCityId = _getCityIdFromName(cityName);
+    if (existingCityId != null) {
+      return existingCityId;
+    }
+
+    return _createCityRecord(
+      cityName: cityName,
+      district: district,
+      pincode: pincode,
+    );
   }
 
   // Get districts for autocomplete: prefer API list, else derive from loaded cities.
@@ -506,15 +716,19 @@ class SchoolController extends GetxController {
   }
 
   Future<void> loadCreateFormVillagesByDistrict() async {
-    if (selectedStateId.value <= 0 || selectedDistrict.value.trim().isEmpty) {
+    final district = _committedOrDraftDistrict();
+    if (selectedStateId.value <= 0 || district.isEmpty) {
       createFormVillages.clear();
       return;
+    }
+    if (selectedDistrict.value.trim() != district) {
+      selectedDistrict.value = district;
     }
     try {
       isLoadingCreateFormVillages.value = true;
       final response = await _locationRepository.getVillagesByStateAndDistrict(
         stateId: selectedStateId.value,
-        district: selectedDistrict.value.trim(),
+        district: district,
       );
       if (response.success && response.data != null) {
         createFormVillages.value = response.data!;
@@ -856,13 +1070,8 @@ class SchoolController extends GetxController {
       return;
     }
 
-    if (selectedDistrict.value.isEmpty) {
-      errorMessage.value = 'Please select district';
-      return;
-    }
-
-    if (selectedCity.value.isEmpty) {
-      errorMessage.value = 'Please enter city';
+    if (!hasAnyLocationDetailFilled) {
+      errorMessage.value = locationGroupRequiredMessage;
       return;
     }
 

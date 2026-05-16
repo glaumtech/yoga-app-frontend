@@ -26,7 +26,7 @@ class SchoolRepository {
     required int cityId,
     required int institutionTypeId,
     List<int>? institutionCategoryIds,
-    required String pincode,
+    String? pincode,
     String? emailId,
     String? website,
     String? landLine,
@@ -41,8 +41,11 @@ class SchoolRepository {
         'stateId': stateId,
         'cityId': cityId,
         'institutionTypeId': institutionTypeId,
-        'pincode': pincode,
       };
+
+      if (pincode != null && pincode.trim().isNotEmpty) {
+        requestBody['pincode'] = pincode.trim();
+      }
 
       if (institutionShortName != null && institutionShortName.isNotEmpty) {
         requestBody['institutionShortName'] = institutionShortName;

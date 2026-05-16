@@ -6,6 +6,8 @@ class JuryAssignmentModel {
   final String competitionName;
   final int minimumMarks;
   final int maximumMarks;
+  final bool male;
+  final bool female;
 
   JuryAssignmentModel({
     required this.juryId,
@@ -15,6 +17,8 @@ class JuryAssignmentModel {
     required this.competitionName,
     required this.minimumMarks,
     required this.maximumMarks,
+    this.male = false,
+    this.female = false,
   });
 
   factory JuryAssignmentModel.fromJson(Map<String, dynamic> json) {
@@ -39,6 +43,8 @@ class JuryAssignmentModel {
       minimumMarks: json['minimumMarks'] as int? ?? 0,
       // Use 0 when absent so callers can fall back to a default range (e.g. 3–10).
       maximumMarks: json['maximumMarks'] as int? ?? 0,
+      male: json['male'] as bool? ?? false,
+      female: json['female'] as bool? ?? false,
     );
   }
 
@@ -51,6 +57,8 @@ class JuryAssignmentModel {
       'competitionName': competitionName,
       'minimumMarks': minimumMarks,
       'maximumMarks': maximumMarks,
+      'male': male,
+      'female': female,
     };
   }
 }

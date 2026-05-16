@@ -216,8 +216,8 @@ class LocationRepository {
   // Create city
   Future<ApiResponse<CityModel>> createCity({
     required String cityName,
-    required String district,
-    required String pincode,
+    String district = '',
+    String pincode = '',
     required int stateId,
     String? description,
   }) async {
