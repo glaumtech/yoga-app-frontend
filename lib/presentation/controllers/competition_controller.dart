@@ -20,8 +20,14 @@ class CompetitionController extends GetxController {
 
   final RxInt formKeyRevision = 0.obs;
 
-  /// Bumped when any competition date changes so all date [FormField]s re-validate.
+  /// Bumped when any competition date changes so date [FormField]s rebuild.
   final RxInt competitionDatesRevision = 0.obs;
+
+  static const String dateFieldStart = 'start';
+  static const String dateFieldEnd = 'end';
+  static const String dateFieldDisplayAd = 'displayAd';
+
+  final RxSet<String> touchedCompetitionDateFields = <String>{}.obs;
 
   void _refreshFormKeys() {
     _formKey = GlobalKey<FormState>();
@@ -30,6 +36,19 @@ class CompetitionController extends GetxController {
 
   void notifyCompetitionDatesChanged() {
     competitionDatesRevision.value++;
+  }
+
+  void markCompetitionDateFieldTouched(String fieldKey) {
+    touchedCompetitionDateFields.add(fieldKey);
+  }
+
+  bool shouldShowCompetitionDateError(String fieldKey) {
+    return hasAttemptedSubmit.value ||
+        touchedCompetitionDateFields.contains(fieldKey);
+  }
+
+  void clearCompetitionDateFieldTouches() {
+    touchedCompetitionDateFields.clear();
   }
 
   final competitionNameController = TextEditingController();
@@ -863,9 +882,16 @@ class CompetitionController extends GetxController {
   static DateTime _dateOnly(DateTime date) =>
       DateTime(date.year, date.month, date.day);
 
-  String? validateEventStartDate(DateTime? value) {
+  String? validateEventStartDate(
+    DateTime? value, {
+    bool requireWhenEmpty = false,
+  }) {
     if (value == null) {
-      return 'Please select event start date';
+      if (requireWhenEmpty ||
+          shouldShowCompetitionDateError(dateFieldStart)) {
+        return 'Please select event start date';
+      }
+      return null;
     }
     final start = _dateOnly(value);
     final end = eventEndDate.value;
@@ -879,9 +905,15 @@ class CompetitionController extends GetxController {
     return null;
   }
 
-  String? validateEventEndDate(DateTime? value) {
+  String? validateEventEndDate(
+    DateTime? value, {
+    bool requireWhenEmpty = false,
+  }) {
     if (value == null) {
-      return 'Please select event end date';
+      if (requireWhenEmpty || shouldShowCompetitionDateError(dateFieldEnd)) {
+        return 'Please select event end date';
+      }
+      return null;
     }
     final end = _dateOnly(value);
     final start = eventStartDate.value;
@@ -891,9 +923,16 @@ class CompetitionController extends GetxController {
     return null;
   }
 
-  String? validateDisplayAdFrom(DateTime? value) {
+  String? validateDisplayAdFrom(
+    DateTime? value, {
+    bool requireWhenEmpty = false,
+  }) {
     if (value == null) {
-      return 'Please select display ad from date';
+      if (requireWhenEmpty ||
+          shouldShowCompetitionDateError(dateFieldDisplayAd)) {
+        return 'Please select display ad from date';
+      }
+      return null;
     }
     final ad = _dateOnly(value);
     final start = eventStartDate.value;
@@ -903,15 +942,29 @@ class CompetitionController extends GetxController {
     return null;
   }
 
-  String? validateCompetitionDates() {
-    return validateEventStartDate(eventStartDate.value) ??
-        validateEventEndDate(eventEndDate.value) ??
-        validateDisplayAdFrom(displayAdFrom.value);
+  String? validateCompetitionDates({bool forSubmit = false}) {
+    return validateEventStartDate(
+          eventStartDate.value,
+          requireWhenEmpty: forSubmit,
+        ) ??
+        validateEventEndDate(
+          eventEndDate.value,
+          requireWhenEmpty: forSubmit,
+        ) ??
+        validateDisplayAdFrom(
+          displayAdFrom.value,
+          requireWhenEmpty: forSubmit,
+        );
   }
 
   void alertCompetitionDateValidationIssue() {
     final message = validateCompetitionDates();
     if (message == null) return;
+    final hasAnyDate =
+        eventStartDate.value != null ||
+        eventEndDate.value != null ||
+        displayAdFrom.value != null;
+    if (!hasAnyDate) return;
     Get.snackbar(
       'Invalid date',
       message,
@@ -929,7 +982,7 @@ class CompetitionController extends GetxController {
         return false;
       }
 
-      final dateError = validateCompetitionDates();
+      final dateError = validateCompetitionDates(forSubmit: true);
       if (dateError != null) {
         errorMessage.value = dateError;
         Get.snackbar('Error', dateError);
@@ -1031,7 +1084,7 @@ class CompetitionController extends GetxController {
         return false;
       }
 
-      final dateError = validateCompetitionDates();
+      final dateError = validateCompetitionDates(forSubmit: true);
       if (dateError != null) {
         errorMessage.value = dateError;
         Get.snackbar('Error', dateError);
@@ -1568,6 +1621,7 @@ class CompetitionController extends GetxController {
     brochureUrl.value = '';
     errorMessage.value = '';
     hasAttemptedSubmit.value = false;
+    clearCompetitionDateFieldTouches();
     isEditMode.value = false;
     isViewMode.value = false;
     competitionToEdit.value = null;

@@ -998,6 +998,12 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  String _dateFieldKey({required bool isStartDate, required bool isDisplayAd}) {
+    if (isDisplayAd) return CompetitionController.dateFieldDisplayAd;
+    if (isStartDate) return CompetitionController.dateFieldStart;
+    return CompetitionController.dateFieldEnd;
+  }
+
   String? Function(DateTime?) _dateFieldValidator(
     CompetitionController controller, {
     required bool isStartDate,
@@ -1023,6 +1029,10 @@ class CreateCompetitionScreen extends StatelessWidget {
       isStartDate: isStartDate,
       isDisplayAd: isDisplayAd,
     );
+    final dateFieldKey = _dateFieldKey(
+      isStartDate: isStartDate,
+      isDisplayAd: isDisplayAd,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1030,6 +1040,9 @@ class CreateCompetitionScreen extends StatelessWidget {
         FormLabelWithHint(label: label),
         Obx(() {
           final _ = controller.competitionDatesRevision.value;
+          final showErrors = controller.shouldShowCompetitionDateError(
+            dateFieldKey,
+          );
           return FormField<DateTime>(
             initialValue: isStartDate
                 ? controller.eventStartDate.value
@@ -1048,7 +1061,9 @@ class CreateCompetitionScreen extends StatelessWidget {
                 if (field.value != syncedDate) {
                   field.didChange(syncedDate);
                 }
-                field.validate();
+                if (showErrors || syncedDate != null) {
+                  field.validate();
+                }
               });
 
               return Obx(() {
@@ -1062,12 +1077,17 @@ class CreateCompetitionScreen extends StatelessWidget {
                   onTap: controller.isViewMode.value
                       ? null
                       : () async {
-                          await _selectDate(
+                          final didPick = await _selectDate(
                             context,
                             controller,
                             isStartDate: isStartDate,
                             isDisplayAd: isDisplayAd,
                           );
+                          if (didPick) {
+                            controller.markCompetitionDateFieldTouched(
+                              dateFieldKey,
+                            );
+                          }
                           final updatedDate = isStartDate
                               ? controller.eventStartDate.value
                               : isDisplayAd
@@ -1076,7 +1096,9 @@ class CreateCompetitionScreen extends StatelessWidget {
                           field.didChange(updatedDate);
                           field.validate();
                           controller.notifyCompetitionDatesChanged();
-                          controller.alertCompetitionDateValidationIssue();
+                          if (updatedDate != null) {
+                            controller.alertCompetitionDateValidationIssue();
+                          }
                         },
                   child: InputDecorator(
                     decoration: InputDecoration(
@@ -1096,7 +1118,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                       suffixIcon: controller.isViewMode.value
                           ? null
                           : const Icon(Icons.calendar_today),
-                      errorText: field.errorText,
+                      errorText: showErrors ? field.errorText : null,
                     ),
                     child: Text(
                       displayedDate != null
@@ -1121,7 +1143,7 @@ class CreateCompetitionScreen extends StatelessWidget {
   static DateTime _dateOnly(DateTime date) =>
       DateTime(date.year, date.month, date.day);
 
-  Future<void> _selectDate(
+  Future<bool> _selectDate(
     BuildContext context,
     CompetitionController controller, {
     bool isStartDate = false,
@@ -1184,7 +1206,7 @@ class CreateCompetitionScreen extends StatelessWidget {
       lastDate: lastDate,
     );
 
-    if (picked == null) return;
+    if (picked == null) return false;
 
     final normalized = _dateOnly(picked);
     if (isStartDate) {
@@ -1200,6 +1222,7 @@ class CreateCompetitionScreen extends StatelessWidget {
       controller.eventEndDate.value = normalized;
     }
     controller.notifyCompetitionDatesChanged();
+    return true;
   }
 
   Widget _buildMarksField(
@@ -2008,6 +2031,7 @@ class CreateCompetitionScreen extends StatelessWidget {
               children: [
                 TextFormField(
                   controller: textController,
+                  maxLength: 100,
                   decoration: const InputDecoration(
                     labelText: 'Stage Name *',
                     hintText: 'e.g., G, H',
@@ -2015,6 +2039,9 @@ class CreateCompetitionScreen extends StatelessWidget {
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Stage name is required';
+                    }
+                    if (value.trim().length > 100) {
+                      return 'Stage name must be 100 characters or less';
                     }
                     return null;
                   },
@@ -2313,9 +2340,13 @@ class CreateCompetitionScreen extends StatelessWidget {
                     labelText: 'Group Name *',
                     hintText: 'e.g., XIV, XV',
                   ),
+                  maxLength: 100,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Group name is required';
+                    }
+                    if (value.trim().length > 100) {
+                      return 'Group name must be 100 characters or less';
                     }
                     return null;
                   },
