@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +11,9 @@ import '../../../data/models/school_model.dart';
 
 class SchoolListScreen extends StatelessWidget {
   const SchoolListScreen({super.key});
+
+  /// Minimum width so date/action columns are not squeezed (sidebar layouts).
+  static const double _kMinInstitutionTableWidth = 1120;
 
   @override
   Widget build(BuildContext context) {
@@ -657,24 +662,31 @@ class SchoolListScreen extends StatelessWidget {
       onRefresh: () => controller.loadSchools(),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth - 32;
+          var viewportWidth = constraints.maxWidth;
+          if (!viewportWidth.isFinite || viewportWidth <= 0) {
+            viewportWidth = MediaQuery.sizeOf(context).width;
+          }
+          final tableWidth = math.max(
+            _kMinInstitutionTableWidth,
+            viewportWidth,
+          );
           return SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: Padding(
-              padding: const EdgeInsets.all(0),
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               child: SizedBox(
                 width: tableWidth,
                 child: Table(
                   border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                  columnWidths: {
-                    0: const FixedColumnWidth(80),
+                  columnWidths: const {
+                    0: FixedColumnWidth(80),
                     1: FlexColumnWidth(2.5),
                     2: FlexColumnWidth(2.5),
-                    3: FlexColumnWidth(1.5), // Reduced TYPE & CATEGORY width
+                    3: FlexColumnWidth(1.5),
                     4: FlexColumnWidth(1.5),
-                    5: FlexColumnWidth(1.2),
-                    6: FlexColumnWidth(1.2),
-                    7: FlexColumnWidth(0.8),
+                    5: FixedColumnWidth(190),
+                    6: FixedColumnWidth(190),
+                    7: FixedColumnWidth(108),
                   },
                   children: [
                     // Header Row
@@ -749,13 +761,23 @@ class SchoolListScreen extends StatelessWidget {
                           _buildUpdatedCellWidget(school),
                           TableCell(
                             child: Padding(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.edit, size: 18),
                                     color: Colors.blue,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 36,
+                                      minHeight: 36,
+                                    ),
                                     onPressed: () {
                                       if (school.id != null) {
                                         controller.loadSchoolForEdit(
@@ -767,6 +789,12 @@ class SchoolListScreen extends StatelessWidget {
                                   IconButton(
                                     icon: const Icon(Icons.delete, size: 18),
                                     color: Colors.red,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 36,
+                                      minHeight: 36,
+                                    ),
                                     onPressed: () {
                                       if (school.id != null) {
                                         _showDeleteDialog(
@@ -803,8 +831,9 @@ class SchoolListScreen extends StatelessWidget {
           fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
           fontSize: isHeader ? 14 : 13,
         ),
-        softWrap: true,
-        maxLines: null,
+        softWrap: !isHeader,
+        overflow: isHeader ? TextOverflow.visible : null,
+        maxLines: isHeader ? 1 : null,
       ),
     );
   }
@@ -892,8 +921,9 @@ class SchoolListScreen extends StatelessWidget {
                     fontSize: 14,
                     color: isActive ? AppTheme.primaryColor : Colors.black87,
                   ),
-                  softWrap: true,
-                  maxLines: null,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
                 ),
               ),
               if (isSortable) ...[
