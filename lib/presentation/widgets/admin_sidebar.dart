@@ -171,7 +171,7 @@ class AdminSidebar extends StatelessWidget {
                       route: AppRoutes.createCompetition,
                       currentLocation: currentLocation,
                       onTap: () {
-                        context.push(AppRoutes.createCompetition);
+                        context.go(AppRoutes.createCompetition);
                       },
                     ),
                   if (permissionStore.has('MENU_USERS'))
@@ -182,7 +182,7 @@ class AdminSidebar extends StatelessWidget {
                       route: AppRoutes.userManagement,
                       currentLocation: currentLocation,
                       onTap: () {
-                        context.push(AppRoutes.userManagement);
+                        context.go(AppRoutes.userManagement);
                       },
                     ),
                   if (permissionStore.has('MENU_PARTICIPANTS'))
@@ -193,7 +193,7 @@ class AdminSidebar extends StatelessWidget {
                       route: AppRoutes.participantManagement,
                       currentLocation: currentLocation,
                       onTap: () {
-                        context.push(AppRoutes.participantManagement);
+                        context.go(AppRoutes.participantManagement);
                       },
                     ),
                   if (permissionStore.has('MENU_INSTITUTIONS'))
@@ -204,7 +204,7 @@ class AdminSidebar extends StatelessWidget {
                       route: AppRoutes.schoolsList,
                       currentLocation: currentLocation,
                       onTap: () {
-                        context.push(AppRoutes.schoolsList);
+                        context.go(AppRoutes.schoolsList);
                       },
                     ),
                   if (permissionStore.has('MENU_REPORTS'))
@@ -215,7 +215,7 @@ class AdminSidebar extends StatelessWidget {
                       route: AppRoutes.reports,
                       currentLocation: currentLocation,
                       onTap: () {
-                        context.push(AppRoutes.reports);
+                        context.go(AppRoutes.reports);
                       },
                     ),
                   if (permissionStore.has('MENU_SETTINGS'))
@@ -226,7 +226,7 @@ class AdminSidebar extends StatelessWidget {
                       route: AppRoutes.settings,
                       currentLocation: currentLocation,
                       onTap: () {
-                        context.push(AppRoutes.settings);
+                        context.go(AppRoutes.settings);
                       },
                     ),
                   // SPONSORS menu hidden for now

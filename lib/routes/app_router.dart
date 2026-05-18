@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:yoga_champ/routes/app_routes.dart';
 import '../presentation/screens/splash/splash_screen.dart';
@@ -21,6 +22,10 @@ import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../presentation/screens/organization_setup/organization_setup_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/storage_service.dart';
+
+Page<void> _noTransitionPage(GoRouterState state, Widget child) {
+  return NoTransitionPage<void>(key: state.pageKey, child: child);
+}
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -206,7 +211,8 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.userManagement,
         name: 'user-management',
-        builder: (context, state) => const UserManagementScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const UserManagementScreen()),
       ),
       GoRoute(
         path: AppRoutes.usersList,
@@ -216,27 +222,32 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.createCompetition,
         name: 'create-competition',
-        builder: (context, state) => const CreateCompetitionScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const CreateCompetitionScreen()),
       ),
       GoRoute(
         path: AppRoutes.participantManagement,
         name: 'participant-management',
-        builder: (context, state) => const ParticipantManagementScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const ParticipantManagementScreen()),
       ),
       GoRoute(
         path: AppRoutes.schoolsList,
         name: 'schools-list',
-        builder: (context, state) => const SchoolsScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const SchoolsScreen()),
       ),
       GoRoute(
         path: AppRoutes.reports,
         name: 'reports',
-        builder: (context, state) => const ReportsScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const ReportsScreen()),
       ),
       GoRoute(
         path: AppRoutes.settings,
         name: 'settings',
-        builder: (context, state) => const SettingsScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const SettingsScreen()),
       ),
       GoRoute(
         path: AppRoutes.sponsors,
