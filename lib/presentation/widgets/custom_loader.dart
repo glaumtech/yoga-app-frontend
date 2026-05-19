@@ -5,18 +5,36 @@ class CustomLoader extends StatelessWidget {
   final String? message;
   final Color? color;
 
-  const CustomLoader({super.key, this.message, this.color});
+  /// When set, shows only a small spinner (no message column). Use inside
+  /// tight layouts (e.g. inline button loading) to avoid RenderFlex overflow.
+  final double? size;
+
+  const CustomLoader({super.key, this.message, this.color, this.size});
 
   @override
   Widget build(BuildContext context) {
+    final indicatorColor = color ?? AppTheme.primaryColor;
+
+    if (size != null) {
+      return Center(
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(indicatorColor),
+          ),
+        ),
+      );
+    }
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(
-              color ?? AppTheme.primaryColor,
-            ),
+            valueColor: AlwaysStoppedAnimation<Color>(indicatorColor),
           ),
           if (message != null) ...[
             const SizedBox(height: 16),

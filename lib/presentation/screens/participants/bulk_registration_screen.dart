@@ -6,14 +6,100 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
-import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
+import '../../widgets/form_label_with_hint.dart';
+import '../../widgets/location/state_search_field.dart';
+import '../../widgets/location/district_search_field.dart';
+import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/competition_model.dart';
 import '../../models/bulk_registration_row.dart';
+
+List<({String groupName, String stageName})> _groupStageEntriesForBulk(
+  CompetitionModel? competition,
+  CompetitionController competitionController,
+) {
+  if (competition == null) return const [];
+
+  final entries = <({String groupName, String stageName})>[];
+
+  if (competition.stageGroups != null &&
+      competition.stageGroups!.isNotEmpty) {
+    final sortedStageIds =
+        competition.stageGroups!.keys
+            .map((id) => int.tryParse(id))
+            .whereType<int>()
+            .toList()
+          ..sort((a, b) {
+            final stageA =
+                competitionController.getStageNameById(a)?.toLowerCase() ??
+                '';
+            final stageB =
+                competitionController.getStageNameById(b)?.toLowerCase() ??
+                '';
+            return stageA.compareTo(stageB);
+          });
+
+    for (final stageId in sortedStageIds) {
+      final stageName = competitionController.getStageNameById(stageId);
+      if (stageName == null) continue;
+
+      final groupIds =
+          List<int>.from(
+            competition.stageGroups![stageId.toString()] ?? const [],
+          )..sort((a, b) {
+            final groupA =
+                competitionController.getGroupNameById(a)?.toLowerCase() ??
+                '';
+            final groupB =
+                competitionController.getGroupNameById(b)?.toLowerCase() ??
+                '';
+            return groupA.compareTo(groupB);
+          });
+
+      for (final groupId in groupIds) {
+        final groupName = competitionController.getGroupNameById(groupId);
+        if (groupName != null) {
+          entries.add((groupName: groupName, stageName: stageName));
+        }
+      }
+    }
+  }
+
+  if (entries.isEmpty && competition.stageGroupLabels != null) {
+    final sortedStages = competition.stageGroupLabels!.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    for (final stageName in sortedStages) {
+      final groups = List<String>.from(
+        competition.stageGroupLabels![stageName] ?? const [],
+      )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      for (final groupName in groups) {
+        entries.add((groupName: groupName, stageName: stageName));
+      }
+    }
+  }
+
+  return entries;
+}
 
 class BulkRegistrationScreen extends StatelessWidget {
   const BulkRegistrationScreen({super.key});
+
+  static const double _kBulkTableFieldHeight = 48;
+
+  static InputDecoration _bulkTableFieldDecoration({
+    Widget? suffixIcon,
+    String? hintText,
+  }) {
+    return InputDecoration(
+      border: const OutlineInputBorder(),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      isDense: false,
+      suffixIcon: suffixIcon,
+      hintText: hintText,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +115,10 @@ class BulkRegistrationScreen extends StatelessWidget {
         !competitionController.isLoading.value) {
       competitionController.loadCompetitions();
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      participantController.ensureInstitutionSearchFiltersLoaded();
+    });
 
     return Card(
       elevation: 4,
@@ -70,8 +160,11 @@ class BulkRegistrationScreen extends StatelessWidget {
                 SizedBox(height: isMobile ? 24 : 32),
 
                 // Error Message
-                if (participantController.errorMessage.value.isNotEmpty)
-                  Container(
+                Obx(() {
+                  if (participantController.errorMessage.value.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Container(
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
@@ -91,31 +184,8 @@ class BulkRegistrationScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-
-                // Submit Button
-                Center(
-                  child: Obx(
-                    () => participantController.isLoading.value
-                        ? const CustomLoader()
-                        : PrimaryButton(
-                            text: 'SAVE',
-                            onPressed: () async {
-                              if (participantController
-                                  .selectedEventId
-                                  .value
-                                  .isEmpty) {
-                                participantController.errorMessage.value =
-                                    'Please select a competition';
-                                return;
-                              }
-                              await participantController
-                                  .submitBulkRegistration();
-                            },
-                            width: isMobile ? double.infinity : 200,
-                          ),
-                  ),
-                ),
+                  );
+                }),
                 SizedBox(height: isMobile ? 16 : 24),
               ],
             ),
@@ -205,7 +275,7 @@ class BulkRegistrationScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Competition, Category, and Institution Name in same row
+        // Competition & category
         isMobile
             ? Column(
                 children: [
@@ -221,13 +291,6 @@ class BulkRegistrationScreen extends StatelessWidget {
                     context,
                     controller,
                     competitionController,
-                    isMobile,
-                    isTablet,
-                  ),
-                  SizedBox(height: isMobile ? 20 : 24),
-                  _buildInstitutionField(
-                    context,
-                    controller,
                     isMobile,
                     isTablet,
                   ),
@@ -254,20 +317,15 @@ class BulkRegistrationScreen extends StatelessWidget {
                       isTablet,
                     ),
                   ),
-                  SizedBox(width: isTablet ? 16 : 20),
-                  Expanded(
-                    child: _buildInstitutionField(
-                      context,
-                      controller,
-                      isMobile,
-                      isTablet,
-                    ),
-                  ),
                 ],
               ),
         SizedBox(height: isMobile ? 20 : 24),
 
-        // Yoga Teacher Name and Yoga Teacher Cell in same row (3 columns)
+        // State & district (one column) beside institution on the same row
+        _buildInstitutionFilterSection(context, controller, isMobile, isTablet),
+        SizedBox(height: isMobile ? 20 : 24),
+
+        // Yoga teacher name and cell — full-width row
         isMobile
             ? Column(
                 children: [
@@ -289,6 +347,7 @@ class BulkRegistrationScreen extends StatelessWidget {
                 ],
               )
             : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: _buildTextField(
@@ -309,10 +368,6 @@ class BulkRegistrationScreen extends StatelessWidget {
                       isTablet,
                     ),
                   ),
-                  SizedBox(width: isTablet ? 16 : 20),
-                  Expanded(
-                    child: SizedBox.shrink(), // Empty third column
-                  ),
                 ],
               ),
       ],
@@ -328,21 +383,10 @@ class BulkRegistrationScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Yoga Teacher Cell :',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: isMobile ? 14 : 16,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '(Without +91)',
-          style: TextStyle(
-            fontSize: isMobile ? 11 : 12,
-            color: Colors.grey[600],
-            fontStyle: FontStyle.italic,
-          ),
+        FormLabelWithHint(
+          label: 'Yoga Teacher Cell :',
+          hintText: '(Without +91)',
+          bottomSpacing: 5,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -412,6 +456,177 @@ class BulkRegistrationScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildInstitutionFilterSection(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    final rowGap = isTablet ? 16.0 : 20.0;
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FormLabelWithHint(
+            label: 'Filter institution',
+            hintText: 'Optional state & district before search',
+            bottomSpacing: 8,
+          ),
+          _buildStateDistrictColumn(context, controller, isMobile, isTablet),
+          SizedBox(height: isMobile ? 20 : 24),
+          _buildInstitutionField(context, controller, isMobile, isTablet),
+        ],
+      );
+    }
+
+    // Match competition/category row: filters on the left, institution on the right
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FormLabelWithHint(
+                label: 'Filter institution',
+                hintText: 'Optional state & district before search',
+                bottomSpacing: 8,
+              ),
+              _buildStateDistrictColumn(
+                context,
+                controller,
+                isMobile,
+                isTablet,
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: rowGap),
+        Expanded(
+          child: _buildInstitutionField(
+            context,
+            controller,
+            isMobile,
+            isTablet,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// State and district on the same horizontal line.
+  Widget _buildStateDistrictColumn(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Obx(() {
+      controller.ensureInstitutionSearchFiltersLoaded();
+
+      InputDecoration filterDecoration({Widget? suffixIcon}) {
+        return InputDecoration(
+          labelText: null,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          suffixIcon: suffixIcon,
+        );
+      }
+
+      final loadingLocations =
+          controller.isLoadingInstitutionSearchLocations.value;
+      final stateId = controller.institutionSearchFilterStateId.value;
+      final loadingDistricts =
+          controller.isLoadingInstitutionSearchDistricts.value;
+      final districtListVersion = controller.institutionSearchDistricts.length;
+
+      final stateField = loadingLocations
+          ? TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: filterDecoration(
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ).copyWith(hintText: 'Loading states...'),
+            )
+          : StateSearchField(
+              textEditingController:
+                  controller.institutionFilterStateTextController,
+              focusNode: controller.institutionFilterStateFocusNode,
+              states: List.from(controller.institutionSearchStates),
+              decorationBuilder: ({Widget? suffixIcon}) => filterDecoration(
+                suffixIcon: suffixIcon,
+              ).copyWith(labelText: 'State'),
+              isMobile: isMobile,
+              hintText: 'Filter by State',
+              onStateId: controller.setInstitutionSearchFilterState,
+            );
+
+      final districtField = loadingDistricts
+          ? TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: filterDecoration(
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ).copyWith(hintText: 'Loading districts...'),
+            )
+          : (stateId <= 0
+                ? TextFormField(
+                    readOnly: true,
+                    style: TextStyle(fontSize: isMobile ? 14 : 16),
+                    decoration: filterDecoration().copyWith(
+                      labelText: 'District',
+                      hintText: 'Select state first',
+                    ),
+                  )
+                : DistrictSearchField(
+                    key: ValueKey(
+                      'bulk_district_${stateId}_$districtListVersion',
+                    ),
+                    textEditingController:
+                        controller.institutionFilterDistrictTextController,
+                    focusNode: controller.institutionFilterDistrictFocusNode,
+                    districts: List<String>.from(
+                      controller.institutionSearchDistricts,
+                    ),
+                    decorationBuilder: ({Widget? suffixIcon}) =>
+                        filterDecoration(
+                          suffixIcon: suffixIcon,
+                        ).copyWith(labelText: 'District'),
+                    isMobile: isMobile,
+                    hintText: 'Filter by District',
+                  ));
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: stateField),
+          SizedBox(width: isMobile ? 12 : (isTablet ? 16 : 20)),
+          Expanded(child: districtField),
+        ],
+      );
+    });
+  }
+
   Widget _buildInstitutionField(
     BuildContext context,
     ParticipantController controller,
@@ -429,23 +644,27 @@ class BulkRegistrationScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: controller.bulkInstitutionNameController,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            suffixIcon: const Icon(Icons.arrow_drop_down),
-            hintText: 'Search or type institution name',
+        Obx(
+          () => InstitutionNameAutocompleteField(
+            autocompleteKey:
+                'bulk-institution-${controller.selectedEventId.value}-${controller.bulkInstitutionNameController.text.length}',
+            formTextController: controller.bulkInstitutionNameController,
+            onSearch: (q) => controller.searchInstitutions(q),
+            suggestions: controller.institutionSuggestions,
+            isLoading: controller.isLoadingInstitutions,
+            onInstitutionSelected: controller.selectInstitution,
+            onClear: () {
+              controller.selectedInstitutionId.value = null;
+              controller.selectedInstitution.value = null;
+            },
+            isViewMode: controller.isViewMode,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Institution name is required';
+              }
+              return null;
+            },
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Institution name is required';
-            }
-            return null;
-          },
         ),
       ],
     );
@@ -592,18 +811,30 @@ class BulkRegistrationScreen extends StatelessWidget {
             ],
           ),
         ),
-        // Add More Button
+        // Register current row and prepare next entry
         Padding(
           padding: const EdgeInsets.only(top: 12),
           child: Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => controller.addBulkRegistrationRow(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add More'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primaryColor,
-              ),
+            alignment: Alignment.center,
+            child: Obx(
+              () => controller.isLoading.value
+                  ? const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: CustomLoader(size: 24),
+                    )
+                  : TextButton.icon(
+                      onPressed: () async {
+                        controller.errorMessage.value = '';
+                        await controller.registerCurrentBulkParticipant(
+                          competitionController: competitionController,
+                        );
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add More'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppTheme.primaryColor,
+                      ),
+                    ),
             ),
           ),
         ),
@@ -621,150 +852,175 @@ class BulkRegistrationScreen extends StatelessWidget {
     bool isTablet,
   ) {
     if (isMobile) {
-      return Card(
-        margin: const EdgeInsets.only(bottom: 12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildMobileField(
-                'NAME',
-                TextFormField(
-                  controller: row.nameController,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
+      return Obx(() {
+        final readOnly = row.isRegistered.value;
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          color: readOnly
+              ? AppTheme.primaryColor.withOpacity(0.06)
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (readOnly)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Registered',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildMobileField(
-                'D.O.B',
-                InkWell(
-                  onTap: () => _selectDate(context, row),
-                  child: InputDecorator(
+                _buildMobileField(
+                  'NAME',
+                  TextFormField(
+                    controller: row.nameController,
+                    readOnly: readOnly,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today),
                       isDense: true,
                     ),
-                    child: Obx(
-                      () => Text(
-                        row.dateOfBirth.value != null
-                            ? DateFormat(
-                                'yyyy-MM-dd',
-                              ).format(row.dateOfBirth.value!)
-                            : 'Select date',
-                        style: TextStyle(
-                          color: row.dateOfBirth.value != null
-                              ? Colors.black
-                              : Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildMobileField(
+                  'D.O.B',
+                  InkWell(
+                    onTap: readOnly ? null : () => _selectDate(context, row),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        suffixIcon: Icon(Icons.calendar_today),
+                        isDense: true,
+                      ),
+                      child: Obx(
+                        () => Text(
+                          row.dateOfBirth.value != null
+                              ? DateFormat(
+                                  'yyyy-MM-dd',
+                                ).format(row.dateOfBirth.value!)
+                              : 'Select date',
+                          style: TextStyle(
+                            color: row.dateOfBirth.value != null
+                                ? Colors.black
+                                : Colors.grey[600],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _buildMobileField(
-                'SEX',
-                Obx(
-                  () => DropdownButtonFormField<String>(
-                    value: row.gender.value.isNotEmpty
-                        ? row.gender.value
-                        : null,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                const SizedBox(height: 12),
+                _buildMobileField(
+                  'SEX',
+                  Obx(
+                    () => DropdownButtonFormField<String>(
+                      value: row.gender.value.isNotEmpty
+                          ? row.gender.value
+                          : null,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: ['Male', 'Female'].map((gender) {
+                        return DropdownMenuItem<String>(
+                          value: gender,
+                          child: Text(gender),
+                        );
+                      }).toList(),
+                      onChanged: readOnly
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                row.gender.value = value;
+                              }
+                            },
                     ),
-                    items: ['Male', 'Female'].map((gender) {
-                      return DropdownMenuItem<String>(
-                        value: gender,
-                        child: Text(gender),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        row.gender.value = value;
-                      }
-                    },
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _buildMobileField(
-                'GROUP',
-                _buildGroupDropdown(
-                  context,
-                  controller,
-                  competitionController,
-                  row,
-                  isMobile,
+                const SizedBox(height: 12),
+                _buildMobileField(
+                  'GROUP',
+                  _buildGroupDropdown(
+                    context,
+                    controller,
+                    competitionController,
+                    row,
+                    isMobile,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _buildMobileField(
-                'PHOTO',
-                _buildPhotoField(context, controller, row, isMobile),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
-      ),
-      child: Row(
-        children: [
-          // NAME
-          Expanded(
-            flex: 2,
-            child: TextFormField(
-              controller: row.nameController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 8,
+                const SizedBox(height: 12),
+                _buildMobileField(
+                  'PHOTO',
+                  _buildPhotoField(context, controller, row, isMobile),
                 ),
-                isDense: true,
-              ),
+              ],
             ),
           ),
-          const SizedBox(width: 8),
-          // D.O.B
-          Expanded(
-            child: InkWell(
-              onTap: () => _selectDate(context, row),
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.calendar_today, size: 18),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  isDense: true,
+        );
+      });
+    }
+
+    return Obx(() {
+      final readOnly = row.isRegistered.value;
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: readOnly
+              ? AppTheme.primaryColor.withOpacity(0.06)
+              : null,
+          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+        ),
+        child: Row(
+          children: [
+            // NAME
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                height: _kBulkTableFieldHeight,
+                child: TextFormField(
+                  controller: row.nameController,
+                  readOnly: readOnly,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: _bulkTableFieldDecoration(),
                 ),
-                child: Obx(
-                  () => Text(
-                    row.dateOfBirth.value != null
-                        ? DateFormat(
-                            'dd/MM/yyyy',
-                          ).format(row.dateOfBirth.value!)
-                        : 'Select',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: row.dateOfBirth.value != null
-                          ? Colors.black
-                          : Colors.grey[600],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // D.O.B
+            Expanded(
+              child: SizedBox(
+                height: _kBulkTableFieldHeight,
+                child: InkWell(
+                  onTap: readOnly ? null : () => _selectDate(context, row),
+                child: InputDecorator(
+                  decoration: _bulkTableFieldDecoration(
+                    suffixIcon: const Icon(Icons.calendar_today, size: 18),
+                    hintText: 'Select',
+                  ),
+                  child: Obx(
+                    () => Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        row.dateOfBirth.value != null
+                            ? DateFormat(
+                                'dd/MM/yyyy',
+                              ).format(row.dateOfBirth.value!)
+                            : 'Select',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: row.dateOfBirth.value != null
+                              ? Colors.black
+                              : Colors.grey[600],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
@@ -773,48 +1029,57 @@ class BulkRegistrationScreen extends StatelessWidget {
           const SizedBox(width: 8),
           // SEX
           Expanded(
-            child: Obx(
-              () => DropdownButtonFormField<String>(
-                value: row.gender.value.isNotEmpty ? row.gender.value : null,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  isDense: true,
+            child: SizedBox(
+              height: _kBulkTableFieldHeight,
+              child: Obx(
+                () => DropdownButtonFormField<String>(
+                  value: row.gender.value.isNotEmpty ? row.gender.value : null,
+                  isExpanded: true,
+                  style: const TextStyle(fontSize: 12, color: Colors.black),
+                  decoration: _bulkTableFieldDecoration(hintText: 'Select'),
+                  items: ['Male', 'Female'].map((gender) {
+                    return DropdownMenuItem<String>(
+                      value: gender,
+                      child: Text(
+                        gender,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: readOnly
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            row.gender.value = value;
+                          }
+                        },
                 ),
-                items: ['Male', 'Female'].map((gender) {
-                  return DropdownMenuItem<String>(
-                    value: gender,
-                    child: Text(gender, style: const TextStyle(fontSize: 12)),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    row.gender.value = value;
-                  }
-                },
               ),
             ),
           ),
           const SizedBox(width: 8),
           // GROUP
           Expanded(
-            child: _buildGroupDropdown(
-              context,
-              controller,
-              competitionController,
-              row,
-              isMobile,
+            child: SizedBox(
+              height: _kBulkTableFieldHeight,
+              child: _buildGroupDropdown(
+                context,
+                controller,
+                competitionController,
+                row,
+                isMobile,
+              ),
             ),
           ),
           const SizedBox(width: 8),
           // PHOTO
-          Expanded(child: _buildPhotoField(context, controller, row, isMobile)),
+          Expanded(
+            child: _buildPhotoField(context, controller, row, isMobile),
+          ),
         ],
       ),
     );
+    });
   }
 
   Widget _buildMobileField(String label, Widget field) {
@@ -842,44 +1107,76 @@ class BulkRegistrationScreen extends StatelessWidget {
       final selectedCompetition = competitionController.competitions
           .firstWhereOrNull((c) => c.id == controller.selectedEventId.value);
 
-      // Get all groups from stageGroups map
-      final allGroups = <String>[];
-      if (selectedCompetition != null &&
-          selectedCompetition.stageGroups != null) {
-        selectedCompetition.stageGroups!.values.forEach((groupIds) {
-          // Convert group IDs to names
-          final groupNames = groupIds
-              .map((id) => competitionController.getGroupNameById(id))
-              .where((name) => name != null)
-              .cast<String>()
-              .toList();
-          allGroups.addAll(groupNames);
-        });
+      final groupStageEntries = _groupStageEntriesForBulk(
+        selectedCompetition,
+        competitionController,
+      );
+
+      final allGroupsWithStage = groupStageEntries
+          .map((e) => '${e.groupName} (GROUP ${e.stageName})')
+          .toList();
+
+      final readOnly = row.isRegistered.value;
+
+      String? currentValue;
+      if (row.group.value.isNotEmpty) {
+        final stage = row.stage.value.isNotEmpty
+            ? row.stage.value
+            : controller.selectedStage.value;
+        if (stage.isNotEmpty) {
+          final formatted = '${row.group.value} (GROUP $stage)';
+          currentValue = allGroupsWithStage.contains(formatted)
+              ? formatted
+              : allGroupsWithStage.firstWhereOrNull(
+                  (item) => item.startsWith('${row.group.value} (GROUP'),
+                );
+        } else {
+          currentValue = allGroupsWithStage.firstWhereOrNull(
+            (item) => item.startsWith('${row.group.value} (GROUP'),
+          );
+        }
       }
-      final uniqueGroups = allGroups.toSet().toList()..sort();
 
       return DropdownButtonFormField<String>(
-        value: row.group.value.isNotEmpty ? row.group.value : null,
-        decoration: InputDecoration(
-          border: const OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 8 : 8,
-            vertical: 8,
-          ),
-          isDense: true,
-        ),
+        value: currentValue,
+        isExpanded: true,
+        style: TextStyle(fontSize: isMobile ? 12 : 12, color: Colors.black),
+        decoration: isMobile
+            ? const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
+                isDense: true,
+              )
+            : _bulkTableFieldDecoration(hintText: 'Select'),
         hint: Text('Select', style: TextStyle(fontSize: isMobile ? 12 : 12)),
-        items: uniqueGroups.map((group) {
+        menuMaxHeight: 320,
+        items: allGroupsWithStage.map((formattedGroup) {
           return DropdownMenuItem<String>(
-            value: group,
-            child: Text(group, style: TextStyle(fontSize: isMobile ? 12 : 12)),
+            value: formattedGroup,
+            child: Text(
+              formattedGroup,
+              style: TextStyle(fontSize: isMobile ? 12 : 12),
+            ),
           );
         }).toList(),
-        onChanged: (value) {
-          if (value != null) {
-            row.group.value = value;
-          }
-        },
+        onChanged: readOnly
+            ? null
+            : (value) {
+                if (value != null) {
+                  final groupName = value.split(' (GROUP').first.trim();
+                  final stagePart = value
+                      .split('GROUP ')
+                      .last
+                      .replaceAll(')', '')
+                      .trim();
+                  row.group.value = groupName;
+                  row.stage.value = stagePart;
+                  controller.selectedStage.value = stagePart;
+                }
+              },
       );
     });
   }
@@ -895,7 +1192,9 @@ class BulkRegistrationScreen extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           OutlinedButton(
-            onPressed: () => _pickPhoto(context, controller, row),
+            onPressed: row.isRegistered.value
+                ? null
+                : () => _pickPhoto(context, controller, row),
             style: OutlinedButton.styleFrom(
               padding: EdgeInsets.symmetric(
                 horizontal: isMobile ? 8 : 12,

@@ -36,7 +36,10 @@ class ParticipantController extends GetxController {
   final RxList<ParticipantModel> myRegistrations =
       <ParticipantModel>[].obs; // User's registrations
   final RxBool isLoading = false.obs;
+  /// Form / bulk registration validation and save errors (create tab only).
   final RxString errorMessage = ''.obs;
+  /// List tab load failures only (participants list screen).
+  final RxString listErrorMessage = ''.obs;
   final Rx<ParticipantModel?> selectedParticipant = Rx<ParticipantModel?>(null);
   final RxBool isListView = false.obs; // Toggle between create and list view
   final RxBool isBulkMode =
@@ -468,18 +471,98 @@ class ParticipantController extends GetxController {
 
   // Select institution
   void selectInstitution(SchoolModel institution) {
-    schoolNameController.text = institution.institutionName;
+    if (isBulkMode.value) {
+      bulkInstitutionNameController.text = institution.institutionName;
+    } else {
+      schoolNameController.text = institution.institutionName;
+    }
     selectedInstitutionId.value = institution.id;
     selectedInstitution.value = institution;
     institutionSuggestions.clear();
     _applyBonafideRulesForSelectedInstitution();
   }
 
+  /// Resolves stage name from group for bulk registration (competition stageGroups).
+  String? resolveStageNameForGroup({
+    required String groupName,
+    required CompetitionModel? competition,
+    required CompetitionController competitionController,
+  }) {
+    if (competition == null || groupName.isEmpty) return null;
+
+    if (competition.stageGroups != null) {
+      for (final entry in competition.stageGroups!.entries) {
+        final stageId = int.tryParse(entry.key);
+        if (stageId == null) continue;
+        for (final groupId in entry.value) {
+          final name = competitionController.getGroupNameById(groupId);
+          if (name == groupName) {
+            return competitionController.getStageNameById(stageId);
+          }
+        }
+      }
+    }
+
+    if (competition.stageGroupLabels != null) {
+      for (final entry in competition.stageGroupLabels!.entries) {
+        if (entry.value.contains(groupName)) {
+          return entry.key;
+        }
+      }
+    }
+    return null;
+  }
+
+  void setBulkRowGroup(
+    BulkRegistrationRow row,
+    String groupName, {
+    required CompetitionModel? competition,
+    required CompetitionController competitionController,
+  }) {
+    row.group.value = groupName;
+    final stageName = resolveStageNameForGroup(
+      groupName: groupName,
+      competition: competition,
+      competitionController: competitionController,
+    );
+    if (stageName != null && stageName.isNotEmpty) {
+      selectedStage.value = stageName;
+    }
+  }
+
+  Future<bool> _resolveBulkInstitutionId() async {
+    if (selectedInstitutionId.value != null &&
+        selectedInstitutionId.value!.isNotEmpty) {
+      return true;
+    }
+
+    final name = bulkInstitutionNameController.text.trim();
+    if (name.isEmpty) {
+      errorMessage.value = 'Please select an institution from the list';
+      return false;
+    }
+
+    await searchInstitutions(name);
+    final matching = institutionSuggestions.firstWhereOrNull(
+      (institution) =>
+          institution.institutionName.trim().toLowerCase() ==
+          name.toLowerCase(),
+    );
+
+    if (matching != null && matching.id != null) {
+      selectInstitution(matching);
+      return true;
+    }
+
+    errorMessage.value = 'Please select an institution from the list';
+    return false;
+  }
+
   @override
   void onInit() {
     super.onInit();
     // Participants are now loaded by event ID only
-    // Initialize bulk registration with 5 rows
+    // Initialize bulk registration with one empty row
     resetBulkRegistrationForm();
   }
 
@@ -504,9 +587,196 @@ class ParticipantController extends GetxController {
       row.dispose();
     }
     bulkRegistrationRows.clear();
-    // Initialize with 5 rows by default
-    for (int i = 0; i < 5; i++) {
+    addBulkRegistrationRow();
+    selectedInstitutionId.value = null;
+    selectedInstitution.value = null;
+    institutionSuggestions.clear();
+    _resetInstitutionSearchFilters();
+  }
+
+  /// Registers the active (last unregistered) bulk row, keeps saved rows visible,
+  /// and appends a new empty row. Common fields reset only on list / navigation.
+  Future<bool> registerCurrentBulkParticipant({
+    required CompetitionController competitionController,
+  }) async {
+    if (!formKey.currentState!.validate()) {
+      return false;
+    }
+
+    if (selectedEventId.value.isEmpty) {
+      errorMessage.value = 'Please select a competition';
+      return false;
+    }
+
+    if (bulkCategory.value.isEmpty) {
+      errorMessage.value = 'Please select a category';
+      return false;
+    }
+
+    if (bulkYogaTeacherNameController.text.trim().isEmpty) {
+      errorMessage.value = 'Please enter yoga teacher name';
+      return false;
+    }
+
+    if (bulkYogaTeacherCellController.text.trim().isEmpty) {
+      errorMessage.value = 'Please enter yoga teacher cell number';
+      return false;
+    }
+
+    if (bulkRegistrationRows.isEmpty) {
       addBulkRegistrationRow();
+    }
+
+    BulkRegistrationRow? row;
+    for (var i = bulkRegistrationRows.length - 1; i >= 0; i--) {
+      if (!bulkRegistrationRows[i].isRegistered.value) {
+        row = bulkRegistrationRows[i];
+        break;
+      }
+    }
+    row ??= bulkRegistrationRows.last;
+
+    if (row.isRegistered.value) {
+      errorMessage.value = 'This participant is already registered';
+      return false;
+    }
+
+    if (!row.isValid) {
+      errorMessage.value =
+          'Please fill name, date of birth, sex, and group for the participant';
+      return false;
+    }
+
+    if (!await _resolveBulkInstitutionId()) {
+      return false;
+    }
+
+    final selectedCompetition = competitionController.competitions
+        .firstWhereOrNull((c) => c.id == selectedEventId.value);
+
+    final stageName = row.stage.value.isNotEmpty
+        ? row.stage.value
+        : (selectedStage.value.isNotEmpty
+              ? selectedStage.value
+              : resolveStageNameForGroup(
+                  groupName: row.group.value,
+                  competition: selectedCompetition,
+                  competitionController: competitionController,
+                ));
+
+    if (stageName == null || stageName.isEmpty) {
+      errorMessage.value = 'Could not determine stage for the selected group';
+      return false;
+    }
+
+    final competitionId = int.tryParse(selectedEventId.value);
+    if (competitionId == null) {
+      errorMessage.value = 'Invalid competition ID';
+      return false;
+    }
+
+    final categoryId = competitionController.getCategoryIdByName(
+      bulkCategory.value,
+    );
+    if (categoryId == null) {
+      errorMessage.value = 'Invalid category selected';
+      return false;
+    }
+
+    final institutionId = int.tryParse(selectedInstitutionId.value!);
+    if (institutionId == null) {
+      errorMessage.value = 'Invalid institution selected';
+      return false;
+    }
+
+    final groupId = competitionController.getGroupIdByName(row.group.value);
+    if (groupId == null) {
+      errorMessage.value = 'Invalid group selected';
+      return false;
+    }
+
+    final stageId = competitionController.getStageIdByName(stageName);
+    if (stageId == null) {
+      errorMessage.value = 'Invalid stage for the selected group';
+      return false;
+    }
+
+    final age = app_date_utils.AppDateUtils.calculateAge(row.dateOfBirth.value!);
+    final dobString =
+        '${row.dateOfBirth.value!.year}-'
+        '${row.dateOfBirth.value!.month.toString().padLeft(2, '0')}-'
+        '${row.dateOfBirth.value!.day.toString().padLeft(2, '0')}';
+
+    final registrationData = <String, dynamic>{
+      'competitionId': competitionId,
+      'dateOfBirth': dobString,
+      'age': age,
+      'categoryId': categoryId,
+      'stageId': stageId,
+      'yogaTeacherName': bulkYogaTeacherNameController.text.trim(),
+      'institutionId': institutionId,
+      'participantName': row.nameController.text.trim().toUpperCase(),
+      'sex': row.gender.value,
+      'groupId': groupId,
+      'yogaTeacherCell': bulkYogaTeacherCellController.text.trim(),
+      'paymentMode': 'ONLINE',
+      'isSpotRegistration': false,
+      'optForECertificate': false,
+    };
+
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      final response = await _participantRepository.createParticipantRegistration(
+        registrationData: registrationData,
+        photoFile: row.photoFile.value,
+        photoXFile: row.photoXFile.value,
+      );
+
+      isLoading.value = false;
+
+      if (response.success) {
+        row.isRegistered.value = true;
+        if (row.stage.value.isEmpty && stageName.isNotEmpty) {
+          row.stage.value = stageName;
+        }
+        addBulkRegistrationRow();
+        errorMessage.value = '';
+        Get.snackbar(
+          'Success',
+          response.message ?? 'Participant registered successfully',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        if (selectedEventId.value.isNotEmpty) {
+          await loadParticipantsByEventId(
+            selectedEventId.value,
+            resetPage: true,
+          );
+        }
+        return true;
+      }
+
+      errorMessage.value =
+          response.message ?? 'Failed to register participant';
+      Get.snackbar(
+        'Error',
+        errorMessage.value,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return false;
+    } catch (e) {
+      isLoading.value = false;
+      errorMessage.value = 'Error registering participant: ${e.toString()}';
+      Get.snackbar(
+        'Error',
+        errorMessage.value,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return false;
     }
   }
 
@@ -668,7 +938,7 @@ class ParticipantController extends GetxController {
   }) async {
     try {
       isLoading.value = true;
-      errorMessage.value = '';
+      listErrorMessage.value = '';
 
       // Reset page if needed
       if (resetPage) {
@@ -680,7 +950,7 @@ class ParticipantController extends GetxController {
       final competitionId = int.tryParse(eventId);
 
       if (competitionId == null) {
-        errorMessage.value = 'Invalid competition ID';
+        listErrorMessage.value = 'Invalid competition ID';
         isLoading.value = false;
         return;
       }
@@ -749,7 +1019,8 @@ class ParticipantController extends GetxController {
           }
         }
       } else {
-        errorMessage.value = response.message ?? 'Failed to load participants';
+        listErrorMessage.value =
+            response.message ?? 'Failed to load participants';
         if (resetPage || currentPage.value == 1) {
           participants.clear();
         }
@@ -757,7 +1028,7 @@ class ParticipantController extends GetxController {
 
       isLoading.value = false;
     } catch (e) {
-      errorMessage.value = 'An error occurred: ${e.toString()}';
+      listErrorMessage.value = 'An error occurred: ${e.toString()}';
       isLoading.value = false;
     }
   }
@@ -1264,6 +1535,12 @@ class ParticipantController extends GetxController {
 
   void toggleViewMode(bool showList) {
     isListView.value = showList;
+    if (showList) {
+      errorMessage.value = '';
+      resetBulkRegistrationForm();
+    } else {
+      listErrorMessage.value = '';
+    }
   }
 
   void resetForm() {
@@ -1361,6 +1638,7 @@ class ParticipantController extends GetxController {
   /// Initialize form directly from ParticipantModel without API call
   /// Used when participant data is already available (e.g., from list)
   void initializeFormFromModel(ParticipantModel participant) {
+    isBulkMode.value = false;
     // Clear all form data first
     _clearFormData();
 
@@ -1430,6 +1708,7 @@ class ParticipantController extends GetxController {
 
   /// Initialize form with participant data for viewing (non-editable)
   void initializeFormForView(ParticipantModel participant) {
+    isBulkMode.value = false;
     // Clear all form data first
     _clearFormData();
 
@@ -1578,6 +1857,7 @@ class ParticipantController extends GetxController {
 
   /// Initialize form with participant data for editing
   void initializeFormForEdit(ParticipantModel participant) {
+    isBulkMode.value = false;
     print('Initializing form for edit: ${participant.participantName}');
     print('Participant ID: ${participant.id}');
 
@@ -2238,6 +2518,7 @@ class ParticipantController extends GetxController {
     participantToEdit.value = null;
     isLoading.value = false;
     errorMessage.value = '';
+    listErrorMessage.value = '';
     currentFilter.value = ParticipantFilterRequest();
     currentPage.value = 1;
     totalPages.value = 0;

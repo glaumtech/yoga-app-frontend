@@ -78,7 +78,7 @@ class ParticipantsListScreen extends StatelessWidget {
                   return const Center(child: CustomLoader());
                 }
 
-                if (participantController.errorMessage.value.isNotEmpty) {
+                if (participantController.listErrorMessage.value.isNotEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -90,7 +90,7 @@ class ParticipantsListScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          participantController.errorMessage.value,
+                          participantController.listErrorMessage.value,
                           style: TextStyle(color: Colors.red[700]),
                           textAlign: TextAlign.center,
                         ),
