@@ -14,6 +14,7 @@ import '../../widgets/location/district_search_field.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/competition_model.dart';
+import '../../../data/models/district_model.dart';
 import '../../models/bulk_registration_row.dart';
 
 List<({String groupName, String stageName})> _groupStageEntriesForBulk(
@@ -605,7 +606,7 @@ class BulkRegistrationScreen extends StatelessWidget {
                     textEditingController:
                         controller.institutionFilterDistrictTextController,
                     focusNode: controller.institutionFilterDistrictFocusNode,
-                    districts: List<String>.from(
+                    districts: List<DistrictModel>.from(
                       controller.institutionSearchDistricts,
                     ),
                     decorationBuilder: ({Widget? suffixIcon}) =>

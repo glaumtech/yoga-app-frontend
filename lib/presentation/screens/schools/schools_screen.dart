@@ -298,7 +298,7 @@ class _InstitutionPrecheckAndCreateState
                           itemBuilder: (context, index) {
                             final inst = list[index];
                             final city = (inst.cityName ?? '').trim();
-                            final district = (inst.district ?? '').trim();
+                            final district = (inst.districtName ?? '').trim();
                             final village = (inst.village ?? '').trim();
                             final address = inst.address.trim();
                             final pincode = inst.pincode.trim();

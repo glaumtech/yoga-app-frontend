@@ -16,7 +16,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
-    String? district,
+    int? districtId,
     List<String>? genders,
   }) {
     final segments = <String>[];
@@ -46,8 +46,8 @@ class ReportsRepository {
         'institutionId=${Uri.encodeQueryComponent(institutionId.toString())}',
       );
     }
-    if (district != null && district.trim().isNotEmpty) {
-      segments.add('district=${Uri.encodeQueryComponent(district.trim())}');
+    if (districtId != null && districtId > 0) {
+      segments.add('districtId=$districtId');
     }
     if (genders != null) {
       for (final g in genders) {
@@ -71,7 +71,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
-    String? district,
+    int? districtId,
     List<String>? genders,
   }) {
     final segments = <String>[];
@@ -82,7 +82,7 @@ class ReportsRepository {
       stateId: stateId,
       cityId: cityId,
       institutionId: institutionId,
-      district: district,
+      districtId: districtId,
       genders: genders,
     );
     if (filter.isNotEmpty) {
@@ -108,7 +108,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
-    String? district,
+    int? districtId,
     List<String>? genders,
   }) {
     final segments = <String>[];
@@ -119,7 +119,7 @@ class ReportsRepository {
       stateId: stateId,
       cityId: cityId,
       institutionId: institutionId,
-      district: district,
+      districtId: districtId,
       genders: genders,
     );
     if (filter.isNotEmpty) {
@@ -164,7 +164,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
-    String? district,
+    int? districtId,
     List<String>? genders,
   }) async {
     final q = participantReportQuery(
@@ -174,7 +174,7 @@ class ReportsRepository {
       stateId: stateId,
       cityId: cityId,
       institutionId: institutionId,
-      district: district,
+      districtId: districtId,
       genders: genders,
     );
 
@@ -208,7 +208,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
-    String? district,
+    int? districtId,
     List<String>? genders,
   }) async {
     final q = participantScoresTableQuery(
@@ -221,7 +221,7 @@ class ReportsRepository {
       stateId: stateId,
       cityId: cityId,
       institutionId: institutionId,
-      district: district,
+      districtId: districtId,
       genders: genders,
     );
 
@@ -254,7 +254,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
-    String? district,
+    int? districtId,
     List<String>? genders,
   }) async {
     final q = participantScoreDetailsQuery(
@@ -268,7 +268,7 @@ class ReportsRepository {
       stateId: stateId,
       cityId: cityId,
       institutionId: institutionId,
-      district: district,
+      districtId: districtId,
       genders: genders,
     );
 
@@ -459,7 +459,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
-    String? district,
+    int? districtId,
     List<String>? genders,
   }) async {
     try {
@@ -470,7 +470,7 @@ class ReportsRepository {
         stateId: stateId,
         cityId: cityId,
         institutionId: institutionId,
-        district: district,
+        districtId: districtId,
         genders: genders,
       );
 
@@ -523,7 +523,7 @@ class ReportsRepository {
     int? stateId,
     int? cityId,
     int? institutionId,
-    String? district,
+    int? districtId,
     List<String>? genders,
   }) async {
     try {
@@ -534,7 +534,7 @@ class ReportsRepository {
         stateId: stateId,
         cityId: cityId,
         institutionId: institutionId,
-        district: district,
+        districtId: districtId,
         genders: genders,
       );
 

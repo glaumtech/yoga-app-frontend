@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/location/state_search_field.dart';
+import '../../../data/models/district_model.dart';
 import '../../../data/models/school_model.dart';
 
 class SchoolListScreen extends StatelessWidget {
@@ -163,15 +164,19 @@ class SchoolListScreen extends StatelessWidget {
           ).copyWith(hintText: 'Select state first'),
         );
       }
-      final districts = List<String>.from(controller.stateDistrictList);
+      final districts = List<DistrictModel>.from(controller.stateDistrictList);
 
-      return Autocomplete<String>(
+      return Autocomplete<DistrictModel>(
+        displayStringForOption: (d) => d.districtName,
         optionsBuilder: (TextEditingValue value) {
           final q = value.text.trim().toLowerCase();
           if (q.isEmpty) return districts;
-          return districts.where((d) => d.toLowerCase().contains(q));
+          return districts.where(
+            (d) => d.districtName.toLowerCase().contains(q),
+          );
         },
-        onSelected: (value) => controller.setListFilterDistrict(value),
+        onSelected: (value) =>
+            controller.setListFilterDistrict(value.districtName),
         fieldViewBuilder:
             (context, textController, focusNode, onFieldSubmitted) {
               if (controller.listFilterCityTextController.text !=
@@ -226,7 +231,7 @@ class SchoolListScreen extends StatelessWidget {
                     final option = opts[index];
                     return ListTile(
                       dense: true,
-                      title: Text(option),
+                      title: Text(option.districtName),
                       onTap: () => onSelected(option),
                     );
                   },
@@ -481,7 +486,7 @@ class SchoolListScreen extends StatelessWidget {
               onPressed: () {
                 // Reset all filter options
                 controller.reportState.value = '';
-                controller.reportDistrict.value = '';
+                controller.reportDistrictId.value = 0;
                 controller.reportInstitutionTypeId.value = 0;
                 controller.selectedStateId.value = 0;
                 controller.cities.clear();
@@ -1043,7 +1048,7 @@ class SchoolListScreen extends StatelessWidget {
 
     // Location line: district, city, village (when present), state, pincode
     final locationParts = <String>[];
-    for (final part in [school.district, school.cityName, school.village]) {
+    for (final part in [school.districtName, school.cityName, school.village]) {
       if (part != null && part.trim().isNotEmpty) {
         final t = part.trim();
         if (locationParts.isEmpty || locationParts.last != t) {

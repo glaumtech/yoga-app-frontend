@@ -12,6 +12,7 @@ import '../../data/repositories/location_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/api_response.dart';
 import '../../data/models/score_response_model.dart';
+import '../../data/models/district_model.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
 import '../../data/models/institution_type_model.dart';
@@ -102,7 +103,7 @@ class ParticipantController extends GetxController {
   final RxInt institutionSearchFilterStateId = 0.obs;
   final RxInt institutionSearchFilterTypeId = 0.obs;
   final RxList<StateModel> institutionSearchStates = <StateModel>[].obs;
-  final RxList<String> institutionSearchDistricts = <String>[].obs;
+  final RxList<DistrictModel> institutionSearchDistricts = <DistrictModel>[].obs;
   final RxList<InstitutionTypeModel> institutionSearchTypes =
       <InstitutionTypeModel>[].obs;
   final RxBool isLoadingInstitutionSearchLocations = false.obs;
@@ -239,13 +240,15 @@ class ParticipantController extends GetxController {
     }
   }
 
-  /// Exact district string for API, or null if field empty / no exact match to known districts.
-  String? _resolvedInstitutionSearchDistrict() {
+  /// District id for API, or null if field empty / no exact match to known districts.
+  int? _resolvedInstitutionSearchDistrictId() {
     final typed = institutionFilterDistrictTextController.text.trim();
     if (typed.isEmpty) return null;
-    return institutionSearchDistricts.firstWhereOrNull(
-      (d) => d.toLowerCase() == typed.toLowerCase(),
-    );
+    return institutionSearchDistricts
+        .firstWhereOrNull(
+          (d) => d.districtName.toLowerCase() == typed.toLowerCase(),
+        )
+        ?.id;
   }
 
   void _resetInstitutionSearchFilters() {
@@ -277,8 +280,8 @@ class ParticipantController extends GetxController {
 
     try {
       isLoadingInstitutions.value = true;
-      final String? districtFilter = useInstitutionSearchFilters
-          ? _resolvedInstitutionSearchDistrict()
+      final int? districtFilter = useInstitutionSearchFilters
+          ? _resolvedInstitutionSearchDistrictId()
           : null;
       final response = await _schoolRepository.searchInstitutions(
         query: query.trim(),
@@ -289,7 +292,7 @@ class ParticipantController extends GetxController {
             : null,
         cityId: null,
         cityName: null,
-        district: districtFilter,
+        districtId: districtFilter,
         institutionTypeId:
             useInstitutionSearchFilters &&
                 institutionSearchFilterTypeId.value > 0

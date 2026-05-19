@@ -2,12 +2,12 @@ import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/state_model.dart';
 import '../models/city_model.dart';
+import '../models/district_model.dart';
 import '../models/api_response.dart';
 
 class LocationRepository {
   final APIService _apiService = APIService();
 
-  // Get all states
   Future<ApiResponse<List<StateModel>>> getAllStates() async {
     try {
       final response = await _apiService.getResponse<dynamic>(
@@ -58,7 +58,6 @@ class LocationRepository {
     }
   }
 
-  // Get cities by state ID
   Future<ApiResponse<List<CityModel>>> getCitiesByStateId(int stateId) async {
     try {
       final response = await _apiService.getResponse<dynamic>(
@@ -109,8 +108,9 @@ class LocationRepository {
     }
   }
 
-  /// Distinct district names for a state (from `cities` table).
-  Future<ApiResponse<List<String>>> getDistrictsByStateId(int stateId) async {
+  Future<ApiResponse<List<DistrictModel>>> getDistrictsByStateId(
+    int stateId,
+  ) async {
     try {
       final response = await _apiService.getResponse<dynamic>(
         url: EndPoints.districtListByState(stateId),
@@ -119,7 +119,7 @@ class LocationRepository {
       );
 
       if (response.success && response.data != null) {
-        List<String> districts = [];
+        List<DistrictModel> districts = [];
 
         if (response.data is Map<String, dynamic>) {
           final dataMap = response.data as Map<String, dynamic>;
@@ -128,14 +128,22 @@ class LocationRepository {
 
           if (listData is List) {
             districts = listData
-                .map((e) => e?.toString().trim() ?? '')
-                .where((s) => s.isNotEmpty)
+                .whereType<Map>()
+                .map(
+                  (json) => DistrictModel.fromJson(
+                    Map<String, dynamic>.from(json),
+                  ),
+                )
                 .toList();
           }
         } else if (response.data is List) {
           districts = (response.data as List)
-              .map((e) => e?.toString().trim() ?? '')
-              .where((s) => s.isNotEmpty)
+              .whereType<Map>()
+              .map(
+                (json) => DistrictModel.fromJson(
+                  Map<String, dynamic>.from(json),
+                ),
+              )
               .toList();
         }
 
@@ -155,14 +163,13 @@ class LocationRepository {
     }
   }
 
-  // Get villages by state ID and district
   Future<ApiResponse<List<CityModel>>> getVillagesByStateAndDistrict({
     required int stateId,
-    required String district,
+    required int districtId,
   }) async {
     try {
       final response = await _apiService.getResponse<dynamic>(
-        url: EndPoints.villageListByStateAndDistrict(stateId, district.trim()),
+        url: EndPoints.villageListByStateAndDistrict(stateId, districtId),
         apiType: APIType.aGet,
         fromJson: (json) => json,
       );
@@ -213,10 +220,9 @@ class LocationRepository {
     }
   }
 
-  // Create city
   Future<ApiResponse<CityModel>> createCity({
     required String cityName,
-    String district = '',
+    required int districtId,
     String pincode = '',
     required int stateId,
     String? description,
@@ -227,7 +233,7 @@ class LocationRepository {
         apiType: APIType.aPost,
         body: {
           'cityName': cityName.trim(),
-          'district': district.trim(),
+          'districtId': districtId,
           'pincode': pincode.trim(),
           'stateId': stateId,
           'description': description?.trim().isEmpty == true

@@ -8,7 +8,8 @@ class SchoolModel {
   final String? stateCode;
   final int? cityId;
   final String? cityName;
-  final String? district;
+  final int? districtId;
+  final String? districtName;
   final String? village;
   final String? state; // Legacy field for backward compatibility
   final String pincode;
@@ -38,7 +39,8 @@ class SchoolModel {
     this.stateCode,
     this.cityId,
     this.cityName,
-    this.district,
+    this.districtId,
+    this.districtName,
     this.village,
     this.state,
     required this.pincode,
@@ -93,7 +95,12 @@ class SchoolModel {
           ? int.tryParse(json['cityId'])
           : null,
       cityName: json['cityName']?.toString(),
-      district: json['district']?.toString() ?? json['cityName']?.toString(),
+      districtId: json['districtId'] is int
+          ? json['districtId'] as int
+          : json['districtId'] is String
+          ? int.tryParse(json['districtId'])
+          : null,
+      districtName: json['districtName']?.toString(),
       village: json['village']?.toString(),
       state: json['stateName']?.toString() ?? json['state']?.toString(),
       pincode: json['pincode']?.toString() ?? '',
@@ -146,6 +153,7 @@ class SchoolModel {
       'institutionShortName': institutionShortName,
       'address': address,
       if (stateId != null) 'stateId': stateId,
+      if (districtId != null) 'districtId': districtId,
       if (cityId != null) 'cityId': cityId,
       'pincode': pincode,
       if (email != null) 'email': email,
@@ -173,7 +181,8 @@ class SchoolModel {
     String? stateCode,
     int? cityId,
     String? cityName,
-    String? district,
+    int? districtId,
+    String? districtName,
     String? village,
     String? state,
     String? pincode,
@@ -202,7 +211,8 @@ class SchoolModel {
       stateCode: stateCode ?? this.stateCode,
       cityId: cityId ?? this.cityId,
       cityName: cityName ?? this.cityName,
-      district: district ?? this.district,
+      districtId: districtId ?? this.districtId,
+      districtName: districtName ?? this.districtName,
       village: village ?? this.village,
       state: state ?? this.state,
       pincode: pincode ?? this.pincode,

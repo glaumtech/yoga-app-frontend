@@ -11,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../controllers/reports_participants_tab_controller.dart';
 import '../../controllers/reports_participants_tab_logic.dart';
 import '../../widgets/location/district_search_field.dart';
+import '../../../data/models/district_model.dart';
 import '../../../data/models/school_model.dart';
 import '../../../data/models/state_model.dart';
 import '../../../data/repositories/reports_repository.dart';
@@ -91,11 +92,7 @@ class ReportsParticipantsTab extends StatelessWidget {
         stateId: tabController.selectedStateId.value,
         cityId: null,
         institutionId: tabController.selectedInstitutionId.value,
-        district: (() {
-          final d = tabController.selectedDistrictFilter.value?.trim();
-          if (d == null || d.isEmpty) return null;
-          return d;
-        })(),
+        districtId: tabController.selectedDistrictFilter.value,
         genders: tabController.selectedGenders.isEmpty
             ? null
             : List<String>.from(tabController.selectedGenders),
@@ -1321,9 +1318,14 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
         }
       }
     }
-    final dist = widget.controller.selectedDistrictFilter.value?.trim();
-    if (dist != null && dist.isNotEmpty) {
-      _setFilterFieldText(_districtSearchController, dist);
+    final distId = widget.controller.selectedDistrictFilter.value;
+    if (distId != null && distId > 0) {
+      final match = widget.controller.filterDistrictOptions.firstWhereOrNull(
+        (d) => d.id == distId,
+      );
+      if (match != null) {
+        _setFilterFieldText(_districtSearchController, match.districtName);
+      }
     }
   }
 
@@ -1593,7 +1595,7 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
                             key: ValueKey('report_filter_district_$_state'),
                             textEditingController: _districtSearchController,
                             focusNode: _districtFocus,
-                            districts: List<String>.from(
+                            districts: List<DistrictModel>.from(
                               widget.controller.filterDistrictOptions,
                             ),
                             decorationBuilder: ({Widget? suffixIcon}) =>
@@ -1721,8 +1723,10 @@ class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
               genders: _genders.toList(),
               stateId: _state,
               institutionId: _institution,
-              district: widget.controller.resolveParticipantReportDistrict(
-                List<String>.from(widget.controller.filterDistrictOptions),
+              districtId: widget.controller.resolveParticipantReportDistrictId(
+                List<DistrictModel>.from(
+                  widget.controller.filterDistrictOptions,
+                ),
                 _districtSearchController.text,
               ),
             );

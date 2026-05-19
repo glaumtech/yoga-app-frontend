@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../data/models/district_model.dart';
+
 /// Searchable district field using [RawAutocomplete].
-///
-/// Pass [textEditingController] and [focusNode] from a long-lived owner (e.g. GetX controller)
-/// and dispose them there. The selected value is read from [textEditingController] when searching.
 class DistrictSearchField extends StatelessWidget {
   const DistrictSearchField({
     super.key,
@@ -16,33 +15,37 @@ class DistrictSearchField extends StatelessWidget {
     this.maxOptions = 100,
     this.optionsMaxHeight = 200,
     this.validator,
+    this.onDistrictSelected,
   });
 
   final TextEditingController textEditingController;
   final FocusNode focusNode;
-  final List<String> districts;
+  final List<DistrictModel> districts;
   final InputDecoration Function({Widget? suffixIcon}) decorationBuilder;
   final bool isMobile;
   final String hintText;
   final int maxOptions;
   final double optionsMaxHeight;
   final FormFieldValidator<String>? validator;
+  final ValueChanged<DistrictModel>? onDistrictSelected;
 
   @override
   Widget build(BuildContext context) {
-    return RawAutocomplete<String>(
+    return RawAutocomplete<DistrictModel>(
       focusNode: focusNode,
       textEditingController: textEditingController,
-      displayStringForOption: (String d) => d,
+      displayStringForOption: (DistrictModel d) => d.districtName,
       optionsBuilder: (TextEditingValue value) {
         final q = value.text.trim().toLowerCase();
-        Iterable<String> opts = districts;
+        Iterable<DistrictModel> opts = districts;
         if (q.isNotEmpty) {
-          opts = opts.where((d) => d.toLowerCase().contains(q));
+          opts = opts.where((d) => d.districtName.toLowerCase().contains(q));
         }
         return opts.take(maxOptions);
       },
-      onSelected: (_) {},
+      onSelected: (DistrictModel d) {
+        onDistrictSelected?.call(d);
+      },
       fieldViewBuilder: (
         BuildContext context,
         TextEditingController fieldController,
@@ -61,8 +64,8 @@ class DistrictSearchField extends StatelessWidget {
       },
       optionsViewBuilder: (
         BuildContext context,
-        AutocompleteOnSelected<String> onSelected,
-        Iterable<String> options,
+        AutocompleteOnSelected<DistrictModel> onSelected,
+        Iterable<DistrictModel> options,
       ) {
         return Align(
           alignment: Alignment.topLeft,
@@ -85,7 +88,7 @@ class DistrictSearchField extends StatelessWidget {
                         vertical: 10,
                       ),
                       child: Text(
-                        d,
+                        d.districtName,
                         style: TextStyle(
                           fontSize: isMobile ? 14 : 15,
                         ),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../data/models/api_response.dart';
+import '../../data/models/district_model.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
 import '../../data/repositories/competition_repository.dart';
@@ -44,8 +45,7 @@ class ReportsParticipantsTabController extends GetxController {
 
   final RxnInt selectedStateId = RxnInt();
   final RxnInt selectedInstitutionId = RxnInt();
-  /// District name on institution's city (matches backend `cities.district`).
-  final Rxn<String> selectedDistrictFilter = Rxn<String>();
+  final RxnInt selectedDistrictFilter = RxnInt();
 
   // Search is sent to the paginated table API (server-side).
   final RxString participantSearchQuery = ''.obs;
@@ -62,7 +62,7 @@ class ReportsParticipantsTabController extends GetxController {
 
   /// Populated when opening filters (location / institution pickers).
   final RxList<StateModel> filterStateOptions = <StateModel>[].obs;
-  final RxList<String> filterDistrictOptions = <String>[].obs;
+  final RxList<DistrictModel> filterDistrictOptions = <DistrictModel>[].obs;
   final RxList<SchoolModel> filterInstitutionOptions = <SchoolModel>[].obs;
 
   Worker? _competitionWatcher;
@@ -146,7 +146,7 @@ class ReportsParticipantsTabController extends GetxController {
     if (selectedGroupIds.isNotEmpty) n++;
     if (selectedStateId.value != null) n++;
     if (selectedDistrictFilter.value != null &&
-        selectedDistrictFilter.value!.trim().isNotEmpty) {
+        selectedDistrictFilter.value! > 0) {
       n++;
     }
     if (selectedInstitutionId.value != null) n++;
@@ -154,9 +154,9 @@ class ReportsParticipantsTabController extends GetxController {
     return n;
   }
 
-  String? _districtQueryParam() {
-    final d = selectedDistrictFilter.value?.trim();
-    if (d == null || d.isEmpty) return null;
+  int? _districtQueryParam() {
+    final d = selectedDistrictFilter.value;
+    if (d == null || d <= 0) return null;
     return d;
   }
 
@@ -177,8 +177,10 @@ class ReportsParticipantsTabController extends GetxController {
     if (stateId == null || stateId <= 0) return;
     final d = await _locationRepository.getDistrictsByStateId(stateId);
     if (d.success && d.data != null) {
-      final list = List<String>.from(d.data!)
-        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      final list = List<DistrictModel>.from(d.data!)
+        ..sort((a, b) => a.districtName.toLowerCase().compareTo(
+              b.districtName.toLowerCase(),
+            ));
       filterDistrictOptions.assignAll(list);
     }
   }
@@ -243,20 +245,21 @@ class ReportsParticipantsTabController extends GetxController {
     }
   }
 
-  /// Resolves typed district against loaded [known] list; falls back to trimmed text.
-  String? resolveParticipantReportDistrict(
-    List<String> known,
+  /// Resolves typed district name against loaded [known] list.
+  int? resolveParticipantReportDistrictId(
+    List<DistrictModel> known,
     String typed,
   ) {
     final t = typed.trim();
     if (t.isEmpty) return null;
     for (final d in known) {
-      if (d.toLowerCase() == t.toLowerCase()) return d;
+      if (d.districtName.toLowerCase() == t.toLowerCase()) return d.id;
     }
-    final subs =
-        known.where((d) => d.toLowerCase().contains(t.toLowerCase())).toList();
-    if (subs.length == 1) return subs.first;
-    return t;
+    final subs = known
+        .where((d) => d.districtName.toLowerCase().contains(t.toLowerCase()))
+        .toList();
+    if (subs.length == 1) return subs.first.id;
+    return null;
   }
 
   void applyFilters({
@@ -266,7 +269,7 @@ class ReportsParticipantsTabController extends GetxController {
     required List<String> genders,
     int? stateId,
     int? institutionId,
-    String? district,
+    int? districtId,
   }) {
     selectedStageIds
       ..clear()
@@ -282,9 +285,8 @@ class ReportsParticipantsTabController extends GetxController {
       ..addAll(genders.toSet());
     selectedStateId.value = stateId;
     selectedInstitutionId.value = institutionId;
-    final dTrim = district?.trim();
     selectedDistrictFilter.value =
-        (dTrim != null && dTrim.isNotEmpty) ? dTrim : null;
+        (districtId != null && districtId > 0) ? districtId : null;
     tablePage.value = 0;
     _reloadWithFilters();
   }
@@ -390,7 +392,7 @@ class ReportsParticipantsTabController extends GetxController {
         stateId: selectedStateId.value,
         cityId: null,
         institutionId: selectedInstitutionId.value,
-        district: _districtQueryParam(),
+        districtId: _districtQueryParam(),
         genders: selectedGenders.isEmpty
             ? null
             : List<String>.from(selectedGenders),
@@ -484,7 +486,7 @@ class ReportsParticipantsTabController extends GetxController {
         stateId: selectedStateId.value,
         cityId: null,
         institutionId: selectedInstitutionId.value,
-        district: _districtQueryParam(),
+        districtId: _districtQueryParam(),
         genders: selectedGenders.isEmpty
             ? null
             : List<String>.from(selectedGenders),
@@ -527,7 +529,7 @@ class ReportsParticipantsTabController extends GetxController {
       stateId: selectedStateId.value,
       cityId: null,
       institutionId: selectedInstitutionId.value,
-      district: _districtQueryParam(),
+      districtId: _districtQueryParam(),
       genders:
           selectedGenders.isEmpty ? null : List<String>.from(selectedGenders),
     );

@@ -16,6 +16,7 @@ import '../../widgets/form_label_with_hint.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
 import '../../../data/models/competition_model.dart';
+import '../../../data/models/district_model.dart';
 import '../../../core/utils/date_utils.dart' as app_date_utils;
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/storage_service.dart';
@@ -1624,7 +1625,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     textEditingController:
                         controller.institutionFilterDistrictTextController,
                     focusNode: controller.institutionFilterDistrictFocusNode,
-                    districts: List<String>.from(
+                    districts: List<DistrictModel>.from(
                       controller.institutionSearchDistricts,
                     ),
                     decorationBuilder: filterDecoration,
