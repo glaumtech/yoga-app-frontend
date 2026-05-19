@@ -23,6 +23,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
     this.validator,
     this.onAddNewInstitution,
     this.onClear,
+    this.onValueChanged,
     this.minQueryLength = 3,
     this.hintText = 'Search or type institution name',
     this.optionsMaxHeight = 200,
@@ -40,6 +41,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
   final void Function(BuildContext context, String searchText)?
       onAddNewInstitution;
   final VoidCallback? onClear;
+  final VoidCallback? onValueChanged;
   final int minQueryLength;
   final String hintText;
   final double optionsMaxHeight;
@@ -86,6 +88,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
             );
           }
           onInstitutionSelected(inst);
+          onValueChanged?.call();
         },
         fieldViewBuilder: (
           BuildContext context,
@@ -109,6 +112,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
                       if (formTextController.text != value) {
                         formTextController.text = value;
                       }
+                      onValueChanged?.call();
                     },
               decoration: InputDecoration(
                 border: OutlineInputBorder(
@@ -137,6 +141,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
                               suggestions.clear();
                               FocusScope.of(context).unfocus();
                               onClear?.call();
+                              onValueChanged?.call();
                             },
                           )
                         : const Icon(Icons.search)),

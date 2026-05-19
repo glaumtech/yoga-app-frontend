@@ -33,6 +33,14 @@ class ParticipantController extends GetxController {
   final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
+  /// Re-runs form validators after the user edits a field so errors clear immediately.
+  void validateRegistrationFormOnFieldChange() {
+    if (errorMessage.value.isNotEmpty) {
+      errorMessage.value = '';
+    }
+    formKey.currentState?.validate();
+  }
+
   final RxList<ParticipantModel> participants = <ParticipantModel>[].obs;
   final RxList<ParticipantModel> myRegistrations =
       <ParticipantModel>[].obs; // User's registrations
@@ -586,6 +594,8 @@ class ParticipantController extends GetxController {
     bulkYogaTeacherCellController.clear();
     bulkInstitutionNameController.clear();
     bulkCategory.value = '';
+    isSpotRegistration.value = false;
+    optForECertificate.value = false;
     for (final row in bulkRegistrationRows) {
       row.dispose();
     }
@@ -723,8 +733,8 @@ class ParticipantController extends GetxController {
       'groupId': groupId,
       'yogaTeacherCell': bulkYogaTeacherCellController.text.trim(),
       'paymentMode': 'ONLINE',
-      'isSpotRegistration': false,
-      'optForECertificate': false,
+      'isSpotRegistration': isSpotRegistration.value,
+      'optForECertificate': optForECertificate.value,
     };
 
     try {

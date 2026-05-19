@@ -79,8 +79,7 @@ List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
 
   final entries = <({String groupName, String stageName})>[];
 
-  if (competition.stageGroups != null &&
-      competition.stageGroups!.isNotEmpty) {
+  if (competition.stageGroups != null && competition.stageGroups!.isNotEmpty) {
     final sortedStageIds =
         competition.stageGroups!.keys
             .map((id) => int.tryParse(id))
@@ -185,6 +184,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
         child: Form(
           key: participantController.formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             child: Column(
@@ -825,6 +825,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       controller.selectedStage.value = '';
                       controller.standard.value = '';
                       controller.applySpotRegistrationRulesForSelectedEvent();
+                      controller.validateRegistrationFormOnFieldChange();
                     }
                   }
                 : null,
@@ -861,6 +862,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           () => TextFormField(
             controller: controller.nameController,
             readOnly: controller.isViewMode.value,
+            onChanged: controller.isViewMode.value
+                ? null
+                : (_) => controller.validateRegistrationFormOnFieldChange(),
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -939,6 +943,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     );
                     if (picked != null) {
                       controller.dateOfBirth.value = picked;
+                      controller.validateRegistrationFormOnFieldChange();
                     }
                   }
                 : null,
@@ -1060,6 +1065,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.gender.value = value;
+                            controller.validateRegistrationFormOnFieldChange();
                           }
                         }
                       : null,
@@ -1075,6 +1081,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.gender.value = value;
+                            controller.validateRegistrationFormOnFieldChange();
                           }
                         }
                       : null,
@@ -1161,6 +1168,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.isSpotRegistration.value = value;
+                            controller.validateRegistrationFormOnFieldChange();
                           }
                         }
                       : null,
@@ -1176,6 +1184,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.isSpotRegistration.value = value;
+                            controller.validateRegistrationFormOnFieldChange();
                           }
                         }
                       : null,
@@ -1205,6 +1214,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               value: controller.optForECertificate.value,
               onChanged: (value) {
                 controller.optForECertificate.value = value ?? false;
+                controller.validateRegistrationFormOnFieldChange();
               },
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
@@ -1270,6 +1280,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 ? (value) {
                     if (value != null) {
                       controller.selectedCategories.value = [value];
+                      controller.validateRegistrationFormOnFieldChange();
                     }
                   }
                 : null,
@@ -1369,6 +1380,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     .replaceAll(')', '');
                 controller.standard.value = groupName;
                 controller.selectedStage.value = stagePart;
+                controller.validateRegistrationFormOnFieldChange();
               }
             },
             validator: (value) {
@@ -1398,6 +1410,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           () => TextFormField(
             controller: controller.yogaMasterNameController,
             readOnly: controller.isViewMode.value,
+            onChanged: controller.isViewMode.value
+                ? null
+                : (_) => controller.validateRegistrationFormOnFieldChange(),
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -1443,6 +1458,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           () => TextFormField(
             controller: controller.yogaMasterContactController,
             readOnly: controller.isViewMode.value,
+            onChanged: controller.isViewMode.value
+                ? null
+                : (_) => controller.validateRegistrationFormOnFieldChange(),
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             maxLength: 10,
@@ -1689,7 +1707,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             onClear: () {
               controller.selectedInstitutionId.value = null;
               controller.participantInstitutionId.value = null;
+              controller.validateRegistrationFormOnFieldChange();
             },
+            onValueChanged: controller.validateRegistrationFormOnFieldChange,
             isViewMode: controller.isViewMode,
             validator: !controller.isViewMode.value
                 ? (value) {
@@ -1738,7 +1758,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                   defaultIcon: Icons.description,
                   defaultText: 'No Certificate',
                   memoryBytes: controller.bonafideBytes.value,
-                  previewKey: controller.bonafideImage.value?.path ??
+                  previewKey:
+                      controller.bonafideImage.value?.path ??
                       controller.bonafideFileName.value,
                 ),
               );
@@ -1868,7 +1889,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     Object? previewKey,
   }) {
     final hasMemoryImage = memoryBytes != null && memoryBytes.isNotEmpty;
-    final hasLocalImage = hasMemoryImage ||
+    final hasLocalImage =
+        hasMemoryImage ||
         (xFile != null) ||
         (file != null && file.existsSync());
     final hasUrlImage = imageUrl != null && imageUrl.isNotEmpty;
@@ -1926,7 +1948,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         future: xFile.readAsBytes(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            );
           }
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
             return Image.memory(snapshot.data!, fit: BoxFit.cover);
