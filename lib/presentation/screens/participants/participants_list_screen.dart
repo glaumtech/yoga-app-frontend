@@ -272,10 +272,8 @@ class ParticipantsListScreen extends StatelessWidget {
               SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: () => _refreshParticipantsList(
-                  controller,
-                  competitionController,
-                ),
+                onPressed: () =>
+                    _refreshParticipantsList(controller, competitionController),
                 tooltip: 'Refresh',
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.grey[100],
@@ -400,10 +398,8 @@ class ParticipantsListScreen extends StatelessWidget {
         // Refresh Button
         IconButton(
           icon: const Icon(Icons.refresh),
-          onPressed: () => _refreshParticipantsList(
-            controller,
-            competitionController,
-          ),
+          onPressed: () =>
+              _refreshParticipantsList(controller, competitionController),
           tooltip: 'Refresh',
           style: IconButton.styleFrom(
             backgroundColor: Colors.grey[100],

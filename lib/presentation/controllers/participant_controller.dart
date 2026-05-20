@@ -1014,7 +1014,8 @@ class ParticipantController extends GetxController {
 
       if (eventId.isEmpty) return;
 
-      final needsLoad = forceReload ||
+      final needsLoad =
+          forceReload ||
           participants.isEmpty ||
           _lastParticipantsListEventId != eventId;
       if (!needsLoad) return;
