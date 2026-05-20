@@ -61,8 +61,10 @@ class ParticipantController extends GetxController {
   final RxList<ParticipantModel> myRegistrations =
       <ParticipantModel>[].obs; // User's registrations
   final RxBool isLoading = false.obs;
+
   /// Form / bulk registration validation and save errors (create tab only).
   final RxString errorMessage = ''.obs;
+
   /// List tab load failures only (participants list screen).
   final RxString listErrorMessage = ''.obs;
   final Rx<ParticipantModel?> selectedParticipant = Rx<ParticipantModel?>(null);
@@ -127,7 +129,8 @@ class ParticipantController extends GetxController {
   final RxInt institutionSearchFilterStateId = 0.obs;
   final RxInt institutionSearchFilterTypeId = 0.obs;
   final RxList<StateModel> institutionSearchStates = <StateModel>[].obs;
-  final RxList<DistrictModel> institutionSearchDistricts = <DistrictModel>[].obs;
+  final RxList<DistrictModel> institutionSearchDistricts =
+      <DistrictModel>[].obs;
   final RxList<InstitutionTypeModel> institutionSearchTypes =
       <InstitutionTypeModel>[].obs;
   final RxBool isLoadingInstitutionSearchLocations = false.obs;
@@ -356,8 +359,9 @@ class ParticipantController extends GetxController {
     if (school == null) return false;
     final typeKey = school.institutionType.trim().toUpperCase();
     if (typeKey.contains('PRIVATE')) return true;
-    final display =
-        (school.institutionTypeDisplayName ?? '').trim().toLowerCase();
+    final display = (school.institutionTypeDisplayName ?? '')
+        .trim()
+        .toLowerCase();
     return display.contains('private');
   }
 
@@ -375,8 +379,9 @@ class ParticipantController extends GetxController {
       return true;
     }
 
-    final display =
-        (school.institutionTypeDisplayName ?? '').trim().toLowerCase();
+    final display = (school.institutionTypeDisplayName ?? '')
+        .trim()
+        .toLowerCase();
     if (display.contains('govt') &&
         display.contains('school') &&
         !display.contains('college')) {
@@ -745,7 +750,9 @@ class ParticipantController extends GetxController {
       return false;
     }
 
-    final age = app_date_utils.AppDateUtils.calculateAge(row.dateOfBirth.value!);
+    final age = app_date_utils.AppDateUtils.calculateAge(
+      row.dateOfBirth.value!,
+    );
     final dobString =
         '${row.dateOfBirth.value!.year}-'
         '${row.dateOfBirth.value!.month.toString().padLeft(2, '0')}-'
@@ -772,11 +779,12 @@ class ParticipantController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      final response = await _participantRepository.createParticipantRegistration(
-        registrationData: registrationData,
-        photoFile: row.photoFile.value,
-        photoXFile: row.photoXFile.value,
-      );
+      final response = await _participantRepository
+          .createParticipantRegistration(
+            registrationData: registrationData,
+            photoFile: row.photoFile.value,
+            photoXFile: row.photoXFile.value,
+          );
 
       isLoading.value = false;
 
@@ -802,8 +810,7 @@ class ParticipantController extends GetxController {
         return true;
       }
 
-      errorMessage.value =
-          response.message ?? 'Failed to register participant';
+      errorMessage.value = response.message ?? 'Failed to register participant';
       Get.snackbar(
         'Error',
         errorMessage.value,

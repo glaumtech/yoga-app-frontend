@@ -316,11 +316,7 @@ class _UserCompetitionRegistrationScreenState
           .firstWhereOrNull((c) => c.idStr == widget.competitionId);
       content = competition == null
           ? _buildDetailsPlaceholder(context, isMobile)
-          : _buildCompetitionDetailsPanel(
-              context,
-              competition,
-              isMobile,
-            );
+          : _buildCompetitionDetailsPanel(context, competition, isMobile);
     }
     return Container(
       width: double.infinity,
