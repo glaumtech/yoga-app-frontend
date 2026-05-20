@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -15,6 +16,7 @@ import '../../data/repositories/location_repository.dart';
 import '../../data/repositories/school_repository.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/storage_service.dart';
+import '../../../core/utils/state_defaults.dart';
 import '../../../core/navigation/root_scaffold_messenger_key.dart';
 
 // Conditional import for web
@@ -696,6 +698,30 @@ class SchoolController extends GetxController {
     loadInstitutionTypes();
   }
 
+  Future<void> _applyDefaultTamilNaduStateIfEmpty() async {
+    if (isListView.value) {
+      if (reportState.value.trim().isNotEmpty ||
+          listFilterStateTextController.text.trim().isNotEmpty) {
+        return;
+      }
+      final tn = StateDefaults.findTamilNadu(states);
+      if (tn != null) {
+        await setListFilterState(tn.id);
+      }
+      return;
+    }
+
+    if (isEditMode.value) return;
+    if (selectedStateId.value > 0 ||
+        createFormStateTextController.text.trim().isNotEmpty) {
+      return;
+    }
+    final tn = StateDefaults.findTamilNadu(states);
+    if (tn != null) {
+      await setCreateFormState(tn.id);
+    }
+  }
+
   // Load states from API
   Future<void> loadStates() async {
     try {
@@ -705,6 +731,7 @@ class SchoolController extends GetxController {
         states.value = response.data!;
         // Sort by state name
         states.sort((a, b) => a.stateName.compareTo(b.stateName));
+        await _applyDefaultTamilNaduStateIfEmpty();
       } else {
         errorMessage.value = response.message ?? 'Failed to load states';
       }
@@ -1172,6 +1199,9 @@ class SchoolController extends GetxController {
       resetForm();
       // Keep list mode active (resetForm sets isEditMode/isListView)
       isListView.value = true;
+      if (states.isNotEmpty) {
+        unawaited(_applyDefaultTamilNaduStateIfEmpty());
+      }
     } else {
       // When switching back to create, always start fresh
       resetForm();
@@ -1876,6 +1906,9 @@ class SchoolController extends GetxController {
     errorMessage.value = '';
     isEditMode.value = false;
     editingSchoolId.value = null;
+    if (states.isNotEmpty) {
+      unawaited(_applyDefaultTamilNaduStateIfEmpty());
+    }
   }
 
   // Get filtered schools based on search query

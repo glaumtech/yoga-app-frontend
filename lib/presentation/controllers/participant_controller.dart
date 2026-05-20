@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ import '../../data/models/institution_type_model.dart';
 import '../../data/models/competition_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
+import '../../core/utils/state_defaults.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
 import 'competition_controller.dart';
@@ -33,8 +35,18 @@ class ParticipantController extends GetxController {
   final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
+  /// Cleared text controllers during [resetForm] fire `onChanged`, which would otherwise
+  /// call [validateRegistrationFormOnFieldChange] and show validation errors after Cancel.
+  bool _suppressRegistrationValidate = false;
+
+  /// Invalidates in-flight [submitRegistrationForm] work after [resetForm] / Cancel.
+  Object _registrationSubmitOwner = Object();
+
   /// Re-runs form validators after the user edits a field so errors clear immediately.
   void validateRegistrationFormOnFieldChange() {
+    if (_suppressRegistrationValidate) {
+      return;
+    }
     if (errorMessage.value.isNotEmpty) {
       errorMessage.value = '';
     }
@@ -200,6 +212,17 @@ class ParticipantController extends GetxController {
     await ensureInstitutionSearchFiltersLoaded();
   }
 
+  Future<void> _applyDefaultInstitutionFilterStateIfEmpty() async {
+    if (institutionSearchFilterStateId.value > 0 ||
+        institutionFilterStateTextController.text.trim().isNotEmpty) {
+      return;
+    }
+    final tn = StateDefaults.findTamilNadu(institutionSearchStates);
+    if (tn != null) {
+      await setInstitutionSearchFilterState(tn.id);
+    }
+  }
+
   Future<void> _loadInstitutionSearchFilterData() async {
     isLoadingInstitutionSearchLocations.value = true;
     try {
@@ -210,6 +233,7 @@ class ParticipantController extends GetxController {
         institutionSearchStates.sort(
           (a, b) => a.stateName.compareTo(b.stateName),
         );
+        await _applyDefaultInstitutionFilterStateIfEmpty();
       }
       if (typesRes.success && typesRes.data != null) {
         institutionSearchTypes.assignAll(typesRes.data!);
@@ -265,6 +289,9 @@ class ParticipantController extends GetxController {
     institutionSearchDistricts.clear();
     institutionFilterStateTextController.clear();
     institutionFilterDistrictTextController.clear();
+    if (institutionSearchStates.isNotEmpty) {
+      unawaited(_applyDefaultInstitutionFilterStateIfEmpty());
+    }
   }
 
   void setInstitutionSearchFilterType(int typeId) {
@@ -1557,6 +1584,10 @@ class ParticipantController extends GetxController {
   }
 
   void resetForm() {
+    _suppressRegistrationValidate = true;
+    _registrationSubmitOwner = Object();
+    isLoading.value = false;
+
     // Clear all reactive values first - this will trigger Obx rebuilds
     dateOfBirth.value = null;
     gender.value = '';
@@ -1597,14 +1628,18 @@ class ParticipantController extends GetxController {
     // Use a safe callback that checks if the form key is still valid
     if (formKey.currentContext != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (formKey.currentState != null && formKey.currentContext != null) {
-          formKey.currentState?.reset();
-          // Force clear text controllers again after form reset to ensure they're empty
-          nameController.text = '';
-          schoolNameController.text = '';
-          addressController.text = '';
-          yogaMasterNameController.text = '';
-          yogaMasterContactController.text = '';
+        try {
+          if (formKey.currentState != null && formKey.currentContext != null) {
+            formKey.currentState?.reset();
+            // Force clear text controllers again after form reset to ensure they're empty
+            nameController.text = '';
+            schoolNameController.text = '';
+            addressController.text = '';
+            yogaMasterNameController.text = '';
+            yogaMasterContactController.text = '';
+          }
+        } finally {
+          _suppressRegistrationValidate = false;
         }
       });
     } else {
@@ -1614,6 +1649,7 @@ class ParticipantController extends GetxController {
       addressController.text = '';
       yogaMasterNameController.text = '';
       yogaMasterContactController.text = '';
+      _suppressRegistrationValidate = false;
     }
   }
 
@@ -2280,6 +2316,9 @@ class ParticipantController extends GetxController {
       return false;
     }
 
+    final submitOwner = Object();
+    _registrationSubmitOwner = submitOwner;
+
     if (dateOfBirth.value == null) {
       errorMessage.value = 'Please select date of birth';
       return false;
@@ -2316,6 +2355,12 @@ class ParticipantController extends GetxController {
           useInstitutionSearchFilters: false,
         );
 
+        if (!identical(_registrationSubmitOwner, submitOwner)) {
+          isLoading.value = false;
+          errorMessage.value = '';
+          return false;
+        }
+
         // Check if we found a matching institution
         final matchingInstitution = institutionSuggestions.firstWhereOrNull(
           (institution) =>
@@ -2344,6 +2389,9 @@ class ParticipantController extends GetxController {
     }
 
     if (!await validateBonafideBeforeSave()) {
+      if (!identical(_registrationSubmitOwner, submitOwner)) {
+        errorMessage.value = '';
+      }
       return false;
     }
 
@@ -2443,6 +2491,12 @@ class ParticipantController extends GetxController {
               bonafiedCertificateXFile: bonafideImage.value,
             );
 
+        if (!identical(_registrationSubmitOwner, submitOwner)) {
+          isLoading.value = false;
+          errorMessage.value = '';
+          return false;
+        }
+
         isLoading.value = false;
 
         if (response.success) {
@@ -2483,6 +2537,12 @@ class ParticipantController extends GetxController {
               bonafiedCertificateXFile: bonafideImage.value,
             );
 
+        if (!identical(_registrationSubmitOwner, submitOwner)) {
+          isLoading.value = false;
+          errorMessage.value = '';
+          return false;
+        }
+
         isLoading.value = false;
 
         if (response.success) {
@@ -2511,9 +2571,11 @@ class ParticipantController extends GetxController {
       }
     } catch (e) {
       isLoading.value = false;
-      errorMessage.value = isEditMode
-          ? 'Error updating participant: ${e.toString()}'
-          : 'Error registering participant: ${e.toString()}';
+      if (identical(_registrationSubmitOwner, submitOwner)) {
+        errorMessage.value = isEditMode
+            ? 'Error updating participant: ${e.toString()}'
+            : 'Error registering participant: ${e.toString()}';
+      }
       return false;
     }
   }

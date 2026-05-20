@@ -161,6 +161,7 @@ class UserManagementScreen extends StatelessWidget {
           final _ = controller.formKeyRevision.value;
           return Form(
             key: controller.formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -436,8 +437,9 @@ class UserManagementScreen extends StatelessWidget {
                 controller.availableCategories.clear();
               }
             },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
+            validator: (_) {
+              // Read controller so validation stays correct when Obx rebuilds the dropdown.
+              if (controller.selectedEventId.value.isEmpty) {
                 return 'Please select a competition';
               }
               return null;
@@ -613,8 +615,10 @@ class UserManagementScreen extends StatelessWidget {
                             vertical: 12,
                           ),
                         ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
+                        validator: (_) {
+                          if (controller.userNameController.text
+                              .trim()
+                              .isEmpty) {
                             return 'User name is required';
                           }
                           return null;
@@ -646,8 +650,8 @@ class UserManagementScreen extends StatelessWidget {
                             vertical: 12,
                           ),
                         ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
+                        validator: (_) {
+                          if (controller.nameController.text.trim().isEmpty) {
                             return 'Name is required';
                           }
                           return null;
@@ -771,9 +775,10 @@ class UserManagementScreen extends StatelessWidget {
                                             vertical: 12,
                                           ),
                                     ),
-                                    validator: (value) {
-                                      if (value == null ||
-                                          value.trim().isEmpty) {
+                                    validator: (_) {
+                                      if (controller.userNameController.text
+                                          .trim()
+                                          .isEmpty) {
                                         return 'User name is required';
                                       }
                                       return null;
@@ -848,8 +853,10 @@ class UserManagementScreen extends StatelessWidget {
                                   vertical: 12,
                                 ),
                               ),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
+                              validator: (_) {
+                                if (controller.nameController.text
+                                    .trim()
+                                    .isEmpty) {
                                   return 'Name is required';
                                 }
                                 return null;

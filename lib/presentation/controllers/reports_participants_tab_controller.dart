@@ -10,6 +10,7 @@ import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/repositories/location_repository.dart';
+import '../../core/utils/state_defaults.dart';
 import '../../data/repositories/reports_repository.dart';
 import '../../data/repositories/school_repository.dart';
 import 'reports_controller.dart';
@@ -167,7 +168,18 @@ class ReportsParticipantsTabController extends GetxController {
       final list = List<StateModel>.from(r.data!)
         ..sort((a, b) => a.stateName.compareTo(b.stateName));
       filterStateOptions.assignAll(list);
+      await _applyDefaultFilterStateIfEmpty();
     }
+  }
+
+  Future<void> _applyDefaultFilterStateIfEmpty() async {
+    if (selectedStateId.value != null && selectedStateId.value! > 0) {
+      return;
+    }
+    final tn = StateDefaults.findTamilNadu(filterStateOptions);
+    if (tn == null) return;
+    selectedStateId.value = tn.id;
+    await reloadFilterDistrictsForState(tn.id);
   }
 
   /// Loads districts for autocomplete; clears when [stateId] is null. Call only after a state is chosen.

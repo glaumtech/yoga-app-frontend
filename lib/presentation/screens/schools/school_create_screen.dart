@@ -53,6 +53,7 @@ class SchoolCreateScreen extends StatelessWidget {
           padding: EdgeInsets.all(16),
           child: Form(
             key: controller.formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: double.infinity),
               child: Column(
@@ -81,17 +82,21 @@ class SchoolCreateScreen extends StatelessWidget {
                           children: [
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Institution Name * :',
                               controller: controller.institutionNameController,
                               isMobile: isMobile,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
+                              validator: (_) {
+                                final v = controller
+                                    .institutionNameController.text
+                                    .trim();
+                                if (v.isEmpty) {
                                   return 'Please enter institution name';
                                 }
-                                if (value.trim().length < 3) {
+                                if (v.length < 3) {
                                   return 'Institution name must be at least 3 characters';
                                 }
-                                if (value.trim().length > 255) {
+                                if (v.length > 255) {
                                   return 'Institution name must not exceed 255 characters';
                                 }
                                 return null;
@@ -101,6 +106,7 @@ class SchoolCreateScreen extends StatelessWidget {
 
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Institution Short Name :',
                               controller:
                                   controller.institutionShortNameController,
@@ -109,18 +115,20 @@ class SchoolCreateScreen extends StatelessWidget {
                             SizedBox(height: isMobile ? 20 : 24),
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Email ID :',
                               controller: controller.emailController,
                               isMobile: isMobile,
                               keyboardType: TextInputType.emailAddress,
-                              validator: (value) {
-                                if (value != null && value.isNotEmpty) {
-                                  final emailRegex = RegExp(
-                                    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-                                  );
-                                  if (!emailRegex.hasMatch(value.trim())) {
-                                    return 'Please enter a valid email address';
-                                  }
+                              validator: (_) {
+                                final v =
+                                    controller.emailController.text.trim();
+                                if (v.isEmpty) return null;
+                                final emailRegex = RegExp(
+                                  r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                );
+                                if (!emailRegex.hasMatch(v)) {
+                                  return 'Please enter a valid email address';
                                 }
                                 return null;
                               },
@@ -133,18 +141,22 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Institution Name * :',
                                 controller:
                                     controller.institutionNameController,
                                 isMobile: isMobile,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
+                                validator: (_) {
+                                  final v = controller
+                                      .institutionNameController.text
+                                      .trim();
+                                  if (v.isEmpty) {
                                     return 'Please enter institution name';
                                   }
-                                  if (value.trim().length < 3) {
+                                  if (v.length < 3) {
                                     return 'Institution name must be at least 3 characters';
                                   }
-                                  if (value.trim().length > 255) {
+                                  if (v.length > 255) {
                                     return 'Institution name must not exceed 255 characters';
                                   }
                                   return null;
@@ -155,6 +167,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Institution Short Name :',
                                 controller:
                                     controller.institutionShortNameController,
@@ -165,18 +178,20 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Email ID :',
                                 controller: controller.emailController,
                                 isMobile: isMobile,
                                 keyboardType: TextInputType.emailAddress,
-                                validator: (value) {
-                                  if (value != null && value.isNotEmpty) {
-                                    final emailRegex = RegExp(
-                                      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-                                    );
-                                    if (!emailRegex.hasMatch(value.trim())) {
-                                      return 'Please enter a valid email address';
-                                    }
+                                validator: (_) {
+                                  final v =
+                                      controller.emailController.text.trim();
+                                  if (v.isEmpty) return null;
+                                  final emailRegex = RegExp(
+                                    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                  );
+                                  if (!emailRegex.hasMatch(v)) {
+                                    return 'Please enter a valid email address';
                                   }
                                   return null;
                                 },
@@ -192,6 +207,7 @@ class SchoolCreateScreen extends StatelessWidget {
                           children: [
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Website :',
                               controller: controller.websiteController,
                               isMobile: isMobile,
@@ -200,6 +216,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             SizedBox(height: isMobile ? 20 : 24),
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Land line :',
                               controller: controller.landLineController,
                               isMobile: isMobile,
@@ -208,8 +225,9 @@ class SchoolCreateScreen extends StatelessWidget {
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
                               ],
-                              validator: (value) {
-                                final v = (value ?? '').trim();
+                              validator: (_) {
+                                final v =
+                                    controller.landLineController.text.trim();
                                 if (v.isEmpty) return null;
                                 if (v.length != 10) {
                                   return 'Land line must be 10 digits';
@@ -220,6 +238,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             SizedBox(height: isMobile ? 20 : 24),
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Mobile :',
                               controller: controller.mobileController,
                               isMobile: isMobile,
@@ -228,8 +247,9 @@ class SchoolCreateScreen extends StatelessWidget {
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
                               ],
-                              validator: (value) {
-                                final v = (value ?? '').trim();
+                              validator: (_) {
+                                final v =
+                                    controller.mobileController.text.trim();
                                 if (v.isEmpty) return null;
                                 if (v.length != 10) {
                                   return 'Mobile must be 10 digits';
@@ -245,6 +265,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Website :',
                                 controller: controller.websiteController,
                                 isMobile: isMobile,
@@ -255,6 +276,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Land line :',
                                 controller: controller.landLineController,
                                 isMobile: isMobile,
@@ -263,8 +285,10 @@ class SchoolCreateScreen extends StatelessWidget {
                                 inputFormatters: [
                                   FilteringTextInputFormatter.digitsOnly,
                                 ],
-                                validator: (value) {
-                                  final v = (value ?? '').trim();
+                                validator: (_) {
+                                  final v = controller
+                                      .landLineController.text
+                                      .trim();
                                   if (v.isEmpty) return null;
                                   if (v.length != 10) {
                                     return 'Land line must be 10 digits';
@@ -277,6 +301,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Mobile :',
                                 controller: controller.mobileController,
                                 isMobile: isMobile,
@@ -285,8 +310,10 @@ class SchoolCreateScreen extends StatelessWidget {
                                 inputFormatters: [
                                   FilteringTextInputFormatter.digitsOnly,
                                 ],
-                                validator: (value) {
-                                  final v = (value ?? '').trim();
+                                validator: (_) {
+                                  final v = controller
+                                      .mobileController.text
+                                      .trim();
                                   if (v.isEmpty) return null;
                                   if (v.length != 10) {
                                     return 'Mobile must be 10 digits';
@@ -302,18 +329,21 @@ class SchoolCreateScreen extends StatelessWidget {
                   // Address field
                   _buildTextField(
                     context,
+                    controller,
                     label: 'Address * :',
                     controller: controller.addressController,
                     isMobile: isMobile,
                     maxLines: isMobile ? 3 : 1,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
+                    validator: (_) {
+                      final v =
+                          controller.addressController.text.trim();
+                      if (v.isEmpty) {
                         return 'Please enter address';
                       }
-                      if (value.trim().length < 10) {
+                      if (v.length < 10) {
                         return 'Address must be at least 10 characters';
                       }
-                      if (value.trim().length > 2000) {
+                      if (v.length > 2000) {
                         return 'Address must not exceed 2000 characters';
                       }
                       return null;
@@ -405,6 +435,7 @@ class SchoolCreateScreen extends StatelessWidget {
                           children: [
                             _buildTextField(
                               context,
+                              controller,
                               label: "Contributor's Name :",
                               controller: controller.contributorNameController,
                               isMobile: isMobile,
@@ -412,6 +443,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             SizedBox(height: isMobile ? 20 : 24),
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Mobile No :',
                               controller:
                                   controller.contributorMobileController,
@@ -421,8 +453,10 @@ class SchoolCreateScreen extends StatelessWidget {
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
                               ],
-                              validator: (value) {
-                                final v = (value ?? '').trim();
+                              validator: (_) {
+                                final v = controller
+                                    .contributorMobileController.text
+                                    .trim();
                                 if (v.isEmpty) return null;
                                 if (v.length != 10) {
                                   return 'Mobile No must be 10 digits';
@@ -438,6 +472,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: "Contributor's Name :",
                                 controller:
                                     controller.contributorNameController,
@@ -448,6 +483,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Mobile No :',
                                 controller:
                                     controller.contributorMobileController,
@@ -457,8 +493,10 @@ class SchoolCreateScreen extends StatelessWidget {
                                 inputFormatters: [
                                   FilteringTextInputFormatter.digitsOnly,
                                 ],
-                                validator: (value) {
-                                  final v = (value ?? '').trim();
+                                validator: (_) {
+                                  final v = controller
+                                      .contributorMobileController.text
+                                      .trim();
                                   if (v.isEmpty) return null;
                                   if (v.length != 10) {
                                     return 'Mobile No must be 10 digits';
@@ -552,7 +590,8 @@ class SchoolCreateScreen extends StatelessWidget {
   }
 
   Widget _buildTextField(
-    BuildContext context, {
+    BuildContext context,
+    SchoolController schoolController, {
     required String label,
     required TextEditingController controller,
     required bool isMobile,
@@ -592,7 +631,12 @@ class SchoolCreateScreen extends StatelessWidget {
           ),
           style: TextStyle(fontSize: isMobile ? 14 : 16),
           validator: validator,
-          onChanged: onChanged,
+          onChanged: (value) {
+            onChanged?.call(value);
+            if (schoolController.errorMessage.value.isNotEmpty) {
+              schoolController.errorMessage.value = '';
+            }
+          },
         ),
       ],
     );
@@ -1374,6 +1418,7 @@ class SchoolCreateScreen extends StatelessWidget {
         title: Text('Add New Category for $institutionTypeName'),
         content: Form(
           key: formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: TextFormField(
             controller: categoryController,
             decoration: const InputDecoration(
