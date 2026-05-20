@@ -86,12 +86,13 @@ class _ParticipantManagementScreenState
                               : 0,
                           onTap: (index) {
                             if (index == 1) {
-                              // Switching to list view - reset forms
+                              // List tab: only clear registration form when leaving edit/view.
+                              // Do not reset bulk/institution filters here (avoids duplicate
+                              // district/state API calls unrelated to the list).
                               if (participantController.isEditMode ||
                                   participantController.isViewMode.value) {
                                 participantController.resetForm();
                               }
-                              participantController.resetBulkRegistrationForm();
                             } else {
                               // Switching to create view - always reset form to ensure clean state
                               participantController.resetForm();

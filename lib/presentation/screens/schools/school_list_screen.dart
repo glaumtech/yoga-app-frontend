@@ -454,6 +454,8 @@ class SchoolListScreen extends StatelessWidget {
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           controller.searchQuery.value = '';
+                          controller.searchController.clear();
+                          FocusScope.of(context).unfocus();
                           controller.loadSchools(resetPage: true);
                         },
                         tooltip: 'Clear',

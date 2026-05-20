@@ -13,41 +13,9 @@ class ParticipantsListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final participantController = Get.find<ParticipantController>();
-    // Initialize CompetitionController if not already initialized
-    final competitionController = Get.put(CompetitionController());
-
-    // Load competitions if empty
-    if (competitionController.competitions.isEmpty &&
-        !competitionController.isLoading.value) {
-      competitionController.loadCompetitions().then((_) {
-        // Set first competition as default if no competition is selected
-        if (competitionController.competitions.isNotEmpty &&
-            participantController.selectedEventId.value.isEmpty) {
-          final firstCompetition = competitionController.competitions
-              .firstWhere(
-                (c) => c.id != null,
-                orElse: () => competitionController.competitions.first,
-              );
-          if (firstCompetition.id != null) {
-            participantController.selectedEventId.value = firstCompetition.id!;
-            participantController.loadParticipantsByEventId(
-              firstCompetition.id!,
-            );
-          }
-        }
-      });
-    } else if (competitionController.competitions.isNotEmpty &&
-        participantController.selectedEventId.value.isEmpty) {
-      // Set first competition as default if competitions are already loaded
-      final firstCompetition = competitionController.competitions.firstWhere(
-        (c) => c.id != null,
-        orElse: () => competitionController.competitions.first,
-      );
-      if (firstCompetition.id != null) {
-        participantController.selectedEventId.value = firstCompetition.id!;
-        participantController.loadParticipantsByEventId(firstCompetition.id!);
-      }
-    }
+    final competitionController = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
@@ -304,12 +272,10 @@ class ParticipantsListScreen extends StatelessWidget {
               SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: () {
-                  final eventId = controller.selectedEventId.value;
-                  if (eventId.isNotEmpty) {
-                    controller.loadParticipantsByEventId(eventId);
-                  }
-                },
+                onPressed: () => _refreshParticipantsList(
+                  controller,
+                  competitionController,
+                ),
                 tooltip: 'Refresh',
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.grey[100],
@@ -434,12 +400,10 @@ class ParticipantsListScreen extends StatelessWidget {
         // Refresh Button
         IconButton(
           icon: const Icon(Icons.refresh),
-          onPressed: () {
-            final eventId = controller.selectedEventId.value;
-            if (eventId.isNotEmpty) {
-              controller.loadParticipantsByEventId(eventId);
-            }
-          },
+          onPressed: () => _refreshParticipantsList(
+            controller,
+            competitionController,
+          ),
           tooltip: 'Refresh',
           style: IconButton.styleFrom(
             backgroundColor: Colors.grey[100],
@@ -447,6 +411,16 @@ class ParticipantsListScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _refreshParticipantsList(
+    ParticipantController controller,
+    CompetitionController competitionController,
+  ) {
+    controller.ensureParticipantsListLoaded(
+      competitionController,
+      forceReload: true,
     );
   }
 

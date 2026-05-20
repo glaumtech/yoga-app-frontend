@@ -24,6 +24,7 @@ import '../../core/utils/state_defaults.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
 import 'competition_controller.dart';
+import 'competition_controller.dart';
 
 // Web-specific imports
 import 'dart:html' as html show AnchorElement, Blob, Url;
@@ -83,6 +84,9 @@ class ParticipantController extends GetxController {
   final RxInt totalPages = 0.obs;
   final RxInt totalItems = 0.obs;
   final RxBool hasMorePages = false.obs;
+
+  bool _ensureParticipantsListRunning = false;
+  String? _lastParticipantsListEventId;
 
   // Sorting state
   final RxString sortBy =
@@ -207,9 +211,14 @@ class ParticipantController extends GetxController {
     return cacheBuster != null ? '$baseUrl?t=$cacheBuster' : baseUrl;
   }
 
-  Future<void> ensureInstitutionSearchFiltersLoaded() {
+  Future<void> ensureInstitutionSearchFiltersLoaded() async {
     _institutionSearchFilterDataFuture ??= _loadInstitutionSearchFilterData();
-    return _institutionSearchFilterDataFuture!;
+    await _institutionSearchFilterDataFuture!;
+    // Apply default state only when opening create/bulk (not when switching to list).
+    if (institutionSearchFilterStateId.value <= 0 &&
+        institutionFilterStateTextController.text.trim().isEmpty) {
+      await _applyDefaultInstitutionFilterStateIfEmpty();
+    }
   }
 
   /// Force reload of institution search filter data (types/states/districts source cities).
@@ -290,15 +299,13 @@ class ParticipantController extends GetxController {
         ?.id;
   }
 
+  /// Clears institution filter UI only. Does not call district/state APIs.
   void _resetInstitutionSearchFilters() {
     institutionSearchFilterStateId.value = 0;
     institutionSearchFilterTypeId.value = 0;
     institutionSearchDistricts.clear();
     institutionFilterStateTextController.clear();
     institutionFilterDistrictTextController.clear();
-    if (institutionSearchStates.isNotEmpty) {
-      unawaited(_applyDefaultInstitutionFilterStateIfEmpty());
-    }
   }
 
   void setInstitutionSearchFilterType(int typeId) {
@@ -981,6 +988,48 @@ class ParticipantController extends GetxController {
     }
   }
 
+  /// Loads competitions (if needed), picks a default event, then loads participants
+  /// for the list tab. Safe to call from initState / tab switch (single-flight).
+  Future<void> ensureParticipantsListLoaded(
+    CompetitionController competitionController, {
+    bool forceReload = false,
+  }) async {
+    if (_ensureParticipantsListRunning) return;
+    _ensureParticipantsListRunning = true;
+    try {
+      if (competitionController.competitions.isEmpty) {
+        await competitionController.loadCompetitions();
+      }
+
+      var eventId = selectedEventId.value;
+      if (eventId.isEmpty) {
+        final withId = competitionController.competitions
+            .where((c) => c.id != null)
+            .toList();
+        if (withId.isNotEmpty) {
+          eventId = withId.first.id!;
+          selectedEventId.value = eventId;
+        }
+      }
+
+      if (eventId.isEmpty) return;
+
+      final needsLoad = forceReload ||
+          participants.isEmpty ||
+          _lastParticipantsListEventId != eventId;
+      if (!needsLoad) return;
+
+      await loadParticipantsByEventId(
+        eventId,
+        resetPage: true,
+        replaceItems: true,
+      );
+      _lastParticipantsListEventId = eventId;
+    } finally {
+      _ensureParticipantsListRunning = false;
+    }
+  }
+
   Future<void> loadParticipantsByEventId(
     String eventId, {
     ParticipantFilterRequest? filter,
@@ -1588,7 +1637,10 @@ class ParticipantController extends GetxController {
     isListView.value = showList;
     if (showList) {
       errorMessage.value = '';
-      resetBulkRegistrationForm();
+      final competitionController = Get.isRegistered<CompetitionController>()
+          ? Get.find<CompetitionController>()
+          : Get.put(CompetitionController());
+      unawaited(ensureParticipantsListLoaded(competitionController));
     } else {
       listErrorMessage.value = '';
     }
