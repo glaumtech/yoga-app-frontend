@@ -76,6 +76,8 @@ class EndPoints {
       '/participant-registration/$id';
   static String participantRegistrationDelete(String id) =>
       '/participant-registration/$id';
+  static String participantRegistrationDetailsPdf(String id) =>
+      '/participant-registration/$id/registration-details';
   static String participantRegistrationForScoring =
       '/participant-registration/for-scoring';
   static String participantRegistrationImport =

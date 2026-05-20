@@ -540,6 +540,25 @@ class ParticipantsListScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton.icon(
+                        onPressed:
+                            participant.id == null || participant.id!.isEmpty
+                            ? null
+                            : () => controller
+                                  .downloadParticipantRegistrationDetails(
+                                    participant.id!,
+                                  ),
+                        icon: Icon(
+                          Icons.picture_as_pdf_outlined,
+                          size: 16,
+                          color: Colors.blue.shade800,
+                        ),
+                        label: Text(
+                          'PDF',
+                          style: TextStyle(color: Colors.blue.shade800),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
                         onPressed: () {
                           controller.initializeFormFromModel(participant);
                           controller.toggleViewMode(false);
@@ -907,6 +926,21 @@ class ParticipantsListScreen extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          IconButton(
+            icon: Icon(
+              Icons.picture_as_pdf_outlined,
+              size: 18,
+              color: Colors.blue.shade800,
+            ),
+            onPressed: participant.id == null || participant.id!.isEmpty
+                ? null
+                : () => controller.downloadParticipantRegistrationDetails(
+                    participant.id!,
+                  ),
+            tooltip: 'Download registration details',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
           IconButton(
             icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
             onPressed: () {

@@ -30,12 +30,20 @@ class SchoolController extends GetxController {
       'Please select a valid district from the list';
   static const String invalidCityMessage =
       'Please select a valid city/town/village from the list';
+  static String duplicateInstitutionMessage({String? address}) {
+    final addr = (address ?? '').trim();
+    if (addr.isEmpty) {
+      return 'Institution already exists with the same name, address, state and district.';
+    }
+    return 'Institution already exists with the same name, state, district and address: $addr';
+  }
 
   final LocationRepository _locationRepository = LocationRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
 
-  // Form controllers
-  final formKey = GlobalKey<FormState>();
+  // Form controllers — new key on [resetForm] drops stale field validation after save.
+  GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  final RxInt formResetGeneration = 0.obs;
   final institutionNameController = TextEditingController();
   final institutionShortNameController = TextEditingController();
   final addressController = TextEditingController();
@@ -1208,6 +1216,95 @@ class SchoolController extends GetxController {
     }
   }
 
+  String _normalizeInstitutionField(String value) => value.trim().toLowerCase();
+
+  bool _isSameInstitutionIdentity(
+    SchoolModel existing, {
+    required String name,
+    required String address,
+    required int stateId,
+    required int districtId,
+  }) {
+    return _normalizeInstitutionField(existing.institutionName) ==
+            _normalizeInstitutionField(name) &&
+        _normalizeInstitutionField(existing.address) ==
+            _normalizeInstitutionField(address) &&
+        (existing.stateId ?? 0) == stateId &&
+        (existing.districtId ?? 0) == districtId;
+  }
+
+  /// Returns an existing institution with the same name, address, state, and district.
+  Future<SchoolModel?> _findDuplicateInstitution({
+    required String institutionName,
+    required String address,
+    required int stateId,
+    required int districtId,
+    String? excludeInstitutionId,
+  }) async {
+    final name = institutionName.trim();
+    final addr = address.trim();
+    if (name.isEmpty || addr.isEmpty || stateId <= 0 || districtId <= 0) {
+      return null;
+    }
+
+    if (name.length < 3) {
+      return null;
+    }
+
+    try {
+      final response = await _schoolRepository.searchInstitutions(
+        query: name,
+        stateId: stateId,
+        districtId: districtId,
+      );
+      if (!response.success || response.data == null) {
+        return null;
+      }
+
+      for (final school in response.data!.institutions) {
+        if (excludeInstitutionId != null &&
+            excludeInstitutionId.isNotEmpty &&
+            school.id == excludeInstitutionId) {
+          continue;
+        }
+        if (_isSameInstitutionIdentity(
+          school,
+          name: name,
+          address: addr,
+          stateId: stateId,
+          districtId: districtId,
+        )) {
+          return school;
+        }
+      }
+    } catch (e) {
+      print('Duplicate institution search failed: $e');
+    }
+    return null;
+  }
+
+  String _friendlyInstitutionError(String? message, {SchoolModel? duplicate}) {
+    if (duplicate != null) {
+      return duplicateInstitutionMessage(address: duplicate.address);
+    }
+    final m = message ?? '';
+    if (m.toLowerCase().contains('already exists') &&
+        m.toLowerCase().contains('address:')) {
+      return m;
+    }
+    final match = RegExp(
+      r'address:\s*(.+)$',
+      caseSensitive: false,
+    ).firstMatch(m);
+    if (match != null) {
+      return duplicateInstitutionMessage(address: match.group(1));
+    }
+    if (m.toLowerCase().contains('already exists')) {
+      return duplicateInstitutionMessage();
+    }
+    return m;
+  }
+
   // Submit school form
   Future<void> submitSchool() async {
     await _syncCreateFormLocationBeforeValidate();
@@ -1306,6 +1403,27 @@ class SchoolController extends GetxController {
       print('  Institution Type ID: ${selectedInstitutionTypeId.value}');
       print('  Institution Category IDs: ${categoryIds ?? 'null'}');
 
+      final duplicate = await _findDuplicateInstitution(
+        institutionName: institutionName,
+        address: address,
+        stateId: selectedStateId.value,
+        districtId: districtId,
+        excludeInstitutionId:
+            isEditMode.value ? editingSchoolId.value : null,
+      );
+      if (duplicate != null) {
+        errorMessage.value =
+            duplicateInstitutionMessage(address: duplicate.address);
+        Get.snackbar(
+          'Error',
+          errorMessage.value,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
       ApiResponse<SchoolModel> response;
 
       if (isEditMode.value &&
@@ -1384,11 +1502,12 @@ class SchoolController extends GetxController {
           toggleViewMode(true);
         }
       } else {
-        errorMessage.value =
-            response.message ??
+        final rawMessage = response.message ??
             (isEditMode.value
                 ? 'Failed to update institution'
                 : 'Failed to create institution');
+        final friendly = _friendlyInstitutionError(rawMessage);
+        errorMessage.value = friendly.isNotEmpty ? friendly : rawMessage;
         Get.snackbar(
           'Error',
           errorMessage.value,
@@ -1872,7 +1991,6 @@ class SchoolController extends GetxController {
 
   // Reset form
   void resetForm() {
-    formKey.currentState?.reset();
     _clearDistrictSelection();
     selectedCity.value = '';
     createFormSelectedCityId.value = 0;
@@ -1906,6 +2024,8 @@ class SchoolController extends GetxController {
     errorMessage.value = '';
     isEditMode.value = false;
     editingSchoolId.value = null;
+    formKey = GlobalKey<FormState>();
+    formResetGeneration.value++;
     if (states.isNotEmpty) {
       unawaited(_applyDefaultTamilNaduStateIfEmpty());
     }

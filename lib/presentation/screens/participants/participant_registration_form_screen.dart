@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -184,7 +184,10 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
         child: Form(
           key: participantController.formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
+          // Per-field `autovalidateMode: onUserInteraction` — Form-level
+          // `onUserInteraction` validates *all* fields after any field is touched
+          // (Flutter behavior; see flutter/flutter#107350).
+          autovalidateMode: AutovalidateMode.disabled,
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             child: Column(
@@ -782,6 +785,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         FormLabelWithHint(label: 'COMPETITION :', bottomSpacing: 12),
         Obx(
           () => DropdownButtonFormField<String>(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             value: controller.selectedEventId.value.isNotEmpty
                 ? controller.selectedEventId.value
                 : null,
@@ -860,6 +864,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         ),
         Obx(
           () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.nameController,
             readOnly: controller.isViewMode.value,
             onChanged: controller.isViewMode.value
@@ -909,6 +914,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         FormLabelWithHint(label: 'Date of Birth :', bottomSpacing: 8),
         Obx(
           () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             readOnly: true,
             controller: TextEditingController(
               text: controller.dateOfBirth.value != null
@@ -1253,6 +1259,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           );
 
           return DropdownButtonFormField<String>(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             value: controller.selectedCategories.isNotEmpty
                 ? controller.selectedCategories.first
                 : null,
@@ -1352,6 +1359,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           }
 
           return DropdownButtonFormField<String>(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             value: currentValue,
             decoration: InputDecoration(
               border: OutlineInputBorder(
@@ -1408,6 +1416,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         FormLabelWithHint(label: 'Yoga Teacher Name :', bottomSpacing: 10),
         Obx(
           () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.yogaMasterNameController,
             readOnly: controller.isViewMode.value,
             onChanged: controller.isViewMode.value
@@ -1456,6 +1465,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         ),
         Obx(
           () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.yogaMasterContactController,
             readOnly: controller.isViewMode.value,
             onChanged: controller.isViewMode.value

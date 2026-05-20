@@ -42,7 +42,12 @@ class ParticipantController extends GetxController {
   /// Invalidates in-flight [submitRegistrationForm] work after [resetForm] / Cancel.
   Object _registrationSubmitOwner = Object();
 
-  /// Re-runs form validators after the user edits a field so errors clear immediately.
+  /// Clears the form-level [errorMessage] banner when the user edits a field.
+  ///
+  /// Does **not** call [FormState.validate] on the whole form: that would re-run
+  /// every field's validator on each keystroke (e.g. name) and show errors on
+  /// untouched fields. Per-field feedback comes from [AutovalidateMode.onUserInteraction]
+  /// on each [TextFormField] after the user interacts with that field.
   void validateRegistrationFormOnFieldChange() {
     if (_suppressRegistrationValidate) {
       return;
@@ -50,7 +55,6 @@ class ParticipantController extends GetxController {
     if (errorMessage.value.isNotEmpty) {
       errorMessage.value = '';
     }
-    formKey.currentState?.validate();
   }
 
   final RxList<ParticipantModel> participants = <ParticipantModel>[].obs;
@@ -2681,6 +2685,98 @@ class ParticipantController extends GetxController {
       Get.snackbar(
         'Error',
         'Failed to download certificate: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  /// Download PDF with participant registration details (receipt).
+  Future<void> downloadParticipantRegistrationDetails(
+    String registrationId,
+  ) async {
+    if (registrationId.isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Missing registration id',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+    try {
+      Get.snackbar(
+        'Downloading',
+        'Preparing registration details…',
+        backgroundColor: Colors.blue,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 1),
+      );
+
+      final url =
+          '${BaseUrl.baseUrl}${EndPoints.participantRegistrationDetailsPdf(registrationId)}';
+      final uri = Uri.parse(url);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept': 'application/pdf, application/octet-stream, */*',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        final safeName = 'participant_registration_$registrationId.pdf';
+        if (kIsWeb) {
+          final blob = html.Blob([response.bodyBytes]);
+          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+          html.AnchorElement(href: blobUrl)
+            ..setAttribute('download', safeName)
+            ..click();
+          html.Url.revokeObjectUrl(blobUrl);
+
+          Get.snackbar(
+            'Success',
+            'Download started',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+        } else {
+          final dataUri = Uri.dataFromBytes(
+            response.bodyBytes,
+            mimeType: 'application/pdf',
+          );
+          if (await canLaunchUrl(dataUri)) {
+            await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+            Get.snackbar(
+              'Success',
+              'Registration details opened',
+              backgroundColor: Colors.green,
+              colorText: Colors.white,
+            );
+          } else {
+            Get.snackbar(
+              'Error',
+              'Could not open PDF',
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+            );
+          }
+        }
+      } else {
+        Get.snackbar(
+          'Error',
+          'Failed to download (status ${response.statusCode})',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to download registration details: ${e.toString()}',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );

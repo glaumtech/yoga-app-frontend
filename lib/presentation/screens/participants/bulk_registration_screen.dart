@@ -126,7 +126,8 @@ class BulkRegistrationScreen extends StatelessWidget {
         padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
         child: Form(
           key: participantController.formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
+          // Per-field `autovalidateMode` — Form-level `onUserInteraction` validates all fields.
+          autovalidateMode: AutovalidateMode.disabled,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,6 +215,7 @@ class BulkRegistrationScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Obx(
           () => DropdownButtonFormField<String>(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             value: controller.selectedEventId.value.isNotEmpty
                 ? controller.selectedEventId.value
                 : null,
@@ -523,6 +525,7 @@ class BulkRegistrationScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           controller: controller.bulkYogaTeacherCellController,
           keyboardType: TextInputType.phone,
           maxLength: 10,
@@ -570,6 +573,9 @@ class BulkRegistrationScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          autovalidateMode: isRequired
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
           controller: controller,
           onChanged: (_) =>
               participantController.validateRegistrationFormOnFieldChange(),
@@ -836,6 +842,7 @@ class BulkRegistrationScreen extends StatelessWidget {
           final categories = selectedCompetition?.categories ?? [];
 
           return DropdownButtonFormField<String>(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             value: controller.bulkCategory.value.isNotEmpty
                 ? controller.bulkCategory.value
                 : null,

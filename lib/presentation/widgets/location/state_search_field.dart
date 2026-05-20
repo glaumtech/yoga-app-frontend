@@ -58,6 +58,9 @@ class StateSearchField extends StatelessWidget {
         VoidCallback onFieldSubmitted,
       ) {
         return TextFormField(
+          autovalidateMode: validator != null
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
           controller: fieldController,
           focusNode: fieldFocusNode,
           style: TextStyle(fontSize: isMobile ? 14 : 15),

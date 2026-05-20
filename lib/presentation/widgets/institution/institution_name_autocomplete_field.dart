@@ -102,6 +102,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
             }
             final hasText = textEditingController.text.trim().isNotEmpty;
             return TextFormField(
+              autovalidateMode: AutovalidateMode.onUserInteraction,
               controller: textEditingController,
               readOnly: isViewMode.value,
               focusNode: focusNode,

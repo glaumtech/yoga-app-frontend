@@ -51,21 +51,26 @@ class SchoolCreateScreen extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: EdgeInsets.all(16),
-          child: Form(
-            key: controller.formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: double.infinity),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title
-                  FormTitle(
-                    text: 'Institutions',
-                    isMobile: isMobile,
-                    isTablet: isTablet,
-                  ),
+          child: Obx(() {
+            // Rebuild Form when [SchoolController.resetForm] runs so validators
+            // do not linger on empty fields after a successful save.
+            final _ = controller.formResetGeneration.value;
+            return Form(
+              key: controller.formKey,
+              // Per-field `autovalidateMode` — Form-level `onUserInteraction` validates all fields.
+              autovalidateMode: AutovalidateMode.disabled,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: double.infinity),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title
+                    FormTitle(
+                      text: 'Institutions',
+                      isMobile: isMobile,
+                      isTablet: isTablet,
+                    ),
 
                   // Institution Type and Category (moved to top)
                   _buildInstitutionTypeField(
@@ -580,10 +585,11 @@ class SchoolCreateScreen extends StatelessWidget {
                               ],
                             ),
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ),
+            );
+          }),
         ),
       ),
     );
@@ -614,6 +620,9 @@ class SchoolCreateScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          autovalidateMode: validator != null
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
           controller: controller,
           maxLines: maxLines,
           maxLength: maxLength,
@@ -793,6 +802,7 @@ class SchoolCreateScreen extends StatelessWidget {
                     );
                   }
                   return TextFormField(
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     controller: textController,
                     focusNode: focusNode,
                     style: TextStyle(fontSize: isMobile ? 14 : 16),
@@ -951,6 +961,7 @@ class SchoolCreateScreen extends StatelessWidget {
                   }
 
                   return TextFormField(
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     controller: textController,
                     focusNode: focusNode,
                     style: TextStyle(fontSize: isMobile ? 14 : 16),
@@ -1044,6 +1055,7 @@ class SchoolCreateScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           controller: controller.pincodeController,
           onChanged: (value) {
             if (value.trim().isEmpty) {
@@ -1418,8 +1430,9 @@ class SchoolCreateScreen extends StatelessWidget {
         title: Text('Add New Category for $institutionTypeName'),
         content: Form(
           key: formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
+          autovalidateMode: AutovalidateMode.disabled,
           child: TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: categoryController,
             decoration: const InputDecoration(
               labelText: 'Category Name',
