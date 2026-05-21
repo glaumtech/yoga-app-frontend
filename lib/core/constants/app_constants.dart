@@ -2,7 +2,7 @@ import '../../config/app_config.dart';
 
 class AppConstants {
   // App Info
-  static const String appName = 'Yogasana Championship 2025';
+  static const String appName = 'Yoga Competition';
 
   // Storage Keys
   static const String tokenKey = 'token_key';

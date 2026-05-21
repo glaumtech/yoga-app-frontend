@@ -1,11 +1,11 @@
 {
-    "name": "yoga_champ",
-    "short_name": "yoga_champ",
+    "name": "Yoga Competition",
+    "short_name": "Yoga Competition",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Yogo competition Application",
+    "description": "Yoga competition management — events, participants, scoring, and certificates.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
