@@ -606,7 +606,7 @@ class ParticipantsListScreen extends StatelessWidget {
                     6: FlexColumnWidth(1.4),
                     7: FlexColumnWidth(1.4),
                     8: const FixedColumnWidth(80), // SPOT REG
-                    9: const FixedColumnWidth(100),
+                    9: const FixedColumnWidth(140),
                   },
                   children: [
                     // Header Row
@@ -646,7 +646,7 @@ class ParticipantsListScreen extends StatelessWidget {
                           controller,
                         ),
                         _buildTableCell('SPOT REG', isHeader: true),
-                        _buildTableCell('ACTIONS', isHeader: true),
+                        _buildCenteredTableHeaderCell('ACTIONS'),
                       ],
                     ),
                     // Data Rows
@@ -705,6 +705,19 @@ class ParticipantsListScreen extends StatelessWidget {
         ),
         softWrap: true,
         maxLines: null,
+      ),
+    );
+  }
+
+  Widget _buildCenteredTableHeaderCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Center(
+        child: Text(
+          text,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }
@@ -890,53 +903,71 @@ class ParticipantsListScreen extends StatelessWidget {
     ParticipantModel participant,
     ParticipantController controller,
   ) {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.picture_as_pdf_outlined,
-              size: 18,
-              color: Colors.blue.shade800,
-            ),
-            onPressed: participant.id == null || participant.id!.isEmpty
-                ? null
-                : () => controller.downloadParticipantRegistrationDetails(
-                    participant.id!,
-                  ),
-            tooltip: 'Download registration details',
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+    return TableCell(
+      verticalAlignment: TableCellVerticalAlignment.middle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.picture_as_pdf_outlined,
+                  size: 18,
+                  color: Colors.blue.shade800,
+                ),
+                onPressed: participant.id == null || participant.id!.isEmpty
+                    ? null
+                    : () => controller.downloadParticipantRegistrationDetails(
+                        participant.id!,
+                      ),
+                tooltip: 'Download registration details',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(
+                  Icons.edit,
+                  size: 18,
+                  color: AppTheme.primaryColor,
+                ),
+                onPressed: () {
+                  controller.initializeFormFromModel(participant);
+                  controller.toggleViewMode(false);
+                },
+                tooltip: 'Edit',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                onPressed: () {
+                  if (participant.id != null) {
+                    _showDeleteDialog(context, controller, participant);
+                  }
+                },
+                tooltip: 'Delete',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
-            onPressed: () {
-              // Use existing participant data without API call
-              controller.initializeFormFromModel(participant);
-              // Switch to registration form view
-              controller.toggleViewMode(false);
-            },
-            tooltip: 'Edit',
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-            onPressed: () {
-              if (participant.id != null) {
-                _showDeleteDialog(context, controller, participant);
-              }
-            },
-            tooltip: 'Delete',
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          ),
-        ],
+        ),
       ),
     );
   }

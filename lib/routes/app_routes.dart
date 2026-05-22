@@ -6,8 +6,40 @@ class AppRoutes {
 
   // Public
   static const String home = '/home';
+  static const String competitions = '/competitions';
   static const String about = '/about';
   static const String contact = '/contact';
+
+  /// Public competitions list; [status] is `ongoing`, `upcoming`, or `completed`.
+  static String competitionsList({String? status}) {
+    if (status == null || status.trim().isEmpty) {
+      return competitions;
+    }
+    return '$competitions?status=${Uri.encodeQueryComponent(status.trim())}';
+  }
+
+  /// Public participant list for one competition (from home competitions list).
+  static const String publicCompetitionParticipants =
+      '/competitions/:competitionId/participants';
+
+  static String publicCompetitionParticipantsPath(
+    String competitionId, {
+    String? competitionName,
+    bool isPastCompetition = false,
+  }) {
+    final params = <String, String>{};
+    final name = competitionName?.trim();
+    if (name != null && name.isNotEmpty) {
+      params['name'] = name;
+    }
+    if (isPastCompetition) {
+      params['past'] = '1';
+    }
+    return Uri(
+      path: '/competitions/$competitionId/participants',
+      queryParameters: params.isEmpty ? null : params,
+    ).toString();
+  }
 
   /// User-facing participant registration for a competition (anyone can access).
   static const String registerCompetition =

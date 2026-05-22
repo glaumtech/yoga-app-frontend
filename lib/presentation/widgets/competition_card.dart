@@ -9,18 +9,27 @@ import '../../../core/utils/competition_brochure_banner_url.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../core/utils/competition_registration_url.dart';
 import '../../../routes/app_routes.dart';
+import 'competition_registration_qr_image.dart';
 import 'primary_button.dart';
 
 class CompetitionCard extends StatelessWidget {
   final HomeCompetitionModel competition;
   final VoidCallback? onTap;
   final bool showShareLinkOption;
+  final bool showRegistrationQr;
+  final bool showStatusBadge;
+  final bool showRegistrationButton;
+  final bool showViewParticipantsButton;
 
   const CompetitionCard({
     super.key,
     required this.competition,
     this.onTap,
     this.showShareLinkOption = false,
+    this.showRegistrationQr = false,
+    this.showStatusBadge = true,
+    this.showRegistrationButton = true,
+    this.showViewParticipantsButton = false,
   });
 
   String? _bannerImageUrl() => competitionBrochureBannerUrl(competition);
@@ -62,160 +71,165 @@ class CompetitionCard extends StatelessWidget {
               child: SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Text(
-                            competition.competitionName,
-                            style: titleStyle,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  competition.competitionName,
+                                  style: titleStyle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (showStatusBadge &&
+                                  !showRegistrationQr &&
+                                  competition.status.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: competition.status == 'ongoing'
+                                        ? AppTheme.secondaryColor
+                                        : competition.status == 'upcoming'
+                                        ? Colors.orange
+                                        : Colors.grey,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    competition.status.toUpperCase(),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 10,
+                                        ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            competition.description,
+                            style: Theme.of(context).textTheme.bodySmall,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        if (competition.status.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: competition.status == 'ongoing'
-                                  ? AppTheme.secondaryColor
-                                  : competition.status == 'upcoming'
-                                  ? Colors.orange
-                                  : Colors.grey,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              competition.status.toUpperCase(),
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 10,
+                          if (startDate != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  size: 16,
+                                  color: Colors.grey[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    _formatDate(startDate),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(color: Colors.grey[600]),
                                   ),
+                                ),
+                              ],
                             ),
+                          ],
+                          if (competition.address.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 16,
+                                  color: Colors.grey[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    competition.address,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(color: Colors.grey[600]),
+                                    maxLines: addressMaxLines,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (competition.categories.isNotEmpty ||
+                              showShareLinkOption) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: competition.categories
+                                        .take(3)
+                                        .map((c) => _CategoryPill(label: c))
+                                        .toList(),
+                                  ),
+                                ),
+                                if (showShareLinkOption) ...[
+                                  const SizedBox(width: 8),
+                                  SizedBox(
+                                    height: 36,
+                                    width: 36,
+                                    child: IconButton(
+                                      onPressed: () =>
+                                          _copyRegistrationLink(context),
+                                      icon: const Icon(Icons.share, size: 16),
+                                      tooltip: 'Share registration link',
+                                      padding: EdgeInsets.zero,
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: AppTheme.primaryColor
+                                            .withOpacity(0.08),
+                                        foregroundColor: AppTheme.primaryColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                            ],
                           ),
+                        ),
+                        if (showRegistrationQr)
+                          _buildRegistrationQrAside(context, maxW),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      competition.description,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    if (startDate != null)
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today,
-                            size: 16,
-                            color: Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatDate(startDate),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    if (competition.address.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on,
-                            size: 16,
-                            color: Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              competition.address,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: Colors.grey[600]),
-                              maxLines: addressMaxLines,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
+                    if (showRegistrationButton) ...[
+                      const SizedBox(height: 12),
+                      _buildCenteredRegistrationButton(context, maxW, btnH),
                     ],
-                    if (competition.categories.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: competition.categories
-                                  .take(3)
-                                  .map((c) => _CategoryPill(label: c))
-                                  .toList(),
-                            ),
-                          ),
-                          if (showShareLinkOption) ...[
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              height: 36,
-                              width: 36,
-                              child: IconButton(
-                                onPressed: () => _copyRegistrationLink(context),
-                                icon: const Icon(Icons.share, size: 16),
-                                tooltip: 'Share registration link',
-                                padding: EdgeInsets.zero,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: AppTheme.primaryColor
-                                      .withOpacity(0.08),
-                                  foregroundColor: AppTheme.primaryColor,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                    if (showViewParticipantsButton) ...[
+                      const SizedBox(height: 12),
+                      _buildCenteredViewParticipantsButton(context, maxW, btnH),
                     ],
-                    const SizedBox(height: 12),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final innerW = constraints.maxWidth;
-                        final maxBtn = math.min(
-                          360.0,
-                          innerW > 16 ? innerW - 16 : innerW,
-                        );
-                        final btnWidth = (innerW * 0.88)
-                            .clamp(140.0, maxBtn)
-                            .toDouble();
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            PrimaryButton(
-                              text: 'Registration Now',
-                              icon: Icons.person_add,
-                              width: btnWidth,
-                              height: btnH,
-                              onPressed: () {
-                                final id =
-                                    competition.idStr ?? '${competition.id}';
-                                context.pushNamed(
-                                  'register-competition',
-                                  pathParameters: {'competitionId': id},
-                                );
-                              },
-                            ),
-                          ],
-                        );
-                      },
-                    ),
                   ],
                 ),
               ),
@@ -326,6 +340,124 @@ class CompetitionCard extends StatelessWidget {
 
   static String _formatDate(DateTime d) {
     return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+
+  /// QR at top-right of card body (home screen); replaces status badge.
+  Widget _buildRegistrationQrAside(BuildContext context, double cardWidth) {
+    final id = competition.idStr;
+    if (id == null || id.isEmpty) return const SizedBox.shrink();
+
+    final qrSize = cardWidth < 360 ? 88.0 : (cardWidth < 520 ? 96.0 : 104.0);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: CompetitionRegistrationQrImage(
+              competitionId: id,
+              size: qrSize,
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'SCAN TO\nREGISTER',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppTheme.primaryColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+              height: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double _centeredButtonWidth(double cardWidth) {
+    final maxBtn = math.min(360.0, cardWidth > 16 ? cardWidth - 16 : cardWidth);
+    return (cardWidth * 0.88).clamp(140.0, maxBtn).toDouble();
+  }
+
+  Widget _buildCenteredRegistrationButton(
+    BuildContext context,
+    double cardWidth,
+    double btnH,
+  ) {
+    final btnWidth = _centeredButtonWidth(cardWidth);
+    return Align(
+      alignment: Alignment.center,
+      child: PrimaryButton(
+        text: 'Registration Now',
+        icon: Icons.person_add,
+        width: btnWidth,
+        height: btnH,
+        onPressed: () {
+          final id = competition.idStr ?? '${competition.id}';
+          context.pushNamed(
+            'register-competition',
+            pathParameters: {'competitionId': id},
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCenteredViewParticipantsButton(
+    BuildContext context,
+    double cardWidth,
+    double btnH,
+  ) {
+    final btnWidth = _centeredButtonWidth(cardWidth);
+    return Align(
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: btnWidth,
+        height: btnH,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            final id = competition.idStr ?? '${competition.id}';
+            if (id.isEmpty) return;
+            context.push(
+              AppRoutes.publicCompetitionParticipantsPath(
+                id,
+                competitionName: competition.competitionName,
+                isPastCompetition: true,
+              ),
+            );
+          },
+          icon: const Icon(Icons.people_outline, size: 18),
+          label: const Text('View participants'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.primaryColor,
+            side: BorderSide(color: AppTheme.primaryColor.withOpacity(0.55)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            textStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _copyRegistrationLink(BuildContext context) {

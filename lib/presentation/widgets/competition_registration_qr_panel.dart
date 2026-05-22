@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
-import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/competition_registration_url.dart';
 import '../../data/models/competition_model.dart';
+import 'competition_registration_qr_image.dart';
 
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html show AnchorElement, Blob, Url;
@@ -35,7 +35,7 @@ class CompetitionRegistrationQrPanel extends StatelessWidget {
   String get _qrImageUrl {
     final id = _competitionId;
     if (id == null || id.isEmpty) return '';
-    return '${BaseUrl.baseUrl}${EndPoints.competitionRegistrationQr(id)}';
+    return CompetitionRegistrationQrImage.qrImageUrl(id);
   }
 
   @override
@@ -78,20 +78,10 @@ class CompetitionRegistrationQrPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          ClipRRect(
+          CompetitionRegistrationQrImage(
+            competitionId: id,
+            size: qrSize,
             borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              _qrImageUrl,
-              width: qrSize,
-              height: qrSize,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Container(
-                width: qrSize,
-                height: qrSize,
-                color: Colors.grey[200],
-                child: const Icon(Icons.qr_code_2, size: 48),
-              ),
-            ),
           ),
           const SizedBox(height: 12),
           SelectableText(

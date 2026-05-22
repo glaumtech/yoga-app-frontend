@@ -1232,6 +1232,15 @@ class ParticipantController extends GetxController {
       optForECertificate:
           _parseRegBool(reg['optForECertificate']) ||
           _parseRegBool(reg['opt_for_e_certificate']),
+      stageId: reg['stageId'] is int
+          ? reg['stageId'] as int
+          : int.tryParse(reg['stageId']?.toString() ?? ''),
+      categoryId: reg['categoryId'] is int
+          ? reg['categoryId'] as int
+          : int.tryParse(reg['categoryId']?.toString() ?? ''),
+      groupId: reg['groupId'] is int
+          ? reg['groupId'] as int
+          : int.tryParse(reg['groupId']?.toString() ?? ''),
     );
   }
 

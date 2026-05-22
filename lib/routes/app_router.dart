@@ -5,6 +5,8 @@ import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
 import '../presentation/screens/auth/signup_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
+import '../presentation/screens/home/public_competitions_screen.dart';
+import '../presentation/screens/home/public_competition_participants_screen.dart';
 import '../presentation/screens/about/about_screen.dart';
 import '../presentation/screens/contact/contact_screen.dart';
 import '../presentation/screens/admin/admin_dashboard_screen.dart';
@@ -63,9 +65,13 @@ class AppRouter {
       // If not logged in and trying to access protected routes
       // Note: home is treated as public for unauthenticated users
       final isHomeRoute = location == AppRoutes.home;
+      final isPublicCompetitions =
+          location == AppRoutes.competitions ||
+          location.startsWith('${AppRoutes.competitions}/');
       if (token == null &&
           !isPublicRoute &&
           !isHomeRoute &&
+          !isPublicCompetitions &&
           !isRegister &&
           !isPublicSchools) {
         return AppRoutes.login;
@@ -92,6 +98,7 @@ class AppRouter {
               location != AppRoutes.splash &&
               !isPublicRoute &&
               !isHomeRoute &&
+              !isPublicCompetitions &&
               !isRegister &&
               !isPublicSchools) {
             return AppRoutes.juryScoring;
@@ -175,6 +182,30 @@ class AppRouter {
         path: AppRoutes.home,
         name: 'home',
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.competitions,
+        name: 'competitions',
+        builder: (context, state) {
+          final status = state.uri.queryParameters['status'];
+          return PublicCompetitionsScreen(statusFilter: status);
+        },
+        routes: [
+          GoRoute(
+            path: ':competitionId/participants',
+            name: 'public-competition-participants',
+            builder: (context, state) {
+              final competitionId = state.pathParameters['competitionId'] ?? '';
+              final name = state.uri.queryParameters['name'] ?? '';
+              final isPast = state.uri.queryParameters['past'] == '1';
+              return PublicCompetitionParticipantsScreen(
+                competitionId: competitionId,
+                competitionName: name,
+                isPastCompetition: isPast,
+              );
+            },
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoutes.about,
