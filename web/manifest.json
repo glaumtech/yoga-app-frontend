@@ -1,6 +1,6 @@
 {
-    "name": "yoga_champ",
-    "short_name": "yoga_champ",
+    "name": "Yoga Competition Application",
+    "short_name": "Yoga Comp App",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

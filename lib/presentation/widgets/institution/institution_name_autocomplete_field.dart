@@ -23,6 +23,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
     this.validator,
     this.onAddNewInstitution,
     this.onClear,
+    this.onValueChanged,
     this.minQueryLength = 3,
     this.hintText = 'Search or type institution name',
     this.optionsMaxHeight = 200,
@@ -40,6 +41,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
   final void Function(BuildContext context, String searchText)?
       onAddNewInstitution;
   final VoidCallback? onClear;
+  final VoidCallback? onValueChanged;
   final int minQueryLength;
   final String hintText;
   final double optionsMaxHeight;
@@ -78,14 +80,10 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
           // Keep the outer form controller in sync so the selected value
           // remains visible even if the Autocomplete rebuilds.
           if (formTextController.text != inst.institutionName) {
-            formTextController.value = TextEditingValue(
-              text: inst.institutionName,
-              selection: TextSelection.collapsed(
-                offset: inst.institutionName.length,
-              ),
-            );
+            formTextController.text = inst.institutionName;
           }
           onInstitutionSelected(inst);
+          onValueChanged?.call();
         },
         fieldViewBuilder: (
           BuildContext context,
@@ -93,12 +91,25 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
           FocusNode focusNode,
           VoidCallback onFieldSubmitted,
         ) {
+          void syncAutocompleteFromForm() {
+            final formText = formTextController.text;
+            if (textEditingController.text == formText) return;
+            textEditingController.value = TextEditingValue(
+              text: formText,
+              selection: TextSelection.collapsed(offset: formText.length),
+            );
+          }
+
           return Obx(() {
+            // Do not assign to TextEditingController during build (e.g. after resetForm).
             if (textEditingController.text != formTextController.text) {
-              textEditingController.value = formTextController.value;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                syncAutocompleteFromForm();
+              });
             }
             final hasText = textEditingController.text.trim().isNotEmpty;
             return TextFormField(
+              autovalidateMode: AutovalidateMode.onUserInteraction,
               controller: textEditingController,
               readOnly: isViewMode.value,
               focusNode: focusNode,
@@ -109,6 +120,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
                       if (formTextController.text != value) {
                         formTextController.text = value;
                       }
+                      onValueChanged?.call();
                     },
               decoration: InputDecoration(
                 border: OutlineInputBorder(
@@ -137,6 +149,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
                               suggestions.clear();
                               FocusScope.of(context).unfocus();
                               onClear?.call();
+                              onValueChanged?.call();
                             },
                           )
                         : const Icon(Icons.search)),

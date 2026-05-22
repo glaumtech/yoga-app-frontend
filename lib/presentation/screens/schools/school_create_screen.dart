@@ -1,11 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
-import '../../widgets/location/city_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
+import '../../widgets/mandatory_aware_label.dart';
 import '../../../data/models/institution_category_model.dart';
+import '../../../data/models/city_model.dart';
+import '../../../data/models/district_model.dart';
+
+String _villageName(CityModel c) => (c.village ?? c.description ?? '').trim();
+
+/// Suggestion row: city • village • pincode (no labels).
+String _villageSuggestionLine(CityModel c) {
+  final v = _villageName(c);
+  if (v.isEmpty) {
+    return '${c.cityName} • ${c.pincode}';
+  }
+  return '${c.cityName} • $v • ${c.pincode}';
+}
+
+/// Text field after selection: city, village.
+String _villageSelectedDisplay(CityModel c) {
+  final v = _villageName(c);
+  if (v.isEmpty) {
+    return c.cityName;
+  }
+  return '${c.cityName}, $v';
+}
 
 class SchoolCreateScreen extends StatelessWidget {
   final bool hideButtons;
@@ -28,20 +51,26 @@ class SchoolCreateScreen extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: EdgeInsets.all(16),
-          child: Form(
-            key: controller.formKey,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: double.infinity),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title
-                  FormTitle(
-                    text: 'Institutions',
-                    isMobile: isMobile,
-                    isTablet: isTablet,
-                  ),
+          child: Obx(() {
+            // Rebuild Form when [SchoolController.resetForm] runs so validators
+            // do not linger on empty fields after a successful save.
+            final _ = controller.formResetGeneration.value;
+            return Form(
+              key: controller.formKey,
+              // Per-field `autovalidateMode` — Form-level `onUserInteraction` validates all fields.
+              autovalidateMode: AutovalidateMode.disabled,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: double.infinity),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title
+                    FormTitle(
+                      text: 'Institutions',
+                      isMobile: isMobile,
+                      isTablet: isTablet,
+                    ),
 
                   // Institution Type and Category (moved to top)
                   _buildInstitutionTypeField(
@@ -58,17 +87,21 @@ class SchoolCreateScreen extends StatelessWidget {
                           children: [
                             _buildTextField(
                               context,
-                              label: 'Institution Name :',
+                              controller,
+                              label: 'Institution Name * :',
                               controller: controller.institutionNameController,
                               isMobile: isMobile,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
+                              validator: (_) {
+                                final v = controller
+                                    .institutionNameController.text
+                                    .trim();
+                                if (v.isEmpty) {
                                   return 'Please enter institution name';
                                 }
-                                if (value.trim().length < 3) {
+                                if (v.length < 3) {
                                   return 'Institution name must be at least 3 characters';
                                 }
-                                if (value.trim().length > 255) {
+                                if (v.length > 255) {
                                   return 'Institution name must not exceed 255 characters';
                                 }
                                 return null;
@@ -78,6 +111,7 @@ class SchoolCreateScreen extends StatelessWidget {
 
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Institution Short Name :',
                               controller:
                                   controller.institutionShortNameController,
@@ -86,18 +120,20 @@ class SchoolCreateScreen extends StatelessWidget {
                             SizedBox(height: isMobile ? 20 : 24),
                             _buildTextField(
                               context,
+                              controller,
                               label: 'Email ID :',
                               controller: controller.emailController,
                               isMobile: isMobile,
                               keyboardType: TextInputType.emailAddress,
-                              validator: (value) {
-                                if (value != null && value.isNotEmpty) {
-                                  final emailRegex = RegExp(
-                                    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-                                  );
-                                  if (!emailRegex.hasMatch(value.trim())) {
-                                    return 'Please enter a valid email address';
-                                  }
+                              validator: (_) {
+                                final v =
+                                    controller.emailController.text.trim();
+                                if (v.isEmpty) return null;
+                                final emailRegex = RegExp(
+                                  r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                );
+                                if (!emailRegex.hasMatch(v)) {
+                                  return 'Please enter a valid email address';
                                 }
                                 return null;
                               },
@@ -110,18 +146,22 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
-                                label: 'Institution Name :',
+                                controller,
+                                label: 'Institution Name * :',
                                 controller:
                                     controller.institutionNameController,
                                 isMobile: isMobile,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
+                                validator: (_) {
+                                  final v = controller
+                                      .institutionNameController.text
+                                      .trim();
+                                  if (v.isEmpty) {
                                     return 'Please enter institution name';
                                   }
-                                  if (value.trim().length < 3) {
+                                  if (v.length < 3) {
                                     return 'Institution name must be at least 3 characters';
                                   }
-                                  if (value.trim().length > 255) {
+                                  if (v.length > 255) {
                                     return 'Institution name must not exceed 255 characters';
                                   }
                                   return null;
@@ -132,6 +172,7 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Institution Short Name :',
                                 controller:
                                     controller.institutionShortNameController,
@@ -142,18 +183,145 @@ class SchoolCreateScreen extends StatelessWidget {
                             Expanded(
                               child: _buildTextField(
                                 context,
+                                controller,
                                 label: 'Email ID :',
                                 controller: controller.emailController,
                                 isMobile: isMobile,
                                 keyboardType: TextInputType.emailAddress,
-                                validator: (value) {
-                                  if (value != null && value.isNotEmpty) {
-                                    final emailRegex = RegExp(
-                                      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-                                    );
-                                    if (!emailRegex.hasMatch(value.trim())) {
-                                      return 'Please enter a valid email address';
-                                    }
+                                validator: (_) {
+                                  final v =
+                                      controller.emailController.text.trim();
+                                  if (v.isEmpty) return null;
+                                  final emailRegex = RegExp(
+                                    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                  );
+                                  if (!emailRegex.hasMatch(v)) {
+                                    return 'Please enter a valid email address';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                  SizedBox(height: isMobile ? 20 : 24),
+
+                  // Website / Land line / Mobile
+                  isMobile
+                      ? Column(
+                          children: [
+                            _buildTextField(
+                              context,
+                              controller,
+                              label: 'Website :',
+                              controller: controller.websiteController,
+                              isMobile: isMobile,
+                              keyboardType: TextInputType.url,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildTextField(
+                              context,
+                              controller,
+                              label: 'Land line :',
+                              controller: controller.landLineController,
+                              isMobile: isMobile,
+                              maxLength: 10,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              validator: (_) {
+                                final v =
+                                    controller.landLineController.text.trim();
+                                if (v.isEmpty) return null;
+                                if (v.length != 10) {
+                                  return 'Land line must be 10 digits';
+                                }
+                                return null;
+                              },
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildTextField(
+                              context,
+                              controller,
+                              label: 'Mobile :',
+                              controller: controller.mobileController,
+                              isMobile: isMobile,
+                              maxLength: 10,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              validator: (_) {
+                                final v =
+                                    controller.mobileController.text.trim();
+                                if (v.isEmpty) return null;
+                                if (v.length != 10) {
+                                  return 'Mobile must be 10 digits';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                controller,
+                                label: 'Website :',
+                                controller: controller.websiteController,
+                                isMobile: isMobile,
+                                keyboardType: TextInputType.url,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                controller,
+                                label: 'Land line :',
+                                controller: controller.landLineController,
+                                isMobile: isMobile,
+                                maxLength: 10,
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                validator: (_) {
+                                  final v = controller
+                                      .landLineController.text
+                                      .trim();
+                                  if (v.isEmpty) return null;
+                                  if (v.length != 10) {
+                                    return 'Land line must be 10 digits';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                controller,
+                                label: 'Mobile :',
+                                controller: controller.mobileController,
+                                isMobile: isMobile,
+                                maxLength: 10,
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                validator: (_) {
+                                  final v = controller
+                                      .mobileController.text
+                                      .trim();
+                                  if (v.isEmpty) return null;
+                                  if (v.length != 10) {
+                                    return 'Mobile must be 10 digits';
                                   }
                                   return null;
                                 },
@@ -166,18 +334,21 @@ class SchoolCreateScreen extends StatelessWidget {
                   // Address field
                   _buildTextField(
                     context,
-                    label: 'Address :',
+                    controller,
+                    label: 'Address * :',
                     controller: controller.addressController,
                     isMobile: isMobile,
                     maxLines: isMobile ? 3 : 1,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
+                    validator: (_) {
+                      final v =
+                          controller.addressController.text.trim();
+                      if (v.isEmpty) {
                         return 'Please enter address';
                       }
-                      if (value.trim().length < 10) {
+                      if (v.length < 10) {
                         return 'Address must be at least 10 characters';
                       }
-                      if (value.trim().length > 2000) {
+                      if (v.length > 2000) {
                         return 'Address must not exceed 2000 characters';
                       }
                       return null;
@@ -185,7 +356,7 @@ class SchoolCreateScreen extends StatelessWidget {
                   ),
                   SizedBox(height: isMobile ? 20 : 24),
 
-                  // State, City, Pincode in row (desktop) or column (mobile)
+                  // State, District, Village, Pincode in row (desktop) or column (mobile)
                   isMobile
                       ? Column(
                           children: [
@@ -196,7 +367,14 @@ class SchoolCreateScreen extends StatelessWidget {
                               isTablet,
                             ),
                             SizedBox(height: isMobile ? 20 : 24),
-                            _buildCityField(
+                            _buildDistrictField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildVillageSearchField(
                               context,
                               controller,
                               isMobile,
@@ -226,7 +404,17 @@ class SchoolCreateScreen extends StatelessWidget {
                             SizedBox(width: isTablet ? 8 : 12),
                             Expanded(
                               flex: 1,
-                              child: _buildCityField(
+                              child: _buildDistrictField(
+                                context,
+                                controller,
+                                isMobile,
+                                isTablet,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 8 : 12),
+                            Expanded(
+                              flex: 1,
+                              child: _buildVillageSearchField(
                                 context,
                                 controller,
                                 isMobile,
@@ -241,6 +429,85 @@ class SchoolCreateScreen extends StatelessWidget {
                                 controller,
                                 isMobile,
                                 isTablet,
+                              ),
+                            ),
+                          ],
+                        ),
+                  SizedBox(height: isMobile ? 20 : 24),
+
+                  isMobile
+                      ? Column(
+                          children: [
+                            _buildTextField(
+                              context,
+                              controller,
+                              label: "Contributor's Name :",
+                              controller: controller.contributorNameController,
+                              isMobile: isMobile,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildTextField(
+                              context,
+                              controller,
+                              label: 'Mobile No :',
+                              controller:
+                                  controller.contributorMobileController,
+                              isMobile: isMobile,
+                              maxLength: 10,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              validator: (_) {
+                                final v = controller
+                                    .contributorMobileController.text
+                                    .trim();
+                                if (v.isEmpty) return null;
+                                if (v.length != 10) {
+                                  return 'Mobile No must be 10 digits';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                controller,
+                                label: "Contributor's Name :",
+                                controller:
+                                    controller.contributorNameController,
+                                isMobile: isMobile,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 16 : 20),
+                            Expanded(
+                              child: _buildTextField(
+                                context,
+                                controller,
+                                label: 'Mobile No :',
+                                controller:
+                                    controller.contributorMobileController,
+                                isMobile: isMobile,
+                                maxLength: 10,
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                validator: (_) {
+                                  final v = controller
+                                      .contributorMobileController.text
+                                      .trim();
+                                  if (v.isEmpty) return null;
+                                  if (v.length != 10) {
+                                    return 'Mobile No must be 10 digits';
+                                  }
+                                  return null;
+                                },
                               ),
                             ),
                           ],
@@ -318,30 +585,34 @@ class SchoolCreateScreen extends StatelessWidget {
                               ],
                             ),
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ),
+            );
+          }),
         ),
       ),
     );
   }
 
   Widget _buildTextField(
-    BuildContext context, {
+    BuildContext context,
+    SchoolController schoolController, {
     required String label,
     required TextEditingController controller,
     required bool isMobile,
     int maxLines = 1,
+    int? maxLength,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     void Function(String?)? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
+        MandatoryAwareLabel(
+          label: label,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -349,9 +620,14 @@ class SchoolCreateScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          autovalidateMode: validator != null
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
           controller: controller,
           maxLines: maxLines,
+          maxLength: maxLength,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: EdgeInsets.symmetric(
@@ -360,10 +636,16 @@ class SchoolCreateScreen extends StatelessWidget {
             ),
             filled: true,
             fillColor: Colors.white,
+            counterText: maxLength != null ? '' : null,
           ),
           style: TextStyle(fontSize: isMobile ? 14 : 16),
           validator: validator,
-          onChanged: onChanged,
+          onChanged: (value) {
+            onChanged?.call(value);
+            if (schoolController.errorMessage.value.isNotEmpty) {
+              schoolController.errorMessage.value = '';
+            }
+          },
         ),
       ],
     );
@@ -394,8 +676,8 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'State :',
+        MandatoryAwareLabel(
+          label: 'State * :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -430,19 +712,14 @@ class SchoolCreateScreen extends StatelessWidget {
             isMobile: isMobile,
             hintText: 'Search or select state',
             onStateId: controller.setCreateFormState,
-            validator: (_) {
-              if (controller.selectedStateId.value <= 0) {
-                return 'Please select state';
-              }
-              return null;
-            },
+            validator: controller.validateStateField,
           );
         }),
       ],
     );
   }
 
-  Widget _buildCityField(
+  Widget _buildDistrictField(
     BuildContext context,
     SchoolController controller,
     bool isMobile,
@@ -451,8 +728,8 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'City :',
+        MandatoryAwareLabel(
+          label: 'District *:',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -460,7 +737,13 @@ class SchoolCreateScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Obx(() {
-          if (controller.isLoadingCities.value) {
+          // Track committed district for async pre-fill / selection; do not
+          // mirror draft text here (typing would rebuild and drop focus).
+          // ignore: unused_local_variable
+          final committedDistrictId = controller.selectedDistrictId.value;
+          final districtListVersion = controller.stateDistrictList.length;
+
+          if (controller.isLoadingStateDistricts.value) {
             return TextFormField(
               readOnly: true,
               style: TextStyle(fontSize: isMobile ? 14 : 16),
@@ -474,7 +757,7 @@ class SchoolCreateScreen extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              ).copyWith(hintText: 'Loading cities...'),
+              ).copyWith(hintText: 'Loading districts...'),
             );
           }
 
@@ -488,29 +771,265 @@ class SchoolCreateScreen extends StatelessWidget {
             );
           }
 
-          final availableCities =
-              controller.cities
-                  .where((c) => c.stateId == controller.selectedStateId.value)
-                  .toList()
-                ..sort((a, b) => a.cityName.compareTo(b.cityName));
+          return Autocomplete<DistrictModel>(
+            key: ValueKey(
+              'district_${controller.selectedStateId}_$districtListVersion',
+            ),
+            displayStringForOption: (d) => d.districtName,
+            optionsBuilder: (TextEditingValue value) {
+              final q = value.text.trim().toLowerCase();
+              final availableDistricts = List<DistrictModel>.from(
+                controller.stateDistrictList,
+              );
+              if (q.isEmpty) return availableDistricts;
+              return availableDistricts.where(
+                (d) => d.districtName.toLowerCase().contains(q),
+              );
+            },
+            onSelected: (d) => controller.setCreateFormDistrict(d.districtName),
+            fieldViewBuilder:
+                (context, textController, focusNode, onFieldSubmitted) {
+                  if (controller.createFormDistrictTextController.text !=
+                      textController.text) {
+                    textController.value = TextEditingValue(
+                      text: controller.createFormDistrictTextController.text,
+                      selection: TextSelection.collapsed(
+                        offset: controller
+                            .createFormDistrictTextController
+                            .text
+                            .length,
+                      ),
+                    );
+                  }
+                  return TextFormField(
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    controller: textController,
+                    focusNode: focusNode,
+                    style: TextStyle(fontSize: isMobile ? 14 : 16),
+                    decoration: _schoolLocationDecoration(
+                      isMobile,
+                      suffixIcon: const Icon(Icons.search),
+                    ).copyWith(hintText: 'Search or select district'),
+                    onChanged: (value) {
+                      final nextDistrict = value.trim();
+                      final previousDistrictId =
+                          controller.selectedDistrictId.value;
+                      controller.createFormDistrictTextController.text = value;
+                      if (nextDistrict.isEmpty) {
+                        controller.setCreateFormDistrict('');
+                      } else {
+                        controller.createFormCityAcknowledgedNew.value = false;
+                      }
+                      if (nextDistrict.isNotEmpty &&
+                          previousDistrictId !=
+                              controller.selectedDistrictId.value &&
+                          controller.selectedCity.value.trim().isNotEmpty) {
+                        controller.selectedCity.value = '';
+                        controller.createFormCityTextController.clear();
+                        controller.pincodeController.clear();
+                      }
+                      controller.createFormDistrictDraftRevision.value++;
+                    },
+                    onFieldSubmitted: (_) =>
+                        controller.setCreateFormDistrict(textController.text),
+                    validator: (_) => controller.validateDistrictField(),
+                  );
+                },
+            optionsViewBuilder: (context, onSelected, options) {
+              final opts = options.toList(growable: false);
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxHeight: 240,
+                      minWidth: 280,
+                    ),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: opts.length,
+                      itemBuilder: (context, index) {
+                        final option = opts[index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(option.districtName),
+                          onTap: () => onSelected(option),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        }),
+      ],
+    );
+  }
 
-          return CitySearchField(
-            textEditingController: controller.createFormCityTextController,
-            focusNode: controller.createFormCityFocusNode,
-            cities: availableCities,
-            decorationBuilder: ({Widget? suffixIcon}) =>
-                _schoolLocationDecoration(isMobile, suffixIcon: suffixIcon),
-            isMobile: isMobile,
-            hintText: 'Search or select city',
-            onCityId: controller.setCreateFormCity,
-            validator: (_) {
-              if (controller.selectedStateId.value <= 0) {
-                return 'Please select state first';
+  Widget _buildVillageSearchField(
+    BuildContext context,
+    SchoolController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MandatoryAwareLabel(
+          label: 'City/Town/Village :',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: isMobile ? 14 : 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Obx(() {
+          controller.createFormDistrictDraftRevision.value;
+          if (controller.selectedStateId.value <= 0) {
+            return TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: _schoolLocationDecoration(
+                isMobile,
+              ).copyWith(hintText: 'Select state first'),
+            );
+          }
+
+          final districtDraft = controller.createFormDistrictTextController.text
+              .trim();
+          final districtCommitted = controller.selectedDistrictId.value > 0;
+          final hasDistrict = districtDraft.isNotEmpty || districtCommitted;
+
+          if (hasDistrict && controller.isLoadingCreateFormVillages.value) {
+            return TextFormField(
+              readOnly: true,
+              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              decoration: _schoolLocationDecoration(
+                isMobile,
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ).copyWith(hintText: 'Loading villages...'),
+            );
+          }
+
+          final availableVillages = (hasDistrict
+                  ? controller.createFormVillages
+                  : controller.cities.where(
+                      (c) => c.stateId == controller.selectedStateId.value,
+                    ))
+              .toList()
+            ..sort((a, b) => a.cityName.compareTo(b.cityName));
+
+          return Autocomplete<CityModel>(
+            optionsBuilder: (TextEditingValue value) {
+              final q = value.text.trim().toLowerCase();
+              if (q.isEmpty) {
+                return availableVillages;
               }
-              if (controller.selectedCity.value.isEmpty) {
-                return 'Please select city';
-              }
-              return null;
+              return availableVillages.where((c) {
+                final village = (c.village ?? c.description ?? '')
+                    .toLowerCase();
+                return c.cityName.toLowerCase().contains(q) ||
+                    village.contains(q) ||
+                    c.pincode.toLowerCase().contains(q);
+              });
+            },
+            displayStringForOption: _villageSelectedDisplay,
+            // Persists city row id as createFormSelectedCityId for save/update cityId.
+            onSelected: (CityModel city) =>
+                controller.setCreateFormCity(city.id),
+            fieldViewBuilder:
+                (context, textController, focusNode, onFieldSubmitted) {
+                  if (controller.createFormCityTextController.text !=
+                      textController.text) {
+                    textController.value = TextEditingValue(
+                      text: controller.createFormCityTextController.text,
+                      selection: TextSelection.collapsed(
+                        offset:
+                            controller.createFormCityTextController.text.length,
+                      ),
+                    );
+                  }
+
+                  return TextFormField(
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    controller: textController,
+                    focusNode: focusNode,
+                    style: TextStyle(fontSize: isMobile ? 14 : 16),
+                    decoration: _schoolLocationDecoration(
+                      isMobile,
+                      suffixIcon: const Icon(Icons.search),
+                    ).copyWith(
+                      hintText: 'Search or enter city/town/village',
+                    ),
+                    onChanged: controller.setCreateFormCityName,
+                    onFieldSubmitted: controller.setCreateFormCityName,
+                    validator: controller.validateCityField,
+                  );
+                },
+            optionsViewBuilder: (context, onSelected, options) {
+              final opts = options.toList(growable: false);
+              final query = controller.createFormCityTextController.text.trim();
+              final qLower = query.toLowerCase();
+              final hasExact =
+                  query.isNotEmpty &&
+                  opts.any((c) {
+                    final cityOnly = c.cityName.trim().toLowerCase() == qLower;
+                    final fullDisplay =
+                        _villageSelectedDisplay(c).toLowerCase() == qLower;
+                    return cityOnly || fullDisplay;
+                  });
+              final showAdd = query.isNotEmpty && !hasExact;
+
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxHeight: 280,
+                      minWidth: 360,
+                    ),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: opts.length + (showAdd ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (showAdd && index == 0) {
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.add, size: 18),
+                            title: Text('Add "$query" as city/town/village'),
+                            onTap: () {
+                              controller.confirmCreateFormNewCity(query);
+                              FocusScope.of(context).unfocus();
+                            },
+                          );
+                        }
+
+                        final city = opts[showAdd ? index - 1 : index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            _villageSuggestionLine(city),
+                            style: TextStyle(fontSize: isMobile ? 13.5 : 14.5),
+                          ),
+                          onTap: () => onSelected(city),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
             },
           );
         }),
@@ -527,8 +1046,8 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Pincode :',
+        MandatoryAwareLabel(
+          label: 'Pincode :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -536,7 +1055,13 @@ class SchoolCreateScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           controller: controller.pincodeController,
+          onChanged: (value) {
+            if (value.trim().isEmpty) {
+              controller.clearCreateFormCitySelection();
+            }
+          },
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: EdgeInsets.symmetric(
@@ -551,18 +1076,7 @@ class SchoolCreateScreen extends StatelessWidget {
           style: TextStyle(fontSize: isMobile ? 14 : 16),
           keyboardType: TextInputType.number,
           maxLength: 6,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter pincode';
-            }
-            if (value.length != 6) {
-              return 'Pincode must be 6 digits';
-            }
-            if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
-              return 'Pincode must contain only numbers';
-            }
-            return null;
-          },
+          validator: controller.validatePincodeField,
         ),
       ],
     );
@@ -577,8 +1091,8 @@ class SchoolCreateScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Institution Type :',
+        MandatoryAwareLabel(
+          label: 'Institution Type * :',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isMobile ? 14 : 16,
@@ -916,7 +1430,9 @@ class SchoolCreateScreen extends StatelessWidget {
         title: Text('Add New Category for $institutionTypeName'),
         content: Form(
           key: formKey,
+          autovalidateMode: AutovalidateMode.disabled,
           child: TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: categoryController,
             decoration: const InputDecoration(
               labelText: 'Category Name',

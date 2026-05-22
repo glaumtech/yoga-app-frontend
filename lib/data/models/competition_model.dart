@@ -22,7 +22,10 @@ class CompetitionModel {
   final List<int>? stageIds; // e.g., [1, 2, 3] - for API submission
   final Map<String, List<int>>?
   stageGroups; // e.g., {"1": [1, 2], "2": [3, 4]} - key is stage ID as string, value is list of group IDs
+  /// Display map from API `stageGroups`: stage name -> group names.
+  final Map<String, List<String>>? stageGroupLabels;
   final String? brochureUrl;
+  final String? registrationUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -48,12 +51,43 @@ class CompetitionModel {
     this.stages,
     this.stageIds,
     this.stageGroups,
+    this.stageGroupLabels,
     this.brochureUrl,
+    this.registrationUrl,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
     this.updatedBy,
   });
+
+  static Map<String, List<String>>? _parseStageGroupLabelMap(dynamic raw) {
+    if (raw is! Map) return null;
+    final result = <String, List<String>>{};
+    for (final entry in raw.entries) {
+      final values = entry.value;
+      if (values is! List || values.isEmpty) continue;
+      final labels = <String>[];
+      var hasNonNumericLabel = false;
+      for (final item in values) {
+        if (item is String) {
+          final text = item.trim();
+          if (text.isEmpty) continue;
+          labels.add(text);
+          hasNonNumericLabel = true;
+        } else if (item is! int && int.tryParse(item.toString()) == null) {
+          final text = item.toString().trim();
+          if (text.isNotEmpty) {
+            labels.add(text);
+            hasNonNumericLabel = true;
+          }
+        }
+      }
+      if (hasNonNumericLabel && labels.isNotEmpty) {
+        result[entry.key.toString()] = labels;
+      }
+    }
+    return result.isEmpty ? null : result;
+  }
 
   factory CompetitionModel.fromJson(Map<String, dynamic> json) {
     return CompetitionModel(
@@ -177,6 +211,7 @@ class CompetitionModel {
               ),
             )
           : null,
+      stageGroupLabels: _parseStageGroupLabelMap(json['stageGroups']),
       categoryAmounts: json['categoryAmounts'] != null
           ? Map<String, double>.from(
               (json['categoryAmounts'] as Map).map(
@@ -202,6 +237,7 @@ class CompetitionModel {
           : null,
       brochureUrl:
           json['brochureUrl']?.toString() ?? json['brochure_url']?.toString(),
+      registrationUrl: json['registrationUrl']?.toString(),
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])
@@ -283,7 +319,9 @@ class CompetitionModel {
     List<String>? stages,
     List<int>? stageIds,
     Map<String, List<int>>? stageGroups,
+    Map<String, List<String>>? stageGroupLabels,
     String? brochureUrl,
+    String? registrationUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -309,13 +347,34 @@ class CompetitionModel {
       stages: stages ?? this.stages,
       stageIds: stageIds ?? this.stageIds,
       stageGroups: stageGroups ?? this.stageGroups,
+      stageGroupLabels: stageGroupLabels ?? this.stageGroupLabels,
       brochureUrl: brochureUrl ?? this.brochureUrl,
+      registrationUrl: registrationUrl ?? this.registrationUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,
       updatedBy: updatedBy ?? this.updatedBy,
     );
   }
+
+  /// Whether [date] (calendar day) falls within [eventStartDate]..[eventEndDate].
+  bool containsEventDate(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final start = DateTime(
+      eventStartDate.year,
+      eventStartDate.month,
+      eventStartDate.day,
+    );
+    final end = DateTime(
+      eventEndDate.year,
+      eventEndDate.month,
+      eventEndDate.day,
+    );
+    return !day.isBefore(start) && !day.isAfter(end);
+  }
+
+  /// True when today's date is on or between event start and end (inclusive).
+  bool get isEventOngoing => containsEventDate(DateTime.now());
 }
 
 /// Lightweight model for public competition list (home screen).
@@ -333,6 +392,7 @@ class HomeCompetitionModel {
   final String? brochureUrl;
   final String? brochureFilePath;
   final String status;
+  final String? registrationUrl;
 
   HomeCompetitionModel({
     this.id,
@@ -347,6 +407,7 @@ class HomeCompetitionModel {
     this.brochureUrl,
     this.brochureFilePath,
     this.status = 'upcoming',
+    this.registrationUrl,
   });
 
   factory HomeCompetitionModel.fromJson(Map<String, dynamic> json) {
@@ -376,6 +437,7 @@ class HomeCompetitionModel {
       brochureUrl: json['brochureUrl']?.toString(),
       brochureFilePath: json['brochureFilePath']?.toString(),
       status: json['status']?.toString() ?? 'upcoming',
+      registrationUrl: json['registrationUrl']?.toString(),
     );
   }
 

@@ -9,9 +9,10 @@ class CompetitionOptionModel {
       id: json['id'] is int
           ? json['id']
           : int.tryParse(json['id'].toString()) ?? 0,
-      name: json['name']?.toString() ?? 
-            json['stageName']?.toString() ?? 
-            json['categoryName']?.toString() ?? 
+      name: json['name']?.toString() ??
+            json['stageName']?.toString() ??
+            json['categoryName']?.toString() ??
+            json['groupName']?.toString() ??
             '',
     );
   }

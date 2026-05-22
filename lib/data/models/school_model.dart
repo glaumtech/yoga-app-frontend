@@ -8,10 +8,17 @@ class SchoolModel {
   final String? stateCode;
   final int? cityId;
   final String? cityName;
-  final String? district;
+  final int? districtId;
+  final String? districtName;
+  final String? village;
   final String? state; // Legacy field for backward compatibility
   final String pincode;
   final String? email;
+  final String? website;
+  final String? landLine;
+  final String? mobile;
+  final String? contributorName;
+  final String? contributorMobileNo;
   final String
   institutionType; // 'PRIVATE_SCHOOL', 'GOVT_AIDED_SCHOOL', etc. or UI format
   final String? institutionTypeDisplayName;
@@ -32,10 +39,17 @@ class SchoolModel {
     this.stateCode,
     this.cityId,
     this.cityName,
-    this.district,
+    this.districtId,
+    this.districtName,
+    this.village,
     this.state,
     required this.pincode,
     this.email,
+    this.website,
+    this.landLine,
+    this.mobile,
+    this.contributorName,
+    this.contributorMobileNo,
     required this.institutionType,
     this.institutionTypeDisplayName,
     this.institutionCategoryDisplayName,
@@ -81,10 +95,29 @@ class SchoolModel {
           ? int.tryParse(json['cityId'])
           : null,
       cityName: json['cityName']?.toString(),
-      district: json['district']?.toString() ?? json['cityName']?.toString(),
+      districtId: json['districtId'] is int
+          ? json['districtId'] as int
+          : json['districtId'] is String
+          ? int.tryParse(json['districtId'])
+          : null,
+      districtName: json['districtName']?.toString(),
+      village: json['village']?.toString(),
       state: json['stateName']?.toString() ?? json['state']?.toString(),
       pincode: json['pincode']?.toString() ?? '',
       email: json['email']?.toString() ?? json['emailId']?.toString(),
+      website: json['website']?.toString() ?? json['websiteUrl']?.toString(),
+      landLine:
+          json['landLine']?.toString() ??
+          json['landline']?.toString() ??
+          json['landLineNo']?.toString(),
+      mobile:
+          json['mobile']?.toString() ??
+          json['mobileNo']?.toString() ??
+          json['institutionMobile']?.toString(),
+      contributorName: json['contributorName']?.toString(),
+      contributorMobileNo:
+          json['contributorMobileNo']?.toString() ??
+          json['contributorMobile']?.toString(),
       institutionType:
           json['institutionType']?.toString() ??
           json['institution_type']?.toString() ??
@@ -120,9 +153,16 @@ class SchoolModel {
       'institutionShortName': institutionShortName,
       'address': address,
       if (stateId != null) 'stateId': stateId,
+      if (districtId != null) 'districtId': districtId,
       if (cityId != null) 'cityId': cityId,
       'pincode': pincode,
       if (email != null) 'email': email,
+      if (website != null) 'website': website,
+      if (landLine != null) 'landLine': landLine,
+      if (mobile != null) 'mobile': mobile,
+      if (contributorName != null) 'contributorName': contributorName,
+      if (contributorMobileNo != null)
+        'contributorMobileNo': contributorMobileNo,
       'institutionType': institutionType,
       if (includeMetadata && createdAt != null)
         'createdAt': createdAt!.toIso8601String(),
@@ -141,10 +181,17 @@ class SchoolModel {
     String? stateCode,
     int? cityId,
     String? cityName,
-    String? district,
+    int? districtId,
+    String? districtName,
+    String? village,
     String? state,
     String? pincode,
     String? email,
+    String? website,
+    String? landLine,
+    String? mobile,
+    String? contributorName,
+    String? contributorMobileNo,
     String? institutionType,
     String? institutionTypeDisplayName,
     String? institutionCategoryDisplayName,
@@ -164,10 +211,17 @@ class SchoolModel {
       stateCode: stateCode ?? this.stateCode,
       cityId: cityId ?? this.cityId,
       cityName: cityName ?? this.cityName,
-      district: district ?? this.district,
+      districtId: districtId ?? this.districtId,
+      districtName: districtName ?? this.districtName,
+      village: village ?? this.village,
       state: state ?? this.state,
       pincode: pincode ?? this.pincode,
       email: email ?? this.email,
+      website: website ?? this.website,
+      landLine: landLine ?? this.landLine,
+      mobile: mobile ?? this.mobile,
+      contributorName: contributorName ?? this.contributorName,
+      contributorMobileNo: contributorMobileNo ?? this.contributorMobileNo,
       institutionType: institutionType ?? this.institutionType,
       institutionTypeDisplayName:
           institutionTypeDisplayName ?? this.institutionTypeDisplayName,

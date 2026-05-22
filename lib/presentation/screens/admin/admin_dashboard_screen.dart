@@ -7,18 +7,38 @@ import '../../controllers/competition_controller.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 
-class AdminDashboardScreen extends StatelessWidget {
+class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final competitionController = Get.isRegistered<CompetitionController>()
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  CompetitionController _competitionController() {
+    return Get.isRegistered<CompetitionController>()
         ? Get.find<CompetitionController>()
         : Get.put(CompetitionController());
-    if (competitionController.competitions.isEmpty &&
-        !competitionController.isLoading.value) {
-      competitionController.loadCompetitions();
-    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Never call loadCompetitions from build(): it updates Rx (isLoading, etc.)
+    // and can finish in the same frame on web, causing
+    // "setState/markNeedsBuild called during build" on Obx ancestors.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final c = _competitionController();
+      if (c.competitions.isEmpty && !c.isLoading.value) {
+        c.loadCompetitions();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final competitionController = _competitionController();
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;

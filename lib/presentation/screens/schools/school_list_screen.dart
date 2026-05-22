@@ -1,15 +1,21 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/custom_loader.dart';
-import '../../widgets/location/city_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
+import '../../../data/models/district_model.dart';
 import '../../../data/models/school_model.dart';
 
 class SchoolListScreen extends StatelessWidget {
   const SchoolListScreen({super.key});
+
+  /// Minimum width so date/action columns are not squeezed (sidebar layouts).
+  static const double _kMinInstitutionTableWidth = 1120;
 
   @override
   Widget build(BuildContext context) {
@@ -126,18 +132,18 @@ class SchoolListScreen extends StatelessWidget {
     });
   }
 
-  Widget _buildSchoolListCityFilter(
+  Widget _buildSchoolListDistrictFilter(
     SchoolController controller,
     bool isMobile,
   ) {
     return Obx(() {
-      if (controller.isLoadingCities.value) {
+      if (controller.isLoadingStateDistricts.value) {
         return TextFormField(
           readOnly: true,
           style: TextStyle(fontSize: isMobile ? 14 : 16),
           decoration: _schoolListFilterDecoration(
             isMobile,
-            'Filter by City',
+            'Filter by District',
             suffixIcon: const Padding(
               padding: EdgeInsets.all(12),
               child: SizedBox(
@@ -155,28 +161,86 @@ class SchoolListScreen extends StatelessWidget {
           style: TextStyle(fontSize: isMobile ? 14 : 16),
           decoration: _schoolListFilterDecoration(
             isMobile,
-            'Filter by City',
+            'Filter by District',
           ).copyWith(hintText: 'Select state first'),
         );
       }
-      final cityList =
-          controller.cities
-              .where((c) => c.stateId == controller.selectedStateId.value)
-              .toList()
-            ..sort((a, b) => a.cityName.compareTo(b.cityName));
-      return CitySearchField(
-        textEditingController: controller.listFilterCityTextController,
-        focusNode: controller.listFilterCityFocusNode,
-        cities: cityList,
-        decorationBuilder: ({Widget? suffixIcon}) =>
-            _schoolListFilterDecoration(
-              isMobile,
-              'Filter by City',
-              suffixIcon: suffixIcon,
+      final districts = List<DistrictModel>.from(controller.stateDistrictList);
+
+      return Autocomplete<DistrictModel>(
+        displayStringForOption: (d) => d.districtName,
+        optionsBuilder: (TextEditingValue value) {
+          final q = value.text.trim().toLowerCase();
+          if (q.isEmpty) return districts;
+          return districts.where(
+            (d) => d.districtName.toLowerCase().contains(q),
+          );
+        },
+        onSelected: (value) =>
+            controller.setListFilterDistrict(value.districtName),
+        fieldViewBuilder:
+            (context, textController, focusNode, onFieldSubmitted) {
+              if (controller.listFilterCityTextController.text !=
+                  textController.text) {
+                textController.value = TextEditingValue(
+                  text: controller.listFilterCityTextController.text,
+                  selection: TextSelection.collapsed(
+                    offset: controller.listFilterCityTextController.text.length,
+                  ),
+                );
+              }
+              return TextFormField(
+                controller: textController,
+                focusNode: focusNode,
+                style: TextStyle(fontSize: isMobile ? 14 : 16),
+                decoration: _schoolListFilterDecoration(
+                  isMobile,
+                  'Filter by District',
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () {
+                      controller.setListFilterDistrict(textController.text);
+                    },
+                  ),
+                ),
+                onChanged: (value) {
+                  controller.listFilterCityTextController.text = value;
+                  if (value.trim().isEmpty) {
+                    controller.setListFilterDistrict('');
+                  }
+                },
+                onFieldSubmitted: (_) =>
+                    controller.setListFilterDistrict(textController.text),
+              );
+            },
+        optionsViewBuilder: (context, onSelected, options) {
+          final opts = options.toList(growable: false);
+          return Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              elevation: 4,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxHeight: 240,
+                  minWidth: 280,
+                ),
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  shrinkWrap: true,
+                  itemCount: opts.length,
+                  itemBuilder: (context, index) {
+                    final option = opts[index];
+                    return ListTile(
+                      dense: true,
+                      title: Text(option.districtName),
+                      onTap: () => onSelected(option),
+                    );
+                  },
+                ),
+              ),
             ),
-        isMobile: isMobile,
-        hintText: 'Search city',
-        onCityId: controller.setListFilterCity,
+          );
+        },
       );
     });
   }
@@ -195,7 +259,7 @@ class SchoolListScreen extends StatelessWidget {
             children: [
               _buildSchoolListStateFilter(controller, isMobile),
               SizedBox(height: isMobile ? 12 : 16),
-              _buildSchoolListCityFilter(controller, isMobile),
+              _buildSchoolListDistrictFilter(controller, isMobile),
               SizedBox(height: isMobile ? 12 : 16),
               Obx(() {
                 String? currentValue;
@@ -238,7 +302,9 @@ class SchoolListScreen extends StatelessWidget {
                 child: _buildSchoolListStateFilter(controller, isMobile),
               ),
               SizedBox(width: isTablet ? 12 : 16),
-              Expanded(child: _buildSchoolListCityFilter(controller, isMobile)),
+              Expanded(
+                child: _buildSchoolListDistrictFilter(controller, isMobile),
+              ),
               SizedBox(width: isTablet ? 12 : 16),
               Expanded(
                 child: Obx(() {
@@ -389,6 +455,8 @@ class SchoolListScreen extends StatelessWidget {
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           controller.searchQuery.value = '';
+                          controller.searchController.clear();
+                          FocusScope.of(context).unfocus();
                           controller.loadSchools(resetPage: true);
                         },
                         tooltip: 'Clear',
@@ -405,26 +473,40 @@ class SchoolListScreen extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(width: isMobile ? 8 : 12),
-            IconButton(
-              icon: const Icon(Icons.print),
-              onPressed: () => controller.generateReport('all'),
-              tooltip: 'Print Report',
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.grey[100],
-                padding: const EdgeInsets.all(12),
-              ),
-            ),
+            Obx(() {
+              final permissionStore = Get.isRegistered<PermissionStore>()
+                  ? Get.find<PermissionStore>()
+                  : Get.put(PermissionStore());
+              if (!permissionStore.has('SHOW_INSTITUTION_DOWNLOAD_ICON')) {
+                return const SizedBox.shrink();
+              }
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: isMobile ? 8 : 12),
+                  IconButton(
+                    icon: const Icon(Icons.print),
+                    onPressed: () => controller.generateReport('all'),
+                    tooltip: 'Download / print institutions report',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey[100],
+                      padding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
+              );
+            }),
             SizedBox(width: isMobile ? 8 : 12),
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: () {
                 // Reset all filter options
                 controller.reportState.value = '';
-                controller.reportDistrict.value = '';
+                controller.reportDistrictId.value = 0;
                 controller.reportInstitutionTypeId.value = 0;
                 controller.selectedStateId.value = 0;
                 controller.cities.clear();
+                controller.stateDistrictList.clear();
                 controller.listFilterStateTextController.clear();
                 controller.listFilterCityTextController.clear();
                 controller.searchQuery.value = '';
@@ -601,24 +683,31 @@ class SchoolListScreen extends StatelessWidget {
       onRefresh: () => controller.loadSchools(),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth - 32;
+          var viewportWidth = constraints.maxWidth;
+          if (!viewportWidth.isFinite || viewportWidth <= 0) {
+            viewportWidth = MediaQuery.sizeOf(context).width;
+          }
+          final tableWidth = math.max(
+            _kMinInstitutionTableWidth,
+            viewportWidth,
+          );
           return SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: Padding(
-              padding: const EdgeInsets.all(0),
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               child: SizedBox(
                 width: tableWidth,
                 child: Table(
                   border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                  columnWidths: {
-                    0: const FixedColumnWidth(80),
+                  columnWidths: const {
+                    0: FixedColumnWidth(80),
                     1: FlexColumnWidth(2.5),
                     2: FlexColumnWidth(2.5),
-                    3: FlexColumnWidth(1.5), // Reduced TYPE & CATEGORY width
+                    3: FlexColumnWidth(1.5),
                     4: FlexColumnWidth(1.5),
-                    5: FlexColumnWidth(1.2),
-                    6: FlexColumnWidth(1.2),
-                    7: FlexColumnWidth(0.8),
+                    5: FixedColumnWidth(190),
+                    6: FixedColumnWidth(190),
+                    7: FixedColumnWidth(108),
                   },
                   children: [
                     // Header Row
@@ -693,13 +782,23 @@ class SchoolListScreen extends StatelessWidget {
                           _buildUpdatedCellWidget(school),
                           TableCell(
                             child: Padding(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.edit, size: 18),
                                     color: Colors.blue,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 36,
+                                      minHeight: 36,
+                                    ),
                                     onPressed: () {
                                       if (school.id != null) {
                                         controller.loadSchoolForEdit(
@@ -711,6 +810,12 @@ class SchoolListScreen extends StatelessWidget {
                                   IconButton(
                                     icon: const Icon(Icons.delete, size: 18),
                                     color: Colors.red,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 36,
+                                      minHeight: 36,
+                                    ),
                                     onPressed: () {
                                       if (school.id != null) {
                                         _showDeleteDialog(
@@ -747,8 +852,9 @@ class SchoolListScreen extends StatelessWidget {
           fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
           fontSize: isHeader ? 14 : 13,
         ),
-        softWrap: true,
-        maxLines: null,
+        softWrap: !isHeader,
+        overflow: isHeader ? TextOverflow.visible : null,
+        maxLines: isHeader ? 1 : null,
       ),
     );
   }
@@ -836,8 +942,9 @@ class SchoolListScreen extends StatelessWidget {
                     fontSize: 14,
                     color: isActive ? AppTheme.primaryColor : Colors.black87,
                   ),
-                  softWrap: true,
-                  maxLines: null,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
                 ),
               ),
               if (isSortable) ...[
@@ -955,12 +1062,15 @@ class SchoolListScreen extends StatelessWidget {
       parts.add(school.address);
     }
 
-    // Combine district, state, and pincode on the same line without labels
+    // Location line: district, city, village (when present), state, pincode
     final locationParts = <String>[];
-    if (school.district != null && school.district!.isNotEmpty) {
-      locationParts.add(school.district!);
-    } else if (school.cityName != null && school.cityName!.isNotEmpty) {
-      locationParts.add(school.cityName!);
+    for (final part in [school.districtName, school.cityName, school.village]) {
+      if (part != null && part.trim().isNotEmpty) {
+        final t = part.trim();
+        if (locationParts.isEmpty || locationParts.last != t) {
+          locationParts.add(t);
+        }
+      }
     }
     if (school.stateName != null && school.stateName!.isNotEmpty) {
       locationParts.add(school.stateName!);

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/repositories/competition_repository.dart';
@@ -12,8 +13,44 @@ import '../../data/models/competition_option_model.dart';
 class CompetitionController extends GetxController {
   final CompetitionRepository _repository = CompetitionRepository();
 
-  // Form controllers
-  final formKey = GlobalKey<FormState>();
+  // Form controllers — keys are replaced when the form subtree is (re)shown so one
+  // GlobalKey is never attached to two widgets during list/form transitions.
+  GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  GlobalKey<FormState> get formKey => _formKey;
+
+  final RxInt formKeyRevision = 0.obs;
+
+  /// Bumped when any competition date changes so date [FormField]s rebuild.
+  final RxInt competitionDatesRevision = 0.obs;
+
+  static const String dateFieldStart = 'start';
+  static const String dateFieldEnd = 'end';
+  static const String dateFieldDisplayAd = 'displayAd';
+
+  final RxSet<String> touchedCompetitionDateFields = <String>{}.obs;
+
+  void _refreshFormKeys() {
+    _formKey = GlobalKey<FormState>();
+    formKeyRevision.value++;
+  }
+
+  void notifyCompetitionDatesChanged() {
+    competitionDatesRevision.value++;
+  }
+
+  void markCompetitionDateFieldTouched(String fieldKey) {
+    touchedCompetitionDateFields.add(fieldKey);
+  }
+
+  bool shouldShowCompetitionDateError(String fieldKey) {
+    return hasAttemptedSubmit.value ||
+        touchedCompetitionDateFields.contains(fieldKey);
+  }
+
+  void clearCompetitionDateFieldTouches() {
+    touchedCompetitionDateFields.clear();
+  }
+
   final competitionNameController = TextEditingController();
   final descriptionController = TextEditingController();
   final addressController = TextEditingController();
@@ -37,6 +74,10 @@ class CompetitionController extends GetxController {
   final Rx<CompetitionModel?> competitionToEdit = Rx<CompetitionModel?>(
     null,
   ); // Competition being edited
+
+  /// Set after successful create; used to show registration QR dialog.
+  final Rx<CompetitionModel?> lastSavedCompetitionForQr =
+      Rx<CompetitionModel?>(null);
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -160,6 +201,99 @@ class CompetitionController extends GetxController {
     } finally {
       isLoadingHomeCompetitions.value = false;
     }
+  }
+
+  final RxBool isLoadingRegistrationCompetition = false.obs;
+
+  /// Loads full competition data for the public/admin registration form.
+  /// Safe after logout: does not rely on a prior [loadCompetitions] admin list call.
+  Future<void> ensureCompetitionLoadedForRegistration(String competitionId) async {
+    final id = competitionId.trim();
+    if (id.isEmpty) return;
+
+    final existing = competitions.firstWhereOrNull((c) => c.id == id);
+    final hasGroupData = existing != null &&
+        ((existing.stageGroups != null && existing.stageGroups!.isNotEmpty) ||
+            (existing.stageGroupLabels != null &&
+                existing.stageGroupLabels!.isNotEmpty));
+    if (hasGroupData) {
+      return;
+    }
+
+    if (stageOptions.isEmpty || groupOptions.isEmpty) {
+      await loadOptions();
+    }
+
+    isLoadingRegistrationCompetition.value = true;
+    try {
+      final numericId = int.tryParse(id);
+      if (numericId != null) {
+        final response = await _repository.getCompetitionById(numericId);
+        if (response.success && response.data != null) {
+          _upsertCompetition(response.data!);
+          return;
+        }
+      }
+
+      final home = homeCompetitions.firstWhereOrNull(
+        (c) => c.id?.toString() == id,
+      );
+      if (home != null) {
+        _upsertCompetition(_competitionFromHome(home, existing));
+      }
+    } catch (e) {
+      print('Error loading competition for registration: $e');
+    } finally {
+      isLoadingRegistrationCompetition.value = false;
+    }
+  }
+
+  void _upsertCompetition(CompetitionModel competition) {
+    final compId = competition.id;
+    if (compId == null || compId.isEmpty) {
+      competitions.add(competition);
+    } else {
+      final index = competitions.indexWhere((c) => c.id == compId);
+      if (index >= 0) {
+        competitions[index] = competition;
+      } else {
+        competitions.add(competition);
+      }
+    }
+    competitions.refresh();
+  }
+
+  CompetitionModel _competitionFromHome(
+    HomeCompetitionModel home,
+    CompetitionModel? existing,
+  ) {
+    DateTime parseDate(String? value) {
+      if (value == null || value.isEmpty) return DateTime.now();
+      return DateTime.tryParse(value) ?? DateTime.now();
+    }
+
+    return CompetitionModel(
+      id: home.id?.toString(),
+      competitionName: home.competitionName,
+      description: home.description,
+      address: home.address,
+      eventStartDate: parseDate(home.eventStartDate),
+      eventEndDate: parseDate(home.eventEndDate),
+      displayAdFrom: home.displayAdFrom != null
+          ? parseDate(home.displayAdFrom)
+          : null,
+      categories: home.categories.isNotEmpty
+          ? List<String>.from(home.categories)
+          : existing?.categories,
+      categoryIds: existing?.categoryIds,
+      categoryAmounts: home.categoryAmounts.isNotEmpty
+          ? Map<String, double>.from(home.categoryAmounts)
+          : existing?.categoryAmounts,
+      stageGroups: existing?.stageGroups,
+      stageIds: existing?.stageIds,
+      stages: existing?.stages,
+      brochureUrl: home.brochureUrl ?? existing?.brochureUrl,
+    );
   }
 
   void onInit() {
@@ -749,30 +883,113 @@ class CompetitionController extends GetxController {
     return assignedStage == null || assignedStage == currentStageName;
   }
 
+  static DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  String? validateEventStartDate(
+    DateTime? value, {
+    bool requireWhenEmpty = false,
+  }) {
+    if (value == null) {
+      if (requireWhenEmpty ||
+          shouldShowCompetitionDateError(dateFieldStart)) {
+        return 'Please select event start date';
+      }
+      return null;
+    }
+    final start = _dateOnly(value);
+    final end = eventEndDate.value;
+    if (end != null && _dateOnly(end).isBefore(start)) {
+      return 'Start date must be on or before end date';
+    }
+    final ad = displayAdFrom.value;
+    if (ad != null && _dateOnly(ad).isAfter(start)) {
+      return 'Start date must be on or after display ad date';
+    }
+    return null;
+  }
+
+  String? validateEventEndDate(
+    DateTime? value, {
+    bool requireWhenEmpty = false,
+  }) {
+    if (value == null) {
+      if (requireWhenEmpty || shouldShowCompetitionDateError(dateFieldEnd)) {
+        return 'Please select event end date';
+      }
+      return null;
+    }
+    final end = _dateOnly(value);
+    final start = eventStartDate.value;
+    if (start != null && end.isBefore(_dateOnly(start))) {
+      return 'End date must be on or after start date';
+    }
+    return null;
+  }
+
+  String? validateDisplayAdFrom(
+    DateTime? value, {
+    bool requireWhenEmpty = false,
+  }) {
+    if (value == null) {
+      if (requireWhenEmpty ||
+          shouldShowCompetitionDateError(dateFieldDisplayAd)) {
+        return 'Please select display ad from date';
+      }
+      return null;
+    }
+    final ad = _dateOnly(value);
+    final start = eventStartDate.value;
+    if (start != null && ad.isAfter(_dateOnly(start))) {
+      return 'Display ad date must be on or before event start date';
+    }
+    return null;
+  }
+
+  String? validateCompetitionDates({bool forSubmit = false}) {
+    return validateEventStartDate(
+          eventStartDate.value,
+          requireWhenEmpty: forSubmit,
+        ) ??
+        validateEventEndDate(
+          eventEndDate.value,
+          requireWhenEmpty: forSubmit,
+        ) ??
+        validateDisplayAdFrom(
+          displayAdFrom.value,
+          requireWhenEmpty: forSubmit,
+        );
+  }
+
+  void alertCompetitionDateValidationIssue() {
+    final message = validateCompetitionDates();
+    if (message == null) return;
+    final hasAnyDate =
+        eventStartDate.value != null ||
+        eventEndDate.value != null ||
+        displayAdFrom.value != null;
+    if (!hasAnyDate) return;
+    Get.snackbar(
+      'Invalid date',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 4),
+    );
+  }
+
   // Create competition
   Future<bool> createCompetition() async {
     try {
       hasAttemptedSubmit.value = true;
+      notifyCompetitionDatesChanged();
       if (!formKey.currentState!.validate()) {
         return false;
       }
 
-      // Validate all mandatory fields
-      if (eventStartDate.value == null || eventEndDate.value == null) {
-        errorMessage.value = 'Please select event start and end dates';
-        Get.snackbar('Error', errorMessage.value);
-        return false;
-      }
-
-      if (displayAdFrom.value == null) {
-        errorMessage.value = 'Please select display ad from date';
-        Get.snackbar('Error', errorMessage.value);
-        return false;
-      }
-
-      if (eventEndDate.value!.isBefore(eventStartDate.value!)) {
-        errorMessage.value = 'End date must be after start date';
-        Get.snackbar('Error', errorMessage.value);
+      final dateError = validateCompetitionDates(forSubmit: true);
+      if (dateError != null) {
+        errorMessage.value = dateError;
+        Get.snackbar('Error', dateError);
         return false;
       }
 
@@ -836,24 +1053,31 @@ class CompetitionController extends GetxController {
         brochureBytes: brochureBytes.value,
       );
 
-      if (response.success) {
+      if (response.success && response.data != null) {
+        lastSavedCompetitionForQr.value = response.data;
+        await loadCompetitions(resetPage: true);
         clearForm();
         Get.snackbar('Success', 'Competition created successfully');
-        // Switch to list view after successful creation
         toggleViewMode(true);
         return true;
       } else {
+        lastSavedCompetitionForQr.value = null;
         errorMessage.value = response.message ?? 'Failed to create competition';
         Get.snackbar('Error', errorMessage.value);
         return false;
       }
     } catch (e) {
+      lastSavedCompetitionForQr.value = null;
       errorMessage.value = 'Error creating competition: ${e.toString()}';
       Get.snackbar('Error', errorMessage.value);
       return false;
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void clearLastSavedCompetitionForQr() {
+    lastSavedCompetitionForQr.value = null;
   }
 
   // Update competition
@@ -866,26 +1090,15 @@ class CompetitionController extends GetxController {
       }
 
       hasAttemptedSubmit.value = true;
+      notifyCompetitionDatesChanged();
       if (!formKey.currentState!.validate()) {
         return false;
       }
 
-      // Validate all mandatory fields
-      if (eventStartDate.value == null || eventEndDate.value == null) {
-        errorMessage.value = 'Please select event start and end dates';
-        Get.snackbar('Error', errorMessage.value);
-        return false;
-      }
-
-      if (displayAdFrom.value == null) {
-        errorMessage.value = 'Please select display ad from date';
-        Get.snackbar('Error', errorMessage.value);
-        return false;
-      }
-
-      if (eventEndDate.value!.isBefore(eventStartDate.value!)) {
-        errorMessage.value = 'End date must be after start date';
-        Get.snackbar('Error', errorMessage.value);
+      final dateError = validateCompetitionDates(forSubmit: true);
+      if (dateError != null) {
+        errorMessage.value = dateError;
+        Get.snackbar('Error', dateError);
         return false;
       }
 
@@ -951,21 +1164,21 @@ class CompetitionController extends GetxController {
       );
 
       if (response.success) {
+        if (response.data != null) {
+          competitionToEdit.value = response.data;
+        }
         // Update timestamp to force brochure reload after update
-        // This ensures the new brochure from server is shown instead of cached old one
         brochureUpdateTimestamp.value = DateTime.now().millisecondsSinceEpoch;
 
-        // If a new brochure was uploaded, clear local files after successful update
-        // Server now has the new brochure, so we'll fetch it from API
         if (hasNewBrochure) {
           brochureFile.value = null;
           brochureFileLocal.value = null;
           brochureBytes.value = null;
         }
 
+        await loadCompetitions(resetPage: false);
         clearForm();
         Get.snackbar('Success', 'Competition updated successfully');
-        // Switch to list view and reload competitions
         toggleViewMode(true);
         return true;
       } else {
@@ -984,6 +1197,7 @@ class CompetitionController extends GetxController {
 
   // Load competitions list
   Future<void> loadCompetitions({bool resetPage = false}) async {
+    await _yieldPastBuildIfNeeded();
     try {
       isLoading.value = true;
       errorMessage.value = '';
@@ -1048,6 +1262,16 @@ class CompetitionController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  /// When [loadCompetitions] is started from [StatelessWidget.build], the HTTP
+  /// stack on web can resolve in the same frame; GetX then notifies [Obx]
+  /// during build ("markNeedsBuild called during build").
+  static Future<void> _yieldPastBuildIfNeeded() async {
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      return;
+    }
+    await SchedulerBinding.instance.endOfFrame;
   }
 
   // Go to next page
@@ -1267,6 +1491,7 @@ class CompetitionController extends GetxController {
 
     // Switch to create view
     isListView.value = false;
+    _refreshFormKeys();
   }
 
   // View competition details - redirect to form with data (read-only)
@@ -1369,15 +1594,20 @@ class CompetitionController extends GetxController {
       competitionToEdit.value = null;
       loadCompetitions();
     } else {
+      _refreshFormKeys();
       // Clear form when switching to create view (if not in edit mode)
       if (!isEditMode.value) {
-        clearForm();
+        clearForm(refreshFormKeys: false);
       }
     }
   }
 
   // Clear form
-  void clearForm() {
+  void clearForm({bool refreshFormKeys = true}) {
+    if (refreshFormKeys) {
+      _refreshFormKeys();
+    }
+
     // Clear text controllers first
     competitionNameController.clear();
     descriptionController.clear();
@@ -1402,21 +1632,9 @@ class CompetitionController extends GetxController {
     brochureUrl.value = '';
     errorMessage.value = '';
     hasAttemptedSubmit.value = false;
+    clearCompetitionDateFieldTouches();
     isEditMode.value = false;
     isViewMode.value = false;
     competitionToEdit.value = null;
-
-    // Reset form state - try immediately first
-    formKey.currentState?.reset();
-
-    // Also reset after a frame delay to ensure all reactive updates are complete
-    // This handles cases where widgets need to rebuild before form state can be reset
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      formKey.currentState?.reset();
-      // Force rebuild of form fields by clearing controllers again after form reset
-      competitionNameController.clear();
-      descriptionController.clear();
-      addressController.clear();
-    });
   }
 }

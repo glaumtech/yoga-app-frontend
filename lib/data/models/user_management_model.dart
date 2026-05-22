@@ -29,6 +29,8 @@ class UserManagementModel {
   categories; // COMMON, SPECIAL, CHAMPIONS (for backward compatibility)
   final List<Map<String, dynamic>>?
   categoriesObj; // New API format: [{"id": 1, "categoryName": "COMMON"}]
+  final bool? male;
+  final bool? female;
   final String? cell; // Phone number for volunteers
   final String? volunteerNo; // Auto-generated for volunteers
   final List<Map<String, dynamic>>?
@@ -60,6 +62,8 @@ class UserManagementModel {
     this.stagesObj,
     this.categories = const [],
     this.categoriesObj,
+    this.male,
+    this.female,
     this.cell,
     this.volunteerNo,
     this.volunteers,
@@ -197,6 +201,8 @@ class UserManagementModel {
       stagesObj: stagesObj,
       categories: categories,
       categoriesObj: categoriesObj,
+      male: json['male'] is bool ? json['male'] as bool : null,
+      female: json['female'] is bool ? json['female'] as bool : null,
       cell:
           json['cell']?.toString() ??
           json['phone']?.toString() ??
@@ -266,6 +272,8 @@ class UserManagementModel {
         // For now, we'll need to map category names to IDs in the controller
         json['categories'] = [];
       }
+      if (male != null) json['male'] = male;
+      if (female != null) json['female'] = female;
 
       // Include volunteers array if present
       if (volunteers != null && volunteers!.isNotEmpty) {
@@ -311,6 +319,8 @@ class UserManagementModel {
     List<Map<String, dynamic>>? stagesObj,
     List<String>? categories,
     List<Map<String, dynamic>>? categoriesObj,
+    bool? male,
+    bool? female,
     String? cell,
     String? volunteerNo,
     List<Map<String, dynamic>>? volunteers,
@@ -341,6 +351,8 @@ class UserManagementModel {
       stagesObj: stagesObj ?? this.stagesObj,
       categories: categories ?? this.categories,
       categoriesObj: categoriesObj ?? this.categoriesObj,
+      male: male ?? this.male,
+      female: female ?? this.female,
       cell: cell ?? this.cell,
       volunteerNo: volunteerNo ?? this.volunteerNo,
       volunteers: volunteers ?? this.volunteers,

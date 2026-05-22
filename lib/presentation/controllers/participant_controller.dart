@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -12,14 +13,17 @@ import '../../data/repositories/location_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/api_response.dart';
 import '../../data/models/score_response_model.dart';
+import '../../data/models/district_model.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
-import '../../data/models/city_model.dart';
 import '../../data/models/institution_type_model.dart';
+import '../../data/models/competition_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
+import '../../core/utils/state_defaults.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
+import 'competition_controller.dart';
 import 'competition_controller.dart';
 
 // Web-specific imports
@@ -32,11 +36,38 @@ class ParticipantController extends GetxController {
   final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
+  /// Cleared text controllers during [resetForm] fire `onChanged`, which would otherwise
+  /// call [validateRegistrationFormOnFieldChange] and show validation errors after Cancel.
+  bool _suppressRegistrationValidate = false;
+
+  /// Invalidates in-flight [submitRegistrationForm] work after [resetForm] / Cancel.
+  Object _registrationSubmitOwner = Object();
+
+  /// Clears the form-level [errorMessage] banner when the user edits a field.
+  ///
+  /// Does **not** call [FormState.validate] on the whole form: that would re-run
+  /// every field's validator on each keystroke (e.g. name) and show errors on
+  /// untouched fields. Per-field feedback comes from [AutovalidateMode.onUserInteraction]
+  /// on each [TextFormField] after the user interacts with that field.
+  void validateRegistrationFormOnFieldChange() {
+    if (_suppressRegistrationValidate) {
+      return;
+    }
+    if (errorMessage.value.isNotEmpty) {
+      errorMessage.value = '';
+    }
+  }
+
   final RxList<ParticipantModel> participants = <ParticipantModel>[].obs;
   final RxList<ParticipantModel> myRegistrations =
       <ParticipantModel>[].obs; // User's registrations
   final RxBool isLoading = false.obs;
+
+  /// Form / bulk registration validation and save errors (create tab only).
   final RxString errorMessage = ''.obs;
+
+  /// List tab load failures only (participants list screen).
+  final RxString listErrorMessage = ''.obs;
   final Rx<ParticipantModel?> selectedParticipant = Rx<ParticipantModel?>(null);
   final RxBool isListView = false.obs; // Toggle between create and list view
   final RxBool isBulkMode =
@@ -53,6 +84,9 @@ class ParticipantController extends GetxController {
   final RxInt totalPages = 0.obs;
   final RxInt totalItems = 0.obs;
   final RxBool hasMorePages = false.obs;
+
+  bool _ensureParticipantsListRunning = false;
+  String? _lastParticipantsListEventId;
 
   // Sorting state
   final RxString sortBy =
@@ -71,6 +105,7 @@ class ParticipantController extends GetxController {
   final Rx<DateTime?> dateOfBirth = Rx<DateTime?>(null);
   final RxString gender = ''.obs;
   final RxBool isSpotRegistration = false.obs;
+  final RxBool optForECertificate = false.obs;
   final RxList<String> selectedCategories = <String>[].obs;
   final RxString selectedStage = ''.obs; // Selected stage name
   final RxString standard = ''.obs;
@@ -80,6 +115,8 @@ class ParticipantController extends GetxController {
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
   final Rx<File?> bonafideFile = Rx<File?>(null);
   final Rx<XFile?> bonafideImage = Rx<XFile?>(null);
+  final Rx<Uint8List?> bonafideBytes = Rx<Uint8List?>(null);
+  final RxString bonafideFileName = ''.obs;
   final Rx<ParticipantModel?> participantToEdit = Rx<ParticipantModel?>(null);
   final RxString existingPhotoUrl = ''.obs;
   final RxString existingCertificateUrl = ''.obs;
@@ -90,26 +127,27 @@ class ParticipantController extends GetxController {
   final RxList<SchoolModel> institutionSuggestions = <SchoolModel>[].obs;
   final RxBool isLoadingInstitutions = false.obs;
   final RxnString selectedInstitutionId = RxnString();
+  final Rxn<SchoolModel> selectedInstitution = Rxn<SchoolModel>();
 
   /// Optional filters for institution autocomplete (registration form).
   final RxInt institutionSearchFilterStateId = 0.obs;
-  final RxInt institutionSearchFilterCityId = 0.obs;
   final RxInt institutionSearchFilterTypeId = 0.obs;
   final RxList<StateModel> institutionSearchStates = <StateModel>[].obs;
-  final RxList<CityModel> institutionSearchCities = <CityModel>[].obs;
+  final RxList<DistrictModel> institutionSearchDistricts =
+      <DistrictModel>[].obs;
   final RxList<InstitutionTypeModel> institutionSearchTypes =
       <InstitutionTypeModel>[].obs;
   final RxBool isLoadingInstitutionSearchLocations = false.obs;
-  final RxBool isLoadingInstitutionSearchCities = false.obs;
+  final RxBool isLoadingInstitutionSearchDistricts = false.obs;
   Future<void>? _institutionSearchFilterDataFuture;
 
-  /// Owned by this controller; passed to [StateSearchField] / [CitySearchField] (stateless).
+  /// Owned by this controller; passed to [StateSearchField] / [DistrictSearchField] (stateless).
   final TextEditingController institutionFilterStateTextController =
       TextEditingController();
   final FocusNode institutionFilterStateFocusNode = FocusNode();
-  final TextEditingController institutionFilterCityTextController =
+  final TextEditingController institutionFilterDistrictTextController =
       TextEditingController();
-  final FocusNode institutionFilterCityFocusNode = FocusNode();
+  final FocusNode institutionFilterDistrictFocusNode = FocusNode();
 
   // Store institutionId from API response for edit mode
   final RxnString participantInstitutionId = RxnString();
@@ -173,16 +211,32 @@ class ParticipantController extends GetxController {
     return cacheBuster != null ? '$baseUrl?t=$cacheBuster' : baseUrl;
   }
 
-  Future<void> ensureInstitutionSearchFiltersLoaded() {
+  Future<void> ensureInstitutionSearchFiltersLoaded() async {
     _institutionSearchFilterDataFuture ??= _loadInstitutionSearchFilterData();
-    return _institutionSearchFilterDataFuture!;
+    await _institutionSearchFilterDataFuture!;
+    // Apply default state only when opening create/bulk (not when switching to list).
+    if (institutionSearchFilterStateId.value <= 0 &&
+        institutionFilterStateTextController.text.trim().isEmpty) {
+      await _applyDefaultInstitutionFilterStateIfEmpty();
+    }
   }
 
-  /// Force reload of institution search filter data (types/states/cities).
+  /// Force reload of institution search filter data (types/states/districts source cities).
   /// Useful when institution types/categories are updated in Settings.
   Future<void> refreshInstitutionSearchFilters() async {
     _institutionSearchFilterDataFuture = null;
     await ensureInstitutionSearchFiltersLoaded();
+  }
+
+  Future<void> _applyDefaultInstitutionFilterStateIfEmpty() async {
+    if (institutionSearchFilterStateId.value > 0 ||
+        institutionFilterStateTextController.text.trim().isNotEmpty) {
+      return;
+    }
+    final tn = StateDefaults.findTamilNadu(institutionSearchStates);
+    if (tn != null) {
+      await setInstitutionSearchFilterState(tn.id);
+    }
   }
 
   Future<void> _loadInstitutionSearchFilterData() async {
@@ -195,6 +249,7 @@ class ParticipantController extends GetxController {
         institutionSearchStates.sort(
           (a, b) => a.stateName.compareTo(b.stateName),
         );
+        await _applyDefaultInstitutionFilterStateIfEmpty();
       }
       if (typesRes.success && typesRes.data != null) {
         institutionSearchTypes.assignAll(typesRes.data!);
@@ -207,9 +262,8 @@ class ParticipantController extends GetxController {
 
   Future<void> setInstitutionSearchFilterState(int stateId) async {
     institutionSearchFilterStateId.value = stateId;
-    institutionSearchFilterCityId.value = 0;
-    institutionSearchCities.clear();
-    institutionFilterCityTextController.clear();
+    institutionSearchDistricts.clear();
+    institutionFilterDistrictTextController.clear();
 
     if (stateId <= 0) {
       institutionFilterStateTextController.clear();
@@ -221,39 +275,37 @@ class ParticipantController extends GetxController {
       institutionFilterStateTextController.text = st.stateName;
     }
 
-    isLoadingInstitutionSearchCities.value = true;
+    isLoadingInstitutionSearchDistricts.value = true;
     try {
-      final res = await _locationRepository.getCitiesByStateId(stateId);
+      final res = await _locationRepository.getDistrictsByStateId(stateId);
       if (res.success && res.data != null) {
-        institutionSearchCities.assignAll(res.data!);
-        institutionSearchCities.sort(
-          (a, b) => a.cityName.compareTo(b.cityName),
-        );
+        institutionSearchDistricts.assignAll(res.data!);
+      } else {
+        institutionSearchDistricts.clear();
       }
     } finally {
-      isLoadingInstitutionSearchCities.value = false;
+      isLoadingInstitutionSearchDistricts.value = false;
     }
   }
 
-  void setInstitutionSearchFilterCity(int cityId) {
-    institutionSearchFilterCityId.value = cityId;
-    if (cityId <= 0) {
-      institutionFilterCityTextController.clear();
-      return;
-    }
-    final c = institutionSearchCities.firstWhereOrNull((x) => x.id == cityId);
-    if (c != null) {
-      institutionFilterCityTextController.text = c.cityName;
-    }
+  /// District id for API, or null if field empty / no exact match to known districts.
+  int? _resolvedInstitutionSearchDistrictId() {
+    final typed = institutionFilterDistrictTextController.text.trim();
+    if (typed.isEmpty) return null;
+    return institutionSearchDistricts
+        .firstWhereOrNull(
+          (d) => d.districtName.toLowerCase() == typed.toLowerCase(),
+        )
+        ?.id;
   }
 
+  /// Clears institution filter UI only. Does not call district/state APIs.
   void _resetInstitutionSearchFilters() {
     institutionSearchFilterStateId.value = 0;
-    institutionSearchFilterCityId.value = 0;
     institutionSearchFilterTypeId.value = 0;
-    institutionSearchCities.clear();
+    institutionSearchDistricts.clear();
     institutionFilterStateTextController.clear();
-    institutionFilterCityTextController.clear();
+    institutionFilterDistrictTextController.clear();
   }
 
   void setInstitutionSearchFilterType(int typeId) {
@@ -277,6 +329,9 @@ class ParticipantController extends GetxController {
 
     try {
       isLoadingInstitutions.value = true;
+      final int? districtFilter = useInstitutionSearchFilters
+          ? _resolvedInstitutionSearchDistrictId()
+          : null;
       final response = await _schoolRepository.searchInstitutions(
         query: query.trim(),
         stateId:
@@ -284,11 +339,9 @@ class ParticipantController extends GetxController {
                 institutionSearchFilterStateId.value > 0
             ? institutionSearchFilterStateId.value
             : null,
-        cityId:
-            useInstitutionSearchFilters &&
-                institutionSearchFilterCityId.value > 0
-            ? institutionSearchFilterCityId.value
-            : null,
+        cityId: null,
+        cityName: null,
+        districtId: districtFilter,
         institutionTypeId:
             useInstitutionSearchFilters &&
                 institutionSearchFilterTypeId.value > 0
@@ -309,18 +362,261 @@ class ParticipantController extends GetxController {
     }
   }
 
+  static bool isPrivateInstitution(SchoolModel? school) {
+    if (school == null) return false;
+    final typeKey = school.institutionType.trim().toUpperCase();
+    if (typeKey.contains('PRIVATE')) return true;
+    final display = (school.institutionTypeDisplayName ?? '')
+        .trim()
+        .toLowerCase();
+    return display.contains('private');
+  }
+
+  /// Bonafide upload applies only to Govt / Govt Aided **School** institutions.
+  static bool isGovtAidedSchoolInstitution(SchoolModel? school) {
+    if (school == null) return false;
+
+    final typeKey = school.institutionType.trim().toUpperCase();
+    if (typeKey == 'GOVT_SCHOOL' || typeKey == 'GOVT_AIDED_SCHOOL') {
+      return true;
+    }
+    if (typeKey.contains('GOVT') &&
+        typeKey.contains('SCHOOL') &&
+        !typeKey.contains('COLLEGE')) {
+      return true;
+    }
+
+    final display = (school.institutionTypeDisplayName ?? '')
+        .trim()
+        .toLowerCase();
+    if (display.contains('govt') &&
+        display.contains('school') &&
+        !display.contains('college')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool get isBonafideCertificateApplicable {
+    return isGovtAidedSchoolInstitution(selectedInstitution.value);
+  }
+
+  CompetitionModel? selectedCompetition() {
+    if (!Get.isRegistered<CompetitionController>()) return null;
+    if (selectedEventId.value.isEmpty) return null;
+    return Get.find<CompetitionController>().competitions.firstWhereOrNull(
+      (c) => c.id == selectedEventId.value,
+    );
+  }
+
+  /// Spot registration is only allowed while the event is in progress.
+  bool get isSpotRegistrationOptionVisible {
+    final competition = selectedCompetition();
+    return competition != null && competition.isEventOngoing;
+  }
+
+  void applySpotRegistrationRulesForSelectedEvent() {
+    if (!isSpotRegistrationOptionVisible) {
+      isSpotRegistration.value = false;
+    }
+  }
+
+  void _clearBonafideCertificateFiles() {
+    bonafideFile.value = null;
+    bonafideImage.value = null;
+    bonafideBytes.value = null;
+    bonafideFileName.value = '';
+    existingCertificateUrl.value = '';
+  }
+
+  bool get hasBonafideCertificateSelected =>
+      bonafideFile.value != null ||
+      bonafideImage.value != null ||
+      bonafideBytes.value != null ||
+      existingCertificateUrl.value.trim().isNotEmpty;
+
+  Future<bool> pickBonafideCertificate() async {
+    try {
+      final XFile? file = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (file == null) return false;
+
+      bonafideFileName.value = file.name;
+      existingCertificateUrl.value = '';
+
+      if (kIsWeb) {
+        bonafideBytes.value = await file.readAsBytes();
+        bonafideImage.value = file;
+        bonafideFile.value = null;
+      } else {
+        bonafideImage.value = file;
+        bonafideFile.value = File(file.path);
+        bonafideBytes.value = null;
+      }
+      return true;
+    } catch (e) {
+      errorMessage.value = 'Failed to pick certificate: ${e.toString()}';
+      return false;
+    }
+  }
+
+  void _applyBonafideRulesForSelectedInstitution() {
+    if (!isBonafideCertificateApplicable) {
+      _clearBonafideCertificateFiles();
+    }
+  }
+
+  Future<void> _syncSelectedInstitutionFromId() async {
+    if (selectedInstitution.value != null) return;
+    final id = selectedInstitutionId.value;
+    if (id == null || id.isEmpty) return;
+
+    final fromSuggestions = institutionSuggestions.firstWhereOrNull(
+      (institution) => institution.id == id,
+    );
+    if (fromSuggestions != null) {
+      selectedInstitution.value = fromSuggestions;
+      _applyBonafideRulesForSelectedInstitution();
+      return;
+    }
+
+    try {
+      final response = await _schoolRepository.getInstitutionById(id);
+      if (response.success && response.data != null) {
+        selectedInstitution.value = response.data;
+        _applyBonafideRulesForSelectedInstitution();
+      }
+    } catch (e) {
+      print('Error loading institution details: $e');
+    }
+  }
+
+  Future<void> _loadSelectedInstitutionForEdit() async {
+    await _syncSelectedInstitutionFromId();
+  }
+
+  Future<bool> validateBonafideBeforeSave() async {
+    await _syncSelectedInstitutionFromId();
+
+    final school = selectedInstitution.value;
+    if (school == null) {
+      errorMessage.value = 'Please select an institution from the list';
+      return false;
+    }
+
+    if (!isGovtAidedSchoolInstitution(school)) {
+      _clearBonafideCertificateFiles();
+      return true;
+    }
+
+    final hasCertificate = hasBonafideCertificateSelected;
+    if (!hasCertificate) {
+      errorMessage.value =
+          'Bonafied certificate is required for Govt / Govt Aided School';
+      return false;
+    }
+
+    return true;
+  }
+
   // Select institution
   void selectInstitution(SchoolModel institution) {
-    schoolNameController.text = institution.institutionName;
+    if (isBulkMode.value) {
+      bulkInstitutionNameController.text = institution.institutionName;
+    } else {
+      schoolNameController.text = institution.institutionName;
+    }
     selectedInstitutionId.value = institution.id;
+    selectedInstitution.value = institution;
     institutionSuggestions.clear();
+    _applyBonafideRulesForSelectedInstitution();
+  }
+
+  /// Resolves stage name from group for bulk registration (competition stageGroups).
+  String? resolveStageNameForGroup({
+    required String groupName,
+    required CompetitionModel? competition,
+    required CompetitionController competitionController,
+  }) {
+    if (competition == null || groupName.isEmpty) return null;
+
+    if (competition.stageGroups != null) {
+      for (final entry in competition.stageGroups!.entries) {
+        final stageId = int.tryParse(entry.key);
+        if (stageId == null) continue;
+        for (final groupId in entry.value) {
+          final name = competitionController.getGroupNameById(groupId);
+          if (name == groupName) {
+            return competitionController.getStageNameById(stageId);
+          }
+        }
+      }
+    }
+
+    if (competition.stageGroupLabels != null) {
+      for (final entry in competition.stageGroupLabels!.entries) {
+        if (entry.value.contains(groupName)) {
+          return entry.key;
+        }
+      }
+    }
+    return null;
+  }
+
+  void setBulkRowGroup(
+    BulkRegistrationRow row,
+    String groupName, {
+    required CompetitionModel? competition,
+    required CompetitionController competitionController,
+  }) {
+    row.group.value = groupName;
+    final stageName = resolveStageNameForGroup(
+      groupName: groupName,
+      competition: competition,
+      competitionController: competitionController,
+    );
+    if (stageName != null && stageName.isNotEmpty) {
+      selectedStage.value = stageName;
+    }
+  }
+
+  Future<bool> _resolveBulkInstitutionId() async {
+    if (selectedInstitutionId.value != null &&
+        selectedInstitutionId.value!.isNotEmpty) {
+      return true;
+    }
+
+    final name = bulkInstitutionNameController.text.trim();
+    if (name.isEmpty) {
+      errorMessage.value = 'Please select an institution from the list';
+      return false;
+    }
+
+    await searchInstitutions(name);
+    final matching = institutionSuggestions.firstWhereOrNull(
+      (institution) =>
+          institution.institutionName.trim().toLowerCase() ==
+          name.toLowerCase(),
+    );
+
+    if (matching != null && matching.id != null) {
+      selectInstitution(matching);
+      return true;
+    }
+
+    errorMessage.value = 'Please select an institution from the list';
+    return false;
   }
 
   @override
   void onInit() {
     super.onInit();
     // Participants are now loaded by event ID only
-    // Initialize bulk registration with 5 rows
+    // Initialize bulk registration with one empty row
     resetBulkRegistrationForm();
   }
 
@@ -341,13 +637,204 @@ class ParticipantController extends GetxController {
     bulkYogaTeacherCellController.clear();
     bulkInstitutionNameController.clear();
     bulkCategory.value = '';
+    isSpotRegistration.value = false;
+    optForECertificate.value = false;
     for (final row in bulkRegistrationRows) {
       row.dispose();
     }
     bulkRegistrationRows.clear();
-    // Initialize with 5 rows by default
-    for (int i = 0; i < 5; i++) {
+    addBulkRegistrationRow();
+    selectedInstitutionId.value = null;
+    selectedInstitution.value = null;
+    institutionSuggestions.clear();
+    _resetInstitutionSearchFilters();
+  }
+
+  /// Registers the active (last unregistered) bulk row, keeps saved rows visible,
+  /// and appends a new empty row. Common fields reset only on list / navigation.
+  Future<bool> registerCurrentBulkParticipant({
+    required CompetitionController competitionController,
+  }) async {
+    if (!formKey.currentState!.validate()) {
+      return false;
+    }
+
+    if (selectedEventId.value.isEmpty) {
+      errorMessage.value = 'Please select a competition';
+      return false;
+    }
+
+    if (bulkCategory.value.isEmpty) {
+      errorMessage.value = 'Please select a category';
+      return false;
+    }
+
+    if (bulkYogaTeacherNameController.text.trim().isEmpty) {
+      errorMessage.value = 'Please enter yoga teacher name';
+      return false;
+    }
+
+    if (bulkYogaTeacherCellController.text.trim().isEmpty) {
+      errorMessage.value = 'Please enter yoga teacher cell number';
+      return false;
+    }
+
+    if (bulkRegistrationRows.isEmpty) {
       addBulkRegistrationRow();
+    }
+
+    BulkRegistrationRow? row;
+    for (var i = bulkRegistrationRows.length - 1; i >= 0; i--) {
+      if (!bulkRegistrationRows[i].isRegistered.value) {
+        row = bulkRegistrationRows[i];
+        break;
+      }
+    }
+    row ??= bulkRegistrationRows.last;
+
+    if (row.isRegistered.value) {
+      errorMessage.value = 'This participant is already registered';
+      return false;
+    }
+
+    if (!row.isValid) {
+      errorMessage.value =
+          'Please fill name, date of birth, sex, and group for the participant';
+      return false;
+    }
+
+    if (!await _resolveBulkInstitutionId()) {
+      return false;
+    }
+
+    final selectedCompetition = competitionController.competitions
+        .firstWhereOrNull((c) => c.id == selectedEventId.value);
+
+    final stageName = row.stage.value.isNotEmpty
+        ? row.stage.value
+        : (selectedStage.value.isNotEmpty
+              ? selectedStage.value
+              : resolveStageNameForGroup(
+                  groupName: row.group.value,
+                  competition: selectedCompetition,
+                  competitionController: competitionController,
+                ));
+
+    if (stageName == null || stageName.isEmpty) {
+      errorMessage.value = 'Could not determine stage for the selected group';
+      return false;
+    }
+
+    final competitionId = int.tryParse(selectedEventId.value);
+    if (competitionId == null) {
+      errorMessage.value = 'Invalid competition ID';
+      return false;
+    }
+
+    final categoryId = competitionController.getCategoryIdByName(
+      bulkCategory.value,
+    );
+    if (categoryId == null) {
+      errorMessage.value = 'Invalid category selected';
+      return false;
+    }
+
+    final institutionId = int.tryParse(selectedInstitutionId.value!);
+    if (institutionId == null) {
+      errorMessage.value = 'Invalid institution selected';
+      return false;
+    }
+
+    final groupId = competitionController.getGroupIdByName(row.group.value);
+    if (groupId == null) {
+      errorMessage.value = 'Invalid group selected';
+      return false;
+    }
+
+    final stageId = competitionController.getStageIdByName(stageName);
+    if (stageId == null) {
+      errorMessage.value = 'Invalid stage for the selected group';
+      return false;
+    }
+
+    final age = app_date_utils.AppDateUtils.calculateAge(
+      row.dateOfBirth.value!,
+    );
+    final dobString =
+        '${row.dateOfBirth.value!.year}-'
+        '${row.dateOfBirth.value!.month.toString().padLeft(2, '0')}-'
+        '${row.dateOfBirth.value!.day.toString().padLeft(2, '0')}';
+
+    final registrationData = <String, dynamic>{
+      'competitionId': competitionId,
+      'dateOfBirth': dobString,
+      'age': age,
+      'categoryId': categoryId,
+      'stageId': stageId,
+      'yogaTeacherName': bulkYogaTeacherNameController.text.trim(),
+      'institutionId': institutionId,
+      'participantName': row.nameController.text.trim().toUpperCase(),
+      'sex': row.gender.value,
+      'groupId': groupId,
+      'yogaTeacherCell': bulkYogaTeacherCellController.text.trim(),
+      'paymentMode': 'ONLINE',
+      'isSpotRegistration': isSpotRegistration.value,
+      'optForECertificate': optForECertificate.value,
+    };
+
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      final response = await _participantRepository
+          .createParticipantRegistration(
+            registrationData: registrationData,
+            photoFile: row.photoFile.value,
+            photoXFile: row.photoXFile.value,
+          );
+
+      isLoading.value = false;
+
+      if (response.success) {
+        row.isRegistered.value = true;
+        if (row.stage.value.isEmpty && stageName.isNotEmpty) {
+          row.stage.value = stageName;
+        }
+        addBulkRegistrationRow();
+        errorMessage.value = '';
+        Get.snackbar(
+          'Success',
+          response.message ?? 'Participant registered successfully',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        if (selectedEventId.value.isNotEmpty) {
+          await loadParticipantsByEventId(
+            selectedEventId.value,
+            resetPage: true,
+          );
+        }
+        return true;
+      }
+
+      errorMessage.value = response.message ?? 'Failed to register participant';
+      Get.snackbar(
+        'Error',
+        errorMessage.value,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return false;
+    } catch (e) {
+      isLoading.value = false;
+      errorMessage.value = 'Error registering participant: ${e.toString()}';
+      Get.snackbar(
+        'Error',
+        errorMessage.value,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return false;
     }
   }
 
@@ -467,8 +954,8 @@ class ParticipantController extends GetxController {
     bulkInstitutionNameController.dispose();
     institutionFilterStateTextController.dispose();
     institutionFilterStateFocusNode.dispose();
-    institutionFilterCityTextController.dispose();
-    institutionFilterCityFocusNode.dispose();
+    institutionFilterDistrictTextController.dispose();
+    institutionFilterDistrictFocusNode.dispose();
     for (final row in bulkRegistrationRows) {
       row.dispose();
     }
@@ -501,14 +988,58 @@ class ParticipantController extends GetxController {
     }
   }
 
+  /// Loads competitions (if needed), picks a default event, then loads participants
+  /// for the list tab. Safe to call from initState / tab switch (single-flight).
+  Future<void> ensureParticipantsListLoaded(
+    CompetitionController competitionController, {
+    bool forceReload = false,
+  }) async {
+    if (_ensureParticipantsListRunning) return;
+    _ensureParticipantsListRunning = true;
+    try {
+      if (competitionController.competitions.isEmpty) {
+        await competitionController.loadCompetitions();
+      }
+
+      var eventId = selectedEventId.value;
+      if (eventId.isEmpty) {
+        final withId = competitionController.competitions
+            .where((c) => c.id != null)
+            .toList();
+        if (withId.isNotEmpty) {
+          eventId = withId.first.id!;
+          selectedEventId.value = eventId;
+        }
+      }
+
+      if (eventId.isEmpty) return;
+
+      final needsLoad =
+          forceReload ||
+          participants.isEmpty ||
+          _lastParticipantsListEventId != eventId;
+      if (!needsLoad) return;
+
+      await loadParticipantsByEventId(
+        eventId,
+        resetPage: true,
+        replaceItems: true,
+      );
+      _lastParticipantsListEventId = eventId;
+    } finally {
+      _ensureParticipantsListRunning = false;
+    }
+  }
+
   Future<void> loadParticipantsByEventId(
     String eventId, {
     ParticipantFilterRequest? filter,
     bool resetPage = false,
+    bool replaceItems = false,
   }) async {
     try {
       isLoading.value = true;
-      errorMessage.value = '';
+      listErrorMessage.value = '';
 
       // Reset page if needed
       if (resetPage) {
@@ -520,7 +1051,7 @@ class ParticipantController extends GetxController {
       final competitionId = int.tryParse(eventId);
 
       if (competitionId == null) {
-        errorMessage.value = 'Invalid competition ID';
+        listErrorMessage.value = 'Invalid competition ID';
         isLoading.value = false;
         return;
       }
@@ -554,7 +1085,12 @@ class ParticipantController extends GetxController {
             return _mapRegistrationToParticipant(reg as Map<String, dynamic>);
           }).toList();
 
-          if (resetPage || currentPage.value == 1) {
+          // When navigating with explicit pagination controls, we want to replace the list
+          // with the selected page's items (not append like infinite scroll).
+          final shouldReplace =
+              resetPage || replaceItems || currentPage.value == 1;
+
+          if (shouldReplace) {
             participants.value = participantList;
           } else {
             // Append for pagination
@@ -584,7 +1120,8 @@ class ParticipantController extends GetxController {
           }
         }
       } else {
-        errorMessage.value = response.message ?? 'Failed to load participants';
+        listErrorMessage.value =
+            response.message ?? 'Failed to load participants';
         if (resetPage || currentPage.value == 1) {
           participants.clear();
         }
@@ -592,7 +1129,7 @@ class ParticipantController extends GetxController {
 
       isLoading.value = false;
     } catch (e) {
-      errorMessage.value = 'An error occurred: ${e.toString()}';
+      listErrorMessage.value = 'An error occurred: ${e.toString()}';
       isLoading.value = false;
     }
   }
@@ -654,7 +1191,9 @@ class ParticipantController extends GetxController {
       participantName: reg['participantName'] as String? ?? '',
       dateOfBirth: dob,
       age: reg['age'] as int? ?? 0,
-      gender: reg['sex'] as String? ?? reg['gender'] as String? ?? '',
+      gender: _normalizeGender(
+        reg['sex'] as String? ?? reg['gender'] as String?,
+      ),
       category:
           reg['categoryName'] as String? ?? reg['category'] as String? ?? '',
       standard: reg['groupName'] as String? ?? reg['standard'] as String? ?? '',
@@ -690,7 +1229,42 @@ class ParticipantController extends GetxController {
           _parseRegBool(reg['isSpotRegistration']) ||
           _parseRegBool(reg['is_spot_registration']) ||
           _parseRegBool(reg['spotRegistration']),
+      optForECertificate:
+          _parseRegBool(reg['optForECertificate']) ||
+          _parseRegBool(reg['opt_for_e_certificate']),
+      stageId: reg['stageId'] is int
+          ? reg['stageId'] as int
+          : int.tryParse(reg['stageId']?.toString() ?? ''),
+      categoryId: reg['categoryId'] is int
+          ? reg['categoryId'] as int
+          : int.tryParse(reg['categoryId']?.toString() ?? ''),
+      groupId: reg['groupId'] is int
+          ? reg['groupId'] as int
+          : int.tryParse(reg['groupId']?.toString() ?? ''),
     );
+  }
+
+  /// Normalize API/UI gender variants into values used by the form radio group.
+  /// The form expects exactly 'MALE' or 'FEMALE' (empty string means "not selected").
+  String _normalizeGender(String? raw) {
+    if (raw == null) return '';
+    final v = raw.trim();
+    if (v.isEmpty) return '';
+    final upper = v.toUpperCase();
+
+    // Common backend variants
+    if (upper == 'MALE' || upper == 'M' || upper == 'BOY' || upper == 'B') {
+      return 'MALE';
+    }
+    if (upper == 'FEMALE' || upper == 'F' || upper == 'GIRL' || upper == 'G') {
+      return 'FEMALE';
+    }
+
+    // Handle title-case variants like "Male"/"Female"
+    if (upper.startsWith('MALE')) return 'MALE';
+    if (upper.startsWith('FEMALE')) return 'FEMALE';
+
+    return '';
   }
 
   bool _parseRegBool(dynamic value) {
@@ -717,7 +1291,7 @@ class ParticipantController extends GetxController {
       currentPage.value++;
       final eventId = selectedEventId.value;
       if (eventId.isNotEmpty) {
-        loadParticipantsByEventId(eventId, resetPage: false);
+        loadParticipantsByEventId(eventId, replaceItems: true);
       }
     }
   }
@@ -727,7 +1301,7 @@ class ParticipantController extends GetxController {
       currentPage.value--;
       final eventId = selectedEventId.value;
       if (eventId.isNotEmpty) {
-        loadParticipantsByEventId(eventId, resetPage: false);
+        loadParticipantsByEventId(eventId, replaceItems: true);
       }
     }
   }
@@ -737,7 +1311,7 @@ class ParticipantController extends GetxController {
       currentPage.value = page;
       final eventId = selectedEventId.value;
       if (eventId.isNotEmpty) {
-        loadParticipantsByEventId(eventId, resetPage: false);
+        loadParticipantsByEventId(eventId, replaceItems: true);
       }
     }
   }
@@ -1050,7 +1624,7 @@ class ParticipantController extends GetxController {
   }
 
   void setGender(String? value) {
-    gender.value = value ?? '';
+    gender.value = _normalizeGender(value);
   }
 
   void toggleCategory(String categoryValue) {
@@ -1071,22 +1645,35 @@ class ParticipantController extends GetxController {
 
   void toggleViewMode(bool showList) {
     isListView.value = showList;
+    if (showList) {
+      errorMessage.value = '';
+      final competitionController = Get.isRegistered<CompetitionController>()
+          ? Get.find<CompetitionController>()
+          : Get.put(CompetitionController());
+      unawaited(ensureParticipantsListLoaded(competitionController));
+    } else {
+      listErrorMessage.value = '';
+    }
   }
 
   void resetForm() {
+    _suppressRegistrationValidate = true;
+    _registrationSubmitOwner = Object();
+    isLoading.value = false;
+
     // Clear all reactive values first - this will trigger Obx rebuilds
     dateOfBirth.value = null;
     gender.value = '';
+    optForECertificate.value = false;
     selectedCategories.clear();
     selectedStage.value = '';
     standard.value = '';
     photoFile.value = null;
     selectedImage.value = null;
-    bonafideFile.value = null;
-    bonafideImage.value = null;
     existingPhotoUrl.value = '';
-    existingCertificateUrl.value = '';
+    _clearBonafideCertificateFiles();
     selectedInstitutionId.value = null;
+    selectedInstitution.value = null;
     participantInstitutionId.value = null;
     institutionSuggestions.clear(); // Clear institution suggestions
     _resetInstitutionSearchFilters();
@@ -1114,14 +1701,18 @@ class ParticipantController extends GetxController {
     // Use a safe callback that checks if the form key is still valid
     if (formKey.currentContext != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (formKey.currentState != null && formKey.currentContext != null) {
-          formKey.currentState?.reset();
-          // Force clear text controllers again after form reset to ensure they're empty
-          nameController.text = '';
-          schoolNameController.text = '';
-          addressController.text = '';
-          yogaMasterNameController.text = '';
-          yogaMasterContactController.text = '';
+        try {
+          if (formKey.currentState != null && formKey.currentContext != null) {
+            formKey.currentState?.reset();
+            // Force clear text controllers again after form reset to ensure they're empty
+            nameController.text = '';
+            schoolNameController.text = '';
+            addressController.text = '';
+            yogaMasterNameController.text = '';
+            yogaMasterContactController.text = '';
+          }
+        } finally {
+          _suppressRegistrationValidate = false;
         }
       });
     } else {
@@ -1131,6 +1722,7 @@ class ParticipantController extends GetxController {
       addressController.text = '';
       yogaMasterNameController.text = '';
       yogaMasterContactController.text = '';
+      _suppressRegistrationValidate = false;
     }
   }
 
@@ -1168,6 +1760,7 @@ class ParticipantController extends GetxController {
   /// Initialize form directly from ParticipantModel without API call
   /// Used when participant data is already available (e.g., from list)
   void initializeFormFromModel(ParticipantModel participant) {
+    isBulkMode.value = false;
     // Clear all form data first
     _clearFormData();
 
@@ -1190,6 +1783,7 @@ class ParticipantController extends GetxController {
     _resetInstitutionSearchFilters();
     dateOfBirth.value = null;
     gender.value = '';
+    optForECertificate.value = false;
     isSpotRegistration.value = false;
     selectedCategories.clear();
     selectedStage.value = '';
@@ -1198,7 +1792,10 @@ class ParticipantController extends GetxController {
     selectedImage.value = null;
     errorMessage.value = '';
     existingPhotoUrl.value = '';
-    existingCertificateUrl.value = '';
+    _clearBonafideCertificateFiles();
+    selectedInstitutionId.value = null;
+    selectedInstitution.value = null;
+    participantInstitutionId.value = null;
     isLoadingParticipant.value = false;
     participantToEdit.value = null;
     isViewMode.value = false;
@@ -1233,6 +1830,7 @@ class ParticipantController extends GetxController {
 
   /// Initialize form with participant data for viewing (non-editable)
   void initializeFormForView(ParticipantModel participant) {
+    isBulkMode.value = false;
     // Clear all form data first
     _clearFormData();
 
@@ -1297,8 +1895,9 @@ class ParticipantController extends GetxController {
       }
       addressController.text = participant.address;
       standard.value = participant.standard;
-      gender.value = participant.gender;
+      gender.value = _normalizeGender(participant.gender);
       isSpotRegistration.value = participant.isSpotRegistration;
+      optForECertificate.value = participant.optForECertificate;
       dateOfBirth.value = participant.dateOfBirth;
 
       // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
@@ -1380,6 +1979,7 @@ class ParticipantController extends GetxController {
 
   /// Initialize form with participant data for editing
   void initializeFormForEdit(ParticipantModel participant) {
+    isBulkMode.value = false;
     print('Initializing form for edit: ${participant.participantName}');
     print('Participant ID: ${participant.id}');
 
@@ -1439,6 +2039,7 @@ class ParticipantController extends GetxController {
       print(
         'Set selectedInstitutionId from participantInstitutionId: ${selectedInstitutionId.value}',
       );
+      _loadSelectedInstitutionForEdit();
     } else {
       // If participantInstitutionId is not set, try to find it by name
       // Note: This is async and might complete after widget disposal, so we check if still needed
@@ -1463,6 +2064,8 @@ class ParticipantController extends GetxController {
                     matchingInstitution.id != null) {
                   selectedInstitutionId.value = matchingInstitution.id;
                   participantInstitutionId.value = matchingInstitution.id;
+                  selectedInstitution.value = matchingInstitution;
+                  _applyBonafideRulesForSelectedInstitution();
                   print(
                     'Found and set institution ID by name: ${selectedInstitutionId.value}',
                   );
@@ -1477,10 +2080,10 @@ class ParticipantController extends GetxController {
     }
     addressController.text = participant.address;
     standard.value = participant.standard;
-    gender.value = participant.gender;
+    gender.value = _normalizeGender(participant.gender);
     isSpotRegistration.value = participant.isSpotRegistration;
+    optForECertificate.value = participant.optForECertificate;
     dateOfBirth.value = participant.dateOfBirth;
-
     // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
     // Otherwise, try to find the stage from competition data
     if (participant.standard.isNotEmpty) {
@@ -1613,6 +2216,10 @@ class ParticipantController extends GetxController {
 
     if (standard.value.isEmpty) {
       errorMessage.value = 'Please select standard/group';
+      return false;
+    }
+
+    if (!await validateBonafideBeforeSave()) {
       return false;
     }
 
@@ -1782,6 +2389,9 @@ class ParticipantController extends GetxController {
       return false;
     }
 
+    final submitOwner = Object();
+    _registrationSubmitOwner = submitOwner;
+
     if (dateOfBirth.value == null) {
       errorMessage.value = 'Please select date of birth';
       return false;
@@ -1818,6 +2428,12 @@ class ParticipantController extends GetxController {
           useInstitutionSearchFilters: false,
         );
 
+        if (!identical(_registrationSubmitOwner, submitOwner)) {
+          isLoading.value = false;
+          errorMessage.value = '';
+          return false;
+        }
+
         // Check if we found a matching institution
         final matchingInstitution = institutionSuggestions.firstWhereOrNull(
           (institution) =>
@@ -1826,8 +2442,9 @@ class ParticipantController extends GetxController {
         );
 
         if (matchingInstitution != null && matchingInstitution.id != null) {
-          // Set the institution ID
           selectedInstitutionId.value = matchingInstitution.id;
+          selectedInstitution.value = matchingInstitution;
+          _applyBonafideRulesForSelectedInstitution();
         } else {
           // If still not found, check if participantInstitutionId is available (from edit mode)
           if (participantInstitutionId.value != null &&
@@ -1842,6 +2459,13 @@ class ParticipantController extends GetxController {
         errorMessage.value = 'Please select an institution from the list';
         return false;
       }
+    }
+
+    if (!await validateBonafideBeforeSave()) {
+      if (!identical(_registrationSubmitOwner, submitOwner)) {
+        errorMessage.value = '';
+      }
+      return false;
     }
 
     final age = app_date_utils.AppDateUtils.calculateAge(dateOfBirth.value!);
@@ -1861,6 +2485,7 @@ class ParticipantController extends GetxController {
     if (selectedEventId.value.isEmpty) {
       selectedEventId.value = eventId;
     }
+    applySpotRegistrationRulesForSelectedEvent();
 
     final categoryName = selectedCategories.first;
     final categoryId = compController.getCategoryIdByName(categoryName);
@@ -1917,6 +2542,7 @@ class ParticipantController extends GetxController {
       'yogaTeacherCell': yogaMasterContactController.text.trim(),
       'paymentMode': 'ONLINE', // Default payment mode
       'isSpotRegistration': isSpotRegistration.value,
+      'optForECertificate': optForECertificate.value,
       // Registration number will be auto-generated by backend based on competition, category, gender, and stage
     };
 
@@ -1937,6 +2563,12 @@ class ParticipantController extends GetxController {
               bonafiedCertificateFile: bonafideFile.value,
               bonafiedCertificateXFile: bonafideImage.value,
             );
+
+        if (!identical(_registrationSubmitOwner, submitOwner)) {
+          isLoading.value = false;
+          errorMessage.value = '';
+          return false;
+        }
 
         isLoading.value = false;
 
@@ -1978,6 +2610,12 @@ class ParticipantController extends GetxController {
               bonafiedCertificateXFile: bonafideImage.value,
             );
 
+        if (!identical(_registrationSubmitOwner, submitOwner)) {
+          isLoading.value = false;
+          errorMessage.value = '';
+          return false;
+        }
+
         isLoading.value = false;
 
         if (response.success) {
@@ -2006,9 +2644,11 @@ class ParticipantController extends GetxController {
       }
     } catch (e) {
       isLoading.value = false;
-      errorMessage.value = isEditMode
-          ? 'Error updating participant: ${e.toString()}'
-          : 'Error registering participant: ${e.toString()}';
+      if (identical(_registrationSubmitOwner, submitOwner)) {
+        errorMessage.value = isEditMode
+            ? 'Error updating participant: ${e.toString()}'
+            : 'Error registering participant: ${e.toString()}';
+      }
       return false;
     }
   }
@@ -2026,6 +2666,7 @@ class ParticipantController extends GetxController {
     participantToEdit.value = null;
     isLoading.value = false;
     errorMessage.value = '';
+    listErrorMessage.value = '';
     currentFilter.value = ParticipantFilterRequest();
     currentPage.value = 1;
     totalPages.value = 0;
@@ -2113,6 +2754,98 @@ class ParticipantController extends GetxController {
       Get.snackbar(
         'Error',
         'Failed to download certificate: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  /// Download PDF with participant registration details (receipt).
+  Future<void> downloadParticipantRegistrationDetails(
+    String registrationId,
+  ) async {
+    if (registrationId.isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Missing registration id',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+    try {
+      Get.snackbar(
+        'Downloading',
+        'Preparing registration details…',
+        backgroundColor: Colors.blue,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 1),
+      );
+
+      final url =
+          '${BaseUrl.baseUrl}${EndPoints.participantRegistrationDetailsPdf(registrationId)}';
+      final uri = Uri.parse(url);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept': 'application/pdf, application/octet-stream, */*',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        final safeName = 'participant_registration_$registrationId.pdf';
+        if (kIsWeb) {
+          final blob = html.Blob([response.bodyBytes]);
+          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+          html.AnchorElement(href: blobUrl)
+            ..setAttribute('download', safeName)
+            ..click();
+          html.Url.revokeObjectUrl(blobUrl);
+
+          Get.snackbar(
+            'Success',
+            'Download started',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+        } else {
+          final dataUri = Uri.dataFromBytes(
+            response.bodyBytes,
+            mimeType: 'application/pdf',
+          );
+          if (await canLaunchUrl(dataUri)) {
+            await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+            Get.snackbar(
+              'Success',
+              'Registration details opened',
+              backgroundColor: Colors.green,
+              colorText: Colors.white,
+            );
+          } else {
+            Get.snackbar(
+              'Error',
+              'Could not open PDF',
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+            );
+          }
+        }
+      } else {
+        Get.snackbar(
+          'Error',
+          'Failed to download (status ${response.statusCode})',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to download registration details: ${e.toString()}',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );

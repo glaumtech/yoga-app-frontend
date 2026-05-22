@@ -2,7 +2,7 @@ import '../../config/app_config.dart';
 
 class AppConstants {
   // App Info
-  static const String appName = 'Yogasana Championship 2025';
+  static const String appName = 'Yoga Competition Application';
 
   // Storage Keys
   static const String tokenKey = 'token_key';
@@ -76,6 +76,8 @@ class EndPoints {
       '/participant-registration/$id';
   static String participantRegistrationDelete(String id) =>
       '/participant-registration/$id';
+  static String participantRegistrationDetailsPdf(String id) =>
+      '/participant-registration/$id/registration-details';
   static String participantRegistrationForScoring =
       '/participant-registration/for-scoring';
   static String participantRegistrationImport =
@@ -110,6 +112,8 @@ class EndPoints {
   static String competitionUpdate(String id) => '/competition/$id';
   static String competitionById(String id) => '/competition/$id';
   static String competitionBrochure(String id) => '/competition/$id/brochure';
+  static String competitionRegistrationQr(String id) =>
+      '/competition/$id/registration-qr';
 
   /// Public competitions list (home / unauthenticated)
   static String competitionPublic = '/competition/public';
@@ -130,7 +134,11 @@ class EndPoints {
 
   /// LOCATIONS
   static String stateList = '/state';
+  static String cityCreate = '/city';
   static String cityListByState(int stateId) => '/city/state/$stateId';
+  static String districtListByState(int stateId) => '/district/state/$stateId';
+  static String villageListByStateAndDistrict(int stateId, int districtId) =>
+      '/city/villages/state/$stateId/district/$districtId';
 
   /// INSTITUTIONS
   static String institutionCreate = '/institution';
@@ -159,13 +167,20 @@ class EndPoints {
   static String competitionParticipantScores(int competitionId) =>
       '/reports/competition/$competitionId/participant-scores';
 
+  static String competitionParticipantScoresTable(int competitionId) =>
+      '/reports/competition/$competitionId/participant-scores/table';
+
+  static String competitionParticipantScoreDetails(int competitionId) =>
+      '/reports/competition/$competitionId/participant-scores/details';
+
   /// REPORTS PRINT (PDF / Excel as blob)
   static String competitionPrizeWinnersPrint(int competitionId) =>
       '/reports/competition/$competitionId/print/prize-winners';
 
-  /// Single prize-winner certificate PDF (query: stageId, categoryId, participantRegistrationId, optional prizeRank)
-  static String competitionPrizeWinnerCertificate(int competitionId) =>
-      '/reports/competition/$competitionId/print/prize-winner-certificate';
+  /// Winner certificate PDF generated from certificate-template design.
+  /// Query params: competitionId, stageId, categoryId, participantRegistrationId, optional prizeRank
+  static String winnerCertificateFromTemplate =
+      '/settings/certificate-templates/winner-certificate/download';
 
   static String competitionParticipantsPrint(int competitionId) =>
       '/reports/competition/$competitionId/print/participants';
@@ -173,8 +188,18 @@ class EndPoints {
   static String competitionParticipantsExcel(int competitionId) =>
       '/reports/competition/$competitionId/print/participants/excel';
 
+  static String competitionParticipantECertificatePrint(int competitionId) =>
+      '/reports/competition/$competitionId/print/participant-e-certificate';
+
   /// ORGANIZATION / BRANCH SETUP
   static String organizationSetup = '/organization/setup';
+
+  /// Branch-level certificate template CRUD.
+  static String certificateTemplates = '/settings/certificate-templates';
+  static String certificateTemplateById(int id) =>
+      '/settings/certificate-templates/$id';
+  static String certificateTemplateSetDefault(int id) =>
+      '/settings/certificate-templates/$id/default';
 
   /// PERMISSIONS (app-level permission definitions)
   static String permission = '/permission';

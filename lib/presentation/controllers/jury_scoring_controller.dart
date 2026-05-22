@@ -428,8 +428,9 @@ class JuryScoringController extends GetxController {
       final List<int>? replaceParticipantIds = replaceParticipantIdsOverride;
 
       // Call API to get participants for scoring
+      final assignment = juryAssignment.value!;
       print(
-        'Calling API with - CompetitionId: $competitionId, JuryId: $juryId, StageId: $stageId, CategoryId: $categoryId, GroupId: $groupId',
+        'Calling API with - CompetitionId: $competitionId, JuryId: $juryId, StageId: $stageId, CategoryId: $categoryId, GroupId: $groupId, male: ${assignment.male}, female: ${assignment.female}',
       );
       final response = await _participantRepository.getParticipantsForScoring(
         competitionId: competitionId,
@@ -438,6 +439,8 @@ class JuryScoringController extends GetxController {
         categoryId: categoryId,
         groupId: groupId,
         institutionId: selectedInstitutionId.value,
+        male: assignment.male,
+        female: assignment.female,
         replaceParticipantIds:
             replaceParticipantIds != null && replaceParticipantIds.isNotEmpty
             ? replaceParticipantIds

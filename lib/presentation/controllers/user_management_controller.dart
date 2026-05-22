@@ -50,7 +50,20 @@ class UserManagementController extends GetxController {
   final userNameController = TextEditingController();
   final passwordController = TextEditingController();
   final cellController = TextEditingController();
-  final formKey = GlobalKey<FormState>();
+
+  /// New key whenever the user form subtree is (re)shown so we never attach one
+  /// [GlobalKey] to two [Form] elements during list/form transitions (web hot reload
+  /// and rapid Obx rebuilds could otherwise trigger duplicate GlobalKey assertions).
+  GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  GlobalKey<FormState> get formKey => _formKey;
+
+  /// Bumped whenever [_formKey] is replaced so the UI can rebuild the [Form] shell.
+  final RxInt formKeyRevision = 0.obs;
+
+  void _refreshFormKey() {
+    _formKey = GlobalKey<FormState>();
+    formKeyRevision.value++;
+  }
 
   // Form State
   final RxString selectedType = 'SUB ADMIN'.obs;
@@ -59,6 +72,8 @@ class UserManagementController extends GetxController {
   final RxList<String> selectedPermissions = <String>[].obs;
   final RxList<String> selectedStages = <String>[].obs;
   final RxList<String> selectedCategories = <String>[].obs;
+  final RxBool selectedMale = false.obs;
+  final RxBool selectedFemale = false.obs;
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<Uint8List?> photoBytes = Rx<Uint8List?>(null);
   final RxString photoUrl = ''.obs;
@@ -151,6 +166,9 @@ class UserManagementController extends GetxController {
   }
 
   void toggleViewMode(bool showList) {
+    if (!showList) {
+      _refreshFormKey();
+    }
     isListView.value = showList;
   }
 
@@ -466,6 +484,12 @@ class UserManagementController extends GetxController {
         errorMessage.value = 'Please select a competition';
         return false;
       }
+      if (selectedType.value == 'JURY(S)' &&
+          !selectedMale.value &&
+          !selectedFemale.value) {
+        errorMessage.value = 'Please select at least one gender option';
+        return false;
+      }
 
       isLoading.value = true;
       errorMessage.value = '';
@@ -508,6 +532,8 @@ class UserManagementController extends GetxController {
         categoriesObj: categoryIds.isNotEmpty
             ? categoryIds.map((id) => {'id': id}).toList()
             : null,
+        male: selectedType.value == 'JURY(S)' ? selectedMale.value : null,
+        female: selectedType.value == 'JURY(S)' ? selectedFemale.value : null,
         cell: cellController.text.trim().isNotEmpty
             ? cellController.text.trim()
             : null,
@@ -628,6 +654,8 @@ class UserManagementController extends GetxController {
     selectedPermissions.value = user.permissions.toList();
     selectedStages.value = user.stages.toList();
     selectedCategories.value = user.categories.toList();
+    selectedMale.value = user.male ?? false;
+    selectedFemale.value = user.female ?? false;
     if (user.cell != null) {
       cellController.text = user.cell!;
     }
@@ -669,6 +697,12 @@ class UserManagementController extends GetxController {
 
       if (selectedEventId.value.isEmpty) {
         errorMessage.value = 'Please select a competition';
+        return false;
+      }
+      if (selectedType.value == 'JURY(S)' &&
+          !selectedMale.value &&
+          !selectedFemale.value) {
+        errorMessage.value = 'Please select at least one gender option';
         return false;
       }
 
@@ -723,6 +757,8 @@ class UserManagementController extends GetxController {
         categoriesObj: categoryIds.isNotEmpty
             ? categoryIds.map((id) => {'id': id}).toList()
             : null,
+        male: selectedType.value == 'JURY(S)' ? selectedMale.value : null,
+        female: selectedType.value == 'JURY(S)' ? selectedFemale.value : null,
         cell: cellController.text.trim().isNotEmpty
             ? cellController.text.trim()
             : null,
@@ -740,6 +776,7 @@ class UserManagementController extends GetxController {
         final eventIdInt = int.tryParse(selectedEventId.value);
         await loadUsers(eventId: eventIdInt);
         resetForm();
+        toggleViewMode(true);
         return true;
       } else {
         errorMessage.value = response.message ?? 'Failed to update user';
@@ -794,6 +831,8 @@ class UserManagementController extends GetxController {
     selectedCategories.clear();
     selectedAllStage.value = false;
     selectedAllCategory.value = false;
+    selectedMale.value = false;
+    selectedFemale.value = false;
     photoFile.value = null;
     photoBytes.value = null;
     photoUrl.value = '';

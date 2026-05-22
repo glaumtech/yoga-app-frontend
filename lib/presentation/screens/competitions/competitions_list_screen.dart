@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../controllers/competition_controller.dart';
 import '../../controllers/competitions_list_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../../data/models/competition_model.dart';
+import '../../widgets/competition_registration_qr_panel.dart';
 
 class CompetitionsListScreen extends StatelessWidget {
   const CompetitionsListScreen({super.key});
@@ -646,6 +648,28 @@ class CompetitionsListScreen extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Obx(() {
+            final permissionStore = Get.isRegistered<PermissionStore>()
+                ? Get.find<PermissionStore>()
+                : Get.put(PermissionStore());
+            if (competition.id == null ||
+                competition.id!.isEmpty ||
+                !permissionStore.has('SHOW_COMP_QR_CODE_ON_ADMIN')) {
+              return const SizedBox.shrink();
+            }
+            return IconButton(
+              icon: Icon(
+                Icons.qr_code_2,
+                size: 18,
+                color: AppTheme.primaryColor,
+              ),
+              onPressed: () =>
+                  showCompetitionRegistrationQrDialog(context, competition),
+              tooltip: 'Registration QR',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            );
+          }),
           IconButton(
             icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
             onPressed: () async {

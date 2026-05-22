@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -7,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
 import '../../data/models/city_model.dart';
+import '../../data/models/district_model.dart';
 import '../../data/models/api_response.dart';
 import '../../data/models/institution_type_model.dart';
 import '../../data/models/institution_category_model.dart';
@@ -14,28 +16,53 @@ import '../../data/repositories/location_repository.dart';
 import '../../data/repositories/school_repository.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/storage_service.dart';
+import '../../../core/utils/state_defaults.dart';
 import '../../../core/navigation/root_scaffold_messenger_key.dart';
 
 // Conditional import for web
 import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class SchoolController extends GetxController {
+  static const String districtRequiredMessage = 'Please select district';
+  static const String invalidStateMessage =
+      'Please select a valid state from the list';
+  static const String invalidDistrictMessage =
+      'Please select a valid district from the list';
+  static const String invalidCityMessage =
+      'Please select a valid city/town/village from the list';
+  static String duplicateInstitutionMessage({String? address}) {
+    final addr = (address ?? '').trim();
+    if (addr.isEmpty) {
+      return 'Institution already exists with the same name, address, state and district.';
+    }
+    return 'Institution already exists with the same name, state, district and address: $addr';
+  }
+
   final LocationRepository _locationRepository = LocationRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
 
-  // Form controllers
-  final formKey = GlobalKey<FormState>();
+  // Form controllers — new key on [resetForm] drops stale field validation after save.
+  GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  final RxInt formResetGeneration = 0.obs;
   final institutionNameController = TextEditingController();
   final institutionShortNameController = TextEditingController();
   final addressController = TextEditingController();
   final pincodeController = TextEditingController();
   final emailController = TextEditingController();
+  final websiteController = TextEditingController();
+  final landLineController = TextEditingController();
+  final mobileController = TextEditingController();
+  final contributorNameController = TextEditingController();
+  final contributorMobileController = TextEditingController();
   final searchController = TextEditingController();
 
   /// Create form (school create screen): state/city autocomplete controllers.
   final TextEditingController createFormStateTextController =
       TextEditingController();
   final FocusNode createFormStateFocusNode = FocusNode();
+  final TextEditingController createFormDistrictTextController =
+      TextEditingController();
+  final FocusNode createFormDistrictFocusNode = FocusNode();
   final TextEditingController createFormCityTextController =
       TextEditingController();
   final FocusNode createFormCityFocusNode = FocusNode();
@@ -71,8 +98,16 @@ class SchoolController extends GetxController {
   final RxString sortOrder = 'desc'.obs; // asc, desc
 
   // Form fields
-  final RxString selectedDistrict = ''.obs;
-  final RxString selectedCity = ''.obs; // Selected city name
+  final RxInt selectedDistrictId = 0.obs;
+  final RxString selectedCity =
+      ''.obs; // Selected city name (create-new / fallback)
+  /// Village/city row id from API list; sent as `cityId` on save/update when set.
+  final RxInt createFormSelectedCityId = 0.obs;
+
+  /// Bumped when create-form district draft text changes (GetX does not track [TextEditingController]).
+  final RxInt createFormDistrictDraftRevision = 0.obs;
+  /// User chose "Add … as city/town/village" — allow save without list row id.
+  final RxBool createFormCityAcknowledgedNew = false.obs;
   final RxString selectedState = ''.obs;
   final RxInt selectedStateId = 0.obs; // Store state ID
   final RxString selectedPincode = ''.obs;
@@ -85,15 +120,21 @@ class SchoolController extends GetxController {
   final RxString customCategory = ''.obs;
 
   // Report generation fields
-  final RxString reportDistrict = ''.obs;
+  final RxInt reportDistrictId = 0.obs;
   final RxString reportState = ''.obs;
   final RxInt reportInstitutionTypeId = 0.obs;
 
   // API-loaded data
   final RxList<StateModel> states = <StateModel>[].obs;
   final RxList<CityModel> cities = <CityModel>[].obs;
+
+  /// Districts for the current list/create state selection (GET /city/districts/state/{id}).
+  final RxList<DistrictModel> stateDistrictList = <DistrictModel>[].obs;
+  final RxList<CityModel> createFormVillages = <CityModel>[].obs;
   final RxBool isLoadingStates = false.obs;
   final RxBool isLoadingCities = false.obs;
+  final RxBool isLoadingStateDistricts = false.obs;
+  final RxBool isLoadingCreateFormVillages = false.obs;
 
   // Institution types and categories from API
   final RxList<InstitutionTypeModel> institutionTypes =
@@ -105,6 +146,37 @@ class SchoolController extends GetxController {
 
   // Selected institution type ID
   final RxInt selectedInstitutionTypeId = 0.obs;
+
+  int? _committedOrResolvedDistrictId() {
+    if (selectedDistrictId.value > 0) return selectedDistrictId.value;
+    final name = createFormDistrictTextController.text.trim();
+    if (name.isEmpty) return null;
+    return stateDistrictList
+        .firstWhereOrNull(
+          (d) => d.districtName.toLowerCase() == name.toLowerCase(),
+        )
+        ?.id;
+  }
+
+  String _committedOrDraftDistrictName() {
+    if (selectedDistrictId.value > 0) {
+      final match = stateDistrictList.firstWhereOrNull(
+        (d) => d.id == selectedDistrictId.value,
+      );
+      if (match != null) return match.districtName;
+    }
+    return createFormDistrictTextController.text.trim();
+  }
+
+  void _selectDistrict(DistrictModel district) {
+    selectedDistrictId.value = district.id;
+    createFormDistrictTextController.text = district.districtName;
+  }
+
+  void _clearDistrictSelection() {
+    selectedDistrictId.value = 0;
+    createFormDistrictTextController.clear();
+  }
 
   // Load institution types from API
   Future<void> loadInstitutionTypes() async {
@@ -171,52 +243,427 @@ class SchoolController extends GetxController {
     return baseType;
   }
 
-  // Get city ID from selected city name
-  int? _getCityIdFromName(String cityName) {
-    if (cityName.isEmpty || selectedStateId.value == 0) {
-      return null;
-    }
-    final city = cities.firstWhereOrNull(
-      (c) => c.cityName == cityName && c.stateId == selectedStateId.value,
-    );
-    return city?.id;
+  bool get hasAnyLocationDetailFilled {
+    return _committedOrResolvedDistrictId() != null;
   }
 
-  // Get districts (unique) from cities for selected state
-  List<String> getDistrictsForState(String stateName) {
-    if (selectedStateId.value == 0) return [];
+  String _committedOrDraftCityName() {
+    final committed = selectedCity.value.trim();
+    if (committed.isNotEmpty) return committed;
+    return _parseCityNameFromDisplay(createFormCityTextController.text.trim());
+  }
 
+  /// User entered or chose city/pincode in the form (ignores stale [createFormSelectedCityId]).
+  bool _hasUserProvidedCityOrPincode() {
+    if (pincodeController.text.trim().isNotEmpty) return true;
+    if (createFormCityTextController.text.trim().isNotEmpty) return true;
+    if (createFormCityAcknowledgedNew.value) return true;
+    return false;
+  }
+
+  void clearCreateFormCitySelection() {
+    createFormSelectedCityId.value = 0;
+    createFormCityAcknowledgedNew.value = false;
+    selectedCity.value = '';
+  }
+
+  /// API: 0 or negative → null; positive id unchanged.
+  int? _apiCityId(int? id) {
+    if (id == null || id <= 0) return null;
+    return id;
+  }
+
+  String _parseCityNameFromDisplay(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    if (trimmed.contains(',')) {
+      return trimmed.split(',').first.trim();
+    }
+    return trimmed;
+  }
+
+  StateModel? _stateModelForTypedName(String text) {
+    final q = text.trim().toLowerCase();
+    if (q.isEmpty) return null;
+    return states.firstWhereOrNull(
+      (s) => s.stateName.trim().toLowerCase() == q,
+    );
+  }
+
+  bool _createFormCityTextMatchesList(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return true;
+
+    final lower = trimmed.toLowerCase();
+    final cityName = _parseCityNameFromDisplay(trimmed).toLowerCase();
+    final districtId = _committedOrResolvedDistrictId();
+
+    Iterable<CityModel> rows = createFormVillages;
+    if (rows.isEmpty && selectedStateId.value > 0) {
+      rows = cities.where((c) => c.stateId == selectedStateId.value);
+    }
+
+    for (final row in rows) {
+      if (_createFormVillageDisplay(row).toLowerCase() == lower) return true;
+      if (row.cityName.trim().toLowerCase() != cityName) continue;
+      if (districtId == null ||
+          districtId <= 0 ||
+          row.districtId == districtId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String? validateStateField([String? value]) {
+    final text = (value ?? createFormStateTextController.text).trim();
+    if (text.isEmpty) {
+      return 'Please select state';
+    }
+    final match = _stateModelForTypedName(text);
+    if (match == null) {
+      return invalidStateMessage;
+    }
+    if (selectedStateId.value != match.id) {
+      return invalidStateMessage;
+    }
+    return null;
+  }
+
+  Future<void> _syncCreateFormLocationBeforeValidate() async {
+    final stateMatch = _stateModelForTypedName(
+      createFormStateTextController.text,
+    );
+    if (stateMatch != null && selectedStateId.value != stateMatch.id) {
+      await setCreateFormState(stateMatch.id);
+    }
+
+    final districtName = createFormDistrictTextController.text.trim();
+    if (districtName.isNotEmpty && selectedStateId.value > 0) {
+      final districtMatch = stateDistrictList.firstWhereOrNull(
+        (d) => d.districtName.toLowerCase() == districtName.toLowerCase(),
+      );
+      if (districtMatch != null) {
+        if (selectedDistrictId.value != districtMatch.id) {
+          _selectDistrict(districtMatch);
+          await loadCreateFormVillagesByDistrict();
+        }
+      } else {
+        setCreateFormDistrict(districtName);
+      }
+    }
+
+    final cityText = createFormCityTextController.text.trim();
+    if (cityText.isNotEmpty &&
+        createFormSelectedCityId.value <= 0 &&
+        !createFormCityAcknowledgedNew.value) {
+      setCreateFormCityName(cityText);
+    }
+  }
+
+  String? validateDistrictField([String? value]) {
+    final stateError = validateStateField();
+    if (stateError != null) return stateError;
+
+    final text = (value ?? createFormDistrictTextController.text).trim();
+    if (text.isEmpty) {
+      return districtRequiredMessage;
+    }
+    if (_committedOrResolvedDistrictId() == null) {
+      return invalidDistrictMessage;
+    }
+    return null;
+  }
+
+  String? validateCityField([String? value]) {
+    final text = (value ?? createFormCityTextController.text).trim();
+    if (text.isEmpty) return null;
+
+    if (selectedStateId.value <= 0) {
+      return 'Please select state before city/town/village';
+    }
+    if (_committedOrResolvedDistrictId() == null) {
+      return 'Please select district before city/town/village';
+    }
+
+    if (createFormSelectedCityId.value > 0) return null;
+    if (createFormCityAcknowledgedNew.value) return null;
+    if (_createFormCityTextMatchesList(text)) return null;
+
+    return invalidCityMessage;
+  }
+
+  String? validatePincodeField(String? value) {
+    final pin = (value ?? pincodeController.text).trim();
+    if (pin.isEmpty) return null;
+
+    if (pin.length != 6) return 'Pincode must be 6 digits';
+    if (!RegExp(r'^[0-9]+$').hasMatch(pin)) {
+      return 'Pincode must contain only numbers';
+    }
+    return null;
+  }
+
+  List<CityModel> _citiesForSelectedState() {
+    final stateId = selectedStateId.value;
+    if (stateId <= 0) return [];
+    final byId = <int, CityModel>{};
+    for (final c in createFormVillages) {
+      if (c.stateId == stateId) byId[c.id] = c;
+    }
+    for (final c in cities) {
+      if (c.stateId == stateId) byId[c.id] = c;
+    }
+    return byId.values.toList();
+  }
+
+  Future<void> _ensureLocationCitiesLoaded() async {
+    if (selectedStateId.value <= 0) return;
+
+    if (_committedOrResolvedDistrictId() != null &&
+        createFormVillages.isEmpty) {
+      await loadCreateFormVillagesByDistrict();
+    }
+
+    if (cities.isEmpty) {
+      await loadCitiesByStateId(selectedStateId.value);
+    }
+  }
+
+  int? _findExistingCityId({
+    required String cityName,
+    int? districtId,
+    String? pincode,
+  }) {
+    final nameNorm = cityName.trim().toLowerCase();
+    if (nameNorm.isEmpty || selectedStateId.value <= 0) return null;
+
+    final resolvedDistrictId = districtId ?? _committedOrResolvedDistrictId();
+    final pinNorm = (pincode ?? pincodeController.text.trim()).trim();
+
+    var matches = _citiesForSelectedState().where((c) {
+      if (c.cityName.trim().toLowerCase() != nameNorm) return false;
+      if (resolvedDistrictId != null &&
+          resolvedDistrictId > 0 &&
+          c.districtId != resolvedDistrictId) {
+        return false;
+      }
+      if (pinNorm.isNotEmpty && c.pincode.trim() != pinNorm) return false;
+      return true;
+    }).toList();
+
+    if (matches.isEmpty) {
+      matches = _citiesForSelectedState()
+          .where((c) => c.cityName.trim().toLowerCase() == nameNorm)
+          .toList();
+    }
+
+    if (matches.isEmpty) return null;
+    if (matches.length == 1) return matches.first.id;
+
+    if (pinNorm.isNotEmpty) {
+      final pinMatches = matches
+          .where((c) => c.pincode.trim() == pinNorm)
+          .toList();
+      if (pinMatches.length == 1) return pinMatches.first.id;
+    }
+
+    return matches.first.id;
+  }
+
+  // Get city ID from selected city name (ambiguous if several villages share same cityName)
+  int? _getCityIdFromName(String cityName) {
+    return _findExistingCityId(cityName: cityName);
+  }
+
+  /// Same display as village field in [SchoolCreateScreen] after selection.
+  String _createFormVillageDisplay(CityModel c) {
+    final v = (c.village ?? c.description ?? '').trim();
+    if (v.isEmpty) return c.cityName.trim();
+    return '${c.cityName}, $v';
+  }
+
+  int? getCityIdForSelectedStateAndDistrict(String cityName) {
+    return _getCityIdFromName(cityName);
+  }
+
+  Future<int?> _createCityRecord({
+    required String cityName,
+    required int districtId,
+    required String pincode,
+  }) async {
+    await _ensureLocationCitiesLoaded();
+
+    final existingId = _findExistingCityId(
+      cityName: cityName,
+      districtId: districtId,
+      pincode: pincode,
+    );
+    if (existingId != null) {
+      return existingId;
+    }
+
+    final response = await _locationRepository.createCity(
+      cityName: cityName,
+      districtId: districtId,
+      pincode: pincode,
+      stateId: selectedStateId.value,
+      description: null,
+    );
+
+    if (!response.success || response.data == null) {
+      final message = response.message ?? '';
+      if (message.toLowerCase().contains('already exists')) {
+        await _ensureLocationCitiesLoaded();
+        final reusedId = _findExistingCityId(
+          cityName: cityName,
+          districtId: districtId,
+          pincode: pincode,
+        );
+        if (reusedId != null) return reusedId;
+      }
+      errorMessage.value = message.isNotEmpty ? message : 'Failed to add city';
+      return null;
+    }
+
+    final createdCity = response.data!;
+    final cityIdx = cities.indexWhere((c) => c.id == createdCity.id);
+    if (cityIdx >= 0) {
+      cities[cityIdx] = createdCity;
+    } else {
+      cities.add(createdCity);
+    }
+    cities.refresh();
+    final villageIdx = createFormVillages.indexWhere(
+      (c) => c.id == createdCity.id,
+    );
+    if (villageIdx >= 0) {
+      createFormVillages[villageIdx] = createdCity;
+    } else {
+      createFormVillages.add(createdCity);
+    }
+    createFormVillages.refresh();
+
+    createFormSelectedCityId.value = createdCity.id;
+    if (createdCity.districtId > 0) {
+      selectedDistrictId.value = createdCity.districtId;
+      createFormDistrictTextController.text = createdCity.districtName;
+    }
+    selectedCity.value = createdCity.cityName;
+    final createdV = (createdCity.village ?? createdCity.description ?? '')
+        .trim();
+    createFormCityTextController.text = createdV.isEmpty
+        ? createdCity.cityName
+        : '${createdCity.cityName}, $createdV';
+    if (createdCity.pincode.trim().isNotEmpty) {
+      pincodeController.text = createdCity.pincode;
+    }
+
+    return createdCity.id;
+  }
+
+  Future<int?> resolveOrCreateCityIdForCreateForm() async {
+    if (selectedStateId.value <= 0) {
+      return null;
+    }
+
+    if (!_hasUserProvidedCityOrPincode()) {
+      clearCreateFormCitySelection();
+      return null;
+    }
+
+    await _ensureLocationCitiesLoaded();
+
+    final explicitId = createFormSelectedCityId.value;
+    if (explicitId > 0) {
+      final row =
+          createFormVillages.firstWhereOrNull((c) => c.id == explicitId) ??
+          cities.firstWhereOrNull((c) => c.id == explicitId);
+      if (row != null && row.stateId == selectedStateId.value) {
+        final resolvedDistrictId = _committedOrResolvedDistrictId();
+        if (resolvedDistrictId == null ||
+            row.districtId == resolvedDistrictId) {
+          return explicitId;
+        }
+      }
+    }
+
+    final districtId = _committedOrResolvedDistrictId();
+    final pincode = pincodeController.text.trim();
+    final cityName = _committedOrDraftCityName();
+
+    if (districtId == null) {
+      errorMessage.value = districtRequiredMessage;
+      return null;
+    }
+
+    // City and pincode are optional — only resolve/create when user entered a city.
+    if (cityName.isEmpty) {
+      return null;
+    }
+
+    final existingCityId = _getCityIdFromName(cityName);
+    if (existingCityId != null) {
+      return existingCityId;
+    }
+
+    return _createCityRecord(
+      cityName: cityName,
+      districtId: districtId,
+      pincode: pincode,
+    );
+  }
+
+  // Get districts for autocomplete: prefer API list, else derive from loaded cities.
+  List<DistrictModel> getDistrictsForState(String stateName) {
+    if (selectedStateId.value == 0) return [];
+    if (stateDistrictList.isNotEmpty) {
+      return List<DistrictModel>.from(stateDistrictList);
+    }
     final stateCities = cities
         .where((city) => city.stateId == selectedStateId.value)
         .toList();
-    final districts = stateCities.map((city) => city.district).toSet().toList();
-    districts.sort();
+    final byId = <int, DistrictModel>{};
+    for (final city in stateCities) {
+      if (city.districtId > 0) {
+        byId[city.districtId] = DistrictModel(
+          id: city.districtId,
+          districtName: city.districtName,
+          stateId: city.stateId,
+        );
+      }
+    }
+    final districts = byId.values.toList();
+    districts.sort(
+      (a, b) =>
+          a.districtName.toLowerCase().compareTo(b.districtName.toLowerCase()),
+    );
     return districts;
   }
 
   // Get cities for selected district
-  List<CityModel> getCitiesForDistrict(String district) {
-    if (selectedStateId.value == 0 || district.isEmpty) return [];
+  List<CityModel> getCitiesForDistrict(int districtId) {
+    if (selectedStateId.value == 0 || districtId <= 0) return [];
 
     return cities
         .where(
           (city) =>
               city.stateId == selectedStateId.value &&
-              city.district == district,
+              city.districtId == districtId,
         )
         .toList()
       ..sort((a, b) => a.cityName.compareTo(b.cityName));
   }
 
   // Get pincodes for selected district
-  List<String> getPincodesForDistrict(String district) {
-    if (selectedStateId.value == 0) return [];
+  List<String> getPincodesForDistrict(int districtId) {
+    if (selectedStateId.value == 0 || districtId <= 0) return [];
 
     final districtCities = cities
         .where(
           (city) =>
               city.stateId == selectedStateId.value &&
-              city.district == district,
+              city.districtId == districtId,
         )
         .toList();
     final pincodes = districtCities
@@ -227,12 +674,60 @@ class SchoolController extends GetxController {
     return pincodes;
   }
 
+  void _onCreateFormStateTextEdited() {
+    final text = createFormStateTextController.text.trim();
+    if (text.isEmpty || selectedStateId.value <= 0) return;
+
+    final current = states.firstWhereOrNull(
+      (s) => s.id == selectedStateId.value,
+    );
+    if (current != null &&
+        current.stateName.trim().toLowerCase() == text.toLowerCase()) {
+      return;
+    }
+
+    selectedStateId.value = 0;
+    selectedState.value = '';
+    _clearDistrictSelection();
+    createFormCityTextController.clear();
+    createFormSelectedCityId.value = 0;
+    createFormCityAcknowledgedNew.value = false;
+    selectedCity.value = '';
+    createFormVillages.clear();
+    stateDistrictList.clear();
+  }
+
   @override
   void onInit() {
     super.onInit();
+    createFormStateTextController.addListener(_onCreateFormStateTextEdited);
     loadSchools();
     loadStates();
     loadInstitutionTypes();
+  }
+
+  Future<void> _applyDefaultTamilNaduStateIfEmpty() async {
+    if (isListView.value) {
+      if (reportState.value.trim().isNotEmpty ||
+          listFilterStateTextController.text.trim().isNotEmpty) {
+        return;
+      }
+      final tn = StateDefaults.findTamilNadu(states);
+      if (tn != null) {
+        await setListFilterState(tn.id);
+      }
+      return;
+    }
+
+    if (isEditMode.value) return;
+    if (selectedStateId.value > 0 ||
+        createFormStateTextController.text.trim().isNotEmpty) {
+      return;
+    }
+    final tn = StateDefaults.findTamilNadu(states);
+    if (tn != null) {
+      await setCreateFormState(tn.id);
+    }
   }
 
   // Load states from API
@@ -244,6 +739,7 @@ class SchoolController extends GetxController {
         states.value = response.data!;
         // Sort by state name
         states.sort((a, b) => a.stateName.compareTo(b.stateName));
+        await _applyDefaultTamilNaduStateIfEmpty();
       } else {
         errorMessage.value = response.message ?? 'Failed to load states';
       }
@@ -257,14 +753,18 @@ class SchoolController extends GetxController {
 
   /// Create form: state autocomplete selection (id 0 = clear).
   Future<void> setCreateFormState(int stateId) async {
+    _clearDistrictSelection();
     selectedCity.value = '';
+    createFormSelectedCityId.value = 0;
     pincodeController.clear();
     createFormCityTextController.clear();
+    createFormVillages.clear();
 
     if (stateId <= 0) {
       selectedState.value = '';
       selectedStateId.value = 0;
       cities.clear();
+      stateDistrictList.clear();
       createFormStateTextController.clear();
       return;
     }
@@ -276,33 +776,165 @@ class SchoolController extends GetxController {
       createFormStateTextController.text = st.stateName;
     }
 
-    await loadCitiesByStateId(stateId);
+    cities.clear();
+    await loadDistrictsByStateId(stateId);
+  }
+
+  void confirmCreateFormNewCity(String name) {
+    createFormCityAcknowledgedNew.value = true;
+    setCreateFormCityName(name);
+  }
+
+  void setCreateFormDistrict(String districtName) {
+    final d = districtName.trim();
+    createFormSelectedCityId.value = 0;
+    createFormCityAcknowledgedNew.value = false;
+    final match = stateDistrictList.firstWhereOrNull(
+      (x) => x.districtName.toLowerCase() == d.toLowerCase(),
+    );
+    if (match != null) {
+      _selectDistrict(match);
+    } else {
+      selectedDistrictId.value = 0;
+      createFormDistrictTextController.text = d;
+    }
+    selectedCity.value = '';
+    createFormCityTextController.clear();
+    pincodeController.clear();
+    createFormVillages.clear();
+    if (selectedStateId.value > 0 && d.isNotEmpty) {
+      loadCreateFormVillagesByDistrict();
+    }
+  }
+
+  void setCreateFormCityName(String cityName) {
+    createFormCityTextController.text = cityName;
+    final c = cityName.trim();
+    createFormSelectedCityId.value = 0;
+    createFormCityAcknowledgedNew.value = false;
+
+    if (c.isEmpty) {
+      clearCreateFormCitySelection();
+      return;
+    }
+
+    final lower = c.toLowerCase();
+    final districtIdFilter = selectedDistrictId.value;
+
+    for (final row in createFormVillages) {
+      if (_createFormVillageDisplay(row).toLowerCase() == lower) {
+        createFormSelectedCityId.value = row.id;
+        if (row.districtId > 0) {
+          selectedDistrictId.value = row.districtId;
+        }
+        createFormDistrictTextController.text = row.districtName;
+        selectedCity.value = row.cityName;
+        pincodeController.text = row.pincode;
+        return;
+      }
+    }
+
+    final ambiguousMatches = createFormVillages.where((row) {
+      if (row.stateId != selectedStateId.value) return false;
+      if (districtIdFilter > 0 && row.districtId != districtIdFilter) {
+        return false;
+      }
+      return row.cityName.trim().toLowerCase() == lower;
+    }).toList();
+    if (ambiguousMatches.length == 1) {
+      final row = ambiguousMatches.first;
+      createFormSelectedCityId.value = row.id;
+      if (row.districtId > 0) {
+        selectedDistrictId.value = row.districtId;
+      }
+      createFormDistrictTextController.text = row.districtName;
+      pincodeController.text = row.pincode;
+      selectedCity.value = row.cityName;
+      return;
+    }
+
+    final cityId = _getCityIdFromName(c);
+    if (cityId != null) {
+      createFormSelectedCityId.value = cityId;
+      final city = (createFormVillages.isNotEmpty ? createFormVillages : cities)
+          .firstWhereOrNull((x) => x.id == cityId);
+      if (city != null) {
+        if (city.districtId > 0) {
+          selectedDistrictId.value = city.districtId;
+        }
+        createFormDistrictTextController.text = city.districtName;
+        pincodeController.text = city.pincode;
+        selectedCity.value = city.cityName;
+        return;
+      }
+    }
+
+    selectedCity.value = c;
   }
 
   /// Create form: city autocomplete selection (id 0 = clear).
   void setCreateFormCity(int cityId) {
     if (cityId <= 0) {
-      selectedCity.value = '';
+      clearCreateFormCitySelection();
       createFormCityTextController.clear();
+      pincodeController.clear();
       return;
     }
-    final c = cities.firstWhereOrNull((x) => x.id == cityId);
+    final c = (createFormVillages.isNotEmpty ? createFormVillages : cities)
+        .firstWhereOrNull((x) => x.id == cityId);
     if (c != null) {
+      createFormCityAcknowledgedNew.value = false;
+      createFormSelectedCityId.value = c.id;
+      if (c.districtId > 0) {
+        selectedDistrictId.value = c.districtId;
+      }
+      createFormDistrictTextController.text = c.districtName;
       selectedCity.value = c.cityName;
-      createFormCityTextController.text = c.cityName;
+      final v = (c.village ?? c.description ?? '').trim();
+      createFormCityTextController.text = v.isEmpty
+          ? c.cityName
+          : '${c.cityName}, $v';
       pincodeController.text = c.pincode;
+    } else {
+      createFormSelectedCityId.value = 0;
+    }
+  }
+
+  Future<void> loadCreateFormVillagesByDistrict() async {
+    final districtId = _committedOrResolvedDistrictId();
+    if (selectedStateId.value <= 0 || districtId == null) {
+      createFormVillages.clear();
+      return;
+    }
+    try {
+      isLoadingCreateFormVillages.value = true;
+      final response = await _locationRepository.getVillagesByStateAndDistrict(
+        stateId: selectedStateId.value,
+        districtId: districtId,
+      );
+      if (response.success && response.data != null) {
+        createFormVillages.value = response.data!;
+      } else {
+        createFormVillages.clear();
+      }
+    } catch (e) {
+      createFormVillages.clear();
+      print('Error in loadCreateFormVillagesByDistrict: $e');
+    } finally {
+      isLoadingCreateFormVillages.value = false;
     }
   }
 
   /// List filter: state (id 0 = clear); reloads schools.
   Future<void> setListFilterState(int stateId) async {
-    reportDistrict.value = '';
+    reportDistrictId.value = 0;
     listFilterCityTextController.clear();
 
     if (stateId <= 0) {
       reportState.value = '';
       selectedStateId.value = 0;
       cities.clear();
+      stateDistrictList.clear();
       listFilterStateTextController.clear();
       await loadSchools(resetPage: true);
       return;
@@ -315,23 +947,35 @@ class SchoolController extends GetxController {
       listFilterStateTextController.text = st.stateName;
     }
 
-    await loadCitiesByStateId(stateId);
+    cities.clear();
+    await loadDistrictsByStateId(stateId);
     await loadSchools(resetPage: true);
   }
 
   /// List filter: city/district label uses city name for API (id 0 = clear).
   void setListFilterCity(int cityId) {
     if (cityId <= 0) {
-      reportDistrict.value = '';
+      reportDistrictId.value = 0;
       listFilterCityTextController.clear();
       loadSchools(resetPage: true);
       return;
     }
     final c = cities.firstWhereOrNull((x) => x.id == cityId);
     if (c != null) {
-      reportDistrict.value = c.cityName;
+      reportDistrictId.value = 0;
       listFilterCityTextController.text = c.cityName;
     }
+    loadSchools(resetPage: true);
+  }
+
+  /// List filter: district text (empty = clear).
+  void setListFilterDistrict(String district) {
+    final d = district.trim();
+    final match = stateDistrictList.firstWhereOrNull(
+      (x) => x.districtName.toLowerCase() == d.toLowerCase(),
+    );
+    reportDistrictId.value = match?.id ?? 0;
+    listFilterCityTextController.text = d;
     loadSchools(resetPage: true);
   }
 
@@ -356,6 +1000,27 @@ class SchoolController extends GetxController {
     }
   }
 
+  Future<void> loadDistrictsByStateId(int stateId) async {
+    if (stateId <= 0) {
+      stateDistrictList.clear();
+      return;
+    }
+    isLoadingStateDistricts.value = true;
+    try {
+      final response = await _locationRepository.getDistrictsByStateId(stateId);
+      if (response.success && response.data != null) {
+        stateDistrictList.value = response.data!;
+      } else {
+        stateDistrictList.clear();
+      }
+    } catch (e) {
+      print('Error loading districts: $e');
+      stateDistrictList.clear();
+    } finally {
+      isLoadingStateDistricts.value = false;
+    }
+  }
+
   @override
   void onClose() {
     institutionNameController.dispose();
@@ -363,9 +1028,17 @@ class SchoolController extends GetxController {
     addressController.dispose();
     pincodeController.dispose();
     emailController.dispose();
+    websiteController.dispose();
+    landLineController.dispose();
+    mobileController.dispose();
+    contributorNameController.dispose();
+    contributorMobileController.dispose();
     searchController.dispose();
+    createFormStateTextController.removeListener(_onCreateFormStateTextEdited);
     createFormStateTextController.dispose();
     createFormStateFocusNode.dispose();
+    createFormDistrictTextController.dispose();
+    createFormDistrictFocusNode.dispose();
     createFormCityTextController.dispose();
     createFormCityFocusNode.dispose();
     listFilterStateTextController.dispose();
@@ -412,6 +1085,7 @@ class SchoolController extends GetxController {
       int? finalStateId = stateId;
       int? finalCityId = cityId;
       int? finalInstitutionTypeId = institutionTypeId;
+      int? finalDistrictId;
 
       if (useReportFilters) {
         // Use report state filter if set
@@ -424,38 +1098,8 @@ class SchoolController extends GetxController {
           }
         }
 
-        // Use report district/city filter if set
-        if (reportDistrict.value.isNotEmpty && finalCityId == null) {
-          // Determine which state ID to use for filtering
-          final stateIdForFilter = finalStateId ?? selectedStateId.value;
-
-          // Try to find city by name first (in case reportDistrict contains city name)
-          final cityByName = cities.firstWhereOrNull(
-            (c) =>
-                c.cityName == reportDistrict.value &&
-                (stateIdForFilter > 0 ? c.stateId == stateIdForFilter : true),
-          );
-
-          if (cityByName != null) {
-            finalCityId = cityByName.id;
-          } else {
-            // If not found by name, try to find by district
-            // Get cities from the selected district for the current state
-            final districtCities = cities
-                .where(
-                  (c) =>
-                      c.district == reportDistrict.value &&
-                      (stateIdForFilter > 0
-                          ? c.stateId == stateIdForFilter
-                          : true),
-                )
-                .toList();
-
-            if (districtCities.isNotEmpty) {
-              // Use the first city from the district
-              finalCityId = districtCities.first.id;
-            }
-          }
+        if (reportDistrictId.value > 0) {
+          finalDistrictId = reportDistrictId.value;
         }
 
         // Use report institution type filter if set
@@ -469,6 +1113,7 @@ class SchoolController extends GetxController {
         search: searchTerm.isNotEmpty ? searchTerm : null,
         stateId: finalStateId,
         cityId: finalCityId,
+        districtId: finalDistrictId,
         institutionTypeId: finalInstitutionTypeId,
         page: pageNum,
         limit: limitNum,
@@ -562,14 +1207,108 @@ class SchoolController extends GetxController {
       resetForm();
       // Keep list mode active (resetForm sets isEditMode/isListView)
       isListView.value = true;
+      if (states.isNotEmpty) {
+        unawaited(_applyDefaultTamilNaduStateIfEmpty());
+      }
     } else {
       // When switching back to create, always start fresh
       resetForm();
     }
   }
 
+  String _normalizeInstitutionField(String value) => value.trim().toLowerCase();
+
+  bool _isSameInstitutionIdentity(
+    SchoolModel existing, {
+    required String name,
+    required String address,
+    required int stateId,
+    required int districtId,
+  }) {
+    return _normalizeInstitutionField(existing.institutionName) ==
+            _normalizeInstitutionField(name) &&
+        _normalizeInstitutionField(existing.address) ==
+            _normalizeInstitutionField(address) &&
+        (existing.stateId ?? 0) == stateId &&
+        (existing.districtId ?? 0) == districtId;
+  }
+
+  /// Returns an existing institution with the same name, address, state, and district.
+  Future<SchoolModel?> _findDuplicateInstitution({
+    required String institutionName,
+    required String address,
+    required int stateId,
+    required int districtId,
+    String? excludeInstitutionId,
+  }) async {
+    final name = institutionName.trim();
+    final addr = address.trim();
+    if (name.isEmpty || addr.isEmpty || stateId <= 0 || districtId <= 0) {
+      return null;
+    }
+
+    if (name.length < 3) {
+      return null;
+    }
+
+    try {
+      final response = await _schoolRepository.searchInstitutions(
+        query: name,
+        stateId: stateId,
+        districtId: districtId,
+      );
+      if (!response.success || response.data == null) {
+        return null;
+      }
+
+      for (final school in response.data!.institutions) {
+        if (excludeInstitutionId != null &&
+            excludeInstitutionId.isNotEmpty &&
+            school.id == excludeInstitutionId) {
+          continue;
+        }
+        if (_isSameInstitutionIdentity(
+          school,
+          name: name,
+          address: addr,
+          stateId: stateId,
+          districtId: districtId,
+        )) {
+          return school;
+        }
+      }
+    } catch (e) {
+      print('Duplicate institution search failed: $e');
+    }
+    return null;
+  }
+
+  String _friendlyInstitutionError(String? message, {SchoolModel? duplicate}) {
+    if (duplicate != null) {
+      return duplicateInstitutionMessage(address: duplicate.address);
+    }
+    final m = message ?? '';
+    if (m.toLowerCase().contains('already exists') &&
+        m.toLowerCase().contains('address:')) {
+      return m;
+    }
+    final match = RegExp(
+      r'address:\s*(.+)$',
+      caseSensitive: false,
+    ).firstMatch(m);
+    if (match != null) {
+      return duplicateInstitutionMessage(address: match.group(1));
+    }
+    if (m.toLowerCase().contains('already exists')) {
+      return duplicateInstitutionMessage();
+    }
+    return m;
+  }
+
   // Submit school form
   Future<void> submitSchool() async {
+    await _syncCreateFormLocationBeforeValidate();
+
     if (!formKey.currentState!.validate()) {
       // Important: The institution dialog closes based on `errorMessage`.
       // If validation fails and we don't set an error, the dialog thinks it's
@@ -610,14 +1349,9 @@ class SchoolController extends GetxController {
       return;
     }
 
-    if (selectedCity.value.isEmpty) {
-      errorMessage.value = 'Please select city';
-      return;
-    }
-
-    final cityId = _getCityIdFromName(selectedCity.value);
-    if (cityId == null) {
-      errorMessage.value = 'Invalid city selection';
+    final districtId = _committedOrResolvedDistrictId();
+    if (districtId == null) {
+      errorMessage.value = districtRequiredMessage;
       return;
     }
 
@@ -625,11 +1359,29 @@ class SchoolController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
+      if (!_hasUserProvidedCityOrPincode()) {
+        clearCreateFormCitySelection();
+      }
+
+      final resolvedCityId = await resolveOrCreateCityIdForCreateForm();
+      if (resolvedCityId == null && _hasUserProvidedCityOrPincode()) {
+        errorMessage.value = errorMessage.value.isNotEmpty
+            ? errorMessage.value
+            : invalidCityMessage;
+        return;
+      }
+      final apiCityId = _apiCityId(resolvedCityId);
+
       final institutionName = institutionNameController.text.trim();
       final institutionShortName = institutionShortNameController.text.trim();
       final address = addressController.text.trim();
       final pincode = pincodeController.text.trim();
       final emailId = emailController.text.trim();
+      final website = websiteController.text.trim();
+      final landLine = landLineController.text.trim();
+      final mobile = mobileController.text.trim();
+      final contributorName = contributorNameController.text.trim();
+      final contributorMobileNo = contributorMobileController.text.trim();
 
       final categoryIds = selectedInstitutionCategoryIds.isNotEmpty
           ? selectedInstitutionCategoryIds.toList()
@@ -640,11 +1392,37 @@ class SchoolController extends GetxController {
       print('  Short Name: $institutionShortName');
       print('  Address: $address');
       print('  Email ID: $emailId');
+      print('  Website: $website');
+      print('  Land line: $landLine');
+      print('  Mobile: $mobile');
+      print('  Contributor Name: $contributorName');
+      print('  Contributor Mobile No: $contributorMobileNo');
       print('  State ID: ${selectedStateId.value}');
-      print('  City ID: $cityId');
+      print('  City ID: $apiCityId');
       print('  Pincode: $pincode');
       print('  Institution Type ID: ${selectedInstitutionTypeId.value}');
       print('  Institution Category IDs: ${categoryIds ?? 'null'}');
+
+      final duplicate = await _findDuplicateInstitution(
+        institutionName: institutionName,
+        address: address,
+        stateId: selectedStateId.value,
+        districtId: districtId,
+        excludeInstitutionId:
+            isEditMode.value ? editingSchoolId.value : null,
+      );
+      if (duplicate != null) {
+        errorMessage.value =
+            duplicateInstitutionMessage(address: duplicate.address);
+        Get.snackbar(
+          'Error',
+          errorMessage.value,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
 
       ApiResponse<SchoolModel> response;
 
@@ -661,10 +1439,17 @@ class SchoolController extends GetxController {
           address: address,
           emailId: emailId.isNotEmpty ? emailId : null,
           stateId: selectedStateId.value,
-          cityId: cityId,
+          districtId: districtId,
+          cityId: apiCityId,
+          includeCityId: true,
           institutionTypeId: selectedInstitutionTypeId.value,
           institutionCategoryIds: categoryIds,
           pincode: pincode,
+          website: website,
+          landLine: landLine,
+          mobile: mobile,
+          contributorName: contributorName,
+          contributorMobileNo: contributorMobileNo,
         );
       } else {
         // Create new institution
@@ -676,10 +1461,18 @@ class SchoolController extends GetxController {
           address: address,
           emailId: emailId.isNotEmpty ? emailId : null,
           stateId: selectedStateId.value,
-          cityId: cityId,
+          districtId: districtId,
+          cityId: apiCityId,
           institutionTypeId: selectedInstitutionTypeId.value,
           institutionCategoryIds: categoryIds,
           pincode: pincode,
+          website: website.isNotEmpty ? website : null,
+          landLine: landLine.isNotEmpty ? landLine : null,
+          mobile: mobile.isNotEmpty ? mobile : null,
+          contributorName: contributorName.isNotEmpty ? contributorName : null,
+          contributorMobileNo: contributorMobileNo.isNotEmpty
+              ? contributorMobileNo
+              : null,
         );
       }
 
@@ -709,11 +1502,12 @@ class SchoolController extends GetxController {
           toggleViewMode(true);
         }
       } else {
-        errorMessage.value =
-            response.message ??
+        final rawMessage = response.message ??
             (isEditMode.value
                 ? 'Failed to update institution'
                 : 'Failed to create institution');
+        final friendly = _friendlyInstitutionError(rawMessage);
+        errorMessage.value = friendly.isNotEmpty ? friendly : rawMessage;
         Get.snackbar(
           'Error',
           errorMessage.value,
@@ -782,6 +1576,11 @@ class SchoolController extends GetxController {
         addressController.text = school.address;
         pincodeController.text = school.pincode;
         emailController.text = school.email ?? '';
+        websiteController.text = school.website ?? '';
+        landLineController.text = school.landLine ?? '';
+        mobileController.text = school.mobile ?? '';
+        contributorNameController.text = school.contributorName ?? '';
+        contributorMobileController.text = school.contributorMobileNo ?? '';
 
         // Find and set institution type ID - prefer displayName from API if available
         InstitutionTypeModel? type;
@@ -833,8 +1632,8 @@ class SchoolController extends GetxController {
             // For single-select UI types, pick the first category ID
             selectedInstitutionCategoryId.value =
                 selectedInstitutionCategoryIds.isNotEmpty
-                    ? selectedInstitutionCategoryIds.first
-                    : 0;
+                ? selectedInstitutionCategoryIds.first
+                : 0;
           }
         } else {
           print(
@@ -846,7 +1645,9 @@ class SchoolController extends GetxController {
           'Basic fields populated - Name: ${school.institutionName}, Address: ${school.address}',
         );
 
-        // Load state and city if available
+        // Load location: district list by state only (no full /city/state/{id} on state change).
+        // Villages for the form load via /city/villages/... after district is known.
+        CityModel? resolvedCityForDisplay;
         if (school.stateId != null && school.stateId! > 0) {
           print('State ID found: ${school.stateId}');
           selectedStateId.value = school.stateId!;
@@ -855,7 +1656,6 @@ class SchoolController extends GetxController {
           if (school.stateName != null) {
             selectedState.value = school.stateName!;
           } else {
-            // Try to find state name from states list
             final state = states.firstWhereOrNull(
               (s) => s.id == school.stateId,
             );
@@ -864,41 +1664,126 @@ class SchoolController extends GetxController {
             }
           }
 
-          // Load cities for the state
-          await loadCitiesByStateId(school.stateId!);
+          cities.clear();
+          await loadDistrictsByStateId(school.stateId!);
 
-          // Set city after cities are loaded
+          var districtId = school.districtId ?? 0;
+          var districtStr = (school.districtName ?? '').trim();
+
+          if (districtId <= 0 &&
+              districtStr.isEmpty &&
+              school.cityId != null &&
+              school.stateId != null) {
+            await loadCitiesByStateId(school.stateId!);
+            final inferred =
+                cities.firstWhereOrNull((c) => c.id == school.cityId) ??
+                cities.firstWhereOrNull((c) => c.cityName == school.cityName);
+            districtId = inferred?.districtId ?? 0;
+            districtStr = (inferred?.districtName ?? '').trim();
+            cities.clear();
+          }
+
+          if (districtId > 0) {
+            selectedDistrictId.value = districtId;
+            if (districtStr.isEmpty) {
+              districtStr =
+                  stateDistrictList
+                      .firstWhereOrNull((d) => d.id == districtId)
+                      ?.districtName ??
+                  '';
+            }
+            createFormDistrictTextController.text = districtStr;
+            await loadCreateFormVillagesByDistrict();
+          } else if (districtStr.isNotEmpty) {
+            selectedDistrictId.value = 0;
+            createFormDistrictTextController.text = districtStr;
+            await loadCreateFormVillagesByDistrict();
+          }
+
           if (school.cityId != null && school.cityName != null) {
-            // Wait for cities to fully load and UI to update
-            await Future.delayed(const Duration(milliseconds: 500));
-
-            // Verify city exists in the loaded cities list
-            final matchingCity = cities.firstWhereOrNull(
-              (c) => c.id == school.cityId,
-            );
+            CityModel? matchingCity =
+                createFormVillages.firstWhereOrNull(
+                  (c) => c.id == school.cityId,
+                ) ??
+                createFormVillages.firstWhereOrNull(
+                  (c) => c.cityName == school.cityName,
+                );
 
             if (matchingCity != null) {
+              var dId = matchingCity.districtId;
+              var d = matchingCity.districtName.trim();
+              if (d.isEmpty &&
+                  school.districtName != null &&
+                  school.districtName!.trim().isNotEmpty) {
+                d = school.districtName!.trim();
+              }
+              if (school.districtId != null && school.districtId! > 0) {
+                dId = school.districtId!;
+              }
+              final previousDistrictId = selectedDistrictId.value;
+              if (dId > 0) {
+                selectedDistrictId.value = dId;
+              }
+              if (d.isNotEmpty) {
+                createFormDistrictTextController.text = d;
+              }
               selectedCity.value = matchingCity.cityName;
+              if (dId > 0 && dId != previousDistrictId) {
+                await loadCreateFormVillagesByDistrict();
+              }
+              resolvedCityForDisplay = matchingCity;
               print(
                 'City set to: ${selectedCity.value} (ID: ${matchingCity.id})',
               );
             } else {
-              // Try to match by name as fallback
-              final cityByName = cities.firstWhereOrNull(
-                (c) => c.cityName == school.cityName,
-              );
-              if (cityByName != null) {
-                selectedCity.value = cityByName.cityName;
-                print('City set by name: ${selectedCity.value}');
+              await loadCitiesByStateId(school.stateId!);
+              final fromAll =
+                  cities.firstWhereOrNull((c) => c.id == school.cityId) ??
+                  cities.firstWhereOrNull((c) => c.cityName == school.cityName);
+              cities.clear();
+              if (fromAll != null) {
+                var dId = fromAll.districtId;
+                var d = fromAll.districtName.trim();
+                if (d.isEmpty &&
+                    school.districtName != null &&
+                    school.districtName!.trim().isNotEmpty) {
+                  d = school.districtName!.trim();
+                }
+                if (school.districtId != null && school.districtId! > 0) {
+                  dId = school.districtId!;
+                }
+                if (dId > 0) {
+                  selectedDistrictId.value = dId;
+                }
+                selectedCity.value = fromAll.cityName;
+                createFormDistrictTextController.text = d;
+                await loadCreateFormVillagesByDistrict();
+                resolvedCityForDisplay =
+                    createFormVillages.firstWhereOrNull(
+                      (c) => c.id == fromAll.id,
+                    ) ??
+                    fromAll;
+                print('City set after full city lookup: ${selectedCity.value}');
               } else {
                 print(
                   'City not found. Expected: ${school.cityName} (ID: ${school.cityId})',
                 );
-                print(
-                  'Available cities: ${cities.map((c) => '${c.cityName} (ID: ${c.id})').toList()}',
-                );
               }
             }
+          }
+
+          if (selectedDistrictId.value <= 0 &&
+              school.districtId != null &&
+              school.districtId! > 0) {
+            selectedDistrictId.value = school.districtId!;
+            createFormDistrictTextController.text =
+                school.districtName?.trim() ?? '';
+            await loadCreateFormVillagesByDistrict();
+          } else if (selectedDistrictId.value <= 0 &&
+              school.districtName != null &&
+              school.districtName!.trim().isNotEmpty) {
+            createFormDistrictTextController.text = school.districtName!.trim();
+            await loadCreateFormVillagesByDistrict();
           }
         } else {
           print('Warning: State ID is null or 0. Cannot load state/city data.');
@@ -911,7 +1796,31 @@ class SchoolController extends GetxController {
         }
 
         createFormStateTextController.text = selectedState.value;
-        createFormCityTextController.text = selectedCity.value;
+        createFormDistrictTextController.text = _committedOrDraftDistrictName();
+        final cmForVillageDisplay =
+            resolvedCityForDisplay ??
+            createFormVillages.firstWhereOrNull((c) => c.id == school.cityId) ??
+            createFormVillages.firstWhereOrNull(
+              (c) => c.cityName == school.cityName,
+            );
+        if (cmForVillageDisplay != null) {
+          final v =
+              (cmForVillageDisplay.village ??
+                      cmForVillageDisplay.description ??
+                      '')
+                  .trim();
+          createFormCityTextController.text = v.isEmpty
+              ? cmForVillageDisplay.cityName
+              : '${cmForVillageDisplay.cityName}, $v';
+        } else {
+          createFormCityTextController.text = selectedCity.value;
+        }
+
+        if (school.cityId != null && school.cityId! > 0) {
+          createFormSelectedCityId.value = school.cityId!;
+        } else {
+          createFormSelectedCityId.value = cmForVillageDisplay?.id ?? 0;
+        }
 
         print(
           'Form populated - State: ${selectedState.value}, City: ${selectedCity.value}',
@@ -1082,9 +1991,10 @@ class SchoolController extends GetxController {
 
   // Reset form
   void resetForm() {
-    formKey.currentState?.reset();
-    selectedDistrict.value = '';
+    _clearDistrictSelection();
     selectedCity.value = '';
+    createFormSelectedCityId.value = 0;
+    createFormCityAcknowledgedNew.value = false;
     selectedState.value = '';
     selectedStateId.value = 0;
     selectedPincode.value = '';
@@ -1100,12 +2010,25 @@ class SchoolController extends GetxController {
     addressController.clear();
     pincodeController.clear();
     emailController.clear();
+    websiteController.clear();
+    landLineController.clear();
+    mobileController.clear();
+    contributorNameController.clear();
+    contributorMobileController.clear();
     cities.clear();
+    createFormVillages.clear();
     createFormStateTextController.clear();
+    createFormDistrictTextController.clear();
+    createFormDistrictDraftRevision.value = 0;
     createFormCityTextController.clear();
     errorMessage.value = '';
     isEditMode.value = false;
     editingSchoolId.value = null;
+    formKey = GlobalKey<FormState>();
+    formResetGeneration.value++;
+    if (states.isNotEmpty) {
+      unawaited(_applyDefaultTamilNaduStateIfEmpty());
+    }
   }
 
   // Get filtered schools based on search query
@@ -1117,7 +2040,9 @@ class SchoolController extends GetxController {
     return schools.where((school) {
       return school.institutionName.toLowerCase().contains(query) ||
           school.address.toLowerCase().contains(query) ||
-          (school.district?.toLowerCase().contains(query) ?? false) ||
+          (school.districtName?.toLowerCase().contains(query) ?? false) ||
+          (school.cityName?.toLowerCase().contains(query) ?? false) ||
+          (school.village?.toLowerCase().contains(query) ?? false) ||
           (school.state?.toLowerCase().contains(query) ?? false);
     }).toList();
   }
@@ -1206,22 +2131,12 @@ class SchoolController extends GetxController {
 
       // Get filter values
       int? stateIdForPrint;
-      int? cityIdForPrint;
 
       if (reportState.value.isNotEmpty) {
         final state = states.firstWhereOrNull(
           (s) => s.stateName == reportState.value,
         );
         stateIdForPrint = state?.id;
-      }
-
-      if (reportDistrict.value.isNotEmpty && stateIdForPrint != null) {
-        final city = cities.firstWhereOrNull(
-          (c) =>
-              c.cityName == reportDistrict.value &&
-              c.stateId == stateIdForPrint,
-        );
-        cityIdForPrint = city?.id;
       }
 
       // Prepare request body
@@ -1232,8 +2147,8 @@ class SchoolController extends GetxController {
       if (stateIdForPrint != null) {
         requestBody['stateId'] = stateIdForPrint;
       }
-      if (cityIdForPrint != null) {
-        requestBody['cityId'] = cityIdForPrint;
+      if (reportDistrictId.value > 0) {
+        requestBody['districtId'] = reportDistrictId.value;
       }
       if (reportInstitutionTypeId.value > 0) {
         requestBody['institutionTypeId'] = reportInstitutionTypeId.value;

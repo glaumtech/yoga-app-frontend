@@ -884,6 +884,8 @@ class ParticipantRepository {
     int? categoryId,
     int? groupId,
     String? institutionId,
+    bool? male,
+    bool? female,
     List<int>? replaceParticipantIds,
   }) async {
     try {
@@ -904,6 +906,12 @@ class ParticipantRepository {
       }
       if (institutionId != null && institutionId.trim().isNotEmpty) {
         requestBody['institutionId'] = int.tryParse(institutionId) ?? institutionId;
+      }
+      if (male != null) {
+        requestBody['male'] = male;
+      }
+      if (female != null) {
+        requestBody['female'] = female;
       }
       if (replaceParticipantIds != null && replaceParticipantIds.isNotEmpty) {
         requestBody['replaceParticipantIds'] = replaceParticipantIds;

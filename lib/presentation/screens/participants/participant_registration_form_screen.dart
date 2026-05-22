@@ -7,17 +7,23 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
-import '../../controllers/participant_registration_form_controller.dart';
+import '../../controllers/participant_registration_form_controller.dart'
+    show
+        ParticipantRegistrationFormController,
+        kParticipantRegistrationFormControllerTag;
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_label_with_hint.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
+import '../../../data/models/competition_model.dart';
+import '../../../data/models/district_model.dart';
 import '../../../core/utils/date_utils.dart' as app_date_utils;
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
-import '../../widgets/location/city_search_field.dart';
+import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../schools/school_create_screen.dart';
 
@@ -37,6 +43,96 @@ String? _eventIdForRegistrationSave(
   return null;
 }
 
+CompetitionModel? _competitionForRegistration(
+  ParticipantController participantController,
+  CompetitionController competitionController,
+) {
+  final id = participantController.selectedEventId.value;
+  if (id.isEmpty) return null;
+  return competitionController.competitions.firstWhereOrNull((c) => c.id == id);
+}
+
+List<String> _categoriesForRegistration(
+  ParticipantController participantController,
+  CompetitionController competitionController,
+) {
+  final competition = _competitionForRegistration(
+    participantController,
+    competitionController,
+  );
+  if (competition?.categories != null && competition!.categories!.isNotEmpty) {
+    return competition.categories!;
+  }
+
+  final id = participantController.selectedEventId.value;
+  final home = competitionController.homeCompetitions.firstWhereOrNull(
+    (c) => c.id?.toString() == id,
+  );
+  return home?.categories ?? const [];
+}
+
+List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
+  CompetitionModel? competition,
+  CompetitionController competitionController,
+) {
+  if (competition == null) return const [];
+
+  final entries = <({String groupName, String stageName})>[];
+
+  if (competition.stageGroups != null && competition.stageGroups!.isNotEmpty) {
+    final sortedStageIds =
+        competition.stageGroups!.keys
+            .map((id) => int.tryParse(id))
+            .whereType<int>()
+            .toList()
+          ..sort((a, b) {
+            final stageA =
+                competitionController.getStageNameById(a)?.toLowerCase() ?? '';
+            final stageB =
+                competitionController.getStageNameById(b)?.toLowerCase() ?? '';
+            return stageA.compareTo(stageB);
+          });
+
+    for (final stageId in sortedStageIds) {
+      final stageName = competitionController.getStageNameById(stageId);
+      if (stageName == null) continue;
+
+      final groupIds =
+          List<int>.from(
+            competition.stageGroups![stageId.toString()] ?? const [],
+          )..sort((a, b) {
+            final groupA =
+                competitionController.getGroupNameById(a)?.toLowerCase() ?? '';
+            final groupB =
+                competitionController.getGroupNameById(b)?.toLowerCase() ?? '';
+            return groupA.compareTo(groupB);
+          });
+
+      for (final groupId in groupIds) {
+        final groupName = competitionController.getGroupNameById(groupId);
+        if (groupName != null) {
+          entries.add((groupName: groupName, stageName: stageName));
+        }
+      }
+    }
+  }
+
+  if (entries.isEmpty && competition.stageGroupLabels != null) {
+    final sortedStages = competition.stageGroupLabels!.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    for (final stageName in sortedStages) {
+      final groups = List<String>.from(
+        competition.stageGroupLabels![stageName] ?? const [],
+      )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      for (final groupName in groups) {
+        entries.add((groupName: groupName, stageName: stageName));
+      }
+    }
+  }
+
+  return entries;
+}
+
 class ParticipantRegistrationFormScreen extends StatelessWidget {
   final String? initialCompetitionId;
 
@@ -52,11 +148,20 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Keep screen Stateless: init work happens in controller.onReady()
+    // Fresh controller each visit (e.g. after logout) so competition data reloads.
+    if (Get.isRegistered<ParticipantRegistrationFormController>(
+      tag: kParticipantRegistrationFormControllerTag,
+    )) {
+      Get.delete<ParticipantRegistrationFormController>(
+        tag: kParticipantRegistrationFormControllerTag,
+        force: true,
+      );
+    }
     Get.put(
       ParticipantRegistrationFormController(
         initialCompetitionId: initialCompetitionId,
       ),
+      tag: kParticipantRegistrationFormControllerTag,
     );
 
     // Public registration screen can be opened after logout.
@@ -79,6 +184,10 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
         child: Form(
           key: participantController.formKey,
+          // Per-field `autovalidateMode: onUserInteraction` — Form-level
+          // `onUserInteraction` validates *all* fields after any field is touched
+          // (Flutter behavior; see flutter/flutter#107350).
+          autovalidateMode: AutovalidateMode.disabled,
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             child: Column(
@@ -165,29 +274,19 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                             isTablet,
                           ),
                           SizedBox(height: isMobile ? 20 : 24),
-                          Builder(
-                            builder: (context) {
-                              final permissionStore =
-                                  Get.isRegistered<PermissionStore>()
-                                  ? Get.find<PermissionStore>()
-                                  : Get.put(PermissionStore());
-                              final showSpot = permissionStore.has(
-                                'SHOW_SPOT_REGISTRATION_OPTION',
-                              );
-                              if (!showSpot) return const SizedBox.shrink();
-                              return Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildSpotRegistrationField(
-                                    context,
-                                    participantController,
-                                    isMobile,
-                                    isTablet,
-                                  ),
-                                  SizedBox(height: isMobile ? 20 : 24),
-                                ],
-                              );
-                            },
+                          _buildEcoCertificateOptInField(
+                            context,
+                            participantController,
+                            isMobile,
+                          ),
+                          SizedBox(height: isMobile ? 20 : 24),
+                          _buildSpotRegistrationSection(
+                            context,
+                            participantController,
+                            competitionController,
+                            isMobile,
+                            isTablet,
+                            includeBottomSpacing: true,
                           ),
                         ],
                       )
@@ -284,23 +383,6 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                             isTablet,
                                           ),
                                           SizedBox(height: isMobile ? 20 : 24),
-                                          Builder(
-                                            builder: (context) {
-                                              final permissionStore =
-                                                  Get.isRegistered<
-                                                    PermissionStore
-                                                  >()
-                                                  ? Get.find<PermissionStore>()
-                                                  : Get.put(PermissionStore());
-                                              final showSpot = permissionStore.has(
-                                                'SHOW_SPOT_REGISTRATION_OPTION',
-                                              );
-                                              if (!showSpot) {
-                                                return const SizedBox.shrink();
-                                              }
-                                              return const SizedBox.shrink();
-                                            },
-                                          ),
                                         ],
                                       ),
                                     ),
@@ -361,24 +443,18 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                   isTablet,
                                 ),
                                 SizedBox(height: isMobile ? 20 : 24),
-                                Builder(
-                                  builder: (context) {
-                                    final permissionStore =
-                                        Get.isRegistered<PermissionStore>()
-                                        ? Get.find<PermissionStore>()
-                                        : Get.put(PermissionStore());
-                                    final showSpot = permissionStore.has(
-                                      'SHOW_SPOT_REGISTRATION_OPTION',
-                                    );
-                                    if (!showSpot)
-                                      return const SizedBox.shrink();
-                                    return _buildSpotRegistrationField(
-                                      context,
-                                      participantController,
-                                      isMobile,
-                                      isTablet,
-                                    );
-                                  },
+                                _buildEcoCertificateOptInField(
+                                  context,
+                                  participantController,
+                                  isMobile,
+                                ),
+                                SizedBox(height: isMobile ? 20 : 24),
+                                _buildSpotRegistrationSection(
+                                  context,
+                                  participantController,
+                                  competitionController,
+                                  isMobile,
+                                  isTablet,
                                 ),
                               ],
                             ),
@@ -491,13 +567,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                     // Clear error message on success
                                     participantController.errorMessage.value =
                                         '';
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Participant registered successfully',
-                                        ),
-                                        backgroundColor: Colors.green,
-                                      ),
+                                    SnackbarHelper.showSuccess(
+                                      context,
+                                      'Participant registered successfully',
                                     );
                                     // Form is already reset in submitRegistrationForm method
                                   }
@@ -549,15 +621,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                       // Clear error message on success
                                       participantController.errorMessage.value =
                                           '';
-                                      ScaffoldMessenger.of(
+                                      SnackbarHelper.showSuccess(
                                         context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: const Text(
-                                            'Participant registered successfully',
-                                          ),
-                                          backgroundColor: Colors.green,
-                                        ),
+                                        'Participant registered successfully',
                                       );
                                       // Form is already reset in submitRegistrationForm method
                                     }
@@ -671,13 +737,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                     // Clear error message on success
                                     participantController.errorMessage.value =
                                         '';
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Participant updated successfully',
-                                        ),
-                                        backgroundColor: Colors.green,
-                                      ),
+                                    SnackbarHelper.showSuccess(
+                                      context,
+                                      'Participant updated successfully',
                                     );
                                     // Redirect to list view after successful update
                                     participantController.resetForm();
@@ -723,6 +785,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         FormLabelWithHint(label: 'COMPETITION :', bottomSpacing: 12),
         Obx(
           () => DropdownButtonFormField<String>(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             value: controller.selectedEventId.value.isNotEmpty
                 ? controller.selectedEventId.value
                 : null,
@@ -765,6 +828,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       controller.selectedCategories.clear();
                       controller.selectedStage.value = '';
                       controller.standard.value = '';
+                      controller.applySpotRegistrationRulesForSelectedEvent();
+                      controller.validateRegistrationFormOnFieldChange();
                     }
                   }
                 : null,
@@ -799,8 +864,12 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         ),
         Obx(
           () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.nameController,
             readOnly: controller.isViewMode.value,
+            onChanged: controller.isViewMode.value
+                ? null
+                : (_) => controller.validateRegistrationFormOnFieldChange(),
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -845,6 +914,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         FormLabelWithHint(label: 'Date of Birth :', bottomSpacing: 8),
         Obx(
           () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             readOnly: true,
             controller: TextEditingController(
               text: controller.dateOfBirth.value != null
@@ -879,6 +949,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     );
                     if (picked != null) {
                       controller.dateOfBirth.value = picked;
+                      controller.validateRegistrationFormOnFieldChange();
                     }
                   }
                 : null,
@@ -1000,6 +1071,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.gender.value = value;
+                            controller.validateRegistrationFormOnFieldChange();
                           }
                         }
                       : null,
@@ -1015,6 +1087,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.gender.value = value;
+                            controller.validateRegistrationFormOnFieldChange();
                           }
                         }
                       : null,
@@ -1026,6 +1099,57 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  bool _isSpotRegistrationOptionVisible(
+    PermissionStore permissionStore,
+    ParticipantController participantController,
+    CompetitionController competitionController,
+  ) {
+    if (!permissionStore.has('SHOW_SPOT_REGISTRATION_OPTION')) {
+      return false;
+    }
+    if (competitionController.competitions.isEmpty) {
+      return false;
+    }
+    return participantController.isSpotRegistrationOptionVisible;
+  }
+
+  Widget _buildSpotRegistrationSection(
+    BuildContext context,
+    ParticipantController participantController,
+    CompetitionController competitionController,
+    bool isMobile,
+    bool isTablet, {
+    bool includeBottomSpacing = false,
+  }) {
+    return Obx(() {
+      final permissionStore = Get.isRegistered<PermissionStore>()
+          ? Get.find<PermissionStore>()
+          : Get.put(PermissionStore());
+      final _ = competitionController.competitions.length;
+      final visible = _isSpotRegistrationOptionVisible(
+        permissionStore,
+        participantController,
+        competitionController,
+      );
+      if (!visible) {
+        return const SizedBox.shrink();
+      }
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSpotRegistrationField(
+            context,
+            participantController,
+            isMobile,
+            isTablet,
+          ),
+          if (includeBottomSpacing) SizedBox(height: isMobile ? 20 : 24),
+        ],
+      );
+    });
   }
 
   Widget _buildSpotRegistrationField(
@@ -1050,6 +1174,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.isSpotRegistration.value = value;
+                            controller.validateRegistrationFormOnFieldChange();
                           }
                         }
                       : null,
@@ -1065,6 +1190,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       ? (value) {
                           if (value != null) {
                             controller.isSpotRegistration.value = value;
+                            controller.validateRegistrationFormOnFieldChange();
                           }
                         }
                       : null,
@@ -1072,6 +1198,38 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEcoCertificateOptInField(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(label: 'E-Certificate :', bottomSpacing: 8),
+        Obx(
+          () => IgnorePointer(
+            ignoring: controller.isViewMode.value,
+            child: CheckboxListTile(
+              value: controller.optForECertificate.value,
+              onChanged: (value) {
+                controller.optForECertificate.value = value ?? false;
+                controller.validateRegistrationFormOnFieldChange();
+              },
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              activeColor: Colors.green,
+              title: Text(
+                'Save Trees. Go Green. Opt for a Downloadable E-Certificate',
+                style: TextStyle(fontSize: isMobile ? 12 : 13),
+              ),
+            ),
           ),
         ),
       ],
@@ -1090,14 +1248,18 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       children: [
         FormLabelWithHint(label: 'Category :', bottomSpacing: 12),
         Obx(() {
-          final selectedCompetition = competitionController.competitions
-              .firstWhereOrNull(
-                (c) => c.id == controller.selectedEventId.value,
-              );
-          final availableCategories =
-              selectedCompetition?.categories ?? <String>[];
+          final _ = competitionController.competitions.length;
+          if (competitionController.isLoadingRegistrationCompetition.value) {
+            return const LinearProgressIndicator(minHeight: 2);
+          }
+
+          final availableCategories = _categoriesForRegistration(
+            controller,
+            competitionController,
+          );
 
           return DropdownButtonFormField<String>(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             value: controller.selectedCategories.isNotEmpty
                 ? controller.selectedCategories.first
                 : null,
@@ -1125,6 +1287,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 ? (value) {
                     if (value != null) {
                       controller.selectedCategories.value = [value];
+                      controller.validateRegistrationFormOnFieldChange();
                     }
                   }
                 : null,
@@ -1155,42 +1318,24 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       children: [
         FormLabelWithHint(label: 'Select Group :', bottomSpacing: 8),
         Obx(() {
-          final selectedCompetition = competitionController.competitions
-              .firstWhereOrNull(
-                (c) => c.id == controller.selectedEventId.value,
-              );
-
-          // Get all groups from all stages with their stage information
-          final allGroupsWithStage = <String>[];
-          if (selectedCompetition != null &&
-              selectedCompetition.stageGroups != null) {
-            selectedCompetition.stageGroups!.forEach((stageIdStr, groupIds) {
-              final stageId = int.tryParse(stageIdStr);
-              if (stageId != null) {
-                final stageName = competitionController.getStageNameById(
-                  stageId,
-                );
-                if (stageName != null) {
-                  // Convert group IDs to names and format as "GroupName (GROUP StageName)"
-                  groupIds.forEach((groupId) {
-                    final groupName = competitionController.getGroupNameById(
-                      groupId,
-                    );
-                    if (groupName != null) {
-                      // Format: "II (GROUP A)" or "II (GROUP StageName)"
-                      allGroupsWithStage.add('$groupName (GROUP $stageName)');
-                    }
-                  });
-                }
-              }
-            });
+          final _ = competitionController.competitions.length;
+          if (competitionController.isLoadingRegistrationCompetition.value) {
+            return const LinearProgressIndicator(minHeight: 2);
           }
-          // Sort by group name (extract before " (GROUP")
-          allGroupsWithStage.sort((a, b) {
-            final groupA = a.split(' (GROUP').first;
-            final groupB = b.split(' (GROUP').first;
-            return groupA.compareTo(groupB);
-          });
+
+          final selectedCompetition = _competitionForRegistration(
+            controller,
+            competitionController,
+          );
+
+          final groupStageEntries = _groupStageEntriesForRegistration(
+            selectedCompetition,
+            competitionController,
+          );
+
+          final allGroupsWithStage = groupStageEntries
+              .map((e) => '${e.groupName} (GROUP ${e.stageName})')
+              .toList();
 
           // Find current value - match by formatted string or group name
           String? currentValue;
@@ -1214,6 +1359,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           }
 
           return DropdownButtonFormField<String>(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             value: currentValue,
             decoration: InputDecoration(
               border: OutlineInputBorder(
@@ -1242,6 +1388,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     .replaceAll(')', '');
                 controller.standard.value = groupName;
                 controller.selectedStage.value = stagePart;
+                controller.validateRegistrationFormOnFieldChange();
               }
             },
             validator: (value) {
@@ -1269,8 +1416,12 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         FormLabelWithHint(label: 'Yoga Teacher Name :', bottomSpacing: 10),
         Obx(
           () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.yogaMasterNameController,
             readOnly: controller.isViewMode.value,
+            onChanged: controller.isViewMode.value
+                ? null
+                : (_) => controller.validateRegistrationFormOnFieldChange(),
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -1314,8 +1465,12 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         ),
         Obx(
           () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.yogaMasterContactController,
             readOnly: controller.isViewMode.value,
+            onChanged: controller.isViewMode.value
+                ? null
+                : (_) => controller.validateRegistrationFormOnFieldChange(),
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             maxLength: 10,
@@ -1435,7 +1590,13 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       final loadingLocations =
           controller.isLoadingInstitutionSearchLocations.value;
       final stateId = controller.institutionSearchFilterStateId.value;
-      final loadingCities = controller.isLoadingInstitutionSearchCities.value;
+      final loadingDistricts =
+          controller.isLoadingInstitutionSearchDistricts.value;
+      // Rebuild when cities for the state load (district list is derived).
+      final districtListVersion = controller.institutionSearchDistricts.length;
+      if (controller.institutionSearchFilterTypeId.value > 0) {
+        controller.setInstitutionSearchFilterType(0);
+      }
 
       final stateField = loadingLocations
           ? TextFormField(
@@ -1462,7 +1623,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               onStateId: controller.setInstitutionSearchFilterState,
             );
 
-      final cityField = loadingCities
+      final districtField = loadingDistricts
           ? TextFormField(
               readOnly: true,
               style: TextStyle(fontSize: isMobile ? 14 : 15),
@@ -1475,7 +1636,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              ).copyWith(hintText: 'Loading cities...'),
+              ).copyWith(hintText: 'Loading districts...'),
             )
           : (stateId <= 0
                 ? TextFormField(
@@ -1485,60 +1646,31 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       hintText: 'Select state first',
                     ),
                   )
-                : CitySearchField(
+                : DistrictSearchField(
+                    key: ValueKey(
+                      'inst_search_district_${stateId}_$districtListVersion',
+                    ),
                     textEditingController:
-                        controller.institutionFilterCityTextController,
-                    focusNode: controller.institutionFilterCityFocusNode,
-                    cities: List.from(controller.institutionSearchCities),
+                        controller.institutionFilterDistrictTextController,
+                    focusNode: controller.institutionFilterDistrictFocusNode,
+                    districts: List<DistrictModel>.from(
+                      controller.institutionSearchDistricts,
+                    ),
                     decorationBuilder: filterDecoration,
                     isMobile: isMobile,
-                    onCityId: controller.setInstitutionSearchFilterCity,
                   ));
-
-      final typeField = DropdownButtonFormField<int?>(
-        value: controller.institutionSearchFilterTypeId.value > 0
-            ? controller.institutionSearchFilterTypeId.value
-            : null,
-        decoration: filterDecoration(),
-        hint: const Text('Institution type (optional)'),
-        isExpanded: true,
-        menuMaxHeight: 280,
-        style: TextStyle(fontSize: isMobile ? 14 : 15),
-        items: [
-          const DropdownMenuItem<int?>(value: null, child: Text('Any type')),
-          ...controller.institutionSearchTypes.map(
-            (t) => DropdownMenuItem<int?>(
-              value: t.id,
-              child: Text(t.displayName, overflow: TextOverflow.ellipsis),
-            ),
-          ),
-        ],
-        onChanged: loadingLocations
-            ? null
-            : (v) {
-                controller.setInstitutionSearchFilterType(v ?? 0);
-              },
-      );
 
       final filterChildren = isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                stateField,
-                const SizedBox(height: 12),
-                cityField,
-                const SizedBox(height: 12),
-                typeField,
-              ],
+              children: [stateField, const SizedBox(height: 12), districtField],
             )
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: stateField),
                 SizedBox(width: isTablet ? 10 : 12),
-                Expanded(child: cityField),
-                SizedBox(width: isTablet ? 10 : 12),
-                Expanded(child: typeField),
+                Expanded(child: districtField),
               ],
             );
 
@@ -1547,8 +1679,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         children: [
           FormLabelWithHint(
             label: 'Narrow search (optional)',
-            hintText:
-                'Search state & city by typing; pick institution type below',
+            hintText: 'Search state & district by typing',
             bottomSpacing: 8,
           ),
           filterChildren,
@@ -1586,7 +1717,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             onClear: () {
               controller.selectedInstitutionId.value = null;
               controller.participantInstitutionId.value = null;
+              controller.validateRegistrationFormOnFieldChange();
             },
+            onValueChanged: controller.validateRegistrationFormOnFieldChange,
             isViewMode: controller.isViewMode,
             validator: !controller.isViewMode.value
                 ? (value) {
@@ -1610,63 +1743,58 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isMobile,
     bool isTablet,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FormLabelWithHint(
-          label: 'Bonafied Certificate :',
-          hintText: '(Applicable only for Govt / Govt Aided)',
-          bottomSpacing: 8,
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return Obx(
-              () => _buildImagePreview(
-                controller.bonafideFile.value,
-                controller.bonafideImage.value,
-                controller.existingCertificateUrl.value,
-                constraints.maxWidth,
-                isMobile ? 150 : 200,
-                defaultIcon: Icons.description,
-                defaultText: 'No Certificate',
-              ),
-            );
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: Obx(() {
-            final hasCertificate =
-                controller.bonafideFile.value != null ||
-                controller.bonafideImage.value != null ||
-                (controller.existingCertificateUrl.value.isNotEmpty);
+    return Obx(() {
+      if (!controller.isBonafideCertificateApplicable) {
+        return const SizedBox.shrink();
+      }
 
-            return Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: !controller.isViewMode.value
-                        ? () => _pickBonafideCertificate(controller, context)
-                        : null,
-                    icon: const Icon(Icons.upload_file, size: 16),
-                    label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      minimumSize: const Size(0, 36),
-                    ),
-                  ),
-                  if (hasCertificate && !controller.isViewMode.value) ...[
-                    const SizedBox(width: 8),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FormLabelWithHint(
+            label: 'Bonafied Certificate :',
+            hintText: '(Applicable only for Govt / Govt Aided School)',
+            bottomSpacing: 8,
+          ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Obx(
+                () => _buildImagePreview(
+                  controller.bonafideFile.value,
+                  controller.bonafideImage.value,
+                  controller.existingCertificateUrl.value,
+                  constraints.maxWidth,
+                  isMobile ? 150 : 200,
+                  defaultIcon: Icons.description,
+                  defaultText: 'No Certificate',
+                  memoryBytes: controller.bonafideBytes.value,
+                  previewKey:
+                      controller.bonafideImage.value?.path ??
+                      controller.bonafideFileName.value,
+                ),
+              );
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Obx(() {
+              final hasCertificate = controller.hasBonafideCertificateSelected;
+
+              if (controller.isViewMode.value) {
+                return const SizedBox.shrink();
+              }
+
+              return Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
                     OutlinedButton.icon(
-                      onPressed: () => _removeBonafideCertificate(controller),
-                      icon: const Icon(Icons.delete_outline, size: 16),
+                      onPressed: () =>
+                          _pickBonafideCertificate(controller, context),
+                      icon: const Icon(Icons.upload_file, size: 16),
                       label: const Text(
-                        'REMOVE',
+                        'BROWSE',
                         style: TextStyle(fontSize: 12),
                       ),
                       style: OutlinedButton.styleFrom(
@@ -1675,18 +1803,36 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                           vertical: 8,
                         ),
                         minimumSize: const Size(0, 36),
-                        foregroundColor: Colors.red,
-                        side: BorderSide(color: Colors.red),
                       ),
                     ),
+                    if (hasCertificate) ...[
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => _removeBonafideCertificate(controller),
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text(
+                          'REMOVE',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          minimumSize: const Size(0, 36),
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
-              ),
-            );
-          }),
-        ),
-      ],
-    );
+                ),
+              );
+            }),
+          ),
+        ],
+      );
+    });
   }
 
   Future<void> _pickPhoto(
@@ -1711,11 +1857,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to pick image: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        SnackbarHelper.showError(
+          context,
+          'Failed to pick image: ${e.toString()}',
         );
       }
     }
@@ -1725,45 +1869,21 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     ParticipantController controller,
     BuildContext context,
   ) async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
+    final picked = await controller.pickBonafideCertificate();
+    if (!context.mounted) return;
 
-      if (file != null) {
-        controller.bonafideImage.value = file;
-        if (!kIsWeb) {
-          controller.bonafideFile.value = File(file.path);
-        }
-        // Clear existing certificate URL when a new certificate is selected
-        // This ensures the newly selected local image is shown instead of the old URL
-        controller.existingCertificateUrl.value = '';
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Bonafide certificate selected'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to pick certificate: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (picked) {
+      SnackbarHelper.showSuccess(context, 'Bonafide certificate selected');
+    } else if (controller.errorMessage.value.isNotEmpty) {
+      SnackbarHelper.showError(context, controller.errorMessage.value);
     }
   }
 
   void _removeBonafideCertificate(ParticipantController controller) {
     controller.bonafideFile.value = null;
     controller.bonafideImage.value = null;
+    controller.bonafideBytes.value = null;
+    controller.bonafideFileName.value = '';
     controller.existingCertificateUrl.value = '';
   }
 
@@ -1775,9 +1895,14 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     double height, {
     IconData defaultIcon = Icons.image,
     String defaultText = 'No Image',
+    Uint8List? memoryBytes,
+    Object? previewKey,
   }) {
+    final hasMemoryImage = memoryBytes != null && memoryBytes.isNotEmpty;
     final hasLocalImage =
-        (xFile != null) || (file != null && file.existsSync());
+        hasMemoryImage ||
+        (xFile != null) ||
+        (file != null && file.existsSync());
     final hasUrlImage = imageUrl != null && imageUrl.isNotEmpty;
 
     return Container(
@@ -1790,32 +1915,62 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: hasLocalImage
-            ? (kIsWeb
-                  ? (xFile != null
-                        ? FutureBuilder<Uint8List>(
-                            future: xFile.readAsBytes(),
-                            builder: (context, snapshot) {
-                              if (snapshot.hasData) {
-                                return Image.memory(
-                                  snapshot.data!,
-                                  fit: BoxFit.cover,
-                                );
-                              }
-                              return _buildDefaultPreview(
-                                defaultIcon,
-                                defaultText,
-                              );
-                            },
-                          )
-                        : _buildDefaultPreview(defaultIcon, defaultText))
-                  : (file != null && file.existsSync()
-                        ? Image.file(file, fit: BoxFit.cover)
-                        : _buildDefaultPreview(defaultIcon, defaultText)))
+            ? (hasMemoryImage
+                  ? Image.memory(
+                      memoryBytes,
+                      key: ValueKey(previewKey ?? memoryBytes.hashCode),
+                      fit: BoxFit.cover,
+                      width: width,
+                      height: height,
+                    )
+                  : _buildLocalImagePreview(
+                      file: file,
+                      xFile: xFile,
+                      defaultIcon: defaultIcon,
+                      defaultText: defaultText,
+                      previewKey: previewKey,
+                    ))
             : hasUrlImage
             ? _buildNetworkImage(imageUrl, defaultIcon, defaultText)
             : _buildDefaultPreview(defaultIcon, defaultText),
       ),
     );
+  }
+
+  Widget _buildLocalImagePreview({
+    required File? file,
+    required XFile? xFile,
+    required IconData defaultIcon,
+    required String defaultText,
+    Object? previewKey,
+  }) {
+    if (file != null && file.existsSync()) {
+      return Image.file(
+        file,
+        key: ValueKey(previewKey ?? file.path),
+        fit: BoxFit.cover,
+      );
+    }
+
+    if (xFile != null) {
+      return FutureBuilder<Uint8List>(
+        key: ValueKey(previewKey ?? xFile.path),
+        future: xFile.readAsBytes(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            );
+          }
+          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+            return Image.memory(snapshot.data!, fit: BoxFit.cover);
+          }
+          return _buildDefaultPreview(defaultIcon, defaultText);
+        },
+      );
+    }
+
+    return _buildDefaultPreview(defaultIcon, defaultText);
   }
 
   Widget _buildDefaultPreview(IconData icon, String text) {

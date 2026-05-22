@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../../config/app_config.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../controllers/competition_controller.dart';
@@ -11,6 +12,7 @@ import '../../widgets/form_title.dart';
 import '../../widgets/toggle_button_group.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/form_label_with_hint.dart';
+import '../../widgets/competition_registration_qr_panel.dart';
 import 'competitions_list_screen.dart';
 
 class CreateCompetitionScreen extends StatelessWidget {
@@ -126,181 +128,148 @@ class CreateCompetitionScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
-        child: Form(
-          key: controller.formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title
-              Obx(
-                () => FormTitle(
-                  text: controller.isViewMode.value
-                      ? 'VIEW COMPETITION'
-                      : controller.isEditMode.value
-                      ? 'EDIT COMPETITION'
-                      : 'CREATE COMPETITION',
-                  isMobile: isMobile,
-                  isTablet: isTablet,
+        child: Obx(() {
+          final _ = controller.formKeyRevision.value;
+          return Form(
+            key: controller.formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title
+                Obx(
+                  () => FormTitle(
+                    text: controller.isViewMode.value
+                        ? 'VIEW COMPETITION'
+                        : controller.isEditMode.value
+                        ? 'EDIT COMPETITION'
+                        : 'CREATE COMPETITION',
+                    isMobile: isMobile,
+                    isTablet: isTablet,
+                  ),
                 ),
-              ),
 
-              // Competition Name, Description, Address (right aligned) | Brochure Upload (right side)
-              isMobile
-                  ? Column(
-                      children: [
-                        // Upload Brochure (top on mobile)
-                        _buildBrochureUpload(
-                          context,
-                          controller,
-                          isMobile,
-                          isTablet,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-                        // Competition Name (right aligned)
-                        _buildTextField(
-                          context,
-                          controller,
-                          label: 'COMPETITION NAME :',
-                          textController: controller.competitionNameController,
-                          isRequired: true,
-                          isMobile: isMobile,
-                          isTablet: isTablet,
-                          textAlign: TextAlign.left,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-                        // Description (right aligned)
-                        _buildTextField(
-                          context,
-                          controller,
-                          label: 'DESCRIPTION :',
-                          textController: controller.descriptionController,
-                          isRequired: true,
-                          maxLines: 2,
-                          isMobile: isMobile,
-                          isTablet: isTablet,
-                          textAlign: TextAlign.left,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-                        // Address (right aligned)
-                        _buildTextField(
-                          context,
-                          controller,
-                          label: 'ADDRESS :',
-                          textController: controller.addressController,
-                          isRequired: true,
-                          maxLines: 2,
-                          isMobile: isMobile,
-                          isTablet: isTablet,
-                          textAlign: TextAlign.left,
-                        ),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left side: Competition Name, Description, Address (right aligned)
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            children: [
-                              // Competition Name (right aligned)
-                              _buildTextField(
-                                context,
-                                controller,
-                                label: 'COMPETITION NAME :',
-                                textController:
-                                    controller.competitionNameController,
-                                isRequired: true,
-                                isMobile: isMobile,
-                                isTablet: isTablet,
-                                textAlign: TextAlign.left,
-                              ),
-                              SizedBox(height: isMobile ? 20 : 24),
-                              // Description (right aligned)
-                              _buildTextField(
-                                context,
-                                controller,
-                                label: 'DESCRIPTION :',
-                                textController:
-                                    controller.descriptionController,
-                                isRequired: true,
-                                maxLines: 2,
-                                isMobile: isMobile,
-                                isTablet: isTablet,
-                                textAlign: TextAlign.left,
-                              ),
-                              SizedBox(height: isMobile ? 20 : 24),
-                              // Address (right aligned)
-                              _buildTextField(
-                                context,
-                                controller,
-                                label: 'ADDRESS :',
-                                textController: controller.addressController,
-                                isRequired: true,
-                                maxLines: 2,
-                                isMobile: isMobile,
-                                isTablet: isTablet,
-                                textAlign: TextAlign.left,
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: isTablet ? 16 : 24),
-                        // Right side: Upload Brochure
-                        Expanded(
-                          flex: 1,
-                          child: _buildBrochureUpload(
+                // Competition Name, Description, Address (right aligned) | Brochure Upload (right side)
+                isMobile
+                    ? Column(
+                        children: [
+                          // Upload Brochure (top on mobile)
+                          _buildBrochureUpload(
                             context,
                             controller,
                             isMobile,
                             isTablet,
                           ),
-                        ),
-                      ],
-                    ),
-              SizedBox(height: isMobile ? 20 : 24),
+                          SizedBox(height: isMobile ? 20 : 24),
+                          // Competition Name (right aligned)
+                          _buildTextField(
+                            context,
+                            controller,
+                            label: 'COMPETITION NAME :',
+                            textController:
+                                controller.competitionNameController,
+                            isRequired: true,
+                            isMobile: isMobile,
+                            isTablet: isTablet,
+                            textAlign: TextAlign.left,
+                          ),
+                          SizedBox(height: isMobile ? 20 : 24),
+                          // Description (right aligned)
+                          _buildTextField(
+                            context,
+                            controller,
+                            label: 'DESCRIPTION :',
+                            textController: controller.descriptionController,
+                            isRequired: true,
+                            maxLines: 2,
+                            isMobile: isMobile,
+                            isTablet: isTablet,
+                            textAlign: TextAlign.left,
+                          ),
+                          SizedBox(height: isMobile ? 20 : 24),
+                          // Address (right aligned)
+                          _buildTextField(
+                            context,
+                            controller,
+                            label: 'ADDRESS :',
+                            textController: controller.addressController,
+                            isRequired: true,
+                            maxLines: 2,
+                            isMobile: isMobile,
+                            isTablet: isTablet,
+                            textAlign: TextAlign.left,
+                          ),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left side: Competition Name, Description, Address (right aligned)
+                          Expanded(
+                            flex: 2,
+                            child: Column(
+                              children: [
+                                // Competition Name (right aligned)
+                                _buildTextField(
+                                  context,
+                                  controller,
+                                  label: 'COMPETITION NAME :',
+                                  textController:
+                                      controller.competitionNameController,
+                                  isRequired: true,
+                                  isMobile: isMobile,
+                                  isTablet: isTablet,
+                                  textAlign: TextAlign.left,
+                                ),
+                                SizedBox(height: isMobile ? 20 : 24),
+                                // Description (right aligned)
+                                _buildTextField(
+                                  context,
+                                  controller,
+                                  label: 'DESCRIPTION :',
+                                  textController:
+                                      controller.descriptionController,
+                                  isRequired: true,
+                                  maxLines: 2,
+                                  isMobile: isMobile,
+                                  isTablet: isTablet,
+                                  textAlign: TextAlign.left,
+                                ),
+                                SizedBox(height: isMobile ? 20 : 24),
+                                // Address (right aligned)
+                                _buildTextField(
+                                  context,
+                                  controller,
+                                  label: 'ADDRESS :',
+                                  textController: controller.addressController,
+                                  isRequired: true,
+                                  maxLines: 2,
+                                  isMobile: isMobile,
+                                  isTablet: isTablet,
+                                  textAlign: TextAlign.left,
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: isTablet ? 16 : 24),
+                          // Right side: Upload Brochure
+                          Expanded(
+                            flex: 1,
+                            child: _buildBrochureUpload(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ),
+                        ],
+                      ),
+                SizedBox(height: isMobile ? 20 : 24),
 
-              // Event Start, End, and Display Ad From in same line
-              isMobile
-                  ? Column(
-                      children: [
-                        _buildDateField(
-                          context,
-                          controller,
-                          label: 'EVENT START DATE :',
-                          isStartDate: true,
-                          isDisplayAd: false,
-                          isMobile: isMobile,
-                          isTablet: isTablet,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-                        _buildDateField(
-                          context,
-                          controller,
-                          label: 'EVENT END DATE :',
-                          isStartDate: false,
-                          isDisplayAd: false,
-                          isMobile: isMobile,
-                          isTablet: isTablet,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-                        _buildDateField(
-                          context,
-                          controller,
-                          label: 'DISPLAY AD FROM :',
-                          isStartDate: false,
-                          isDisplayAd: true,
-                          isRequired: true,
-                          isMobile: isMobile,
-                          isTablet: isTablet,
-                        ),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildDateField(
+                // Event Start, End, and Display Ad From in same line
+                isMobile
+                    ? Column(
+                        children: [
+                          _buildDateField(
                             context,
                             controller,
                             label: 'EVENT START DATE :',
@@ -309,10 +278,8 @@ class CreateCompetitionScreen extends StatelessWidget {
                             isMobile: isMobile,
                             isTablet: isTablet,
                           ),
-                        ),
-                        SizedBox(width: isTablet ? 12 : 16),
-                        Expanded(
-                          child: _buildDateField(
+                          SizedBox(height: isMobile ? 20 : 24),
+                          _buildDateField(
                             context,
                             controller,
                             label: 'EVENT END DATE :',
@@ -321,10 +288,8 @@ class CreateCompetitionScreen extends StatelessWidget {
                             isMobile: isMobile,
                             isTablet: isTablet,
                           ),
-                        ),
-                        SizedBox(width: isTablet ? 12 : 16),
-                        Expanded(
-                          child: _buildDateField(
+                          SizedBox(height: isMobile ? 20 : 24),
+                          _buildDateField(
                             context,
                             controller,
                             label: 'DISPLAY AD FROM :',
@@ -334,283 +299,385 @@ class CreateCompetitionScreen extends StatelessWidget {
                             isMobile: isMobile,
                             isTablet: isTablet,
                           ),
-                        ),
-                      ],
-                    ),
-              SizedBox(height: isMobile ? 20 : 24),
-
-              // Participants Per Stage and Marks in same line (desktop)
-              isMobile
-                  ? Column(
-                      children: [
-                        _buildParticipantsPerStageField(
-                          context,
-                          controller,
-                          isMobile,
-                          isTablet,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-
-                        _buildMarksField(
-                          context,
-                          controller,
-                          isMobile,
-                          isTablet,
-                        ),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: _buildParticipantsPerStageField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                        ),
-                        SizedBox(width: isTablet ? 12 : 16),
-
-                        Expanded(
-                          flex: 2,
-                          child: _buildMarksField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                        ),
-                      ],
-                    ),
-              SizedBox(height: isMobile ? 20 : 24),
-
-              // Prizes and Categories in same line (desktop)
-              isMobile
-                  ? Column(
-                      children: [
-                        _buildPrizesField(
-                          context,
-                          controller,
-                          isMobile,
-                          isTablet,
-                        ),
-                        SizedBox(height: isMobile ? 20 : 24),
-                        _buildCategoriesField(
-                          context,
-                          controller,
-                          isMobile,
-                          isTablet,
-                        ),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildPrizesField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                        ),
-                        SizedBox(width: isTablet ? 12 : 16),
-                        Expanded(
-                          child: _buildCategoriesField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                        ),
-                      ],
-                    ),
-              SizedBox(height: isMobile ? 20 : 24),
-
-              // Category Amounts
-              Obx(
-                () => controller.selectedCategories.isNotEmpty
-                    ? Column(
-                        children: [
-                          _buildCategoryAmountsField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
                         ],
                       )
-                    : const SizedBox.shrink(),
-              ),
-
-              // Stages
-              _buildStagesField(context, controller, isMobile, isTablet),
-              SizedBox(height: isMobile ? 20 : 24),
-
-              // Show mapped groups for selected stages
-              Obx(
-                () => controller.selectedStages.isNotEmpty
-                    ? Column(
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildStageGroupsDisplay(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
+                          Expanded(
+                            child: _buildDateField(
+                              context,
+                              controller,
+                              label: 'EVENT START DATE :',
+                              isStartDate: true,
+                              isDisplayAd: false,
+                              isMobile: isMobile,
+                              isTablet: isTablet,
+                            ),
                           ),
-                          SizedBox(height: isMobile ? 20 : 24),
+                          SizedBox(width: isTablet ? 12 : 16),
+                          Expanded(
+                            child: _buildDateField(
+                              context,
+                              controller,
+                              label: 'EVENT END DATE :',
+                              isStartDate: false,
+                              isDisplayAd: false,
+                              isMobile: isMobile,
+                              isTablet: isTablet,
+                            ),
+                          ),
+                          SizedBox(width: isTablet ? 12 : 16),
+                          Expanded(
+                            child: _buildDateField(
+                              context,
+                              controller,
+                              label: 'DISPLAY AD FROM :',
+                              isStartDate: false,
+                              isDisplayAd: true,
+                              isRequired: true,
+                              isMobile: isMobile,
+                              isTablet: isTablet,
+                            ),
+                          ),
                         ],
-                      )
-                    : const SizedBox.shrink(),
-              ),
-
-              // Error Message
-              if (controller.errorMessage.value.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          controller.errorMessage.value,
-                          style: TextStyle(color: Colors.red[700]),
-                        ),
                       ),
-                    ],
-                  ),
+                SizedBox(height: isMobile ? 20 : 24),
+
+                // Participants Per Stage and Marks in same line (desktop)
+                isMobile
+                    ? Column(
+                        children: [
+                          _buildParticipantsPerStageField(
+                            context,
+                            controller,
+                            isMobile,
+                            isTablet,
+                          ),
+                          SizedBox(height: isMobile ? 20 : 24),
+
+                          _buildMarksField(
+                            context,
+                            controller,
+                            isMobile,
+                            isTablet,
+                          ),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: _buildParticipantsPerStageField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ),
+                          SizedBox(width: isTablet ? 12 : 16),
+
+                          Expanded(
+                            flex: 2,
+                            child: _buildMarksField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ),
+                        ],
+                      ),
+                SizedBox(height: isMobile ? 20 : 24),
+
+                // Prizes and Categories in same line (desktop)
+                isMobile
+                    ? Column(
+                        children: [
+                          _buildPrizesField(
+                            context,
+                            controller,
+                            isMobile,
+                            isTablet,
+                          ),
+                          SizedBox(height: isMobile ? 20 : 24),
+                          _buildCategoriesField(
+                            context,
+                            controller,
+                            isMobile,
+                            isTablet,
+                          ),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _buildPrizesField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ),
+                          SizedBox(width: isTablet ? 12 : 16),
+                          Expanded(
+                            child: _buildCategoriesField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ),
+                        ],
+                      ),
+                SizedBox(height: isMobile ? 20 : 24),
+
+                // Category Amounts
+                Obx(
+                  () => controller.selectedCategories.isNotEmpty
+                      ? Column(
+                          children: [
+                            _buildCategoryAmountsField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
                 ),
 
-              // Submit and Cancel Buttons
-              Obx(
-                () => controller.isEditMode.value
-                    ? SizedBox(height: isMobile ? 24 : 32)
-                    : SizedBox(height: isMobile ? 24 : 32),
-              ),
-              Obx(
-                () => controller.isViewMode.value
-                    ? (isMobile
-                          ? Column(
-                              children: [
-                                cancelButton(
-                                  onPressed: () {
-                                    controller.clearForm();
-                                    controller.toggleViewMode(true);
-                                  },
-                                  isFullWidth: true,
-                                ),
-                              ],
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                cancelButton(
-                                  onPressed: () {
-                                    controller.clearForm();
-                                    controller.toggleViewMode(true);
-                                  },
-                                  width: 200,
-                                ),
-                              ],
-                            ))
-                    : controller.isEditMode.value
-                    ? (isMobile
-                          ? Column(
-                              children: [
-                                saveButton(
-                                  onPressed: () async {
-                                    await controller.updateCompetition();
-                                  },
-                                  isLoading: controller.isLoading,
-                                  text: 'UPDATE',
-                                  isFullWidth: true,
-                                ),
-                                const SizedBox(height: 12),
-                                cancelButton(
-                                  onPressed: () {
-                                    controller.clearForm();
-                                    controller.toggleViewMode(true);
-                                  },
-                                  isFullWidth: true,
-                                ),
-                              ],
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                saveButton(
-                                  onPressed: () async {
-                                    await controller.updateCompetition();
-                                  },
-                                  isLoading: controller.isLoading,
-                                  text: 'UPDATE',
-                                  width: 200,
-                                ),
-                                const SizedBox(width: 16),
-                                cancelButton(
-                                  onPressed: () {
-                                    controller.clearForm();
-                                    controller.toggleViewMode(true);
-                                  },
-                                  width: 200,
-                                ),
-                              ],
-                            ))
-                    : (isMobile
-                          ? Column(
-                              children: [
-                                saveButton(
-                                  onPressed: () async {
-                                    await controller.createCompetition();
-                                  },
-                                  isLoading: controller.isLoading,
-                                  isFullWidth: true,
-                                ),
-                                const SizedBox(height: 12),
-                                cancelButton(
-                                  onPressed: () {
-                                    controller.clearForm();
-                                    controller.toggleViewMode(true);
-                                  },
-                                  isFullWidth: true,
-                                ),
-                              ],
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                saveButton(
-                                  onPressed: () async {
-                                    await controller.createCompetition();
-                                  },
-                                  isLoading: controller.isLoading,
-                                  width: 200,
-                                ),
-                                const SizedBox(width: 16),
-                                cancelButton(
-                                  onPressed: () {
-                                    controller.clearForm();
-                                    controller.toggleViewMode(true);
-                                  },
-                                  width: 200,
-                                ),
-                              ],
-                            )),
-              ),
-              SizedBox(height: isMobile ? 16 : 24),
-            ],
-          ),
-        ),
+                // Stages
+                _buildStagesField(context, controller, isMobile, isTablet),
+                SizedBox(height: isMobile ? 20 : 24),
+
+                // Show mapped groups for selected stages
+                Obx(
+                  () => controller.selectedStages.isNotEmpty
+                      ? Column(
+                          children: [
+                            _buildStageGroupsDisplay(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
+
+                // Error Message
+                if (controller.errorMessage.value.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            controller.errorMessage.value,
+                            style: TextStyle(color: Colors.red[700]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Registration QR (edit / view when competition id is known)
+                Obx(() {
+                  final permissionStore = Get.isRegistered<PermissionStore>()
+                      ? Get.find<PermissionStore>()
+                      : Get.put(PermissionStore());
+                  final comp = controller.competitionToEdit.value;
+                  final showQr =
+                      permissionStore.has('SHOW_COMP_QR_CODE_ON_ADMIN') &&
+                      (controller.isEditMode.value ||
+                          controller.isViewMode.value) &&
+                      comp?.id != null &&
+                      comp!.id!.isNotEmpty;
+                  if (!showQr) return const SizedBox.shrink();
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: isMobile ? 16 : 24),
+                    child: CompetitionRegistrationQrPanel(competition: comp),
+                  );
+                }),
+
+                // Submit and Cancel Buttons
+                Obx(
+                  () => controller.isEditMode.value
+                      ? SizedBox(height: isMobile ? 24 : 32)
+                      : SizedBox(height: isMobile ? 24 : 32),
+                ),
+                Obx(
+                  () => controller.isViewMode.value
+                      ? (isMobile
+                            ? Column(
+                                children: [
+                                  cancelButton(
+                                    onPressed: () {
+                                      controller.clearForm();
+                                      controller.toggleViewMode(true);
+                                    },
+                                    isFullWidth: true,
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  cancelButton(
+                                    onPressed: () {
+                                      controller.clearForm();
+                                      controller.toggleViewMode(true);
+                                    },
+                                    width: 200,
+                                  ),
+                                ],
+                              ))
+                      : controller.isEditMode.value
+                      ? (isMobile
+                            ? Column(
+                                children: [
+                                  saveButton(
+                                    onPressed: () async {
+                                      await controller.updateCompetition();
+                                    },
+                                    isLoading: controller.isLoading,
+                                    text: 'UPDATE',
+                                    isFullWidth: true,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  cancelButton(
+                                    onPressed: () {
+                                      controller.clearForm();
+                                      controller.toggleViewMode(true);
+                                    },
+                                    isFullWidth: true,
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  saveButton(
+                                    onPressed: () async {
+                                      await controller.updateCompetition();
+                                    },
+                                    isLoading: controller.isLoading,
+                                    text: 'UPDATE',
+                                    width: 200,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  cancelButton(
+                                    onPressed: () {
+                                      controller.clearForm();
+                                      controller.toggleViewMode(true);
+                                    },
+                                    width: 200,
+                                  ),
+                                ],
+                              ))
+                      : (isMobile
+                            ? Column(
+                                children: [
+                                  saveButton(
+                                    onPressed: () async {
+                                      final ok = await controller
+                                          .createCompetition();
+                                      if (ok && context.mounted) {
+                                        final permissionStore =
+                                            Get.isRegistered<PermissionStore>()
+                                            ? Get.find<PermissionStore>()
+                                            : Get.put(PermissionStore());
+                                        final saved = controller
+                                            .lastSavedCompetitionForQr
+                                            .value;
+                                        if (permissionStore.has(
+                                              'SHOW_COMP_QR_CODE_ON_ADMIN',
+                                            ) &&
+                                            saved != null) {
+                                          await showCompetitionRegistrationQrDialog(
+                                            context,
+                                            saved,
+                                          );
+                                        }
+                                        controller
+                                            .clearLastSavedCompetitionForQr();
+                                      }
+                                    },
+                                    isLoading: controller.isLoading,
+                                    isFullWidth: true,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  cancelButton(
+                                    onPressed: () {
+                                      controller.clearForm();
+                                      controller.toggleViewMode(true);
+                                    },
+                                    isFullWidth: true,
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  saveButton(
+                                    onPressed: () async {
+                                      final ok = await controller
+                                          .createCompetition();
+                                      if (ok && context.mounted) {
+                                        final permissionStore =
+                                            Get.isRegistered<PermissionStore>()
+                                            ? Get.find<PermissionStore>()
+                                            : Get.put(PermissionStore());
+                                        final saved = controller
+                                            .lastSavedCompetitionForQr
+                                            .value;
+                                        if (permissionStore.has(
+                                              'SHOW_COMP_QR_CODE_ON_ADMIN',
+                                            ) &&
+                                            saved != null) {
+                                          await showCompetitionRegistrationQrDialog(
+                                            context,
+                                            saved,
+                                          );
+                                        }
+                                        controller
+                                            .clearLastSavedCompetitionForQr();
+                                      }
+                                    },
+                                    isLoading: controller.isLoading,
+                                    width: 200,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  cancelButton(
+                                    onPressed: () {
+                                      controller.clearForm();
+                                      controller.toggleViewMode(true);
+                                    },
+                                    width: 200,
+                                  ),
+                                ],
+                              )),
+                ),
+                SizedBox(height: isMobile ? 16 : 24),
+              ],
+            ),
+          );
+        }),
       ),
     );
   }
@@ -995,6 +1062,22 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  String _dateFieldKey({required bool isStartDate, required bool isDisplayAd}) {
+    if (isDisplayAd) return CompetitionController.dateFieldDisplayAd;
+    if (isStartDate) return CompetitionController.dateFieldStart;
+    return CompetitionController.dateFieldEnd;
+  }
+
+  String? Function(DateTime?) _dateFieldValidator(
+    CompetitionController controller, {
+    required bool isStartDate,
+    required bool isDisplayAd,
+  }) {
+    if (isDisplayAd) return controller.validateDisplayAdFrom;
+    if (isStartDate) return controller.validateEventStartDate;
+    return controller.validateEventEndDate;
+  }
+
   Widget _buildDateField(
     BuildContext context,
     CompetitionController controller, {
@@ -1005,52 +1088,70 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isMobile = false,
     bool isTablet = false,
   }) {
+    final validateDate = _dateFieldValidator(
+      controller,
+      isStartDate: isStartDate,
+      isDisplayAd: isDisplayAd,
+    );
+    final dateFieldKey = _dateFieldKey(
+      isStartDate: isStartDate,
+      isDisplayAd: isDisplayAd,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: label),
-        FormField<DateTime>(
-          initialValue: isStartDate
-              ? controller.eventStartDate.value
-              : isDisplayAd
-              ? controller.displayAdFrom.value
-              : controller.eventEndDate.value,
-          validator: isRequired
-              ? (value) {
-                  if (value == null) {
-                    return 'This field is required';
-                  }
-                  return null;
-                }
-              : null,
-          builder: (FormFieldState<DateTime> field) {
-            return Obx(() {
-              final currentDate = isStartDate
-                  ? controller.eventStartDate.value
-                  : isDisplayAd
-                  ? controller.displayAdFrom.value
-                  : controller.eventEndDate.value;
-
-              // Update field value when date changes
+        Obx(() {
+          final _ = controller.competitionDatesRevision.value;
+          final showErrors = controller.shouldShowCompetitionDateError(
+            dateFieldKey,
+          );
+          return FormField<DateTime>(
+            initialValue: isStartDate
+                ? controller.eventStartDate.value
+                : isDisplayAd
+                ? controller.displayAdFrom.value
+                : controller.eventEndDate.value,
+            validator: isRequired ? validateDate : null,
+            builder: (FormFieldState<DateTime> field) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (field.value != currentDate) {
-                  field.didChange(currentDate);
+                if (!field.mounted) return;
+                final syncedDate = isStartDate
+                    ? controller.eventStartDate.value
+                    : isDisplayAd
+                    ? controller.displayAdFrom.value
+                    : controller.eventEndDate.value;
+                if (field.value != syncedDate) {
+                  field.didChange(syncedDate);
+                }
+                if (showErrors || syncedDate != null) {
                   field.validate();
                 }
               });
 
-              return InkWell(
-                onTap: controller.isViewMode.value
-                    ? null
-                    : () async {
-                        await _selectDate(
-                          context,
-                          controller,
-                          isStartDate: isStartDate,
-                          isDisplayAd: isDisplayAd,
-                        );
-                        // Trigger validation after date selection
-                        Future.delayed(const Duration(milliseconds: 100), () {
+              return Obx(() {
+                final displayedDate = isStartDate
+                    ? controller.eventStartDate.value
+                    : isDisplayAd
+                    ? controller.displayAdFrom.value
+                    : controller.eventEndDate.value;
+
+                return InkWell(
+                  onTap: controller.isViewMode.value
+                      ? null
+                      : () async {
+                          final didPick = await _selectDate(
+                            context,
+                            controller,
+                            isStartDate: isStartDate,
+                            isDisplayAd: isDisplayAd,
+                          );
+                          if (didPick) {
+                            controller.markCompetitionDateFieldTouched(
+                              dateFieldKey,
+                            );
+                          }
                           final updatedDate = isStartDate
                               ? controller.eventStartDate.value
                               : isDisplayAd
@@ -1058,10 +1159,12 @@ class CreateCompetitionScreen extends StatelessWidget {
                               : controller.eventEndDate.value;
                           field.didChange(updatedDate);
                           field.validate();
-                        });
-                      },
-                child: Obx(
-                  () => InputDecorator(
+                          controller.notifyCompetitionDatesChanged();
+                          if (updatedDate != null) {
+                            controller.alertCompetitionDateValidationIssue();
+                          }
+                        },
+                  child: InputDecorator(
                     decoration: InputDecoration(
                       hintText: 'Select date',
                       border: OutlineInputBorder(
@@ -1079,56 +1182,112 @@ class CreateCompetitionScreen extends StatelessWidget {
                       suffixIcon: controller.isViewMode.value
                           ? null
                           : const Icon(Icons.calendar_today),
-                      errorText: controller.hasAttemptedSubmit.value
-                          ? field.errorText
-                          : null,
+                      errorText: showErrors ? field.errorText : null,
                     ),
                     child: Text(
-                      currentDate != null
-                          ? DateFormat('yyyy-MM-dd').format(currentDate)
+                      displayedDate != null
+                          ? DateFormat('yyyy-MM-dd').format(displayedDate)
                           : '',
                       style: TextStyle(
-                        color: currentDate != null
+                        color: displayedDate != null
                             ? Colors.black
                             : Colors.grey[600],
                       ),
                     ),
                   ),
-                ),
-              );
-            });
-          },
-        ),
+                );
+              });
+            },
+          );
+        }),
       ],
     );
   }
 
-  Future<void> _selectDate(
+  static DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  Future<bool> _selectDate(
     BuildContext context,
     CompetitionController controller, {
     bool isStartDate = false,
     bool isDisplayAd = false,
   }) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: isStartDate
-          ? controller.eventStartDate.value ?? DateTime.now()
-          : isDisplayAd
-          ? controller.displayAdFrom.value ?? DateTime.now()
-          : controller.eventEndDate.value ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
+    final today = _dateOnly(DateTime.now());
+    final start = controller.eventStartDate.value != null
+        ? _dateOnly(controller.eventStartDate.value!)
+        : null;
+    final end = controller.eventEndDate.value != null
+        ? _dateOnly(controller.eventEndDate.value!)
+        : null;
+    final displayAd = controller.displayAdFrom.value != null
+        ? _dateOnly(controller.displayAdFrom.value!)
+        : null;
 
-    if (picked != null) {
-      if (isStartDate) {
-        controller.eventStartDate.value = picked;
-      } else if (isDisplayAd) {
-        controller.displayAdFrom.value = picked;
-      } else {
-        controller.eventEndDate.value = picked;
+    final maxFuture = today.add(const Duration(days: 365 * 2));
+
+    late DateTime initialDate;
+    late DateTime firstDate;
+    late DateTime lastDate;
+
+    if (isStartDate) {
+      initialDate = start ?? today;
+      firstDate = today;
+      if (controller.isEditMode.value &&
+          start != null &&
+          start.isBefore(today)) {
+        firstDate = start;
+      }
+      lastDate = maxFuture;
+    } else if (isDisplayAd) {
+      initialDate = displayAd ?? start ?? today;
+      firstDate = today;
+      lastDate = start ?? maxFuture;
+      if (displayAd != null && start != null && displayAd.isAfter(start)) {
+        lastDate = displayAd;
+      }
+    } else {
+      initialDate = end ?? start ?? today;
+      firstDate = start ?? today;
+      lastDate = maxFuture;
+      if (end != null && start != null && end.isBefore(start)) {
+        firstDate = end;
       }
     }
+
+    if (firstDate.isAfter(lastDate)) {
+      firstDate = lastDate;
+    }
+    if (initialDate.isBefore(firstDate)) {
+      initialDate = firstDate;
+    }
+    if (initialDate.isAfter(lastDate)) {
+      initialDate = lastDate;
+    }
+
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+
+    if (picked == null) return false;
+
+    final normalized = _dateOnly(picked);
+    if (isStartDate) {
+      controller.eventStartDate.value = normalized;
+      final currentEnd = controller.eventEndDate.value;
+      if (currentEnd != null && _dateOnly(currentEnd).isBefore(normalized)) {
+        controller.eventEndDate.value = null;
+      }
+    } else if (isDisplayAd) {
+      controller.displayAdFrom.value = normalized;
+    } else {
+      controller.eventEndDate.value = normalized;
+    }
+    controller.notifyCompetitionDatesChanged();
+    return true;
   }
 
   Widget _buildMarksField(
@@ -1937,6 +2096,7 @@ class CreateCompetitionScreen extends StatelessWidget {
               children: [
                 TextFormField(
                   controller: textController,
+                  maxLength: 100,
                   decoration: const InputDecoration(
                     labelText: 'Stage Name *',
                     hintText: 'e.g., G, H',
@@ -1944,6 +2104,9 @@ class CreateCompetitionScreen extends StatelessWidget {
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Stage name is required';
+                    }
+                    if (value.trim().length > 100) {
+                      return 'Stage name must be 100 characters or less';
                     }
                     return null;
                   },
@@ -2242,9 +2405,13 @@ class CreateCompetitionScreen extends StatelessWidget {
                     labelText: 'Group Name *',
                     hintText: 'e.g., XIV, XV',
                   ),
+                  maxLength: 100,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Group name is required';
+                    }
+                    if (value.trim().length > 100) {
+                      return 'Group name must be 100 characters or less';
                     }
                     return null;
                   },

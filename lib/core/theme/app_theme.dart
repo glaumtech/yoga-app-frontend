@@ -1,6 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+/// Instant route changes (no slide/fade) for sidebar and other navigation.
+class NoAnimationPageTransitionsBuilder extends PageTransitionsBuilder {
+  const NoAnimationPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
+  }
+}
+
+const PageTransitionsTheme _noAnimationPageTransitions = PageTransitionsTheme(
+  builders: {
+    TargetPlatform.android: NoAnimationPageTransitionsBuilder(),
+    TargetPlatform.iOS: NoAnimationPageTransitionsBuilder(),
+    TargetPlatform.linux: NoAnimationPageTransitionsBuilder(),
+    TargetPlatform.macOS: NoAnimationPageTransitionsBuilder(),
+    TargetPlatform.windows: NoAnimationPageTransitionsBuilder(),
+    TargetPlatform.fuchsia: NoAnimationPageTransitionsBuilder(),
+  },
+);
+
 class AppTheme {
   // Color Palette
   static const Color primaryColor = Color(0xFF4CAF50); // Yoga green
@@ -130,6 +157,7 @@ class AppTheme {
           ),
         ),
       ),
+      pageTransitionsTheme: _noAnimationPageTransitions,
     );
   }
 
@@ -183,6 +211,7 @@ class AppTheme {
           ),
         ),
       ),
+      pageTransitionsTheme: _noAnimationPageTransitions,
     );
   }
 }

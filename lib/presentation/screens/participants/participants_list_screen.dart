@@ -13,41 +13,9 @@ class ParticipantsListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final participantController = Get.find<ParticipantController>();
-    // Initialize CompetitionController if not already initialized
-    final competitionController = Get.put(CompetitionController());
-
-    // Load competitions if empty
-    if (competitionController.competitions.isEmpty &&
-        !competitionController.isLoading.value) {
-      competitionController.loadCompetitions().then((_) {
-        // Set first competition as default if no competition is selected
-        if (competitionController.competitions.isNotEmpty &&
-            participantController.selectedEventId.value.isEmpty) {
-          final firstCompetition = competitionController.competitions
-              .firstWhere(
-                (c) => c.id != null,
-                orElse: () => competitionController.competitions.first,
-              );
-          if (firstCompetition.id != null) {
-            participantController.selectedEventId.value = firstCompetition.id!;
-            participantController.loadParticipantsByEventId(
-              firstCompetition.id!,
-            );
-          }
-        }
-      });
-    } else if (competitionController.competitions.isNotEmpty &&
-        participantController.selectedEventId.value.isEmpty) {
-      // Set first competition as default if competitions are already loaded
-      final firstCompetition = competitionController.competitions.firstWhere(
-        (c) => c.id != null,
-        orElse: () => competitionController.competitions.first,
-      );
-      if (firstCompetition.id != null) {
-        participantController.selectedEventId.value = firstCompetition.id!;
-        participantController.loadParticipantsByEventId(firstCompetition.id!);
-      }
-    }
+    final competitionController = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
@@ -78,7 +46,7 @@ class ParticipantsListScreen extends StatelessWidget {
                   return const Center(child: CustomLoader());
                 }
 
-                if (participantController.errorMessage.value.isNotEmpty) {
+                if (participantController.listErrorMessage.value.isNotEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -90,7 +58,7 @@ class ParticipantsListScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          participantController.errorMessage.value,
+                          participantController.listErrorMessage.value,
                           style: TextStyle(color: Colors.red[700]),
                           textAlign: TextAlign.center,
                         ),
@@ -140,10 +108,22 @@ class ParticipantsListScreen extends StatelessWidget {
                 }
 
                 if (isMobile) {
-                  return _buildMobileList(
-                    context,
-                    participants,
-                    participantController,
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: _buildMobileList(
+                          context,
+                          participants,
+                          participantController,
+                        ),
+                      ),
+                      _buildPaginationControls(
+                        context,
+                        participantController,
+                        isMobile,
+                        isTablet,
+                      ),
+                    ],
                   );
                 } else {
                   return Column(
@@ -292,12 +272,8 @@ class ParticipantsListScreen extends StatelessWidget {
               SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: () {
-                  final eventId = controller.selectedEventId.value;
-                  if (eventId.isNotEmpty) {
-                    controller.loadParticipantsByEventId(eventId);
-                  }
-                },
+                onPressed: () =>
+                    _refreshParticipantsList(controller, competitionController),
                 tooltip: 'Refresh',
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.grey[100],
@@ -422,12 +398,8 @@ class ParticipantsListScreen extends StatelessWidget {
         // Refresh Button
         IconButton(
           icon: const Icon(Icons.refresh),
-          onPressed: () {
-            final eventId = controller.selectedEventId.value;
-            if (eventId.isNotEmpty) {
-              controller.loadParticipantsByEventId(eventId);
-            }
-          },
+          onPressed: () =>
+              _refreshParticipantsList(controller, competitionController),
           tooltip: 'Refresh',
           style: IconButton.styleFrom(
             backgroundColor: Colors.grey[100],
@@ -435,6 +407,16 @@ class ParticipantsListScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _refreshParticipantsList(
+    ParticipantController controller,
+    CompetitionController competitionController,
+  ) {
+    controller.ensureParticipantsListLoaded(
+      competitionController,
+      forceReload: true,
     );
   }
 
@@ -523,6 +505,63 @@ class ParticipantsListScreen extends StatelessWidget {
                       'Teacher Cell',
                       participant.yogaMasterContact,
                     ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed:
+                            participant.id == null || participant.id!.isEmpty
+                            ? null
+                            : () => controller
+                                  .downloadParticipantRegistrationDetails(
+                                    participant.id!,
+                                  ),
+                        icon: Icon(
+                          Icons.picture_as_pdf_outlined,
+                          size: 16,
+                          color: Colors.blue.shade800,
+                        ),
+                        label: Text(
+                          'PDF',
+                          style: TextStyle(color: Colors.blue.shade800),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          controller.initializeFormFromModel(participant);
+                          controller.toggleViewMode(false);
+                        },
+                        icon: Icon(
+                          Icons.edit,
+                          size: 16,
+                          color: AppTheme.primaryColor,
+                        ),
+                        label: Text(
+                          'Edit',
+                          style: TextStyle(color: AppTheme.primaryColor),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          if (participant.id != null) {
+                            _showDeleteDialog(context, controller, participant);
+                          }
+                        },
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 16,
+                          color: Colors.red,
+                        ),
+                        label: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -567,7 +606,7 @@ class ParticipantsListScreen extends StatelessWidget {
                     6: FlexColumnWidth(1.4),
                     7: FlexColumnWidth(1.4),
                     8: const FixedColumnWidth(80), // SPOT REG
-                    9: const FixedColumnWidth(100),
+                    9: const FixedColumnWidth(140),
                   },
                   children: [
                     // Header Row
@@ -607,7 +646,7 @@ class ParticipantsListScreen extends StatelessWidget {
                           controller,
                         ),
                         _buildTableCell('SPOT REG', isHeader: true),
-                        _buildTableCell('ACTIONS', isHeader: true),
+                        _buildCenteredTableHeaderCell('ACTIONS'),
                       ],
                     ),
                     // Data Rows
@@ -666,6 +705,19 @@ class ParticipantsListScreen extends StatelessWidget {
         ),
         softWrap: true,
         maxLines: null,
+      ),
+    );
+  }
+
+  Widget _buildCenteredTableHeaderCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Center(
+        child: Text(
+          text,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }
@@ -851,36 +903,71 @@ class ParticipantsListScreen extends StatelessWidget {
     ParticipantModel participant,
     ParticipantController controller,
   ) {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
-            onPressed: () {
-              // Use existing participant data without API call
-              controller.initializeFormFromModel(participant);
-              // Switch to registration form view
-              controller.toggleViewMode(false);
-            },
-            tooltip: 'Edit',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+    return TableCell(
+      verticalAlignment: TableCellVerticalAlignment.middle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.picture_as_pdf_outlined,
+                  size: 18,
+                  color: Colors.blue.shade800,
+                ),
+                onPressed: participant.id == null || participant.id!.isEmpty
+                    ? null
+                    : () => controller.downloadParticipantRegistrationDetails(
+                        participant.id!,
+                      ),
+                tooltip: 'Download registration details',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(
+                  Icons.edit,
+                  size: 18,
+                  color: AppTheme.primaryColor,
+                ),
+                onPressed: () {
+                  controller.initializeFormFromModel(participant);
+                  controller.toggleViewMode(false);
+                },
+                tooltip: 'Edit',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                onPressed: () {
+                  if (participant.id != null) {
+                    _showDeleteDialog(context, controller, participant);
+                  }
+                },
+                tooltip: 'Delete',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-            onPressed: () {
-              if (participant.id != null) {
-                _showDeleteDialog(context, controller, participant);
-              }
-            },
-            tooltip: 'Delete',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
+        ),
       ),
     );
   }

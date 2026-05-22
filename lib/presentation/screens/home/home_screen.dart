@@ -15,8 +15,10 @@ import '../../widgets/footer_section.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/competition_card.dart';
+import '../../widgets/competition_registration_qr_image.dart';
 import '../../widgets/banner_slider.dart';
 import '../../../data/models/competition_model.dart';
+import '../../../core/utils/competition_registration_url.dart';
 
 class _BannerData {
   final String id;
@@ -25,6 +27,7 @@ class _BannerData {
   final String venue;
   final String? venueAddress;
   final List<String> categories;
+  final String? registrationUrl;
 
   _BannerData({
     required this.id,
@@ -33,6 +36,7 @@ class _BannerData {
     required this.venue,
     this.venueAddress,
     required this.categories,
+    this.registrationUrl,
   });
 
   static _BannerData? fromCompetition(HomeCompetitionModel c) {
@@ -47,20 +51,21 @@ class _BannerData {
       venue: c.address,
       venueAddress: c.address.isNotEmpty ? c.address : null,
       categories: c.categories,
+      registrationUrl: c.registrationUrl,
     );
   }
 }
 
-String _registrationShareUrl(String competitionId) {
-  final registerPath = AppRoutes.registerCompetitionPath(competitionId);
-  final base = Uri.base;
-  final origin = '${base.scheme}://${base.authority}';
-  final usesHashRouting = base.hasFragment && base.fragment.startsWith('/');
-  return usesHashRouting ? '$origin/#$registerPath' : '$origin$registerPath';
-}
-
-void _copyBannerRegistrationLink(BuildContext context, String competitionId) {
-  Clipboard.setData(ClipboardData(text: _registrationShareUrl(competitionId)));
+void _copyBannerRegistrationLink(
+  BuildContext context,
+  String competitionId, {
+  String? registrationUrl,
+}) {
+  final link = registrationShareUrlForCompetition(
+    registrationUrl: registrationUrl,
+    competitionId: competitionId,
+  );
+  Clipboard.setData(ClipboardData(text: link));
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).clearSnackBars();
   ScaffoldMessenger.of(context).showSnackBar(
@@ -396,6 +401,10 @@ class HomeScreen extends StatelessWidget {
                         context,
                         competitionController,
                       ),
+                      _buildPastEventsSection(
+                        context,
+                        competitionController,
+                      ),
                       const FooterSection(),
                     ],
                   ),
@@ -704,6 +713,9 @@ class HomeScreen extends StatelessWidget {
                                                     _copyBannerRegistrationLink(
                                                       context,
                                                       bannerEvent.id,
+                                                      registrationUrl:
+                                                          bannerEvent
+                                                              .registrationUrl,
                                                     ),
                                                 icon: const Icon(
                                                   Icons.share,
@@ -764,6 +776,8 @@ class HomeScreen extends StatelessWidget {
                                                 _copyBannerRegistrationLink(
                                                   context,
                                                   bannerEvent.id,
+                                                  registrationUrl:
+                                                      bannerEvent.registrationUrl,
                                                 ),
                                             icon: const Icon(
                                               Icons.share,
@@ -890,21 +904,10 @@ class HomeScreen extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: ClipRRect(
+            child: CompetitionRegistrationQrImage(
+              competitionId: bannerEvent.id,
+              size: qrSize,
               borderRadius: BorderRadius.circular(4),
-              child: Image.asset(
-                'images/bar-code.jpg',
-                width: qrSize,
-                height: qrSize,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return Icon(
-                    Icons.qr_code,
-                    size: qrSize * 0.5,
-                    color: AppTheme.primaryColor,
-                  );
-                },
-              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -1017,9 +1020,65 @@ class HomeScreen extends StatelessWidget {
         .take(4)
         .toList();
 
-    if (currentCompetitions.isEmpty) {
+    return _buildHomeCompetitionsListSection(
+      context,
+      competitions: currentCompetitions,
+      title: 'Current Competitions',
+      subtitle: 'Competitions happening now',
+      backgroundColor: Colors.grey.shade50,
+      itemKeyPrefix: 'current_comp',
+      showRegistrationQr: true,
+      viewMoreStatus: 'ongoing',
+    );
+  }
+
+  Widget _buildPastEventsSection(
+    BuildContext context,
+    CompetitionController controller,
+  ) {
+    final past = controller.homeCompetitions
+        .where((c) => c.status == 'completed')
+        .toList();
+    past.sort((a, b) {
+      final endA = DateTime.tryParse(a.eventEndDate ?? '') ?? DateTime(1970);
+      final endB = DateTime.tryParse(b.eventEndDate ?? '') ?? DateTime(1970);
+      return endB.compareTo(endA);
+    });
+    final pastCompetitions = past.take(4).toList();
+
+    return _buildHomeCompetitionsListSection(
+      context,
+      competitions: pastCompetitions,
+      title: 'Past Events',
+      subtitle: 'Previous competitions',
+      backgroundColor: Colors.grey.shade50,
+      itemKeyPrefix: 'past_comp',
+      showStatusBadge: false,
+      showRegistrationButton: false,
+      showViewParticipantsButton: true,
+      viewMoreStatus: 'completed',
+    );
+  }
+
+  Widget _buildHomeCompetitionsListSection(
+    BuildContext context, {
+    required List<HomeCompetitionModel> competitions,
+    required String title,
+    String? subtitle,
+    required Color backgroundColor,
+    required String itemKeyPrefix,
+    bool showRegistrationQr = false,
+    bool showShareLinkOption = false,
+    bool showStatusBadge = true,
+    bool showRegistrationButton = true,
+    bool showViewParticipantsButton = false,
+    String? viewMoreStatus,
+  }) {
+    if (competitions.isEmpty) {
       return const SizedBox.shrink();
     }
+
+    final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1029,7 +1088,7 @@ class HomeScreen extends StatelessWidget {
         return Container(
           width: double.infinity,
           padding: EdgeInsets.symmetric(vertical: padV, horizontal: padH),
-          color: Colors.grey[50],
+          color: backgroundColor,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1039,13 +1098,15 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: SectionHeader(
-                      title: 'Current Competitions',
-                      subtitle: 'Competitions happening soon',
+                      title: title,
+                      subtitle: subtitle,
                       showDivider: false,
                     ),
                   ),
                   TextButton(
-                    onPressed: () => context.push(AppRoutes.home),
+                    onPressed: () => context.push(
+                      AppRoutes.competitionsList(status: viewMoreStatus),
+                    ),
                     child: const Text('View More'),
                   ),
                 ],
@@ -1061,21 +1122,31 @@ class HomeScreen extends StatelessWidget {
                   final isMobile = cw < HomeLayout.mobile;
                   final isTablet =
                       cw >= HomeLayout.mobile && cw < HomeLayout.tablet;
-                  final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
+
+                  Widget buildCard(HomeCompetitionModel competition) {
+                    return CompetitionCard(
+                      competition: competition,
+                      showRegistrationQr: showRegistrationQr,
+                      showShareLinkOption: showShareLinkOption,
+                      showStatusBadge: showStatusBadge,
+                      showRegistrationButton: showRegistrationButton,
+                      showViewParticipantsButton: showViewParticipantsButton,
+                    );
+                  }
 
                   if (isMobile) {
                     return ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: currentCompetitions.length,
+                      itemCount: competitions.length,
                       itemBuilder: (context, index) {
-                        final competition = currentCompetitions[index];
+                        final competition = competitions[index];
                         return Padding(
                           key: ValueKey(
-                            'current_comp_${idOf(competition)}_$index',
+                            '${itemKeyPrefix}_${idOf(competition)}_$index',
                           ),
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: CompetitionCard(competition: competition),
+                          child: buildCard(competition),
                         );
                       },
                     );
@@ -1095,14 +1166,19 @@ class HomeScreen extends StatelessWidget {
                               crossCount,
                             ),
                       ),
-                      itemCount: currentCompetitions.length,
+                      itemCount: competitions.length,
                       itemBuilder: (context, index) {
-                        final competition = currentCompetitions[index];
+                        final competition = competitions[index];
                         return CompetitionCard(
                           key: ValueKey(
-                            'current_comp_${idOf(competition)}_$index',
+                            '${itemKeyPrefix}_${idOf(competition)}_$index',
                           ),
                           competition: competition,
+                          showRegistrationQr: showRegistrationQr,
+                          showShareLinkOption: showShareLinkOption,
+                          showStatusBadge: showStatusBadge,
+                          showRegistrationButton: showRegistrationButton,
+                          showViewParticipantsButton: showViewParticipantsButton,
                         );
                       },
                     );
@@ -1116,15 +1192,15 @@ class HomeScreen extends StatelessWidget {
                         itemExtent: HomeLayout.competitionCarouselItemExtent(
                           cw,
                         ),
-                        itemCount: currentCompetitions.length,
+                        itemCount: competitions.length,
                         itemBuilder: (context, index) {
-                          final competition = currentCompetitions[index];
+                          final competition = competitions[index];
                           return Padding(
                             key: ValueKey(
-                              'current_comp_${idOf(competition)}_$index',
+                              '${itemKeyPrefix}_${idOf(competition)}_$index',
                             ),
                             padding: const EdgeInsets.only(right: 16),
-                            child: CompetitionCard(competition: competition),
+                            child: buildCard(competition),
                           );
                         },
                       ),
@@ -1224,7 +1300,9 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => context.push(AppRoutes.home),
+                    onPressed: () => context.push(
+                      AppRoutes.competitionsList(status: 'upcoming'),
+                    ),
                     child: const Text('View More'),
                   ),
                 ],
@@ -1256,6 +1334,7 @@ class HomeScreen extends StatelessWidget {
                           child: CompetitionCard(
                             competition: competition,
                             showShareLinkOption: true,
+                            showRegistrationQr: true,
                           ),
                         );
                       },
@@ -1285,6 +1364,7 @@ class HomeScreen extends StatelessWidget {
                           ),
                           competition: competition,
                           showShareLinkOption: true,
+                          showRegistrationQr: true,
                         );
                       },
                     );
@@ -1309,6 +1389,7 @@ class HomeScreen extends StatelessWidget {
                             child: CompetitionCard(
                               competition: competition,
                               showShareLinkOption: true,
+                              showRegistrationQr: true,
                             ),
                           );
                         },

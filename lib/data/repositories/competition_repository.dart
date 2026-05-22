@@ -84,8 +84,12 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        final createdCompetition = CompetitionModel.fromJson(response.data!);
-        return ApiResponse(success: true, data: createdCompetition);
+        final createdCompetition = parseCompetitionFromDetailResponse(
+          response.data,
+        );
+        if (createdCompetition != null) {
+          return ApiResponse(success: true, data: createdCompetition);
+        }
       }
 
       return ApiResponse(
@@ -175,8 +179,12 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        final updatedCompetition = CompetitionModel.fromJson(response.data!);
-        return ApiResponse(success: true, data: updatedCompetition);
+        final updatedCompetition = parseCompetitionFromDetailResponse(
+          response.data,
+        );
+        if (updatedCompetition != null) {
+          return ApiResponse(success: true, data: updatedCompetition);
+        }
       }
 
       return ApiResponse(
@@ -911,6 +919,55 @@ class CompetitionRepository {
     }
   }
 
+  /// Unwraps GET /competition/{id} payloads: `{ data: { competition: {...} } }`.
+  static CompetitionModel? parseCompetitionFromDetailResponse(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(raw as Map);
+
+    final competition = map['competition'];
+    if (competition is Map<String, dynamic>) {
+      return CompetitionModel.fromJson(competition);
+    }
+
+    final nestedData = map['data'];
+    if (nestedData is Map<String, dynamic>) {
+      return parseCompetitionFromDetailResponse(nestedData);
+    }
+
+    if (map.containsKey('competitionName') ||
+        map.containsKey('id') ||
+        map.containsKey('stageGroupsById')) {
+      return CompetitionModel.fromJson(map);
+    }
+
+    return null;
+  }
+
+  /// GET /competition/{id}/registration-qr — PNG bytes for wall print.
+  Future<ApiResponse<Uint8List>> downloadRegistrationQrPng(String id) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '${BaseUrl.baseUrl}${EndPoints.competitionRegistrationQr(id)}',
+        ),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return ApiResponse(success: true, data: response.bodyBytes);
+      }
+      return ApiResponse(
+        success: false,
+        message: 'Failed to download QR (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error downloading QR: ${e.toString()}',
+      );
+    }
+  }
+
   // Get competition by ID
   Future<ApiResponse<CompetitionModel>> getCompetitionById(int id) async {
     try {
@@ -921,16 +978,7 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionModel? competition;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          // Check if data is nested
-          dynamic competitionData = dataMap['data'] ?? dataMap;
-          if (competitionData is Map<String, dynamic>) {
-            competition = CompetitionModel.fromJson(competitionData);
-          }
-        }
+        final competition = parseCompetitionFromDetailResponse(response.data);
 
         if (competition != null) {
           return ApiResponse(success: true, data: competition);

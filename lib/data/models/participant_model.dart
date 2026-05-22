@@ -26,6 +26,10 @@ class ParticipantModel {
   categoryStatusMap; // {'common': 'Un Assigned', 'special': 'Scored'}
   final String? eventId; // Event ID
   final bool isSpotRegistration;
+  final bool optForECertificate;
+  final int? stageId;
+  final int? categoryId;
+  final int? groupId;
 
   ParticipantModel({
     this.id,
@@ -53,6 +57,10 @@ class ParticipantModel {
     this.categoryStatusMap,
     this.eventId,
     this.isSpotRegistration = false,
+    this.optForECertificate = false,
+    this.stageId,
+    this.categoryId,
+    this.groupId,
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory ParticipantModel.fromJson(Map<String, dynamic> json) {
@@ -152,7 +160,19 @@ class ParticipantModel {
           _parseBool(json['spotRegistration']) ??
           _parseBool(json['spot_registration']) ??
           false,
+      optForECertificate: _parseBool(json['optForECertificate']) ??
+          _parseBool(json['opt_for_e_certificate']) ??
+          false,
+      stageId: _parseInt(json['stageId'] ?? json['stage_id']),
+      categoryId: _parseInt(json['categoryId'] ?? json['category_id']),
+      groupId: _parseInt(json['groupId'] ?? json['group_id']),
     );
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
   }
 
   static bool? _parseBool(dynamic value) {
@@ -188,6 +208,7 @@ class ParticipantModel {
       if (categoryStatusMap != null) 'categoryStatusMap': categoryStatusMap,
       if (eventId != null) 'eventId': eventId,
       'isSpotRegistration': isSpotRegistration,
+      'optForECertificate': optForECertificate,
     };
   }
 
@@ -217,6 +238,7 @@ class ParticipantModel {
     Map<String, String>? categoryStatusMap,
     String? eventId,
     bool? isSpotRegistration,
+    bool? optForECertificate,
   }) {
     return ParticipantModel(
       id: id ?? this.id,
@@ -244,6 +266,7 @@ class ParticipantModel {
       categoryStatusMap: categoryStatusMap ?? this.categoryStatusMap,
       eventId: eventId ?? this.eventId,
       isSpotRegistration: isSpotRegistration ?? this.isSpotRegistration,
+      optForECertificate: optForECertificate ?? this.optForECertificate,
     );
   }
 

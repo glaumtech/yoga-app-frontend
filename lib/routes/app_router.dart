@@ -1,9 +1,12 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:yoga_champ/routes/app_routes.dart';
 import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
 import '../presentation/screens/auth/signup_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
+import '../presentation/screens/home/public_competitions_screen.dart';
+import '../presentation/screens/home/public_competition_participants_screen.dart';
 import '../presentation/screens/about/about_screen.dart';
 import '../presentation/screens/contact/contact_screen.dart';
 import '../presentation/screens/admin/admin_dashboard_screen.dart';
@@ -21,6 +24,10 @@ import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../presentation/screens/organization_setup/organization_setup_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/storage_service.dart';
+
+Page<void> _noTransitionPage(GoRouterState state, Widget child) {
+  return NoTransitionPage<void>(key: state.pageKey, child: child);
+}
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -58,9 +65,13 @@ class AppRouter {
       // If not logged in and trying to access protected routes
       // Note: home is treated as public for unauthenticated users
       final isHomeRoute = location == AppRoutes.home;
+      final isPublicCompetitions =
+          location == AppRoutes.competitions ||
+          location.startsWith('${AppRoutes.competitions}/');
       if (token == null &&
           !isPublicRoute &&
           !isHomeRoute &&
+          !isPublicCompetitions &&
           !isRegister &&
           !isPublicSchools) {
         return AppRoutes.login;
@@ -87,6 +98,7 @@ class AppRouter {
               location != AppRoutes.splash &&
               !isPublicRoute &&
               !isHomeRoute &&
+              !isPublicCompetitions &&
               !isRegister &&
               !isPublicSchools) {
             return AppRoutes.juryScoring;
@@ -172,6 +184,30 @@ class AppRouter {
         builder: (context, state) => const HomeScreen(),
       ),
       GoRoute(
+        path: AppRoutes.competitions,
+        name: 'competitions',
+        builder: (context, state) {
+          final status = state.uri.queryParameters['status'];
+          return PublicCompetitionsScreen(statusFilter: status);
+        },
+        routes: [
+          GoRoute(
+            path: ':competitionId/participants',
+            name: 'public-competition-participants',
+            builder: (context, state) {
+              final competitionId = state.pathParameters['competitionId'] ?? '';
+              final name = state.uri.queryParameters['name'] ?? '';
+              final isPast = state.uri.queryParameters['past'] == '1';
+              return PublicCompetitionParticipantsScreen(
+                competitionId: competitionId,
+                competitionName: name,
+                isPastCompetition: isPast,
+              );
+            },
+          ),
+        ],
+      ),
+      GoRoute(
         path: AppRoutes.about,
         name: 'about',
         builder: (context, state) => const AboutScreen(),
@@ -206,7 +242,8 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.userManagement,
         name: 'user-management',
-        builder: (context, state) => const UserManagementScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const UserManagementScreen()),
       ),
       GoRoute(
         path: AppRoutes.usersList,
@@ -216,27 +253,32 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.createCompetition,
         name: 'create-competition',
-        builder: (context, state) => const CreateCompetitionScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const CreateCompetitionScreen()),
       ),
       GoRoute(
         path: AppRoutes.participantManagement,
         name: 'participant-management',
-        builder: (context, state) => const ParticipantManagementScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const ParticipantManagementScreen()),
       ),
       GoRoute(
         path: AppRoutes.schoolsList,
         name: 'schools-list',
-        builder: (context, state) => const SchoolsScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const SchoolsScreen()),
       ),
       GoRoute(
         path: AppRoutes.reports,
         name: 'reports',
-        builder: (context, state) => const ReportsScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const ReportsScreen()),
       ),
       GoRoute(
         path: AppRoutes.settings,
         name: 'settings',
-        builder: (context, state) => const SettingsScreen(),
+        pageBuilder: (context, state) =>
+            _noTransitionPage(state, const SettingsScreen()),
       ),
       GoRoute(
         path: AppRoutes.sponsors,

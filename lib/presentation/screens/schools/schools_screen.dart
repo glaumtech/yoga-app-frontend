@@ -289,7 +289,7 @@ class _InstitutionPrecheckAndCreateState
                         border: Border.all(color: Colors.grey[200]!),
                       ),
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 260),
+                        constraints: const BoxConstraints(maxHeight: 300),
                         child: ListView.separated(
                           shrinkWrap: true,
                           itemCount: list.length,
@@ -297,19 +297,11 @@ class _InstitutionPrecheckAndCreateState
                               Divider(height: 1, color: Colors.grey[200]),
                           itemBuilder: (context, index) {
                             final inst = list[index];
-                            final subtitleParts = <String>[];
-                            if (inst.cityName != null &&
-                                inst.cityName!.trim().isNotEmpty) {
-                              subtitleParts.add(inst.cityName!.trim());
-                            }
-                            if (inst.stateName != null &&
-                                inst.stateName!.trim().isNotEmpty) {
-                              subtitleParts.add(inst.stateName!.trim());
-                            }
-                            if (inst.pincode.trim().isNotEmpty) {
-                              subtitleParts.add(inst.pincode.trim());
-                            }
-                            final subtitle = subtitleParts.join(' • ');
+                            final city = (inst.cityName ?? '').trim();
+                            final district = (inst.districtName ?? '').trim();
+                            final village = (inst.village ?? '').trim();
+                            final address = inst.address.trim();
+                            final pincode = inst.pincode.trim();
 
                             return ListTile(
                               dense: true,
@@ -319,15 +311,47 @@ class _InstitutionPrecheckAndCreateState
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              subtitle: subtitle.isEmpty
-                                  ? null
-                                  : Text(subtitle),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'City: ${city.isEmpty ? '-' : city}   |   District: ${district.isEmpty ? '-' : district}   |   Village: ${village.isEmpty ? '-' : village}',
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 12.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Address: ${address.isEmpty ? '-' : address}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 12.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Pincode: ${pincode.isEmpty ? '-' : pincode}',
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 12.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               trailing: IconButton(
                                 tooltip: 'Edit',
                                 icon: const Icon(Icons.edit),
                                 onPressed: () async {
-                                  if (inst.id == null || inst.id!.isEmpty)
+                                  if (inst.id == null || inst.id!.isEmpty) {
                                     return;
+                                  }
                                   await controller.loadSchoolForEdit(inst.id!);
                                 },
                               ),

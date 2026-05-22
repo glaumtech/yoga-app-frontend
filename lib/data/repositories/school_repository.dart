@@ -23,21 +23,31 @@ class SchoolRepository {
     String? institutionShortName,
     required String address,
     required int stateId,
-    required int cityId,
+    required int districtId,
+    int? cityId,
     required int institutionTypeId,
     List<int>? institutionCategoryIds,
-    required String pincode,
+    String? pincode,
     String? emailId,
+    String? website,
+    String? landLine,
+    String? mobile,
+    String? contributorName,
+    String? contributorMobileNo,
   }) async {
     try {
       final requestBody = <String, dynamic>{
         'institutionName': institutionName,
         'address': address,
         'stateId': stateId,
-        'cityId': cityId,
+        'districtId': districtId,
+        'cityId': (cityId != null && cityId > 0) ? cityId : null,
         'institutionTypeId': institutionTypeId,
-        'pincode': pincode,
       };
+
+      if (pincode != null && pincode.trim().isNotEmpty) {
+        requestBody['pincode'] = pincode.trim();
+      }
 
       if (institutionShortName != null && institutionShortName.isNotEmpty) {
         requestBody['institutionShortName'] = institutionShortName;
@@ -47,6 +57,21 @@ class SchoolRepository {
       }
       if (emailId != null && emailId.isNotEmpty) {
         requestBody['emailId'] = emailId;
+      }
+      if (website != null && website.isNotEmpty) {
+        requestBody['website'] = website;
+      }
+      if (landLine != null && landLine.isNotEmpty) {
+        requestBody['landLine'] = landLine;
+      }
+      if (mobile != null && mobile.isNotEmpty) {
+        requestBody['mobile'] = mobile;
+      }
+      if (contributorName != null && contributorName.isNotEmpty) {
+        requestBody['contributorName'] = contributorName;
+      }
+      if (contributorMobileNo != null && contributorMobileNo.isNotEmpty) {
+        requestBody['contributorMobileNo'] = contributorMobileNo;
       }
 
       print('Creating institution with data: ${requestBody}');
@@ -97,6 +122,7 @@ class SchoolRepository {
     String? search,
     int? stateId,
     int? cityId,
+    int? districtId,
     int? institutionTypeId,
     int? page,
     int? limit,
@@ -114,6 +140,9 @@ class SchoolRepository {
       }
       if (cityId != null && cityId > 0) {
         requestBody['cityId'] = cityId;
+      }
+      if (districtId != null && districtId > 0) {
+        requestBody['districtId'] = districtId;
       }
       if (institutionTypeId != null && institutionTypeId > 0) {
         requestBody['institutionTypeId'] = institutionTypeId;
@@ -323,10 +352,17 @@ class SchoolRepository {
     String? address,
     String? emailId,
     int? stateId,
+    int? districtId,
     int? cityId,
+    bool includeCityId = false,
     int? institutionTypeId,
     List<int>? institutionCategoryIds,
     String? pincode,
+    String? website,
+    String? landLine,
+    String? mobile,
+    String? contributorName,
+    String? contributorMobileNo,
   }) async {
     try {
       final requestBody = <String, dynamic>{};
@@ -343,10 +379,31 @@ class SchoolRepository {
       if (emailId != null && emailId.isNotEmpty) {
         requestBody['emailId'] = emailId;
       }
+      if (website != null) {
+        requestBody['website'] = website;
+      }
+      if (landLine != null) {
+        requestBody['landLine'] = landLine;
+      }
+      if (mobile != null) {
+        requestBody['mobile'] = mobile;
+      }
+      if (contributorName != null) {
+        requestBody['contributorName'] = contributorName;
+      }
+      if (contributorMobileNo != null) {
+        requestBody['contributorMobileNo'] = contributorMobileNo;
+      }
       if (stateId != null && stateId > 0) {
         requestBody['stateId'] = stateId;
       }
-      if (cityId != null && cityId > 0) {
+      if (districtId != null && districtId > 0) {
+        requestBody['districtId'] = districtId;
+      }
+      if (includeCityId) {
+        requestBody['includeCityId'] = true;
+        requestBody['cityId'] = (cityId != null && cityId > 0) ? cityId : null;
+      } else if (cityId != null && cityId > 0) {
         requestBody['cityId'] = cityId;
       }
       if (institutionTypeId != null && institutionTypeId > 0) {
@@ -433,6 +490,8 @@ class SchoolRepository {
     required String query,
     int? stateId,
     int? cityId,
+    String? cityName,
+    int? districtId,
     int? institutionTypeId,
     String? pincode,
   }) async {
@@ -443,6 +502,12 @@ class SchoolRepository {
       }
       if (cityId != null && cityId > 0) {
         queryParameters['cityId'] = '$cityId';
+      }
+      if (cityName != null && cityName.trim().isNotEmpty) {
+        queryParameters['cityName'] = cityName.trim();
+      }
+      if (districtId != null && districtId > 0) {
+        queryParameters['districtId'] = '$districtId';
       }
       if (institutionTypeId != null && institutionTypeId > 0) {
         queryParameters['institutionTypeId'] = '$institutionTypeId';

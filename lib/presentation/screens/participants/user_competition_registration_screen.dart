@@ -30,11 +30,24 @@ class _UserCompetitionRegistrationScreenState
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final competitionController = Get.isRegistered<CompetitionController>()
+          ? Get.find<CompetitionController>()
+          : Get.put(CompetitionController());
       final participantController = Get.isRegistered<ParticipantController>()
           ? Get.find<ParticipantController>()
           : Get.put(ParticipantController());
+
       participantController.clearRegistrationConfirmation();
+      participantController.selectedEventId.value = widget.competitionId;
+
+      if (competitionController.homeCompetitions.isEmpty &&
+          !competitionController.isLoadingHomeCompetitions.value) {
+        await competitionController.loadCompetitionsForHome();
+      }
+      await competitionController.ensureCompetitionLoadedForRegistration(
+        widget.competitionId,
+      );
     });
   }
 
@@ -104,7 +117,6 @@ class _UserCompetitionRegistrationScreenState
               () => _buildCompetitionDetailsContent(
                 context,
                 competitionController,
-                participantController,
                 isMobile,
               ),
             ),
@@ -115,6 +127,7 @@ class _UserCompetitionRegistrationScreenState
               if (participantController.registrationSaved.value) {
                 return _buildRegistrationSuccessPanel(
                   context,
+                  participantController,
                   participantController.lastRegisteredParticipant.value,
                 );
               }
@@ -147,7 +160,6 @@ class _UserCompetitionRegistrationScreenState
               () => _buildCompetitionDetailsContent(
                 context,
                 competitionController,
-                participantController,
                 isMobile,
               ),
             ),
@@ -165,6 +177,7 @@ class _UserCompetitionRegistrationScreenState
                   if (participantController.registrationSaved.value) {
                     return _buildRegistrationSuccessPanel(
                       context,
+                      participantController,
                       participantController.lastRegisteredParticipant.value,
                     );
                   }
@@ -183,6 +196,7 @@ class _UserCompetitionRegistrationScreenState
 
   Widget _buildRegistrationSuccessPanel(
     BuildContext context,
+    ParticipantController participantController,
     ParticipantModel? participant,
   ) {
     final hasParticipant = participant != null;
@@ -203,12 +217,31 @@ class _UserCompetitionRegistrationScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Registration Successful',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  'Registration Successful',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ),
+              if (participant != null &&
+                  participant.id != null &&
+                  participant.id!.isNotEmpty)
+                IconButton(
+                  icon: Icon(
+                    Icons.picture_as_pdf_outlined,
+                    color: Colors.blue.shade800,
+                  ),
+                  tooltip: 'Download registration details (PDF)',
+                  onPressed: () => participantController
+                      .downloadParticipantRegistrationDetails(participant.id!),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           Text(
@@ -269,7 +302,6 @@ class _UserCompetitionRegistrationScreenState
   Widget _buildCompetitionDetailsContent(
     BuildContext context,
     CompetitionController competitionController,
-    ParticipantController participantController,
     bool isMobile,
   ) {
     Widget content;
@@ -284,12 +316,7 @@ class _UserCompetitionRegistrationScreenState
           .firstWhereOrNull((c) => c.idStr == widget.competitionId);
       content = competition == null
           ? _buildDetailsPlaceholder(context, isMobile)
-          : _buildCompetitionDetailsPanel(
-              context,
-              competition,
-              participantController,
-              isMobile,
-            );
+          : _buildCompetitionDetailsPanel(context, competition, isMobile);
     }
     return Container(
       width: double.infinity,
@@ -313,7 +340,6 @@ class _UserCompetitionRegistrationScreenState
   Widget _buildCompetitionDetailsPanel(
     BuildContext context,
     HomeCompetitionModel competition,
-    ParticipantController participantController,
     bool isMobile,
   ) {
     final startDate = competition.eventStartDate != null
@@ -446,29 +472,6 @@ class _UserCompetitionRegistrationScreenState
             }).toList(),
           ),
         ],
-        const SizedBox(height: 18),
-        Obx(() {
-          if (!participantController.registrationSaved.value) {
-            return const SizedBox.shrink();
-          }
-          return SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                participantController.clearRegistrationConfirmation();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text('REGISTER NOW'),
-            ),
-          );
-        }),
       ],
     );
   }
