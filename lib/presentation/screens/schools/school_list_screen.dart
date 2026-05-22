@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/location/state_search_field.dart';
@@ -472,16 +473,29 @@ class SchoolListScreen extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(width: isMobile ? 8 : 12),
-            IconButton(
-              icon: const Icon(Icons.print),
-              onPressed: () => controller.generateReport('all'),
-              tooltip: 'Print Report',
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.grey[100],
-                padding: const EdgeInsets.all(12),
-              ),
-            ),
+            Obx(() {
+              final permissionStore = Get.isRegistered<PermissionStore>()
+                  ? Get.find<PermissionStore>()
+                  : Get.put(PermissionStore());
+              if (!permissionStore.has('SHOW_INSTITUTION_DOWNLOAD_ICON')) {
+                return const SizedBox.shrink();
+              }
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: isMobile ? 8 : 12),
+                  IconButton(
+                    icon: const Icon(Icons.print),
+                    onPressed: () => controller.generateReport('all'),
+                    tooltip: 'Download / print institutions report',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey[100],
+                      padding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
+              );
+            }),
             SizedBox(width: isMobile ? 8 : 12),
             IconButton(
               icon: const Icon(Icons.refresh),

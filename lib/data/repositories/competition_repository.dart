@@ -84,8 +84,12 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        final createdCompetition = CompetitionModel.fromJson(response.data!);
-        return ApiResponse(success: true, data: createdCompetition);
+        final createdCompetition = parseCompetitionFromDetailResponse(
+          response.data,
+        );
+        if (createdCompetition != null) {
+          return ApiResponse(success: true, data: createdCompetition);
+        }
       }
 
       return ApiResponse(
@@ -175,8 +179,12 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        final updatedCompetition = CompetitionModel.fromJson(response.data!);
-        return ApiResponse(success: true, data: updatedCompetition);
+        final updatedCompetition = parseCompetitionFromDetailResponse(
+          response.data,
+        );
+        if (updatedCompetition != null) {
+          return ApiResponse(success: true, data: updatedCompetition);
+        }
       }
 
       return ApiResponse(
@@ -934,6 +942,30 @@ class CompetitionRepository {
     }
 
     return null;
+  }
+
+  /// GET /competition/{id}/registration-qr — PNG bytes for wall print.
+  Future<ApiResponse<Uint8List>> downloadRegistrationQrPng(String id) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '${BaseUrl.baseUrl}${EndPoints.competitionRegistrationQr(id)}',
+        ),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return ApiResponse(success: true, data: response.bodyBytes);
+      }
+      return ApiResponse(
+        success: false,
+        message: 'Failed to download QR (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error downloading QR: ${e.toString()}',
+      );
+    }
   }
 
   // Get competition by ID

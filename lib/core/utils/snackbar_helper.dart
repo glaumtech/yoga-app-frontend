@@ -55,10 +55,10 @@ class SnackbarHelper {
           ),
           backgroundColor: backgroundColor,
           behavior: SnackBarBehavior.floating,
-          width: width,
           elevation: 4,
           duration: duration,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          // Width is implied by left/right margins (SnackBar forbids width + margin).
           margin: EdgeInsets.only(
             bottom: media.size.height - top - snackHeight,
             right: 16,

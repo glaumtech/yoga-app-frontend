@@ -25,6 +25,7 @@ class CompetitionModel {
   /// Display map from API `stageGroups`: stage name -> group names.
   final Map<String, List<String>>? stageGroupLabels;
   final String? brochureUrl;
+  final String? registrationUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -52,6 +53,7 @@ class CompetitionModel {
     this.stageGroups,
     this.stageGroupLabels,
     this.brochureUrl,
+    this.registrationUrl,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -235,6 +237,7 @@ class CompetitionModel {
           : null,
       brochureUrl:
           json['brochureUrl']?.toString() ?? json['brochure_url']?.toString(),
+      registrationUrl: json['registrationUrl']?.toString(),
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])
@@ -318,6 +321,7 @@ class CompetitionModel {
     Map<String, List<int>>? stageGroups,
     Map<String, List<String>>? stageGroupLabels,
     String? brochureUrl,
+    String? registrationUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -345,6 +349,7 @@ class CompetitionModel {
       stageGroups: stageGroups ?? this.stageGroups,
       stageGroupLabels: stageGroupLabels ?? this.stageGroupLabels,
       brochureUrl: brochureUrl ?? this.brochureUrl,
+      registrationUrl: registrationUrl ?? this.registrationUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,
@@ -387,6 +392,7 @@ class HomeCompetitionModel {
   final String? brochureUrl;
   final String? brochureFilePath;
   final String status;
+  final String? registrationUrl;
 
   HomeCompetitionModel({
     this.id,
@@ -401,6 +407,7 @@ class HomeCompetitionModel {
     this.brochureUrl,
     this.brochureFilePath,
     this.status = 'upcoming',
+    this.registrationUrl,
   });
 
   factory HomeCompetitionModel.fromJson(Map<String, dynamic> json) {
@@ -430,6 +437,7 @@ class HomeCompetitionModel {
       brochureUrl: json['brochureUrl']?.toString(),
       brochureFilePath: json['brochureFilePath']?.toString(),
       status: json['status']?.toString() ?? 'upcoming',
+      registrationUrl: json['registrationUrl']?.toString(),
     );
   }
 

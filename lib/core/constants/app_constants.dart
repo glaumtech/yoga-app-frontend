@@ -2,7 +2,7 @@ import '../../config/app_config.dart';
 
 class AppConstants {
   // App Info
-  static const String appName = 'Yoga Competition';
+  static const String appName = 'Yoga Competition Application';
 
   // Storage Keys
   static const String tokenKey = 'token_key';
@@ -112,6 +112,8 @@ class EndPoints {
   static String competitionUpdate(String id) => '/competition/$id';
   static String competitionById(String id) => '/competition/$id';
   static String competitionBrochure(String id) => '/competition/$id/brochure';
+  static String competitionRegistrationQr(String id) =>
+      '/competition/$id/registration-qr';
 
   /// Public competitions list (home / unauthenticated)
   static String competitionPublic = '/competition/public';

@@ -75,6 +75,10 @@ class CompetitionController extends GetxController {
     null,
   ); // Competition being edited
 
+  /// Set after successful create; used to show registration QR dialog.
+  final Rx<CompetitionModel?> lastSavedCompetitionForQr =
+      Rx<CompetitionModel?>(null);
+
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
   Timer? _debounceTimer;
@@ -1049,24 +1053,31 @@ class CompetitionController extends GetxController {
         brochureBytes: brochureBytes.value,
       );
 
-      if (response.success) {
+      if (response.success && response.data != null) {
+        lastSavedCompetitionForQr.value = response.data;
+        await loadCompetitions(resetPage: true);
         clearForm();
         Get.snackbar('Success', 'Competition created successfully');
-        // Switch to list view after successful creation
         toggleViewMode(true);
         return true;
       } else {
+        lastSavedCompetitionForQr.value = null;
         errorMessage.value = response.message ?? 'Failed to create competition';
         Get.snackbar('Error', errorMessage.value);
         return false;
       }
     } catch (e) {
+      lastSavedCompetitionForQr.value = null;
       errorMessage.value = 'Error creating competition: ${e.toString()}';
       Get.snackbar('Error', errorMessage.value);
       return false;
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void clearLastSavedCompetitionForQr() {
+    lastSavedCompetitionForQr.value = null;
   }
 
   // Update competition
@@ -1153,21 +1164,21 @@ class CompetitionController extends GetxController {
       );
 
       if (response.success) {
+        if (response.data != null) {
+          competitionToEdit.value = response.data;
+        }
         // Update timestamp to force brochure reload after update
-        // This ensures the new brochure from server is shown instead of cached old one
         brochureUpdateTimestamp.value = DateTime.now().millisecondsSinceEpoch;
 
-        // If a new brochure was uploaded, clear local files after successful update
-        // Server now has the new brochure, so we'll fetch it from API
         if (hasNewBrochure) {
           brochureFile.value = null;
           brochureFileLocal.value = null;
           brochureBytes.value = null;
         }
 
+        await loadCompetitions(resetPage: false);
         clearForm();
         Get.snackbar('Success', 'Competition updated successfully');
-        // Switch to list view and reload competitions
         toggleViewMode(true);
         return true;
       } else {

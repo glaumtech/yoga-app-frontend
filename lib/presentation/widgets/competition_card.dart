@@ -7,6 +7,7 @@ import '../../../core/layout/home_layout.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/competition_brochure_banner_url.dart';
 import '../../../data/models/competition_model.dart';
+import '../../../core/utils/competition_registration_url.dart';
 import '../../../routes/app_routes.dart';
 import 'primary_button.dart';
 
@@ -329,13 +330,10 @@ class CompetitionCard extends StatelessWidget {
 
   void _copyRegistrationLink(BuildContext context) {
     final id = competition.idStr ?? '${competition.id}';
-    final registerPath = AppRoutes.registerCompetitionPath(id);
-    final base = Uri.base;
-    final origin = '${base.scheme}://${base.authority}';
-    final usesHashRouting = base.hasFragment && base.fragment.startsWith('/');
-    final link = usesHashRouting
-        ? '$origin/#$registerPath'
-        : '$origin$registerPath';
+    final link = registrationShareUrlForCompetition(
+      registrationUrl: competition.registrationUrl,
+      competitionId: id,
+    );
     Clipboard.setData(ClipboardData(text: link));
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(

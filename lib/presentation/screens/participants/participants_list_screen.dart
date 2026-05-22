@@ -908,9 +908,10 @@ class ParticipantsListScreen extends StatelessWidget {
                     participant.id!,
                   ),
             tooltip: 'Download registration details',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
+          const SizedBox(width: 8),
           IconButton(
             icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
             onPressed: () {
@@ -920,9 +921,10 @@ class ParticipantsListScreen extends StatelessWidget {
               controller.toggleViewMode(false);
             },
             tooltip: 'Edit',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
+          const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.delete, size: 18, color: Colors.red),
             onPressed: () {
@@ -931,8 +933,8 @@ class ParticipantsListScreen extends StatelessWidget {
               }
             },
             tooltip: 'Delete',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
         ],
       ),

@@ -17,6 +17,7 @@ import '../../widgets/section_header.dart';
 import '../../widgets/competition_card.dart';
 import '../../widgets/banner_slider.dart';
 import '../../../data/models/competition_model.dart';
+import '../../../core/utils/competition_registration_url.dart';
 
 class _BannerData {
   final String id;
@@ -25,6 +26,7 @@ class _BannerData {
   final String venue;
   final String? venueAddress;
   final List<String> categories;
+  final String? registrationUrl;
 
   _BannerData({
     required this.id,
@@ -33,6 +35,7 @@ class _BannerData {
     required this.venue,
     this.venueAddress,
     required this.categories,
+    this.registrationUrl,
   });
 
   static _BannerData? fromCompetition(HomeCompetitionModel c) {
@@ -47,20 +50,21 @@ class _BannerData {
       venue: c.address,
       venueAddress: c.address.isNotEmpty ? c.address : null,
       categories: c.categories,
+      registrationUrl: c.registrationUrl,
     );
   }
 }
 
-String _registrationShareUrl(String competitionId) {
-  final registerPath = AppRoutes.registerCompetitionPath(competitionId);
-  final base = Uri.base;
-  final origin = '${base.scheme}://${base.authority}';
-  final usesHashRouting = base.hasFragment && base.fragment.startsWith('/');
-  return usesHashRouting ? '$origin/#$registerPath' : '$origin$registerPath';
-}
-
-void _copyBannerRegistrationLink(BuildContext context, String competitionId) {
-  Clipboard.setData(ClipboardData(text: _registrationShareUrl(competitionId)));
+void _copyBannerRegistrationLink(
+  BuildContext context,
+  String competitionId, {
+  String? registrationUrl,
+}) {
+  final link = registrationShareUrlForCompetition(
+    registrationUrl: registrationUrl,
+    competitionId: competitionId,
+  );
+  Clipboard.setData(ClipboardData(text: link));
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).clearSnackBars();
   ScaffoldMessenger.of(context).showSnackBar(
@@ -704,6 +708,9 @@ class HomeScreen extends StatelessWidget {
                                                     _copyBannerRegistrationLink(
                                                       context,
                                                       bannerEvent.id,
+                                                      registrationUrl:
+                                                          bannerEvent
+                                                              .registrationUrl,
                                                     ),
                                                 icon: const Icon(
                                                   Icons.share,
@@ -764,6 +771,8 @@ class HomeScreen extends StatelessWidget {
                                                 _copyBannerRegistrationLink(
                                                   context,
                                                   bannerEvent.id,
+                                                  registrationUrl:
+                                                      bannerEvent.registrationUrl,
                                                 ),
                                             icon: const Icon(
                                               Icons.share,

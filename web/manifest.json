@@ -1,11 +1,11 @@
 {
-    "name": "Yoga Competition",
-    "short_name": "Yoga Competition",
+    "name": "Yoga Competition Application",
+    "short_name": "Yoga Comp App",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Yoga competition management — events, participants, scoring, and certificates.",
+    "description": "Yogo competition Application",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
