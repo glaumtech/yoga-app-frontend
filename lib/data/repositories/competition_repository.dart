@@ -26,6 +26,7 @@ class CompetitionRepository {
     XFile? brochureFile,
     File? brochureFileLocal,
     Uint8List? brochureBytes,
+    String? brochureFilename,
   }) async {
     try {
       // Prepare competition data as JSON string
@@ -36,10 +37,14 @@ class CompetitionRepository {
       http.MultipartFile multipartFile;
 
       if (kIsWeb && brochureBytes != null) {
+        final filename = (brochureFilename != null &&
+                brochureFilename.trim().isNotEmpty)
+            ? brochureFilename.trim()
+            : 'competition_brochure.pdf';
         multipartFile = http.MultipartFile.fromBytes(
           'brochure',
           brochureBytes,
-          filename: 'competition_brochure.pdf',
+          filename: filename,
         );
       } else if (brochureFile != null) {
         final fileBytes = await brochureFile.readAsBytes();
@@ -111,6 +116,7 @@ class CompetitionRepository {
     XFile? brochureFile,
     File? brochureFileLocal,
     Uint8List? brochureBytes,
+    String? brochureFilename,
   }) async {
     try {
       if (competition.id == null) {
@@ -129,10 +135,14 @@ class CompetitionRepository {
 
       http.MultipartFile? multipartFile;
       if (kIsWeb && brochureBytes != null && brochureBytes.isNotEmpty) {
+        final filename = (brochureFilename != null &&
+                brochureFilename.trim().isNotEmpty)
+            ? brochureFilename.trim()
+            : 'competition_brochure.pdf';
         multipartFile = http.MultipartFile.fromBytes(
           'brochure',
           brochureBytes,
-          filename: 'competition_brochure.pdf',
+          filename: filename,
         );
       } else if (brochureFile != null) {
         final fileBytes = await brochureFile.readAsBytes();

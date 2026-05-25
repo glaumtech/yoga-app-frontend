@@ -76,6 +76,9 @@ dependencies:
   # URL Launcher
   url_launcher: ^6.2.5
 
+  # PDF preview (brochure dialog)
+  pdfx: ^2.9.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

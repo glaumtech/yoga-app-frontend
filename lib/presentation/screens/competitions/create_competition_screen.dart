@@ -1,5 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:pdfx/pdfx.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../../../core/constants/championship_style.dart';
 import '../../../core/theme/app_theme.dart';
@@ -149,337 +153,51 @@ class CreateCompetitionScreen extends StatelessWidget {
                   ),
                 ),
 
-                // Competition Name, Description, Address (right aligned) | Brochure Upload (right side)
-                isMobile
-                    ? Column(
-                        children: [
-                          // Upload Brochure (top on mobile)
-                          _buildBrochureUpload(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          // Competition Name (right aligned)
-                          _buildTextField(
-                            context,
-                            controller,
-                            label: 'COMPETITION NAME :',
-                            textController:
-                                controller.competitionNameController,
-                            isRequired: true,
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                            textAlign: TextAlign.left,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          // Description (right aligned)
-                          _buildTextField(
-                            context,
-                            controller,
-                            label: 'DESCRIPTION :',
-                            textController: controller.descriptionController,
-                            isRequired: true,
-                            maxLines: 2,
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                            textAlign: TextAlign.left,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          // Address (right aligned)
-                          _buildTextField(
-                            context,
-                            controller,
-                            label: 'ADDRESS :',
-                            textController: controller.addressController,
-                            isRequired: true,
-                            maxLines: 2,
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                            textAlign: TextAlign.left,
-                          ),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left side: Competition Name, Description, Address (right aligned)
-                          Expanded(
-                            flex: 2,
-                            child: Column(
-                              children: [
-                                // Competition Name (right aligned)
-                                _buildTextField(
-                                  context,
-                                  controller,
-                                  label: 'COMPETITION NAME :',
-                                  textController:
-                                      controller.competitionNameController,
-                                  isRequired: true,
-                                  isMobile: isMobile,
-                                  isTablet: isTablet,
-                                  textAlign: TextAlign.left,
-                                ),
-                                SizedBox(height: isMobile ? 20 : 24),
-                                // Description (right aligned)
-                                _buildTextField(
-                                  context,
-                                  controller,
-                                  label: 'DESCRIPTION :',
-                                  textController:
-                                      controller.descriptionController,
-                                  isRequired: true,
-                                  maxLines: 2,
-                                  isMobile: isMobile,
-                                  isTablet: isTablet,
-                                  textAlign: TextAlign.left,
-                                ),
-                                SizedBox(height: isMobile ? 20 : 24),
-                                // Address (right aligned)
-                                _buildTextField(
-                                  context,
-                                  controller,
-                                  label: 'ADDRESS :',
-                                  textController: controller.addressController,
-                                  isRequired: true,
-                                  maxLines: 2,
-                                  isMobile: isMobile,
-                                  isTablet: isTablet,
-                                  textAlign: TextAlign.left,
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 24),
-                          // Right side: Upload Brochure
-                          Expanded(
-                            flex: 1,
-                            child: _buildBrochureUpload(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                          ),
-                        ],
+                // Left: all form fields | Right: brochure + registration QR (desktop/tablet)
+                if (isMobile)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildMainFormFieldsColumn(
+                        context,
+                        controller,
+                        isMobile,
+                        isTablet,
                       ),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                // Event Start, End, and Display Ad From in same line
-                isMobile
-                    ? Column(
-                        children: [
-                          _buildDateField(
-                            context,
-                            controller,
-                            label: 'EVENT START DATE :',
-                            isStartDate: true,
-                            isDisplayAd: false,
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildDateField(
-                            context,
-                            controller,
-                            label: 'EVENT END DATE :',
-                            isStartDate: false,
-                            isDisplayAd: false,
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildDateField(
-                            context,
-                            controller,
-                            label: 'DISPLAY AD FROM :',
-                            isStartDate: false,
-                            isDisplayAd: true,
-                            isRequired: true,
-                            isMobile: isMobile,
-                            isTablet: isTablet,
-                          ),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _buildDateField(
-                              context,
-                              controller,
-                              label: 'EVENT START DATE :',
-                              isStartDate: true,
-                              isDisplayAd: false,
-                              isMobile: isMobile,
-                              isTablet: isTablet,
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 12 : 16),
-                          Expanded(
-                            child: _buildDateField(
-                              context,
-                              controller,
-                              label: 'EVENT END DATE :',
-                              isStartDate: false,
-                              isDisplayAd: false,
-                              isMobile: isMobile,
-                              isTablet: isTablet,
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 12 : 16),
-                          Expanded(
-                            child: _buildDateField(
-                              context,
-                              controller,
-                              label: 'DISPLAY AD FROM :',
-                              isStartDate: false,
-                              isDisplayAd: true,
-                              isRequired: true,
-                              isMobile: isMobile,
-                              isTablet: isTablet,
-                            ),
-                          ),
-                        ],
+                      SizedBox(height: isMobile ? 20 : 24),
+                      _buildBrochureAndQrSidebar(
+                        context,
+                        controller,
+                        isMobile,
+                        isTablet,
                       ),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                // Participants Per Stage and Marks in same line (desktop)
-                isMobile
-                    ? Column(
-                        children: [
-                          _buildParticipantsPerStageField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-
-                          _buildMarksField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: _buildParticipantsPerStageField(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 12 : 16),
-
-                          Expanded(
-                            flex: 2,
-                            child: _buildMarksField(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                          ),
-                        ],
+                    ],
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _buildMainFormFieldsColumn(
+                          context,
+                          controller,
+                          isMobile,
+                          isTablet,
+                        ),
                       ),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                _buildChampionshipStyleField(
-                  context,
-                  controller,
-                  isMobile,
-                  isTablet,
-                ),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                // Prizes and Categories in same line (desktop)
-                isMobile
-                    ? Column(
-                        children: [
-                          _buildPrizesField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildCategoriesField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
-                          ),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _buildPrizesField(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 12 : 16),
-                          Expanded(
-                            child: _buildCategoriesField(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                          ),
-                        ],
+                      SizedBox(width: isTablet ? 16 : 24),
+                      Expanded(
+                        flex: 1,
+                        child: _buildBrochureAndQrSidebar(
+                          context,
+                          controller,
+                          isMobile,
+                          isTablet,
+                        ),
                       ),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                // Category Amounts
-                Obx(
-                  () => controller.selectedCategories.isNotEmpty
-                      ? Column(
-                          children: [
-                            _buildCategoryAmountsField(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                            SizedBox(height: isMobile ? 20 : 24),
-                          ],
-                        )
-                      : const SizedBox.shrink(),
-                ),
-
-                // Stages
-                _buildStagesField(context, controller, isMobile, isTablet),
-                SizedBox(height: isMobile ? 20 : 24),
-
-                // Show mapped groups for selected stages
-                Obx(
-                  () => controller.selectedStages.isNotEmpty
-                      ? Column(
-                          children: [
-                            _buildStageGroupsDisplay(
-                              context,
-                              controller,
-                              isMobile,
-                              isTablet,
-                            ),
-                            SizedBox(height: isMobile ? 20 : 24),
-                          ],
-                        )
-                      : const SizedBox.shrink(),
-                ),
+                    ],
+                  ),
 
                 // Error Message
                 if (controller.errorMessage.value.isNotEmpty)
@@ -504,25 +222,6 @@ class CreateCompetitionScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-
-                // Registration QR (edit / view when competition id is known)
-                Obx(() {
-                  final permissionStore = Get.isRegistered<PermissionStore>()
-                      ? Get.find<PermissionStore>()
-                      : Get.put(PermissionStore());
-                  final comp = controller.competitionToEdit.value;
-                  final showQr =
-                      permissionStore.has('SHOW_COMP_QR_CODE_ON_ADMIN') &&
-                      (controller.isEditMode.value ||
-                          controller.isViewMode.value) &&
-                      comp?.id != null &&
-                      comp!.id!.isNotEmpty;
-                  if (!showQr) return const SizedBox.shrink();
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: isMobile ? 16 : 24),
-                    child: CompetitionRegistrationQrPanel(competition: comp),
-                  );
-                }),
 
                 // Submit and Cancel Buttons
                 Obx(
@@ -691,6 +390,189 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildMainFormFieldsColumn(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    final gap = SizedBox(height: isMobile ? 20 : 24);
+    final gapSm = SizedBox(width: isTablet ? 12 : 16);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildTextField(
+          context,
+          controller,
+          label: 'COMPETITION NAME :',
+          textController: controller.competitionNameController,
+          isRequired: true,
+          isMobile: isMobile,
+          isTablet: isTablet,
+        ),
+        gap,
+        _buildTextField(
+          context,
+          controller,
+          label: 'DESCRIPTION :',
+          textController: controller.descriptionController,
+          isRequired: true,
+          maxLines: 2,
+          isMobile: isMobile,
+          isTablet: isTablet,
+        ),
+        gap,
+        _buildTextField(
+          context,
+          controller,
+          label: 'ADDRESS :',
+          textController: controller.addressController,
+          isRequired: true,
+          maxLines: 2,
+          isMobile: isMobile,
+          isTablet: isTablet,
+        ),
+        gap,
+        if (isMobile)
+          Column(
+            children: [
+              _buildDateField(
+                context,
+                controller,
+                label: 'EVENT START DATE :',
+                isStartDate: true,
+                isDisplayAd: false,
+                isMobile: isMobile,
+                isTablet: isTablet,
+              ),
+              gap,
+              _buildDateField(
+                context,
+                controller,
+                label: 'EVENT END DATE :',
+                isStartDate: false,
+                isDisplayAd: false,
+                isMobile: isMobile,
+                isTablet: isTablet,
+              ),
+              gap,
+              _buildDateField(
+                context,
+                controller,
+                label: 'DISPLAY AD FROM :',
+                isStartDate: false,
+                isDisplayAd: true,
+                isRequired: true,
+                isMobile: isMobile,
+                isTablet: isTablet,
+              ),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildDateField(
+                  context,
+                  controller,
+                  label: 'EVENT START DATE :',
+                  isStartDate: true,
+                  isDisplayAd: false,
+                  isMobile: isMobile,
+                  isTablet: isTablet,
+                ),
+              ),
+              gapSm,
+              Expanded(
+                child: _buildDateField(
+                  context,
+                  controller,
+                  label: 'EVENT END DATE :',
+                  isStartDate: false,
+                  isDisplayAd: false,
+                  isMobile: isMobile,
+                  isTablet: isTablet,
+                ),
+              ),
+              gapSm,
+              Expanded(
+                child: _buildDateField(
+                  context,
+                  controller,
+                  label: 'DISPLAY AD FROM :',
+                  isStartDate: false,
+                  isDisplayAd: true,
+                  isRequired: true,
+                  isMobile: isMobile,
+                  isTablet: isTablet,
+                ),
+              ),
+            ],
+          ),
+        gap,
+        if (isMobile)
+          Column(
+            children: [
+              _buildParticipantsPerStageField(
+                context,
+                controller,
+                isMobile,
+                isTablet,
+              ),
+              gap,
+              _buildMarksField(context, controller, isMobile, isTablet),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 1,
+                child: _buildParticipantsPerStageField(
+                  context,
+                  controller,
+                  isMobile,
+                  isTablet,
+                ),
+              ),
+              gapSm,
+              Expanded(
+                flex: 2,
+                child: _buildMarksField(context, controller, isMobile, isTablet),
+              ),
+            ],
+          ),
+        gap,
+        _buildChampionshipStyleField(context, controller, isMobile, isTablet),
+        gap,
+        _buildPrizesField(context, controller, isMobile, isTablet),
+        gap,
+        _buildCategoriesField(context, controller, isMobile, isTablet),
+        gap,
+        _buildStagesField(context, controller, isMobile, isTablet),
+        gap,
+        Obx(
+          () => controller.selectedStages.isNotEmpty
+              ? Column(
+                  children: [
+                    _buildStageGroupsDisplay(
+                      context,
+                      controller,
+                      isMobile,
+                      isTablet,
+                    ),
+                    gap,
+                  ],
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTextField(
     BuildContext context,
     CompetitionController competitionController, {
@@ -740,6 +622,39 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildBrochureAndQrSidebar(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildBrochureUpload(context, controller, isMobile, isTablet),
+        Obx(() {
+          final permissionStore = Get.isRegistered<PermissionStore>()
+              ? Get.find<PermissionStore>()
+              : Get.put(PermissionStore());
+          final comp = controller.competitionToEdit.value;
+          final showQr =
+              permissionStore.has('SHOW_COMP_QR_CODE_ON_ADMIN') &&
+              (controller.isEditMode.value || controller.isViewMode.value) &&
+              comp?.id != null &&
+              comp!.id!.isNotEmpty;
+          if (!showQr) return const SizedBox.shrink();
+          return Padding(
+            padding: EdgeInsets.only(top: isMobile ? 20 : 24),
+            child: CompetitionRegistrationQrPanel(
+              competition: comp,
+              compact: true,
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
   Widget _buildBrochureUpload(
     BuildContext context,
     CompetitionController controller,
@@ -749,7 +664,9 @@ class CreateCompetitionScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FormLabelWithHint(label: 'UPLOAD BROCHURE :'),
+        const FormLabelWithHint(
+          label: 'UPLOAD BROCHURE :',
+        ),
         FormField<bool>(
           initialValue:
               controller.brochureFile.value != null ||
@@ -811,6 +728,17 @@ class CreateCompetitionScreen extends StatelessWidget {
                           ),
                         ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    CompetitionController.brochureUploadNotes,
+                    style: TextStyle(
+                      fontSize: isMobile ? 11 : 12,
+                      color: Colors.grey[600],
+                      height: 1.4,
+                    ),
+                  ),
+                ),
                 Obx(() {
                   // Don't show error in edit mode if brochure already exists
                   final shouldShowError =
@@ -858,6 +786,7 @@ class CreateCompetitionScreen extends StatelessWidget {
           controller.competitionToEdit.value?.id != null;
 
       final hasBrochure = hasLocalFile || hasApiBrochure;
+      final showImageOverlay = hasBrochure && controller.isBrochureImage;
 
       return GestureDetector(
         onTap: hasBrochure
@@ -874,27 +803,28 @@ class CreateCompetitionScreen extends StatelessWidget {
           child: hasBrochure
               ? Stack(
                   children: [
-                    // Preview banner image
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Obx(() => _buildPreviewImage(controller)),
-                    ),
-                    // Preview overlay
                     Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: Colors.black.withOpacity(0.2),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.visibility,
-                            color: Colors.white,
-                            size: 24,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Obx(() => _buildBrochureContentPreview(controller)),
+                      ),
+                    ),
+                    if (showImageOverlay)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.black.withOpacity(0.2),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.visibility,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 )
               : _buildDefaultBrochurePreview(),
@@ -905,6 +835,8 @@ class CreateCompetitionScreen extends StatelessWidget {
 
   Widget _buildDefaultBrochurePreview() {
     return Container(
+      width: double.infinity,
+      height: double.infinity,
       color: Colors.grey[200],
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -921,21 +853,132 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPreviewImage(CompetitionController controller) {
-    // Priority 1: Check if a new local file has been uploaded (for both create and edit modes)
-    // This takes precedence over API brochure in edit mode
-    // Access reactive values to ensure this widget rebuilds when they change
-    final brochureBytes = controller.brochureBytes.value;
-    final brochureFileLocal = controller.brochureFileLocal.value;
-    final isEditMode = controller.isEditMode.value;
-    final isViewMode = controller.isViewMode.value;
-    final competitionId = controller.competitionToEdit.value?.id;
-    final updateTimestamp = controller.brochureUpdateTimestamp.value;
+  String _brochurePdfFileName(CompetitionController controller) {
+    final name = controller.brochureFileName.value.trim();
+    return name.isNotEmpty ? name : 'PDF brochure';
+  }
 
-    if (brochureBytes != null) {
-      // Web: Use Image.memory
+  String _formatBrochureFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(bytes < 10 * 1024 ? 1 : 0)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  /// WhatsApp-style document card (icon, name, size · PDF).
+  Widget _buildWhatsAppStylePdfCard({
+    required String fileName,
+    int? fileSizeBytes,
+    bool expanded = false,
+  }) {
+    final subtitleParts = <String>[
+      if (fileSizeBytes != null) _formatBrochureFileSize(fileSizeBytes),
+      'PDF',
+    ];
+
+    final card = Container(
+      constraints: BoxConstraints(maxWidth: expanded ? 400 : 320),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 4,
+            color: const Color(0xFFE53935),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: expanded ? 14 : 12,
+              vertical: expanded ? 12 : 10,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: expanded ? 52 : 44,
+                  height: expanded ? 58 : 50,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFEBEE),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.picture_as_pdf,
+                    color: const Color(0xFFE53935),
+                    size: expanded ? 34 : 28,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fileName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: expanded ? 15 : 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[900],
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitleParts.join(' • '),
+                        style: TextStyle(
+                          fontSize: expanded ? 13 : 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: const Color(0xFFE7E7E7),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(16),
+      child: card,
+    );
+  }
+
+  Widget _buildPdfBrochurePreview(
+    CompetitionController controller, {
+    Uint8List? bytes,
+  }) {
+    return _buildWhatsAppStylePdfCard(
+      fileName: _brochurePdfFileName(controller),
+      fileSizeBytes: bytes?.length,
+      expanded: false,
+    );
+  }
+
+  Widget _buildImageBrochurePreview({Uint8List? bytes}) {
+    if (bytes != null && bytes.isNotEmpty) {
       return Image.memory(
-        brochureBytes,
+        bytes,
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
@@ -943,8 +986,45 @@ class CreateCompetitionScreen extends StatelessWidget {
           return _buildDefaultBrochurePreview();
         },
       );
-    } else if (brochureFileLocal != null && brochureFileLocal.existsSync()) {
-      // Mobile/Desktop: Use Image.file
+    }
+    return _buildDefaultBrochurePreview();
+  }
+
+  /// PNG / JPG / JPEG → image preview; PDF → WhatsApp-style card.
+  Widget _buildBrochureContentPreview(CompetitionController controller) {
+    final brochureBytes = controller.brochureBytes.value;
+    final brochureFileLocal = controller.brochureFileLocal.value;
+    final isEditMode = controller.isEditMode.value;
+    final isViewMode = controller.isViewMode.value;
+    final competitionId = controller.competitionToEdit.value?.id;
+    final updateTimestamp = controller.brochureUpdateTimestamp.value;
+
+    if (brochureBytes != null && brochureBytes.isNotEmpty) {
+      if (controller.isBrochurePdf) {
+        return _buildPdfBrochurePreview(controller, bytes: brochureBytes);
+      }
+      return _buildImageBrochurePreview(bytes: brochureBytes);
+    }
+
+    if (brochureFileLocal != null && brochureFileLocal.existsSync()) {
+      if (controller.isBrochurePdf) {
+        return FutureBuilder<Uint8List>(
+          future: brochureFileLocal.readAsBytes(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final data = snapshot.data;
+            if (data == null || data.isEmpty) {
+              return _buildPdfBrochurePreview(controller);
+            }
+            if (CompetitionController.brochureBytesLookLikeImage(data)) {
+              return _buildImageBrochurePreview(bytes: data);
+            }
+            return _buildPdfBrochurePreview(controller, bytes: data);
+          },
+        );
+      }
       return Image.file(
         brochureFileLocal,
         fit: BoxFit.cover,
@@ -955,60 +1035,94 @@ class CreateCompetitionScreen extends StatelessWidget {
         },
       );
     }
-    // Priority 2: If no local file, check if we're in edit/view mode and have a competition ID
-    // Use API URL for brochure (existing brochure from server)
-    else if ((isEditMode || isViewMode) && competitionId != null) {
-      // Use API URL for brochure with cache-busting parameter only when brochure is updated
-      // Use stable timestamp based on competition ID to prevent excessive API calls
-      // Only add timestamp parameter if brochure was recently updated
-      final brochureUrl = updateTimestamp > 0
-          ? '${AppConfig.baseUrl}${EndPoints.competitionBrochure(competitionId)}?t=$updateTimestamp'
-          : '${AppConfig.baseUrl}${EndPoints.competitionBrochure(competitionId)}';
 
-      return Image.network(
-        brochureUrl,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        headers: _getImageHeaders(),
-        cacheWidth: null, // Allow full resolution
-        cacheHeight: null,
-        // Add a key that includes timestamp only when brochure is updated to force rebuild
+    if ((isEditMode || isViewMode) && competitionId != null) {
+      return _BrochureApiPreview(
         key: ValueKey(
           updateTimestamp > 0
               ? 'brochure_${competitionId}_$updateTimestamp'
               : 'brochure_$competitionId',
         ),
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                  : null,
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return _buildDefaultBrochurePreview();
-        },
+        competitionId: competitionId,
+        cacheBust: updateTimestamp,
+        filenameHintPdf: controller.isBrochurePdf,
+        pdfPreview: (bytes) =>
+            _buildPdfBrochurePreview(controller, bytes: bytes),
+        imagePreview: (bytes) => _buildImageBrochurePreview(bytes: bytes),
+        fallback: _buildDefaultBrochurePreview,
       );
-    } else {
-      return _buildDefaultBrochurePreview();
     }
+
+    return _buildDefaultBrochurePreview();
   }
 
-  Map<String, String> _getImageHeaders() {
-    try {
-      final token = StorageService.getString(AppConstants.tokenKey);
-      if (token != null && token.isNotEmpty) {
-        return {'Authorization': 'Bearer $token'};
+  Widget _buildBrochureDialogPreview(CompetitionController controller) {
+    return _BrochureDialogContent(
+      loadBytes: () => _loadBrochureBytesForPreview(controller),
+      filenameHintPdf: controller.isBrochurePdf,
+    );
+  }
+
+  /// Loads brochure bytes for preview. Saved competition files come from API;
+  /// local pick only when the user chose a new file in this session.
+  static Future<Uint8List?> _loadBrochureBytesForPreview(
+    CompetitionController controller,
+  ) async {
+    if (controller.hasLocalBrochure) {
+      final cached = controller.brochureBytes.value;
+      if (cached != null && cached.isNotEmpty) {
+        return cached;
       }
-      return {};
-    } catch (e) {
-      return {};
+      final localFile = controller.brochureFileLocal.value;
+      if (localFile != null && localFile.existsSync()) {
+        return localFile.readAsBytes();
+      }
     }
+
+    final competitionId = controller.competitionToEdit.value?.id;
+    if (competitionId != null) {
+      return _fetchBrochureBytesFromApi(
+        competitionId,
+        cacheBust: controller.brochureUpdateTimestamp.value,
+      );
+    }
+
+    final cached = controller.brochureBytes.value;
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+    return null;
+  }
+
+  static Future<Uint8List?> _fetchBrochureBytesFromApi(
+    String competitionId, {
+    int cacheBust = 0,
+  }) async {
+    final base = AppConfig.baseUrl.replaceAll(RegExp(r'/$'), '');
+    final path = cacheBust > 0
+        ? '${EndPoints.competitionBrochure(competitionId)}?t=$cacheBust'
+        : EndPoints.competitionBrochure(competitionId);
+    final url = '$base$path';
+
+    final headers = <String, String>{};
+    final token = StorageService.getString(AppConstants.tokenKey);
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await http
+        .get(Uri.parse(url), headers: headers)
+        .timeout(BaseUrl.apiTimeout);
+
+    if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+      return null;
+    }
+
+    final bytes = response.bodyBytes;
+    if (CompetitionController.brochureBytesLookLikeJson(bytes)) {
+      return null;
+    }
+    return bytes;
   }
 
   void _showBrochurePreviewDialog(
@@ -1017,14 +1131,14 @@ class CreateCompetitionScreen extends StatelessWidget {
   ) {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        child: Container(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.9,
-            maxHeight: MediaQuery.of(context).size.height * 0.9,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (context) {
+        final dialogHeight = MediaQuery.of(context).size.height * 0.88;
+        final dialogWidth = MediaQuery.of(context).size.width * 0.9;
+        return Dialog(
+          child: SizedBox(
+            width: dialogWidth,
+            height: dialogHeight,
+            child: Column(
             children: [
               // Header
               Container(
@@ -1057,17 +1171,20 @@ class CreateCompetitionScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              // Preview content
+              // Preview content (PDF: full-height scrollable viewer)
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Center(child: _buildPreviewImage(controller)),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Obx(
+                    () => _buildBrochureDialogPreview(controller),
+                  ),
                 ),
               ),
             ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -1711,8 +1828,9 @@ class CreateCompetitionScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Wrap(
-                      spacing: isMobile ? 8 : 16,
-                      runSpacing: 8,
+                      spacing: isMobile ? 12 : 20,
+                      runSpacing: isMobile ? 12 : 16,
+                      crossAxisAlignment: WrapCrossAlignment.start,
                       children: [
                         ...controller.categoryOptionNames.map((category) {
                           final isSelected = controller.selectedCategories
@@ -1721,30 +1839,56 @@ class CreateCompetitionScreen extends StatelessWidget {
                               controller.isChampionsCategoryName(category);
                           final championsDisabled = isChampions &&
                               !controller.canSelectChampionsCategory;
-                          return Row(
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Checkbox(
-                                value: isSelected,
-                                onChanged: controller.isViewMode.value ||
-                                        championsDisabled
-                                    ? null
-                                    : (value) {
-                                        controller.toggleCategory(category);
-                                        field.didChange(
-                                          controller.selectedCategories
-                                              .toList(),
-                                        );
-                                        field.validate();
-                                      },
-                                activeColor: AppTheme.primaryColor,
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Checkbox(
+                                    value: isSelected,
+                                    onChanged: controller.isViewMode.value ||
+                                            championsDisabled
+                                        ? null
+                                        : (value) {
+                                            controller.toggleCategory(
+                                              category,
+                                            );
+                                            field.didChange(
+                                              controller.selectedCategories
+                                                  .toList(),
+                                            );
+                                            field.validate();
+                                          },
+                                    activeColor: AppTheme.primaryColor,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  Text(
+                                    category,
+                                    style: championsDisabled
+                                        ? TextStyle(color: Colors.grey[500])
+                                        : null,
+                                  ),
+                                ],
                               ),
-                              Text(
-                                category,
-                                style: championsDisabled
-                                    ? TextStyle(color: Colors.grey[500])
-                                    : null,
-                              ),
+                              if (isSelected) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: isMobile ? 160 : 180,
+                                  child: _CategoryAmountField(
+                                    key: ValueKey(
+                                      'category_amount_$category',
+                                    ),
+                                    category: category,
+                                    controller: controller,
+                                    isMobile: isMobile,
+                                    isTablet: isTablet,
+                                  ),
+                                ),
+                              ],
                             ],
                           );
                         }),
@@ -1785,35 +1929,6 @@ class CreateCompetitionScreen extends StatelessWidget {
                 );
               });
             },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCategoryAmountsField(
-    BuildContext context,
-    CompetitionController controller,
-    bool isMobile,
-    bool isTablet,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FormLabelWithHint(label: 'AMOUNT :'),
-        Obx(
-          () => Wrap(
-            spacing: isMobile ? 16 : 24,
-            runSpacing: 16,
-            children: controller.selectedCategories.map((category) {
-              return _CategoryAmountField(
-                key: ValueKey('category_amount_$category'),
-                category: category,
-                controller: controller,
-                isMobile: isMobile,
-                isTablet: isTablet,
-              );
-            }).toList(),
           ),
         ),
       ],
@@ -2630,53 +2745,352 @@ class _CategoryAmountFieldState extends State<_CategoryAmountField> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.isMobile ? double.infinity : 200,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.category,
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: widget.isMobile ? 12 : 13,
-            ),
+    return Obx(
+      () => TextFormField(
+        controller: _amountController,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        readOnly: widget.controller.isViewMode.value,
+        style: TextStyle(
+          fontSize: widget.isMobile ? 14 : 15,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.grey[400]!),
           ),
-          const SizedBox(height: 4),
-          Obx(
-            () => TextFormField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              readOnly: widget.controller.isViewMode.value,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                filled: true,
-                fillColor: widget.controller.isViewMode.value
-                    ? Colors.grey[200]
-                    : Colors.grey[50],
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: widget.isMobile ? 12 : 16,
-                ),
-                isDense: widget.isMobile,
-                prefixText: '₹ ',
-                hintText: 'Enter amount',
-              ),
-              onChanged: widget.controller.isViewMode.value
-                  ? null
-                  : (value) {
-                      final amount = double.tryParse(value) ?? 0.0;
-                      widget.controller.updateCategoryAmount(
-                        widget.category,
-                        amount,
-                      );
-                    },
-            ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.grey[400]!),
           ),
-        ],
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
+          ),
+          filled: true,
+          fillColor: widget.controller.isViewMode.value
+              ? Colors.grey[200]
+              : Colors.white,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: widget.isMobile ? 14 : 16,
+          ),
+          isDense: false,
+          prefixText: '₹ ',
+          prefixStyle: TextStyle(
+            fontSize: widget.isMobile ? 14 : 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[800],
+          ),
+        ),
+        onChanged: widget.controller.isViewMode.value
+            ? null
+            : (value) {
+                final amount = double.tryParse(value) ?? 0.0;
+                widget.controller.updateCategoryAmount(
+                  widget.category,
+                  amount,
+                );
+              },
       ),
     );
+  }
+}
+
+/// Loads brochure bytes from the API with auth (works on web; [Image.network] headers often fail).
+class _BrochureApiPreview extends StatefulWidget {
+  const _BrochureApiPreview({
+    super.key,
+    required this.competitionId,
+    required this.cacheBust,
+    required this.filenameHintPdf,
+    required this.pdfPreview,
+    required this.imagePreview,
+    required this.fallback,
+  });
+
+  final String competitionId;
+  final int cacheBust;
+  final bool filenameHintPdf;
+  final Widget Function(Uint8List bytes) pdfPreview;
+  final Widget Function(Uint8List bytes) imagePreview;
+  final Widget Function() fallback;
+
+  @override
+  State<_BrochureApiPreview> createState() => _BrochureApiPreviewState();
+}
+
+class _BrochureApiPreviewState extends State<_BrochureApiPreview> {
+  Uint8List? _bytes;
+  bool _isPdf = false;
+  bool _loading = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BrochureApiPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.competitionId != widget.competitionId ||
+        oldWidget.cacheBust != widget.cacheBust ||
+        oldWidget.filenameHintPdf != widget.filenameHintPdf) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _failed = false;
+      _bytes = null;
+    });
+
+    try {
+      final base = AppConfig.baseUrl.replaceAll(RegExp(r'/$'), '');
+      final path = widget.cacheBust > 0
+          ? '${EndPoints.competitionBrochure(widget.competitionId)}?t=${widget.cacheBust}'
+          : EndPoints.competitionBrochure(widget.competitionId);
+      final url = '$base$path';
+
+      final headers = <String, String>{};
+      final token = StorageService.getString(AppConstants.tokenKey);
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (!mounted) return;
+
+      if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
+        return;
+      }
+
+      final body = response.bodyBytes;
+      final contentType = response.headers['content-type'];
+      final kind = CompetitionController.brochureKindFromBytes(
+        body,
+        contentType: contentType,
+        filenameHintPdf: widget.filenameHintPdf,
+      );
+
+      setState(() {
+        _bytes = body;
+        _isPdf = kind == BrochureFileKind.pdf;
+        _loading = false;
+        _failed = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_failed || _bytes == null) {
+      return widget.fallback();
+    }
+    if (_isPdf) {
+      return widget.pdfPreview(_bytes!);
+    }
+    return widget.imagePreview(_bytes!);
+  }
+}
+
+/// Brochure preview dialog: PDF (scrollable) or image based on file content.
+class _BrochureDialogContent extends StatefulWidget {
+  const _BrochureDialogContent({
+    required this.loadBytes,
+    required this.filenameHintPdf,
+  });
+
+  final Future<Uint8List?> Function() loadBytes;
+  final bool filenameHintPdf;
+
+  @override
+  State<_BrochureDialogContent> createState() => _BrochureDialogContentState();
+}
+
+class _BrochureDialogContentState extends State<_BrochureDialogContent> {
+  PdfController? _pdfController;
+  Uint8List? _imageBytes;
+  bool _loading = true;
+  bool _failed = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _pdfController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    _pdfController?.dispose();
+    _pdfController = null;
+    _imageBytes = null;
+
+    setState(() {
+      _loading = true;
+      _failed = false;
+      _errorMessage = null;
+    });
+
+    try {
+      final bytes = await widget.loadBytes();
+      if (!mounted) return;
+
+      if (bytes == null || bytes.isEmpty) {
+        setState(() {
+          _loading = false;
+          _failed = true;
+          _errorMessage =
+              'Brochure could not be loaded. Check that a file is uploaded and the server is running.';
+        });
+        return;
+      }
+
+      final kind = CompetitionController.brochureKindFromBytes(
+        bytes,
+        filenameHintPdf: widget.filenameHintPdf,
+      );
+
+      if (kind == BrochureFileKind.pdf) {
+        final pdfController = PdfController(
+          document: PdfDocument.openData(bytes),
+        );
+        if (!mounted) {
+          pdfController.dispose();
+          return;
+        }
+        setState(() {
+          _pdfController = pdfController;
+          _loading = false;
+        });
+        return;
+      }
+
+      if (kind == BrochureFileKind.image ||
+          !CompetitionController.brochureBytesLookLikePdf(bytes)) {
+        setState(() {
+          _imageBytes = bytes;
+          _loading = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _loading = false;
+        _failed = true;
+        _errorMessage = 'Unsupported brochure format.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _failed = true;
+        _errorMessage = 'Failed to load brochure: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_failed) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_outlined,
+                  size: 48, color: Colors.grey[500]),
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage ?? 'Unable to load brochure',
+                style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              TextButton(onPressed: _load, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_pdfController != null) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: PdfView(
+            controller: _pdfController!,
+            scrollDirection: Axis.vertical,
+            backgroundDecoration: const BoxDecoration(color: Colors.white),
+            onDocumentError: (error) {
+              if (!mounted) return;
+              setState(() {
+                _failed = true;
+                _errorMessage = error.toString();
+                _pdfController?.dispose();
+                _pdfController = null;
+              });
+            },
+          ),
+        ),
+      );
+    }
+
+    if (_imageBytes != null) {
+      return InteractiveViewer(
+        minScale: 0.5,
+        maxScale: 4,
+        child: Center(
+          child: Image.memory(
+            _imageBytes!,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.broken_image_outlined,
+              size: 64,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }

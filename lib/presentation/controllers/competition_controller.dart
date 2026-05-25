@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/championship_style.dart';
 import '../../core/utils/dialog_helper.dart';
@@ -13,7 +14,16 @@ import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
 import '../../data/models/competition_option_model.dart';
 
+enum BrochureFileKind { image, pdf, unknown }
+
 class CompetitionController extends GetxController {
+  static const int brochureMaxImageBytes = 10 * 1024 * 1024;
+  static const int brochureMaxPdfBytes = 25 * 1024 * 1024;
+  static const String brochureUploadNotes =
+      'Accepted: JPG, PNG, or PDF\n'
+      '• Images: max 10 MB\n'
+      '• PDF: max 25 MB';
+
   final CompetitionRepository _repository = CompetitionRepository();
 
   // Form controllers — keys are replaced when the form subtree is (re)shown so one
@@ -158,7 +168,113 @@ class CompetitionController extends GetxController {
   final Rx<XFile?> brochureFile = Rx<XFile?>(null);
   final Rx<File?> brochureFileLocal = Rx<File?>(null);
   final Rx<Uint8List?> brochureBytes = Rx<Uint8List?>(null);
+  final RxString brochureFileName = ''.obs;
   final RxString brochureUrl = ''.obs;
+
+  bool get hasLocalBrochure =>
+      brochureBytes.value != null ||
+      brochureFile.value != null ||
+      brochureFileLocal.value != null;
+
+  /// Magic-byte sniffing (more reliable than filename alone).
+  static bool brochureBytesLookLikePdf(Uint8List bytes) {
+    final scanLength = bytes.length < 2048 ? bytes.length : 2048;
+    for (var i = 0; i <= scanLength - 4; i++) {
+      if (bytes[i] == 0x25 &&
+          bytes[i + 1] == 0x50 &&
+          bytes[i + 2] == 0x44 &&
+          bytes[i + 3] == 0x46) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// True when the body looks like a JSON API error, not a file.
+  static bool brochureBytesLookLikeJson(Uint8List bytes) {
+    for (var i = 0; i < bytes.length && i < 64; i++) {
+      final b = bytes[i];
+      if (b <= 32) continue;
+      return b == 0x7b || b == 0x5b; // { or [
+    }
+    return false;
+  }
+
+  static bool brochureBytesLookLikeImage(Uint8List bytes) {
+    if (bytes.length >= 4 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return true; // PNG
+    }
+    if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
+      return true; // JPEG
+    }
+    return false;
+  }
+
+  static bool _pathLooksLikePdf(String path) {
+    final lower = path.trim().toLowerCase();
+    return lower.endsWith('.pdf');
+  }
+
+  static bool _pathLooksLikeImage(String path) {
+    final lower = path.trim().toLowerCase();
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp');
+  }
+
+  /// Resolved brochure type for the current selection / saved file.
+  BrochureFileKind get brochureFileKind {
+    final bytes = brochureBytes.value;
+    if (bytes != null && bytes.isNotEmpty) {
+      if (brochureBytesLookLikeImage(bytes)) return BrochureFileKind.image;
+      if (brochureBytesLookLikePdf(bytes)) return BrochureFileKind.pdf;
+    }
+
+    final name = brochureFileName.value.trim().toLowerCase();
+    if (_pathLooksLikePdf(name)) return BrochureFileKind.pdf;
+    if (_pathLooksLikeImage(name)) return BrochureFileKind.image;
+
+    if (hasLocalBrochure) {
+      return BrochureFileKind.unknown;
+    }
+
+    final url = brochureUrl.value.trim().toLowerCase();
+    if (_pathLooksLikePdf(url)) return BrochureFileKind.pdf;
+    if (_pathLooksLikeImage(url)) return BrochureFileKind.image;
+
+    final apiUrl =
+        competitionToEdit.value?.brochureUrl?.trim().toLowerCase() ?? '';
+    if (_pathLooksLikePdf(apiUrl)) return BrochureFileKind.pdf;
+    if (_pathLooksLikeImage(apiUrl)) return BrochureFileKind.image;
+
+    return BrochureFileKind.unknown;
+  }
+
+  bool get isBrochurePdf => brochureFileKind == BrochureFileKind.pdf;
+
+  bool get isBrochureImage => brochureFileKind == BrochureFileKind.image;
+
+  /// Detect type from downloaded brochure bytes (API preview).
+  static BrochureFileKind brochureKindFromBytes(
+    Uint8List bytes, {
+    String? contentType,
+    bool filenameHintPdf = false,
+  }) {
+    if (brochureBytesLookLikeImage(bytes)) return BrochureFileKind.image;
+    if (brochureBytesLookLikePdf(bytes)) return BrochureFileKind.pdf;
+
+    final ct = contentType?.toLowerCase() ?? '';
+    if (ct.contains('image/')) return BrochureFileKind.image;
+    if (ct.contains('pdf')) return BrochureFileKind.pdf;
+
+    return filenameHintPdf ? BrochureFileKind.pdf : BrochureFileKind.image;
+  }
+
   final RxInt brochureUpdateTimestamp =
       0.obs; // Track brochure updates for cache-busting
 
@@ -426,57 +542,75 @@ class CompetitionController extends GetxController {
     });
   }
 
-  // Pick brochure file
+  // Pick brochure file (JPG, PNG, or PDF)
   Future<void> pickBrochure() async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        allowMultiple: false,
+        withData: kIsWeb,
       );
 
-      if (file != null) {
-        // Validate file size (max 10MB)
-        final fileSize = await file.length();
-        const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      if (result == null || result.files.isEmpty) return;
 
-        if (fileSize > maxSize) {
-          errorMessage.value = 'Brochure file size must be less than 10MB';
-          Get.snackbar('Error', errorMessage.value);
-          return;
-        }
-
-        // Validate file type (images: jpg, jpeg, png, pdf)
-        final fileName = file.name.toLowerCase();
-        final validExtensions = ['.jpg', '.jpeg', '.png', '.pdf'];
-        final isValidType = validExtensions.any(
-          (ext) => fileName.endsWith(ext),
-        );
-
-        if (!isValidType) {
-          errorMessage.value =
-              'Brochure must be an image (JPG, PNG) or PDF file';
-          Get.snackbar('Error', errorMessage.value);
-          return;
-        }
-
-        if (kIsWeb) {
-          final bytes = await file.readAsBytes();
-          brochureBytes.value = bytes;
-          brochureFile.value = null;
-          brochureFileLocal.value = null;
-          brochureUrl.value = 'web_file';
-        } else {
-          brochureFile.value = file;
-          brochureFileLocal.value = File(file.path);
-          brochureBytes.value = null;
-          brochureUrl.value = file.path;
-        }
-        errorMessage.value = ''; // Clear error on success
+      final picked = result.files.first;
+      final fileName = picked.name.trim();
+      if (fileName.isEmpty) {
+        _notifyError('Invalid brochure file name');
+        return;
       }
+
+      final lowerName = fileName.toLowerCase();
+      const validExtensions = ['.jpg', '.jpeg', '.png', '.pdf'];
+      final isValidType = validExtensions.any(lowerName.endsWith);
+      if (!isValidType) {
+        _notifyError('Brochure must be an image (JPG, PNG) or PDF file');
+        return;
+      }
+
+      int fileSize = picked.size;
+      if (kIsWeb) {
+        if (picked.bytes == null || picked.bytes!.isEmpty) {
+          _notifyError('Unable to read brochure file');
+          return;
+        }
+        fileSize = picked.bytes!.length;
+      } else if (picked.path != null) {
+        fileSize = await File(picked.path!).length();
+      }
+
+      final isPdf = lowerName.endsWith('.pdf');
+      final maxSize = isPdf ? brochureMaxPdfBytes : brochureMaxImageBytes;
+      if (fileSize > maxSize) {
+        _notifyError(
+          isPdf
+              ? 'PDF brochure must be 25 MB or smaller'
+              : 'Image brochure must be 10 MB or smaller',
+        );
+        return;
+      }
+
+      brochureFileName.value = fileName;
+      if (kIsWeb) {
+        brochureBytes.value = picked.bytes;
+        brochureFile.value = null;
+        brochureFileLocal.value = null;
+        brochureUrl.value = 'web_file';
+      } else if (picked.path != null) {
+        final path = picked.path!;
+        brochureFile.value = XFile(path, name: fileName);
+        brochureFileLocal.value = File(path);
+        brochureBytes.value = null;
+        brochureUrl.value = path;
+      } else {
+        _notifyError('Unable to access brochure file');
+        return;
+      }
+
+      errorMessage.value = '';
     } catch (e) {
-      errorMessage.value = 'Error picking brochure: ${e.toString()}';
-      Get.snackbar('Error', errorMessage.value);
+      _notifyError('Error picking brochure: ${e.toString()}');
     }
   }
 
@@ -1147,6 +1281,9 @@ class CompetitionController extends GetxController {
         brochureFile: brochureFile.value,
         brochureFileLocal: brochureFileLocal.value,
         brochureBytes: brochureBytes.value,
+        brochureFilename: brochureFileName.value.isNotEmpty
+            ? brochureFileName.value
+            : null,
       );
 
       if (response.success && response.data != null) {
@@ -1260,6 +1397,9 @@ class CompetitionController extends GetxController {
         brochureFile: hasNewBrochure ? brochureFile.value : null,
         brochureFileLocal: hasNewBrochure ? brochureFileLocal.value : null,
         brochureBytes: hasNewBrochure ? brochureBytes.value : null,
+        brochureFilename: hasNewBrochure && brochureFileName.value.isNotEmpty
+            ? brochureFileName.value
+            : null,
       );
 
       if (response.success) {
@@ -1273,6 +1413,14 @@ class CompetitionController extends GetxController {
           brochureFile.value = null;
           brochureFileLocal.value = null;
           brochureBytes.value = null;
+          final url = competitionToEdit.value?.brochureUrl;
+          if (url != null && url.isNotEmpty) {
+            brochureUrl.value = url;
+            final segments = url.split('/');
+            if (segments.isNotEmpty) {
+              brochureFileName.value = segments.last;
+            }
+          }
         }
 
         await loadCompetitions(resetPage: false);
@@ -1593,6 +1741,12 @@ class CompetitionController extends GetxController {
     if (competition.brochureUrl != null &&
         competition.brochureUrl!.isNotEmpty) {
       brochureUrl.value = competition.brochureUrl!;
+      final segments = competition.brochureUrl!.split('/');
+      if (segments.isNotEmpty) {
+        brochureFileName.value = segments.last;
+      }
+    } else {
+      brochureFileName.value = '';
     }
 
     // Switch to create view
@@ -1736,6 +1890,7 @@ class CompetitionController extends GetxController {
     brochureFile.value = null;
     brochureFileLocal.value = null;
     brochureBytes.value = null;
+    brochureFileName.value = '';
     brochureUrl.value = '';
     errorMessage.value = '';
     hasAttemptedSubmit.value = false;
