@@ -677,6 +677,7 @@ class UserManagementController extends GetxController {
 
   // Initialize form for edit
   void initializeFormForEdit(UserManagementModel user) {
+    _refreshFormKey();
     userToEdit.value = user;
     nameController.text = user.name;
     userNameController.text = user.userName ?? '';
@@ -877,20 +878,7 @@ class UserManagementController extends GetxController {
     passwordController.clear();
     cellController.clear();
 
-    // Reset form validation state
-    // Try immediately first
-    formKey.currentState?.reset();
-
-    // Also reset after a frame delay to ensure all reactive updates are complete
-    // This handles cases where widgets need to rebuild before form state can be reset
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      formKey.currentState?.reset();
-      // Force clear text controllers again after form reset to ensure they're empty
-      nameController.clear();
-      userNameController.clear();
-      passwordController.clear();
-      cellController.clear();
-    });
+    _refreshFormKey();
   }
 
   // Login user

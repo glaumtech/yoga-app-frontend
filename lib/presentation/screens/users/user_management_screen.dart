@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
@@ -161,7 +162,7 @@ class UserManagementScreen extends StatelessWidget {
           final _ = controller.formKeyRevision.value;
           return Form(
             key: controller.formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
+            autovalidateMode: AutovalidateMode.disabled,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -287,15 +288,11 @@ class UserManagementScreen extends StatelessWidget {
                                       : await controller.createUser();
 
                                   if (success && context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          controller.isEditMode
-                                              ? 'User updated successfully'
-                                              : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
-                                        ),
-                                        backgroundColor: Colors.green,
-                                      ),
+                                    SnackbarHelper.showSuccess(
+                                      context,
+                                      controller.isEditMode
+                                          ? 'User updated successfully'
+                                          : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
                                     );
                                     // Reset form and switch to list view after successful update
                                     if (controller.isEditMode) {
@@ -337,15 +334,11 @@ class UserManagementScreen extends StatelessWidget {
                                     : await controller.createUser();
 
                                 if (success && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        controller.isEditMode
-                                            ? 'User updated successfully'
-                                            : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
-                                      ),
-                                      backgroundColor: Colors.green,
-                                    ),
+                                  SnackbarHelper.showSuccess(
+                                    context,
+                                    controller.isEditMode
+                                        ? 'User updated successfully'
+                                        : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
                                   );
                                   // Reset form and switch to list view after successful update
                                   if (controller.isEditMode) {
