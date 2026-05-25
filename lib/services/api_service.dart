@@ -393,7 +393,7 @@ class APIService {
   Future<ApiResponse<T>> putMultipart<T>({
     required String url,
     required Map<String, String> fields,
-    required http.MultipartFile file,
+    http.MultipartFile? file,
     Map<String, String>? header,
     T Function(dynamic)? fromJson,
   }) async {
@@ -429,11 +429,14 @@ class APIService {
       // Add fields
       request.fields.addAll(fields);
 
-      // Add file
-      request.files.add(file);
+      if (file != null) {
+        request.files.add(file);
+      }
 
       log('----FIELDS---$fields');
-      log('----FILE---${file.filename} (${file.length} bytes)');
+      if (file != null) {
+        log('----FILE---${file.filename} (${file.length} bytes)');
+      }
 
       // Send request
       final streamedResponse = await request.send().timeout(BaseUrl.apiTimeout);

@@ -23,6 +23,25 @@ class SnackbarHelper {
     return MediaQueryData.fromView(view);
   }
 
+  static void show({
+    BuildContext? context,
+    String? title,
+    required String message,
+    required Color backgroundColor,
+    Duration duration = const Duration(seconds: 4),
+  }) {
+    final safeTitle = title?.trim() ?? '';
+    final safeMessage = message.trim();
+    final body = safeTitle.isEmpty ? safeMessage : '$safeTitle\n$safeMessage';
+    if (body.isEmpty) return;
+    _show(
+      context,
+      message: body,
+      backgroundColor: backgroundColor,
+      duration: duration,
+    );
+  }
+
   static void _show(
     BuildContext? context, {
     required String message,
@@ -39,7 +58,8 @@ class SnackbarHelper {
       math.max(_minWidth, screenWidth * _widthFraction),
     );
     final top = media.padding.top + 16;
-    const snackHeight = 56.0;
+    final lineCount = '\n'.allMatches(message).length + 1;
+    final snackHeight = math.max(56.0, 22.0 * lineCount + 20);
 
     messenger
       ..clearSnackBars()
@@ -83,5 +103,14 @@ class SnackbarHelper {
       backgroundColor: Colors.blueGrey,
       duration: const Duration(seconds: 3),
     );
+  }
+
+  /// Uses [rootScaffoldMessengerKey] when no [BuildContext] is available (e.g. GetX controllers).
+  static void showSuccessMessage(String message) {
+    _show(null, message: message, backgroundColor: Colors.green);
+  }
+
+  static void showErrorMessage(String message) {
+    _show(null, message: message, backgroundColor: Colors.red);
   }
 }

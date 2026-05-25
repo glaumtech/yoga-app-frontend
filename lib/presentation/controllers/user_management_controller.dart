@@ -11,6 +11,7 @@ import '../../data/models/user_management_model.dart';
 import '../../data/models/user_type_model.dart';
 import '../../data/models/competition_option_model.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/constants/championship_style.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/utils/permission_store.dart';
 
@@ -309,6 +310,36 @@ class UserManagementController extends GetxController {
     return ids;
   }
 
+  static const String _championsCategoryName = 'CHAMPIONS';
+
+  /// When competition uses winner-based Champions, add CHAMPIONS for jury allotment.
+  Future<void> _appendChampionsCategoryForWinnerStyle(int competitionId) async {
+    final compResponse =
+        await _competitionRepository.getCompetitionById(competitionId);
+    if (!compResponse.success || compResponse.data == null) return;
+
+    final style = ChampionshipStyle.fromApiValue(
+      compResponse.data!.championshipStyle,
+    );
+    if (style != ChampionshipStyle.fromFirstPlaceWinners) return;
+
+    final hasChampions = availableCategories.any(
+      (c) => c.name.trim().toUpperCase() == _championsCategoryName,
+    );
+    if (hasChampions) return;
+
+    final allResponse = await _competitionRepository.getAllCategories();
+    if (!allResponse.success || allResponse.data == null) return;
+
+    final champions = allResponse.data!.firstWhereOrNull(
+      (c) => c.name.trim().toUpperCase() == _championsCategoryName,
+    );
+    if (champions != null) {
+      availableCategories.add(champions);
+      availableCategories.refresh();
+    }
+  }
+
   // Load stages and categories for selected competition
   Future<void> loadStagesAndCategoriesForCompetition(
     String? competitionId,
@@ -349,6 +380,7 @@ class UserManagementController extends GetxController {
       // Update categories
       if (results[1].success && results[1].data != null) {
         availableCategories.value = results[1].data!;
+        await _appendChampionsCategoryForWinnerStyle(competitionIdInt);
       } else {
         print('Failed to load categories: ${results[1].message}');
         availableCategories.clear();

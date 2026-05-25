@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/championship_style.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
@@ -389,6 +390,14 @@ class CreateCompetitionScreen extends StatelessWidget {
                           ),
                         ],
                       ),
+                SizedBox(height: isMobile ? 20 : 24),
+
+                _buildChampionshipStyleField(
+                  context,
+                  controller,
+                  isMobile,
+                  isTablet,
+                ),
                 SizedBox(height: isMobile ? 20 : 24),
 
                 // Prizes and Categories in same line (desktop)
@@ -1582,6 +1591,92 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildChampionshipStyleField(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(
+          label: 'CHAMPIONS / CHAMPIONSHIP STYLE :',
+          hintText:
+              'Choose whether Champions is a separate registration category or filled from 1st-place winners (boys & girls) in other categories.',
+        ),
+        const SizedBox(height: 8),
+        _optionSectionCard(
+          child: Obx(() {
+            final selected = controller.championshipStyle.value;
+            final readOnly = controller.isViewMode.value;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...ChampionshipStyle.values.map((style) {
+                  return RadioListTile<ChampionshipStyle>(
+                    value: style,
+                    groupValue: selected,
+                    onChanged: readOnly
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              controller.setChampionshipStyle(value);
+                            }
+                          },
+                    activeColor: AppTheme.primaryColor,
+                    title: Text(
+                      style.label,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      style.description,
+                      style: TextStyle(
+                        fontSize: isMobile ? 12 : 13,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  );
+                }),
+                if (controller.hasAttemptedSubmit.value &&
+                    selected == null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Please select a championship style',
+                    style: TextStyle(color: Colors.red[700], fontSize: 12),
+                  ),
+                ],
+                if (selected == ChampionshipStyle.fromFirstPlaceWinners) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Text(
+                      'Champions category is not selectable for this competition. '
+                      'It will be populated from 1st-place winners in Common/Special categories (boys and girls).',
+                      style: TextStyle(
+                        fontSize: isMobile ? 12 : 13,
+                        color: Colors.orange.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCategoriesField(
     BuildContext context,
     CompetitionController controller,
@@ -1622,12 +1717,17 @@ class CreateCompetitionScreen extends StatelessWidget {
                         ...controller.categoryOptionNames.map((category) {
                           final isSelected = controller.selectedCategories
                               .contains(category);
+                          final isChampions =
+                              controller.isChampionsCategoryName(category);
+                          final championsDisabled = isChampions &&
+                              !controller.canSelectChampionsCategory;
                           return Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Checkbox(
                                 value: isSelected,
-                                onChanged: controller.isViewMode.value
+                                onChanged: controller.isViewMode.value ||
+                                        championsDisabled
                                     ? null
                                     : (value) {
                                         controller.toggleCategory(category);
@@ -1639,7 +1739,12 @@ class CreateCompetitionScreen extends StatelessWidget {
                                       },
                                 activeColor: AppTheme.primaryColor,
                               ),
-                              Text(category),
+                              Text(
+                                category,
+                                style: championsDisabled
+                                    ? TextStyle(color: Colors.grey[500])
+                                    : null,
+                              ),
                             ],
                           );
                         }),

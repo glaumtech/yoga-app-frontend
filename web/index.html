@@ -32,8 +32,96 @@
 
   <title>Yoga Competition Application</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #4CAF50;
+    }
+
+    #flutter-loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #4CAF50;
+      color: #ffffff;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      z-index: 9999;
+      transition: opacity 0.25s ease;
+    }
+
+    #flutter-loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #flutter-loading .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: flutter-loading-spin 0.9s linear infinite;
+      margin-bottom: 18px;
+    }
+
+    #flutter-loading h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    #flutter-loading p {
+      margin: 0;
+      opacity: 0.85;
+      font-size: 0.95rem;
+    }
+
+    @keyframes flutter-loading-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <div id="flutter-loading" aria-live="polite" aria-busy="true">
+    <div class="spinner" aria-hidden="true"></div>
+    <h1>Yogasana Championship</h1>
+    <p>Loading application…</p>
+  </div>
+
+  <script>
+    (function () {
+      var loadingEl = document.getElementById('flutter-loading');
+
+      function hideLoading() {
+        if (!loadingEl) return;
+        loadingEl.classList.add('hidden');
+        loadingEl.setAttribute('aria-busy', 'false');
+        setTimeout(function () {
+          if (loadingEl && loadingEl.parentNode) {
+            loadingEl.parentNode.removeChild(loadingEl);
+          }
+        }, 300);
+      }
+
+      window.addEventListener('flutter-first-frame', hideLoading);
+
+      // Fallback: if Flutter never paints (e.g. dev server still compiling), hint the user.
+      setTimeout(function () {
+        if (!loadingEl || loadingEl.classList.contains('hidden')) return;
+        var hint = loadingEl.querySelector('p');
+        if (hint) {
+          hint.textContent = 'Still loading… If this stays blank, refresh the page.';
+        }
+      }, 15000);
+    })();
+  </script>
+
+  <script src="flutter_bootstrap.js"></script>
 </body>
 </html>

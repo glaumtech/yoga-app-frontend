@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:get/get.dart';
 import 'core/theme/app_theme.dart';
 import 'core/navigation/root_scaffold_messenger_key.dart';
@@ -12,6 +14,10 @@ import 'core/utils/permission_store.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (kIsWeb) {
+    usePathUrlStrategy();
+  }
 
   // Initialize storage (await to ensure it's ready)
   await StorageService.init();

@@ -127,10 +127,8 @@ class CompetitionRepository {
 
       print('Update competition request data: $dataJsonString');
 
-      // Prepare brochure file (if provided)
-      http.MultipartFile multipartFile;
-
-      if (kIsWeb && brochureBytes != null) {
+      http.MultipartFile? multipartFile;
+      if (kIsWeb && brochureBytes != null && brochureBytes.isNotEmpty) {
         multipartFile = http.MultipartFile.fromBytes(
           'brochure',
           brochureBytes,
@@ -138,34 +136,33 @@ class CompetitionRepository {
         );
       } else if (brochureFile != null) {
         final fileBytes = await brochureFile.readAsBytes();
-        multipartFile = http.MultipartFile.fromBytes(
-          'brochure',
-          fileBytes,
-          filename: brochureFile.name,
-        );
+        if (fileBytes.isNotEmpty) {
+          multipartFile = http.MultipartFile.fromBytes(
+            'brochure',
+            fileBytes,
+            filename: brochureFile.name,
+          );
+        }
       } else if (brochureFileLocal != null) {
         final fileBytes = await brochureFileLocal.readAsBytes();
-        multipartFile = http.MultipartFile.fromBytes(
-          'brochure',
-          fileBytes,
-          filename: brochureFileLocal.path.split('/').last,
-        );
-      } else {
-        // No brochure provided - send empty file
-        multipartFile = http.MultipartFile.fromBytes(
-          'brochure',
-          [],
-          filename: '',
-        );
+        if (fileBytes.isNotEmpty) {
+          multipartFile = http.MultipartFile.fromBytes(
+            'brochure',
+            fileBytes,
+            filename: brochureFileLocal.path.split('/').last,
+          );
+        }
       }
 
       // Send data as JSON string in 'data' field (backend requirement)
       final fields = <String, String>{'data': dataJsonString};
 
       print('Updating competition with multipart - data: $dataJsonString');
-      print(
-        'Brochure file: ${multipartFile.filename} (${multipartFile.length} bytes)',
-      );
+      if (multipartFile != null) {
+        print(
+          'Brochure file: ${multipartFile.filename} (${multipartFile.length} bytes)',
+        );
+      }
 
       final response = await _apiService.putMultipart<Map<String, dynamic>>(
         url: EndPoints.competitionUpdate(competition.id!),

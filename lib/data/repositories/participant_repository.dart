@@ -1046,20 +1046,24 @@ class ParticipantRepository {
   Future<ApiResponse<Map<String, dynamic>>> submitBulkScores({
     required int competitionId,
     required int juryId,
-    required int stageId,
+    int? stageId,
     required int categoryId,
-    required int groupId,
+    int? groupId,
     required List<Map<String, dynamic>> participantScores,
   }) async {
     try {
       final requestBody = <String, dynamic>{
         'competitionId': competitionId,
         'juryId': juryId,
-        'stageId': stageId,
         'categoryId': categoryId,
-        'groupId': groupId,
         'participantScores': participantScores,
       };
+      if (stageId != null) {
+        requestBody['stageId'] = stageId;
+      }
+      if (groupId != null) {
+        requestBody['groupId'] = groupId;
+      }
 
       print('=== Submitting Bulk Scores ===');
       print('Endpoint: ${EndPoints.juryScoring}');

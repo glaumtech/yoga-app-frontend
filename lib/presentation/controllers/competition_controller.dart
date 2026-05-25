@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/constants/championship_style.dart';
+import '../../core/utils/dialog_helper.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
 import '../../data/models/competition_option_model.dart';
@@ -49,6 +52,24 @@ class CompetitionController extends GetxController {
 
   void clearCompetitionDateFieldTouches() {
     touchedCompetitionDateFields.clear();
+  }
+
+  void _notifyError(String message) {
+    errorMessage.value = message;
+    SnackbarHelper.showErrorMessage(message);
+  }
+
+  void _notifySuccess(String message) {
+    SnackbarHelper.showSuccessMessage(message);
+  }
+
+  bool _validateFormState() {
+    final state = formKey.currentState;
+    if (state == null) {
+      _notifyError('Form is not ready. Please try again.');
+      return false;
+    }
+    return state.validate();
   }
 
   final competitionNameController = TextEditingController();
@@ -95,6 +116,7 @@ class CompetitionController extends GetxController {
   final Rx<DateTime?> eventEndDate = Rx<DateTime?>(null);
   final Rx<DateTime?> displayAdFrom = Rx<DateTime?>(null);
   final RxBool spotRegistration = false.obs;
+  final Rx<ChampionshipStyle?> championshipStyle = Rx<ChampionshipStyle?>(null);
   final RxInt participantsPerStage = RxInt(0);
   final RxInt minimumMarks = RxInt(0);
   final RxInt maximumMarks = RxInt(0);
@@ -605,8 +627,76 @@ class CompetitionController extends GetxController {
     }
   }
 
+  static const String championsCategoryName = 'CHAMPIONS';
+
+  bool isChampionsCategoryName(String categoryName) =>
+      categoryName.trim().toUpperCase() == championsCategoryName;
+
+  bool get canSelectChampionsCategory =>
+      championshipStyle.value == ChampionshipStyle.separateCategory;
+
+  void setChampionshipStyle(ChampionshipStyle? style) {
+    championshipStyle.value = style;
+    if (style == ChampionshipStyle.fromFirstPlaceWinners) {
+      _deselectChampionsCategory();
+    }
+  }
+
+  void _deselectChampionsCategory() {
+    final championsId = getCategoryIdByName(championsCategoryName);
+    if (championsId == null) return;
+    if (selectedCategoryIds.contains(championsId)) {
+      selectedCategoryIds.remove(championsId);
+      categoryAmounts.remove(championsId.toString());
+    }
+  }
+
+  String? validateCategoriesForChampionshipStyle() {
+    if (championshipStyle.value != ChampionshipStyle.fromFirstPlaceWinners) {
+      return null;
+    }
+    for (final id in selectedCategoryIds) {
+      final name = getCategoryNameById(id);
+      if (name != null && isChampionsCategoryName(name)) {
+        return 'Remove the Champions category. For this championship style, '
+            'Champions are derived from 1st-place winners in other categories.';
+      }
+    }
+    return null;
+  }
+
+  Future<bool> confirmChampionshipStyleBeforeSave() async {
+    final style = championshipStyle.value;
+    if (style == null) {
+      _notifyError(
+        'Please select how the Champions category will be determined',
+      );
+      return false;
+    }
+
+    final categoryError = validateCategoriesForChampionshipStyle();
+    if (categoryError != null) {
+      _notifyError(categoryError);
+      return false;
+    }
+
+    return DialogHelper.confirm(
+      title: 'Confirm Champions setup',
+      message: style.confirmationMessage,
+    );
+  }
+
   // Toggle category selection (by name for UI, stores ID internally)
   void toggleCategory(String categoryName) {
+    if (isChampionsCategoryName(categoryName) && !canSelectChampionsCategory) {
+      SnackbarHelper.showErrorMessage(
+        championshipStyle.value == null
+            ? 'Select the championship style above first.'
+            : 'Champions cannot be selected when it is based on 1st-place winners.',
+      );
+      return;
+    }
+
     final categoryId = getCategoryIdByName(categoryName);
     if (categoryId == null) return;
 
@@ -982,44 +1072,49 @@ class CompetitionController extends GetxController {
     try {
       hasAttemptedSubmit.value = true;
       notifyCompetitionDatesChanged();
-      if (!formKey.currentState!.validate()) {
+      if (!_validateFormState()) {
         return false;
       }
 
       final dateError = validateCompetitionDates(forSubmit: true);
       if (dateError != null) {
-        errorMessage.value = dateError;
-        Get.snackbar('Error', dateError);
+        _notifyError(dateError);
         return false;
       }
 
       if (participantsPerStage.value <= 0) {
-        errorMessage.value = 'Please select participants per stage';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select participants per stage');
         return false;
       }
 
       if (selectedCategoryIds.isEmpty) {
-        errorMessage.value = 'Please select at least one category';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one category');
+        return false;
+      }
+
+      final categoryStyleError = validateCategoriesForChampionshipStyle();
+      if (categoryStyleError != null) {
+        _notifyError(categoryStyleError);
+        return false;
+      }
+
+      if (!await confirmChampionshipStyleBeforeSave()) {
         return false;
       }
 
       if (selectedStageIds.isEmpty) {
-        errorMessage.value = 'Please select at least one stage';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one stage');
         return false;
       }
 
       if (selectedPrizeIds.isEmpty) {
-        errorMessage.value = 'Please select at least one prize';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one prize');
         return false;
       }
 
       // Validate brochure upload
       if (!validateBrochure()) {
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError(errorMessage.value);
         return false;
       }
 
@@ -1044,6 +1139,7 @@ class CompetitionController extends GetxController {
         categoryAmounts: Map<String, double>.from(categoryAmounts),
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
+        championshipStyle: championshipStyle.value?.apiValue,
       );
 
       final response = await _repository.createCompetition(
@@ -1057,19 +1153,17 @@ class CompetitionController extends GetxController {
         lastSavedCompetitionForQr.value = response.data;
         await loadCompetitions(resetPage: true);
         clearForm();
-        Get.snackbar('Success', 'Competition created successfully');
+        _notifySuccess('Competition created successfully');
         toggleViewMode(true);
         return true;
       } else {
         lastSavedCompetitionForQr.value = null;
-        errorMessage.value = response.message ?? 'Failed to create competition';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError(response.message ?? 'Failed to create competition');
         return false;
       }
     } catch (e) {
       lastSavedCompetitionForQr.value = null;
-      errorMessage.value = 'Error creating competition: ${e.toString()}';
-      Get.snackbar('Error', errorMessage.value);
+      _notifyError('Error creating competition: ${e.toString()}');
       return false;
     } finally {
       isLoading.value = false;
@@ -1084,45 +1178,49 @@ class CompetitionController extends GetxController {
   Future<bool> updateCompetition() async {
     try {
       if (competitionToEdit.value == null) {
-        errorMessage.value = 'No competition selected for update';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('No competition selected for update');
         return false;
       }
 
       hasAttemptedSubmit.value = true;
       notifyCompetitionDatesChanged();
-      if (!formKey.currentState!.validate()) {
+      if (!_validateFormState()) {
         return false;
       }
 
       final dateError = validateCompetitionDates(forSubmit: true);
       if (dateError != null) {
-        errorMessage.value = dateError;
-        Get.snackbar('Error', dateError);
+        _notifyError(dateError);
         return false;
       }
 
       if (participantsPerStage.value <= 0) {
-        errorMessage.value = 'Please select participants per stage';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select participants per stage');
         return false;
       }
 
       if (selectedCategoryIds.isEmpty) {
-        errorMessage.value = 'Please select at least one category';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one category');
+        return false;
+      }
+
+      final categoryStyleError = validateCategoriesForChampionshipStyle();
+      if (categoryStyleError != null) {
+        _notifyError(categoryStyleError);
+        return false;
+      }
+
+      if (!await confirmChampionshipStyleBeforeSave()) {
         return false;
       }
 
       if (selectedStageIds.isEmpty) {
-        errorMessage.value = 'Please select at least one stage';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one stage');
         return false;
       }
 
       if (selectedPrizeIds.isEmpty) {
-        errorMessage.value = 'Please select at least one prize';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one prize');
         return false;
       }
 
@@ -1154,6 +1252,7 @@ class CompetitionController extends GetxController {
         categoryAmounts: Map<String, double>.from(categoryAmounts),
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
+        championshipStyle: championshipStyle.value?.apiValue,
       );
 
       final response = await _repository.updateCompetition(
@@ -1177,18 +1276,17 @@ class CompetitionController extends GetxController {
         }
 
         await loadCompetitions(resetPage: false);
+        _notifySuccess('Competition updated successfully');
         clearForm();
-        Get.snackbar('Success', 'Competition updated successfully');
         toggleViewMode(true);
         return true;
       } else {
-        errorMessage.value = response.message ?? 'Failed to update competition';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError(response.message ?? 'Failed to update competition');
         return false;
       }
-    } catch (e) {
-      errorMessage.value = 'Error updating competition: ${e.toString()}';
-      Get.snackbar('Error', errorMessage.value);
+    } catch (e, stackTrace) {
+      debugPrint('updateCompetition error: $e\n$stackTrace');
+      _notifyError('Error updating competition: ${e.toString()}');
       return false;
     } finally {
       isLoading.value = false;
@@ -1353,6 +1451,10 @@ class CompetitionController extends GetxController {
     eventEndDate.value = competition.eventEndDate;
     displayAdFrom.value = competition.displayAdFrom;
     spotRegistration.value = competition.spotRegistration;
+    championshipStyle.value = ChampionshipStyle.fromApiValue(
+          competition.championshipStyle,
+        ) ??
+        ChampionshipStyle.separateCategory;
     participantsPerStage.value = competition.participantsPerStage ?? 0;
     minimumMarks.value = competition.minimumMarks ?? 0;
     maximumMarks.value = competition.maximumMarks ?? 0;
@@ -1422,6 +1524,10 @@ class CompetitionController extends GetxController {
     } else {
       selectedCategoryIds.clear();
       categoryAmounts.clear();
+    }
+
+    if (championshipStyle.value == ChampionshipStyle.fromFirstPlaceWinners) {
+      _deselectChampionsCategory();
     }
 
     if (competition.stageIds != null && competition.stageIds!.isNotEmpty) {
@@ -1618,6 +1724,7 @@ class CompetitionController extends GetxController {
     eventEndDate.value = null;
     displayAdFrom.value = null;
     spotRegistration.value = false;
+    championshipStyle.value = null;
     participantsPerStage.value = 0;
     minimumMarks.value = 0;
     maximumMarks.value = 0;
