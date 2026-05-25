@@ -1045,6 +1045,18 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             ),
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            ParticipantController.participantPhotoUploadNotes,
+            style: TextStyle(
+              fontSize: isMobile ? 11 : 12,
+              color: Colors.grey[600],
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ],
     );
   }
@@ -1759,18 +1771,10 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               return Obx(
-                () => _buildImagePreview(
-                  controller.bonafideFile.value,
-                  controller.bonafideImage.value,
-                  controller.existingCertificateUrl.value,
+                () => _buildBonafideCertificatePreview(
+                  controller,
                   constraints.maxWidth,
                   isMobile ? 150 : 200,
-                  defaultIcon: Icons.description,
-                  defaultText: 'No Certificate',
-                  memoryBytes: controller.bonafideBytes.value,
-                  previewKey:
-                      controller.bonafideImage.value?.path ??
-                      controller.bonafideFileName.value,
                 ),
               );
             },
@@ -1830,9 +1834,153 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               );
             }),
           ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              ParticipantController.bonafideUploadNotes,
+              style: TextStyle(
+                fontSize: isMobile ? 11 : 12,
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+          ),
         ],
       );
     });
+  }
+
+  Widget _buildBonafideCertificatePreview(
+    ParticipantController controller,
+    double width,
+    double height,
+  ) {
+    if (controller.isBonafidePdf) {
+      final displayName = controller.bonafideFileName.value.trim().isNotEmpty
+          ? controller.bonafideFileName.value.trim()
+          : 'PDF certificate';
+      final fileSize = controller.bonafideBytes.value?.length;
+      return _buildBonafidePdfCard(
+        fileName: displayName,
+        fileSizeBytes: fileSize,
+        width: width,
+        height: height,
+      );
+    }
+
+    return _buildImagePreview(
+      controller.bonafideFile.value,
+      controller.bonafideImage.value,
+      controller.existingCertificateUrl.value,
+      width,
+      height,
+      defaultIcon: Icons.description,
+      defaultText: 'No Certificate',
+      memoryBytes: controller.bonafideBytes.value,
+      previewKey:
+          controller.bonafideImage.value?.path ??
+          controller.bonafideFileName.value,
+    );
+  }
+
+  Widget _buildBonafidePdfCard({
+    required String fileName,
+    int? fileSizeBytes,
+    required double width,
+    required double height,
+  }) {
+    String formatSize(int bytes) {
+      if (bytes < 1024) return '$bytes B';
+      if (bytes < 1024 * 1024) {
+        return '${(bytes / 1024).toStringAsFixed(bytes < 10 * 1024 ? 1 : 0)} KB';
+      }
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+
+    final subtitle = [
+      if (fileSizeBytes != null) formatSize(fileSizeBytes),
+      'PDF',
+    ].join(' • ');
+
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+        color: const Color(0xFFE7E7E7),
+      ),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(12),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 320),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(height: 4, color: const Color(0xFFE53935)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEBEE),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.picture_as_pdf,
+                      color: Color(0xFFE53935),
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fileName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _pickPhoto(
@@ -1847,12 +1995,28 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       );
 
       if (file != null) {
+        int fileSize;
+        if (kIsWeb) {
+          final bytes = await file.readAsBytes();
+          fileSize = bytes.length;
+        } else {
+          fileSize = await File(file.path).length();
+        }
+
+        if (fileSize > ParticipantController.participantPhotoMaxBytes) {
+          if (context.mounted) {
+            SnackbarHelper.showError(
+              context,
+              'Participant photo must be 10 MB or smaller',
+            );
+          }
+          return;
+        }
+
         controller.selectedImage.value = file;
         if (!kIsWeb) {
           controller.photoFile.value = File(file.path);
         }
-        // Clear existing photo URL when a new image is selected
-        // This ensures the newly selected local image is shown instead of the old URL
         controller.existingPhotoUrl.value = '';
       }
     } catch (e) {
@@ -1885,6 +2049,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     controller.bonafideBytes.value = null;
     controller.bonafideFileName.value = '';
     controller.existingCertificateUrl.value = '';
+    controller.errorMessage.value = '';
   }
 
   Widget _buildImagePreview(

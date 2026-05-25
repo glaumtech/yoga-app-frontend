@@ -11,6 +11,8 @@ class ParticipantModel {
   final String yogaMasterName;
   final String yogaMasterContact;
   final String? photoUrl;
+  /// Server storage path for bonafied certificate (e.g. certificates/abc.pdf).
+  final String? bonafiedCertificate;
   final String? participantCode; // Participant code like 'MEM0006'
   final String? registrationNo; // Registration number like 'CGA001'
   final DateTime createdAt;
@@ -44,6 +46,7 @@ class ParticipantModel {
     required this.yogaMasterName,
     required this.yogaMasterContact,
     this.photoUrl,
+    this.bonafiedCertificate,
     this.participantCode,
     this.registrationNo,
     DateTime? createdAt,
@@ -100,6 +103,10 @@ class ParticipantModel {
               ?.toString() ??
           '',
       photoUrl: (json['photoUrl'] ?? json['photo_url'] ?? json['photo'])
+          ?.toString(),
+      bonafiedCertificate: (json['bonafiedCertificate'] ??
+              json['bonafied_certificate'] ??
+              json['bonafideCertificate'])
           ?.toString(),
       participantCode: (json['participantCode'] ?? json['participant_code'])
           ?.toString(),
@@ -197,6 +204,8 @@ class ParticipantModel {
       'yogaMasterName': yogaMasterName,
       'yogaMasterContact': yogaMasterContact,
       if (photoUrl != null) 'photoUrl': photoUrl,
+      if (bonafiedCertificate != null)
+        'bonafiedCertificate': bonafiedCertificate,
       if (participantCode != null) 'participantCode': participantCode,
       if (registrationNo != null) 'registrationNo': registrationNo,
       if (includeCreatedAt) 'createdAt': createdAt.toIso8601String(),
@@ -225,6 +234,7 @@ class ParticipantModel {
     String? yogaMasterName,
     String? yogaMasterContact,
     String? photoUrl,
+    String? bonafiedCertificate,
     String? participantCode,
     String? registrationNo,
     DateTime? createdAt,
@@ -253,6 +263,7 @@ class ParticipantModel {
       yogaMasterName: yogaMasterName ?? this.yogaMasterName,
       yogaMasterContact: yogaMasterContact ?? this.yogaMasterContact,
       photoUrl: photoUrl ?? this.photoUrl,
+      bonafiedCertificate: bonafiedCertificate ?? this.bonafiedCertificate,
       participantCode: participantCode ?? this.participantCode,
       registrationNo: registrationNo ?? this.registrationNo,
       createdAt: createdAt ?? this.createdAt,
