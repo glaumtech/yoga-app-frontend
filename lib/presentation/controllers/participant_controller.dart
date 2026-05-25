@@ -22,6 +22,7 @@ import '../../data/models/competition_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/utils/state_defaults.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
 import 'competition_controller.dart';
@@ -115,6 +116,7 @@ class ParticipantController extends GetxController {
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
   static const int participantPhotoMaxBytes = 10 * 1024 * 1024;
   static const String participantPhotoUploadNotes =
+      'Use BROWSE or CAMERA\n'
       'Accepted: JPG or PNG\n'
       '• Max size: 10 MB';
 
@@ -1690,38 +1692,61 @@ class ParticipantController extends GetxController {
 
   // Form management methods
   Future<void> pickImage() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        selectedImage.value = image;
-        photoFile.value = File(image.path);
-      }
-    } catch (e) {
-      errorMessage.value = 'Failed to pick image: ${e.toString()}';
-    }
+    await pickParticipantPhoto(ImageSource.gallery);
   }
 
   Future<void> takePhoto() async {
+    await pickParticipantPhoto(ImageSource.camera);
+  }
+
+  /// Pick or capture participant photo (gallery or camera).
+  Future<void> pickParticipantPhoto(
+    ImageSource source, {
+    BuildContext? context,
+  }) async {
     try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
+      final XFile? file = await _imagePicker.pickImage(
+        source: source,
         imageQuality: 85,
       );
 
-      if (image != null) {
-        selectedImage.value = image;
-        photoFile.value = File(image.path);
+      if (file == null) return;
+
+      int fileSize;
+      if (kIsWeb) {
+        final bytes = await file.readAsBytes();
+        fileSize = bytes.length;
+      } else {
+        fileSize = await File(file.path).length();
       }
+
+      if (fileSize > participantPhotoMaxBytes) {
+        final message = 'Participant photo must be 10 MB or smaller';
+        if (context != null && context.mounted) {
+          SnackbarHelper.showError(context, message);
+        } else {
+          errorMessage.value = message;
+        }
+        return;
+      }
+
+      selectedImage.value = file;
+      if (!kIsWeb) {
+        photoFile.value = File(file.path);
+      } else {
+        photoFile.value = null;
+      }
+      existingPhotoUrl.value = '';
+      errorMessage.value = '';
     } catch (e) {
-      errorMessage.value = 'Failed to take photo: ${e.toString()}';
+      final message = source == ImageSource.camera
+          ? 'Failed to take photo: ${e.toString()}'
+          : 'Failed to pick image: ${e.toString()}';
+      if (context != null && context.mounted) {
+        SnackbarHelper.showError(context, message);
+      } else {
+        errorMessage.value = message;
+      }
     }
   }
 

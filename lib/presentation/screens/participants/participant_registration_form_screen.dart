@@ -2,10 +2,10 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../controllers/participant_controller.dart';
+import '../../widgets/photo_source_buttons.dart';
 import '../../controllers/competition_controller.dart';
 import '../../controllers/participant_registration_form_controller.dart'
     show
@@ -1028,18 +1028,11 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           padding: const EdgeInsets.only(top: 16),
           child: Center(
             child: Obx(
-              () => OutlinedButton.icon(
-                onPressed: !controller.isViewMode.value
-                    ? () => _pickPhoto(controller, context)
-                    : null,
-                icon: const Icon(Icons.upload_file, size: 16),
-                label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  minimumSize: const Size(0, 36),
+              () => PhotoSourceButtons(
+                enabled: !controller.isViewMode.value,
+                onPick: (source) => controller.pickParticipantPhoto(
+                  source,
+                  context: context,
                 ),
               ),
             ),
@@ -1981,52 +1974,6 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Future<void> _pickPhoto(
-    ParticipantController controller,
-    BuildContext context,
-  ) async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-
-      if (file != null) {
-        int fileSize;
-        if (kIsWeb) {
-          final bytes = await file.readAsBytes();
-          fileSize = bytes.length;
-        } else {
-          fileSize = await File(file.path).length();
-        }
-
-        if (fileSize > ParticipantController.participantPhotoMaxBytes) {
-          if (context.mounted) {
-            SnackbarHelper.showError(
-              context,
-              'Participant photo must be 10 MB or smaller',
-            );
-          }
-          return;
-        }
-
-        controller.selectedImage.value = file;
-        if (!kIsWeb) {
-          controller.photoFile.value = File(file.path);
-        }
-        controller.existingPhotoUrl.value = '';
-      }
-    } catch (e) {
-      if (context.mounted) {
-        SnackbarHelper.showError(
-          context,
-          'Failed to pick image: ${e.toString()}',
-        );
-      }
-    }
   }
 
   Future<void> _pickBonafideCertificate(

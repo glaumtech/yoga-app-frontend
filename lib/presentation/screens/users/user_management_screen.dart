@@ -11,6 +11,7 @@ import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/toggle_button_group.dart';
 import '../../widgets/buttons.dart';
+import '../../widgets/photo_source_buttons.dart';
 import '../../../data/models/user_management_model.dart';
 import 'users_list_screen.dart';
 import 'dart:io';
@@ -709,20 +710,8 @@ class UserManagementScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: () => controller.pickPhoto(),
-                        icon: const Icon(Icons.upload_file, size: 16),
-                        label: const Text(
-                          'BROWSE',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          minimumSize: const Size(0, 36),
-                        ),
+                      PhotoSourceButtons(
+                        onPick: controller.pickPhoto,
                       ),
                     ],
                   ),
@@ -1205,20 +1194,8 @@ class UserManagementScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: () => controller.pickPhoto(),
-                          icon: const Icon(Icons.upload_file, size: 16),
-                          label: const Text(
-                            'BROWSE',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            minimumSize: const Size(0, 36),
-                          ),
+                        PhotoSourceButtons(
+                          onPick: controller.pickPhoto,
                         ),
                       ],
                     ),
@@ -1593,21 +1570,9 @@ class UserManagementScreen extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            OutlinedButton(
-                              onPressed: () async {
-                                await controller.pickPhotoForVolunteer(row);
-                              },
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                minimumSize: const Size(0, 32),
-                              ),
-                              child: const Text(
-                                'BROWSE',
-                                style: TextStyle(fontSize: 12),
-                              ),
+                            PhotoSourceButtons(
+                              onPick: (source) =>
+                                  controller.pickPhotoForVolunteer(row, source),
                             ),
                             Obx(() {
                               if (row.photoUrl.value.isNotEmpty) {
@@ -1689,19 +1654,9 @@ class UserManagementScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    await controller.pickPhotoForVolunteer(row);
-                  },
-                  icon: const Icon(Icons.upload_file, size: 16),
-                  label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    minimumSize: const Size(0, 36),
-                  ),
+                PhotoSourceButtons(
+                  onPick: (source) =>
+                      controller.pickPhotoForVolunteer(row, source),
                 ),
                 Obx(() {
                   if (row.photoUrl.value.isNotEmpty) {
@@ -2330,19 +2285,9 @@ Widget _buildVolunteerCard(
           const SizedBox(height: 16),
           Row(
             children: [
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await controller.pickPhotoForVolunteer(row);
-                },
-                icon: const Icon(Icons.upload_file, size: 16),
-                label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  minimumSize: const Size(0, 36),
-                ),
+              PhotoSourceButtons(
+                onPick: (source) =>
+                    controller.pickPhotoForVolunteer(row, source),
               ),
               Obx(() {
                 if (row.photoUrl.value.isNotEmpty) {

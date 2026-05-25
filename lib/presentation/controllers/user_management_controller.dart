@@ -18,6 +18,7 @@ import '../../../core/utils/permission_store.dart';
 class UserManagementController extends GetxController {
   final UserManagementRepository _repository = UserManagementRepository();
   final CompetitionRepository _competitionRepository = CompetitionRepository();
+  final ImagePicker _imagePicker = ImagePicker();
 
   // State
   final RxList<UserManagementModel> users = <UserManagementModel>[].obs;
@@ -422,57 +423,65 @@ class UserManagementController extends GetxController {
     }
   }
 
-  // Pick photo
-  Future<void> pickPhoto() async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        if (kIsWeb) {
-          // For web, read bytes
-          final bytes = await image.readAsBytes();
-          photoBytes.value = bytes;
-          photoUrl.value =
-              'web_image'; // Placeholder to indicate image is selected
-        } else {
-          // For mobile/desktop, use File
-          photoFile.value = File(image.path);
-          photoUrl.value = image.path;
-        }
-      }
-    } catch (e) {
-      errorMessage.value = 'Error picking image: ${e.toString()}';
+  Future<void> _applyPickedUserPhoto(XFile image) async {
+    if (kIsWeb) {
+      final bytes = await image.readAsBytes();
+      photoBytes.value = bytes;
+      photoUrl.value = 'web_image';
+      photoFile.value = null;
+    } else {
+      photoFile.value = File(image.path);
+      photoBytes.value = null;
+      photoUrl.value = image.path;
     }
   }
 
-  // Pick photo for volunteer row
-  Future<void> pickPhotoForVolunteer(VolunteerRow row) async {
+  Future<void> _applyPickedVolunteerPhoto(VolunteerRow row, XFile image) async {
+    if (kIsWeb) {
+      final bytes = await image.readAsBytes();
+      row.photoBytes.value = bytes;
+      row.photoUrl.value = 'web_image';
+      row.photoFile.value = null;
+    } else {
+      row.photoFile.value = File(image.path);
+      row.photoBytes.value = null;
+      row.photoUrl.value = image.path;
+    }
+  }
+
+  // Pick or capture user photo (gallery or camera).
+  Future<void> pickPhoto(ImageSource source) async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
+      final XFile? image = await _imagePicker.pickImage(
+        source: source,
         imageQuality: 85,
       );
 
       if (image != null) {
-        if (kIsWeb) {
-          // For web, read bytes
-          final bytes = await image.readAsBytes();
-          row.photoBytes.value = bytes;
-          row.photoUrl.value =
-              'web_image'; // Placeholder to indicate image is selected
-        } else {
-          // For mobile/desktop, use File
-          row.photoFile.value = File(image.path);
-          row.photoUrl.value = image.path;
-        }
+        await _applyPickedUserPhoto(image);
       }
     } catch (e) {
-      errorMessage.value = 'Error picking image: ${e.toString()}';
+      errorMessage.value = source == ImageSource.camera
+          ? 'Error taking photo: ${e.toString()}'
+          : 'Error picking image: ${e.toString()}';
+    }
+  }
+
+  // Pick or capture volunteer row photo (gallery or camera).
+  Future<void> pickPhotoForVolunteer(VolunteerRow row, ImageSource source) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        await _applyPickedVolunteerPhoto(row, image);
+      }
+    } catch (e) {
+      errorMessage.value = source == ImageSource.camera
+          ? 'Error taking photo: ${e.toString()}'
+          : 'Error picking image: ${e.toString()}';
     }
   }
 
