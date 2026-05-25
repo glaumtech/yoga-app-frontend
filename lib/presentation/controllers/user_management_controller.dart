@@ -343,11 +343,26 @@ class UserManagementController extends GetxController {
     }
   }
 
+  bool isVolunteersSelectedType([String? type]) {
+    final value = (type ?? selectedType.value).toUpperCase();
+    return value == 'VOLUNTEERS' || value == 'VOLUNTEER';
+  }
+
+  bool _isVolunteerUser(UserManagementModel user) {
+    return isVolunteersSelectedType(user.type);
+  }
+
   // Load stages and categories for selected competition
   Future<void> loadStagesAndCategoriesForCompetition(
     String? competitionId,
   ) async {
     try {
+      if (isVolunteersSelectedType()) {
+        availableStages.clear();
+        availableCategories.clear();
+        return;
+      }
+
       if (competitionId == null || competitionId.isEmpty) {
         // Clear stages and categories if no competition selected
         availableStages.clear();
@@ -906,6 +921,45 @@ class UserManagementController extends GetxController {
     }
   }
 
+  void _populateVolunteerRowsForEdit(UserManagementModel user) {
+    _disposeVolunteerRows();
+
+    final legacyGroup =
+        user.name.trim().startsWith('Volunteers -') &&
+        user.volunteers != null &&
+        user.volunteers!.isNotEmpty;
+
+    if (legacyGroup) {
+      for (final volunteer in user.volunteers!) {
+        final row = VolunteerRow();
+        row.nameController.text =
+            (volunteer['volunteerName'] ?? volunteer['name'])?.toString().trim() ??
+            '';
+        row.cellController.text = volunteer['cell']?.toString().trim() ?? '';
+        volunteerRows.add(row);
+      }
+    } else {
+      final row = VolunteerRow();
+      String volunteerName = user.name.trim();
+      String cell = user.cell?.trim() ?? '';
+      if (user.volunteers != null && user.volunteers!.isNotEmpty) {
+        final volunteer = user.volunteers!.first;
+        volunteerName =
+            (volunteer['volunteerName'] ?? volunteer['name'])
+                ?.toString()
+                .trim() ??
+            volunteerName;
+        cell = volunteer['cell']?.toString().trim() ?? cell;
+      }
+      row.nameController.text = volunteerName;
+      row.cellController.text = cell;
+      row.savedPassword = user.confirmPassword;
+      volunteerRows.add(row);
+    }
+
+    volunteerRows.refresh();
+  }
+
   // Initialize form for edit
   void initializeFormForEdit(UserManagementModel user) {
     _refreshFormKey();
@@ -924,31 +978,123 @@ class UserManagementController extends GetxController {
       cellController.text = user.cell!;
     }
 
+    if (_isVolunteerUser(user)) {
+      selectedType.value = 'VOLUNTEERS';
+      _populateVolunteerRowsForEdit(user);
+      photoFile.value = null;
+      photoBytes.value = null;
+      photoUrl.value = '';
+      return;
+    }
+
     // Set photo URL - construct full URL if we have user ID
     if (user.id != null &&
         user.displayPhotoUrl != null &&
         user.displayPhotoUrl!.isNotEmpty) {
       final photoPath = user.displayPhotoUrl!;
-      // If it's already a full URL, use it; otherwise construct it
       if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
         photoUrl.value = photoPath;
       } else {
-        // Construct full URL using the user photo endpoint
-        // Import BaseUrl and EndPoints at the top of the file
         photoUrl.value = '${BaseUrl.baseUrl}${EndPoints.userPhoto(user.id!)}';
       }
     } else {
       photoUrl.value = '';
     }
 
-    // Clear local photo files when loading existing user
     photoFile.value = null;
     photoBytes.value = null;
 
-    // Load stages and categories for the selected competition
-    // This is important for edit mode so that stages and categories are available
     if (selectedEventId.value.isNotEmpty) {
       loadStagesAndCategoriesForCompetition(selectedEventId.value);
+    }
+  }
+
+  /// Updates the volunteer being edited (single-user volunteer model).
+  Future<bool> updateVolunteerUser() async {
+    final userId = userToEdit.value?.id;
+    if (userId == null || userId.isEmpty) {
+      errorMessage.value = 'Invalid volunteer user';
+      return false;
+    }
+
+    if (volunteerRows.isEmpty) {
+      errorMessage.value = 'No volunteer data to update';
+      return false;
+    }
+
+    final row = volunteerRows.first;
+    final volunteerName = row.nameController.text.trim();
+    if (volunteerName.isEmpty) {
+      errorMessage.value = 'Please enter volunteer name';
+      return false;
+    }
+
+    final form = formKey.currentState;
+    if (form != null && !form.validate()) {
+      errorMessage.value = '';
+      return false;
+    }
+
+    if (selectedEventId.value.isEmpty) {
+      errorMessage.value = 'Please select a competition';
+      return false;
+    }
+
+    final competitionId = int.tryParse(selectedEventId.value);
+    if (competitionId == null) {
+      errorMessage.value = 'Invalid competition ID';
+      return false;
+    }
+
+    final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
+    final volunteerPayload = <String, dynamic>{
+      'volunteerName': volunteerName,
+      'cell': row.cellController.text.trim(),
+    };
+    if (row.savedPassword != null && row.savedPassword!.length >= 6) {
+      volunteerPayload['password'] = row.savedPassword;
+    }
+
+    final user = UserManagementModel(
+      id: userId,
+      name: volunteerName,
+      userName: volunteerName,
+      type: 'VOLUNTEERS',
+      userTypeId: userTypeId,
+      competitionId: competitionId,
+      competitionName: selectedEventName.value.isNotEmpty
+          ? selectedEventName.value
+          : null,
+      volunteers: [volunteerPayload],
+    );
+
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      final response = await _repository.updateUser(
+        id: userId,
+        user: user,
+        photoFile: row.photoFile.value,
+        photoBytes: row.photoBytes.value,
+        photoFileName: kIsWeb ? 'volunteer_photo.jpg' : null,
+      );
+
+      if (response.success) {
+        await loadUsers(eventId: competitionId);
+        errorMessage.value = '';
+        resetForm();
+        toggleViewMode(true);
+        return true;
+      }
+
+      errorMessage.value = response.message ?? 'Failed to update volunteer';
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Error updating volunteer: ${e.toString()}';
+      return false;
+    } finally {
+      isLoading.value = false;
     }
   }
 

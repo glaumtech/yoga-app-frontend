@@ -265,10 +265,15 @@ class UserManagementScreen extends StatelessWidget {
                                     controller.isEditMode ? 'UPDATE' : 'SUBMIT',
                                 icon: Icons.save,
                                 onPressed: () async {
-                                  final success =
+                                  final isVolunteers =
                                       controller.selectedType.value ==
-                                          'VOLUNTEERS'
-                                      ? await controller.createVolunteers()
+                                      'VOLUNTEERS';
+                                  final success = isVolunteers
+                                      ? (controller.isEditMode
+                                            ? await controller
+                                                  .updateVolunteerUser()
+                                            : await controller
+                                                  .createVolunteers())
                                       : await controller.createUser();
 
                                   if (success && context.mounted) {
@@ -276,11 +281,9 @@ class UserManagementScreen extends StatelessWidget {
                                       context,
                                       controller.isEditMode
                                           ? 'User updated successfully'
-                                          : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
+                                          : 'User${isVolunteers ? 's' : ''} created successfully',
                                     );
-                                    if (controller.isEditMode ||
-                                        controller.selectedType.value ==
-                                            'VOLUNTEERS') {
+                                    if (controller.isEditMode || isVolunteers) {
                                       controller.resetForm();
                                       controller.toggleViewMode(true);
                                     }
@@ -308,10 +311,13 @@ class UserManagementScreen extends StatelessWidget {
                                   controller.isEditMode ? 'UPDATE' : 'SUBMIT',
                               icon: Icons.save,
                               onPressed: () async {
-                                final success =
+                                final isVolunteers =
                                     controller.selectedType.value ==
-                                        'VOLUNTEERS'
-                                    ? await controller.createVolunteers()
+                                    'VOLUNTEERS';
+                                final success = isVolunteers
+                                    ? (controller.isEditMode
+                                          ? await controller.updateVolunteerUser()
+                                          : await controller.createVolunteers())
                                     : await controller.createUser();
 
                                 if (success && context.mounted) {
@@ -319,11 +325,9 @@ class UserManagementScreen extends StatelessWidget {
                                     context,
                                     controller.isEditMode
                                         ? 'User updated successfully'
-                                        : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
+                                        : 'User${isVolunteers ? 's' : ''} created successfully',
                                   );
-                                  if (controller.isEditMode ||
-                                      controller.selectedType.value ==
-                                          'VOLUNTEERS') {
+                                  if (controller.isEditMode || isVolunteers) {
                                     controller.resetForm();
                                     controller.toggleViewMode(true);
                                   }
@@ -412,8 +416,11 @@ class UserManagementScreen extends StatelessWidget {
                   controller.selectedEventName.value =
                       match.first.competitionName;
                 }
-                controller.loadStagesAndCategoriesForCompetition(value);
-                if (controller.selectedType.value == 'VOLUNTEERS') {
+                if (!controller.isVolunteersSelectedType()) {
+                  controller.loadStagesAndCategoriesForCompetition(value);
+                }
+                if (controller.selectedType.value == 'VOLUNTEERS' &&
+                    !controller.isEditMode) {
                   await controller.prepareVolunteerEntry();
                 }
               } else {
@@ -1742,7 +1749,8 @@ class UserManagementScreen extends StatelessWidget {
   ) {
     if (isMobile) {
       return Obx(() {
-        final readOnly = row.isRegistered.value;
+        final readOnly =
+            row.isRegistered.value && !controller.isEditMode;
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           color: readOnly ? AppTheme.primaryColor.withOpacity(0.06) : null,
@@ -1818,7 +1826,8 @@ class UserManagementScreen extends StatelessWidget {
     }
 
     return Obx(() {
-      final readOnly = row.isRegistered.value;
+      final readOnly =
+          row.isRegistered.value && !controller.isEditMode;
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
