@@ -14,6 +14,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/championship_style.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/utils/permission_store.dart';
+import '../../../core/utils/snackbar_helper.dart';
 
 class UserManagementController extends GetxController {
   final UserManagementRepository _repository = UserManagementRepository();
@@ -90,6 +91,9 @@ class UserManagementController extends GetxController {
   // Volunteer table state
   final RxList<VolunteerRow> volunteerRows = <VolunteerRow>[].obs;
 
+  /// Parent VOLUNTEER user created on first "Add More" save in this session.
+  final Set<String> _existingVolunteerNamesLower = {};
+
   // Available options - now loaded from API
   // Get user types as display strings
   List<String> get userTypes {
@@ -125,8 +129,6 @@ class UserManagementController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // Initialize with 4 volunteer rows
-    volunteerRows.value = List.generate(4, (index) => VolunteerRow());
     // Load current user from storage
     loadCurrentUser();
     // Load user types from API
@@ -485,16 +487,232 @@ class UserManagementController extends GetxController {
     }
   }
 
-  // Add volunteer row
   void addVolunteerRow() {
     volunteerRows.add(VolunteerRow());
+    volunteerRows.refresh();
   }
 
-  // Remove volunteer row
   void removeVolunteerRow(int index) {
-    if (volunteerRows.length > 1) {
-      volunteerRows.removeAt(index);
+    if (index < 0 || index >= volunteerRows.length) return;
+    if (volunteerRows[index].isRegistered.value) {
+      errorMessage.value = 'Saved volunteers cannot be removed here';
+      return;
     }
+    volunteerRows[index].dispose();
+    volunteerRows.removeAt(index);
+    if (volunteerRows.isEmpty) {
+      addVolunteerRow();
+    }
+  }
+
+  void _clearVolunteerGroupSession() {
+    _existingVolunteerNamesLower.clear();
+  }
+
+  /// Loads volunteer names already registered for this competition.
+  Future<void> _loadExistingVolunteerNamesForCompetition(int competitionId) async {
+    _existingVolunteerNamesLower.clear();
+    final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
+    final response = await _repository.getAllUsers(
+      competitionId: competitionId,
+      userTypeId: userTypeId,
+      page: 0,
+      limit: 500,
+    );
+    if (!response.success || response.data == null) return;
+
+    for (final user in response.data!.users) {
+      if (!_isVolunteerGroupUser(user)) continue;
+      final name = user.name.trim();
+      if (name.isEmpty) continue;
+      if (name.startsWith('Volunteers -')) {
+        for (final volunteer in user.volunteers ?? const []) {
+          final volunteerName = (volunteer['volunteerName'] ?? volunteer['name'])
+              ?.toString()
+              .trim();
+          if (volunteerName != null && volunteerName.isNotEmpty) {
+            _existingVolunteerNamesLower.add(volunteerName.toLowerCase());
+          }
+        }
+      } else {
+        _existingVolunteerNamesLower.add(name.toLowerCase());
+      }
+    }
+  }
+
+  /// Clears volunteer rows and group session (navigation / type change).
+  void resetVolunteerEntrySession() {
+    _disposeVolunteerRows();
+    _clearVolunteerGroupSession();
+  }
+
+  /// Same as participant bulk: one empty row ready for entry.
+  Future<void> prepareVolunteerEntry() async {
+    resetVolunteerEntrySession();
+    addVolunteerRow();
+    if (selectedEventId.value.trim().isNotEmpty &&
+        errorMessage.value == 'Please select a competition') {
+      errorMessage.value = '';
+    }
+    final competitionId = int.tryParse(selectedEventId.value.trim());
+    if (competitionId != null) {
+      await _loadExistingVolunteerNamesForCompetition(competitionId);
+    }
+  }
+
+  bool _isVolunteerGroupUser(UserManagementModel user) {
+    final typeId = getUserTypeId('VOLUNTEERS') ?? 4;
+    if (user.userTypeId == typeId) return true;
+    final type = user.type.toUpperCase();
+    return type.contains('VOLUNTEER');
+  }
+
+  /// Saves the active row via API, marks it read-only, and appends a new row.
+  Future<bool> registerCurrentVolunteer({BuildContext? context}) async {
+    final eventId = selectedEventId.value.trim();
+    if (eventId.isEmpty) {
+      errorMessage.value = 'Please select a competition';
+      return false;
+    }
+    if (errorMessage.value == 'Please select a competition') {
+      errorMessage.value = '';
+    }
+
+    if (volunteerRows.isEmpty) {
+      addVolunteerRow();
+    }
+
+    VolunteerRow? row;
+    for (var i = volunteerRows.length - 1; i >= 0; i--) {
+      if (!volunteerRows[i].isRegistered.value) {
+        row = volunteerRows[i];
+        break;
+      }
+    }
+    if (row == null) {
+      addVolunteerRow();
+      row = volunteerRows.last;
+    }
+
+    if (row.isRegistered.value) {
+      addVolunteerRow();
+      row = volunteerRows.last;
+    }
+
+    final volunteerName = row.nameController.text.trim();
+    if (volunteerName.isEmpty) {
+      errorMessage.value = 'Please enter volunteer name';
+      return false;
+    }
+
+    if (_existingVolunteerNamesLower.contains(volunteerName.toLowerCase())) {
+      errorMessage.value = '';
+      addVolunteerRow();
+      volunteerRows.refresh();
+      if (context != null && context.mounted) {
+        SnackbarHelper.showInfo(
+          context,
+          'Volunteer "$volunteerName" already exists. '
+          'Enter a different name in the new row below.',
+        );
+      }
+      return false;
+    }
+
+    final form = formKey.currentState;
+    if (form != null && !form.validate()) {
+      errorMessage.value = '';
+      return false;
+    }
+
+    final competitionId = int.tryParse(selectedEventId.value);
+    if (competitionId == null) {
+      errorMessage.value = 'Invalid competition ID';
+      return false;
+    }
+
+    final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
+    final volunteerPassword = generateRandomPassword();
+    final newVolunteer = <String, dynamic>{
+      'volunteerName': volunteerName,
+      'password': volunteerPassword,
+      'cell': row.cellController.text.trim(),
+    };
+
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      await _loadExistingVolunteerNamesForCompetition(competitionId);
+
+      // Login userName matches display name (must be unique across the system).
+      final loginUserName = volunteerName;
+
+      // One user account per volunteer (unique users.id); one linked volunteers row.
+      final user = UserManagementModel(
+        name: volunteerName,
+        userName: loginUserName,
+        password: volunteerPassword,
+        type: 'VOLUNTEERS',
+        userTypeId: userTypeId,
+        competitionId: competitionId,
+        volunteers: [newVolunteer],
+      );
+
+      final response = await _repository.createUser(user: user);
+      if (response.success) {
+        row.isRegistered.value = true;
+        row.savedPassword = volunteerPassword;
+        row.savedUserId = response.data?.id;
+        _existingVolunteerNamesLower.add(volunteerName.toLowerCase());
+        addVolunteerRow();
+        volunteerRows.refresh();
+        await loadUsers(eventId: competitionId);
+        // Do not show list-load errors on the volunteer create form after a successful save.
+        errorMessage.value = '';
+        if (context != null && context.mounted) {
+          SnackbarHelper.showSuccess(context, 'Volunteer saved successfully');
+        } else {
+          Get.snackbar(
+            'Success',
+            'Volunteer saved successfully',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+        }
+        return true;
+      }
+
+      final failMessage = response.message ?? 'Failed to save volunteer';
+      if (failMessage.toLowerCase().contains('already exists')) {
+        errorMessage.value = '';
+        addVolunteerRow();
+        volunteerRows.refresh();
+        if (context != null && context.mounted) {
+          SnackbarHelper.showInfo(
+            context,
+            'Volunteer "$volunteerName" already exists for this competition. '
+            'Use a different name in the new row below.',
+          );
+        }
+        return false;
+      }
+
+      errorMessage.value = failMessage;
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Error saving volunteer: ${e.toString()}';
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  void _disposeVolunteerRows() {
+    for (final row in volunteerRows) {
+      row.dispose();
+    }
+    volunteerRows.clear();
   }
 
   // Generate random password
@@ -640,26 +858,28 @@ class UserManagementController extends GetxController {
         return false;
       }
 
-      // Prepare volunteers array in new format
-      final volunteersList = validVolunteers.asMap().entries.map((entry) {
-        final index = entry.key;
-        final row = entry.value;
+      final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
+
+      // Volunteer numbers are assigned on the server when omitted.
+      final volunteersList = validVolunteers.map((row) {
         return <String, dynamic>{
-          'volunteerNo': generateVolunteerNo(index),
           'volunteerName': row.nameController.text.trim(),
           'password': generateRandomPassword(),
-          'cell': row.cellController.text.trim().isNotEmpty
-              ? row.cellController.text.trim()
-              : '',
+          'cell': row.cellController.text.trim(),
         };
       }).toList();
 
-      // Create a user with VOLUNTEERS type and volunteers array
+      final suffix = DateTime.now().millisecondsSinceEpoch;
+      final competitionLabel = selectedEventName.value.trim().isNotEmpty
+          ? selectedEventName.value.trim()
+          : 'Competition $competitionId';
+
       final user = UserManagementModel(
-        name: 'Volunteers Group', // Placeholder name
+        name: 'Volunteers - $competitionLabel ($suffix)',
+        userName: 'volunteers_${competitionId}_$suffix',
         password: generateRandomPassword(),
         type: 'VOLUNTEERS',
-        userTypeId: 4,
+        userTypeId: userTypeId,
         competitionId: competitionId,
       );
 
@@ -670,7 +890,9 @@ class UserManagementController extends GetxController {
 
       if (response.success) {
         await loadUsers(eventId: competitionId);
+        resetVolunteerEntrySession();
         resetForm();
+        toggleViewMode(true);
         return true;
       } else {
         errorMessage.value = response.message ?? 'Failed to create volunteers';
@@ -878,7 +1100,8 @@ class UserManagementController extends GetxController {
     photoFile.value = null;
     photoBytes.value = null;
     photoUrl.value = '';
-    volunteerRows.value = List.generate(4, (index) => VolunteerRow());
+    _disposeVolunteerRows();
+    _clearVolunteerGroupSession();
     errorMessage.value = '';
 
     // Clear all text controllers
@@ -1009,6 +1232,9 @@ class VolunteerRow {
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<Uint8List?> photoBytes = Rx<Uint8List?>(null);
   final RxString photoUrl = ''.obs;
+  final RxBool isRegistered = false.obs;
+  String? savedPassword;
+  String? savedUserId;
 
   void dispose() {
     nameController.dispose();

@@ -14,6 +14,15 @@ import '../../core/utils/storage_service.dart';
 class UserManagementRepository {
   final APIService _apiService = APIService();
 
+  /// POST /user returns `{ data: { user: { ... } } }` — unwrap before [UserManagementModel.fromJson].
+  static UserManagementModel _userFromResponseData(Map<String, dynamic> data) {
+    final raw = data['user'];
+    if (raw is Map) {
+      return UserManagementModel.fromJson(Map<String, dynamic>.from(raw));
+    }
+    return UserManagementModel.fromJson(data);
+  }
+
   Future<ApiResponse<PagedUsersResponse>> getAllUsers({
     int? competitionId,
     int? userTypeId,
@@ -135,7 +144,7 @@ class UserManagementRepository {
       );
 
       if (response.success && response.data != null) {
-        final createdUser = UserManagementModel.fromJson(response.data!);
+        final createdUser = _userFromResponseData(response.data!);
         return ApiResponse(success: true, data: createdUser);
       }
 
@@ -270,7 +279,7 @@ class UserManagementRepository {
       );
 
       if (response.success && response.data != null) {
-        final updatedUser = UserManagementModel.fromJson(response.data!);
+        final updatedUser = _userFromResponseData(response.data!);
         return ApiResponse(success: true, data: updatedUser);
       }
 

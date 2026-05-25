@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../controllers/user_management_controller.dart';
@@ -14,6 +16,7 @@ import '../../widgets/buttons.dart';
 import '../../widgets/photo_source_buttons.dart';
 import '../../../data/models/user_management_model.dart';
 import 'users_list_screen.dart';
+import 'dart:async' show unawaited;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -86,8 +89,10 @@ class UserManagementScreen extends StatelessWidget {
                     selectedIndex: userController.isListView.value ? 1 : 0,
                     onTap: (index) {
                       if (index == 1) {
-                        // Switching to list view - reset form if in edit mode
-                        if (userController.isEditMode) {
+                        userController.resetVolunteerEntrySession();
+                        if (userController.isEditMode ||
+                            userController.selectedType.value ==
+                                'VOLUNTEERS') {
                           userController.resetForm();
                         }
                         userController.toggleViewMode(true);
@@ -237,32 +242,14 @@ class UserManagementScreen extends StatelessWidget {
 
                 SizedBox(height: isMobile ? 24 : 32),
 
-                // Error Message
-                if (controller.errorMessage.value.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline, color: Colors.red),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            controller.errorMessage.value,
-                            style: TextStyle(color: Colors.red[700]),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                _buildFormErrorBanner(context, controller, isMobile),
 
-                // Submit and Cancel Buttons
+                // Submit and Cancel Buttons (volunteers save via Add More, like bulk)
                 Obx(() {
+                  if (controller.selectedType.value == 'VOLUNTEERS' &&
+                      !controller.isEditMode) {
+                    return const SizedBox.shrink();
+                  }
                   if (controller.isLoading.value) {
                     return const Center(
                       child: CustomLoader(message: 'Processing...'),
@@ -274,12 +261,8 @@ class UserManagementScreen extends StatelessWidget {
                             SizedBox(
                               width: double.infinity,
                               child: PrimaryButton(
-                                text: controller.isEditMode
-                                    ? 'UPDATE'
-                                    : (controller.selectedType.value ==
-                                              'VOLUNTEERS'
-                                          ? 'SAVE CHANGES'
-                                          : 'SUBMIT'),
+                                text:
+                                    controller.isEditMode ? 'UPDATE' : 'SUBMIT',
                                 icon: Icons.save,
                                 onPressed: () async {
                                   final success =
@@ -295,8 +278,9 @@ class UserManagementScreen extends StatelessWidget {
                                           ? 'User updated successfully'
                                           : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
                                     );
-                                    // Reset form and switch to list view after successful update
-                                    if (controller.isEditMode) {
+                                    if (controller.isEditMode ||
+                                        controller.selectedType.value ==
+                                            'VOLUNTEERS') {
                                       controller.resetForm();
                                       controller.toggleViewMode(true);
                                     }
@@ -320,12 +304,8 @@ class UserManagementScreen extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             PrimaryButton(
-                              text: controller.isEditMode
-                                  ? 'UPDATE'
-                                  : (controller.selectedType.value ==
-                                            'VOLUNTEERS'
-                                        ? 'SAVE CHANGES'
-                                        : 'SUBMIT'),
+                              text:
+                                  controller.isEditMode ? 'UPDATE' : 'SUBMIT',
                               icon: Icons.save,
                               onPressed: () async {
                                 final success =
@@ -341,8 +321,9 @@ class UserManagementScreen extends StatelessWidget {
                                         ? 'User updated successfully'
                                         : 'User${controller.selectedType.value == 'VOLUNTEERS' ? 's' : ''} created successfully',
                                   );
-                                  // Reset form and switch to list view after successful update
-                                  if (controller.isEditMode) {
+                                  if (controller.isEditMode ||
+                                      controller.selectedType.value ==
+                                          'VOLUNTEERS') {
                                     controller.resetForm();
                                     controller.toggleViewMode(true);
                                   }
@@ -420,15 +401,28 @@ class UserManagementScreen extends StatelessWidget {
                   );
                 })
                 .toList(),
-            onChanged: (value) {
+            onChanged: (value) async {
               if (value != null) {
                 controller.selectedEventId.value = value;
-                // Load stages and categories for selected competition
+                controller.errorMessage.value = '';
+                final match = competitionController.competitions
+                    .where((c) => c.id == value)
+                    .toList();
+                if (match.isNotEmpty) {
+                  controller.selectedEventName.value =
+                      match.first.competitionName;
+                }
                 controller.loadStagesAndCategoriesForCompetition(value);
+                if (controller.selectedType.value == 'VOLUNTEERS') {
+                  await controller.prepareVolunteerEntry();
+                }
               } else {
-                // Clear stages and categories if no competition selected
+                controller.selectedEventName.value = '';
                 controller.availableStages.clear();
                 controller.availableCategories.clear();
+                if (controller.selectedType.value == 'VOLUNTEERS') {
+                  controller.resetVolunteerEntrySession();
+                }
               }
             },
             validator: (_) {
@@ -536,18 +530,22 @@ class UserManagementScreen extends StatelessWidget {
     required String type,
     required double fontSize,
   }) {
-    void onTypeSelected(String value) {
+    Future<void> onTypeSelected(String value) async {
+      final previousType = controller.selectedType.value;
       controller.selectedType.value = value;
+      controller.errorMessage.value = '';
       if (value == 'VOLUNTEERS') {
-        controller.volunteerRows.value = List.generate(
-          4,
-          (index) => VolunteerRow(),
-        );
+        await controller.prepareVolunteerEntry();
+        if (controller.selectedEventId.value.trim().isNotEmpty) {
+          controller.errorMessage.value = '';
+        }
+      } else if (previousType == 'VOLUNTEERS') {
+        controller.resetVolunteerEntrySession();
       }
     }
 
     return InkWell(
-      onTap: () => onTypeSelected(type),
+      onTap: () => unawaited(onTypeSelected(type)),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
         child: Row(
@@ -558,7 +556,7 @@ class UserManagementScreen extends StatelessWidget {
               groupValue: controller.selectedType.value,
               onChanged: (value) {
                 if (value != null) {
-                  onTypeSelected(value);
+                  unawaited(onTypeSelected(value));
                 }
               },
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1418,6 +1416,222 @@ class UserManagementScreen extends StatelessWidget {
     );
   }
 
+  static const double _kVolunteerTableFieldHeight = 48;
+
+  /// Matches [BulkRegistrationScreen._bulkTableFieldDecoration].
+  static InputDecoration _volunteerBulkFieldDecoration({
+    Widget? suffixIcon,
+    String? hintText,
+  }) {
+    const border = OutlineInputBorder();
+    return InputDecoration(
+      border: border,
+      enabledBorder: border,
+      focusedBorder: border,
+      disabledBorder: border,
+      errorBorder: border,
+      focusedErrorBorder: border,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      isDense: false,
+      suffixIcon: suffixIcon,
+      hintText: hintText,
+    );
+  }
+
+  /// Bordered read-only password cell (same look as bulk date / select fields).
+  Widget _buildVolunteerPasswordField({required bool readOnly}) {
+    return SizedBox(
+      height: _kVolunteerTableFieldHeight,
+      child: InputDecorator(
+        decoration: _volunteerBulkFieldDecoration(),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            readOnly ? 'Saved' : 'XXXXX',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[readOnly ? 700 : 400],
+              fontWeight: readOnly ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormErrorBanner(
+    BuildContext context,
+    UserManagementController controller,
+    bool isMobile,
+  ) {
+    return Obx(() {
+      final message = controller.errorMessage.value;
+      final competitionSelected =
+          controller.selectedEventId.value.trim().isNotEmpty;
+      if (message.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      if (message == 'Please select a competition' && competitionSelected) {
+        return const SizedBox.shrink();
+      }
+
+      return Align(
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: isMobile ? double.infinity : 420,
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.withOpacity(0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(color: Colors.red[700], fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildVolunteerMobileField(String label, Widget field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 6),
+        field,
+      ],
+    );
+  }
+
+  static String? _validateVolunteerCell(String? value) {
+    final cell = value?.trim() ?? '';
+    if (cell.isEmpty) return null;
+    if (cell.length != 10) {
+      return 'Cell number must be exactly 10 digits';
+    }
+    if (RegExp(r'^(\d)\1{9}$').hasMatch(cell)) {
+      return 'Invalid cell number';
+    }
+    if (cell == '9876543210' || cell == '0123456789') {
+      return 'Invalid cell number';
+    }
+    return null;
+  }
+
+  Widget _buildVolunteerCellField({
+    required TextEditingController controller,
+    required bool readOnly,
+    bool showLabel = false,
+  }) {
+    return TextFormField(
+      controller: controller,
+      readOnly: readOnly,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(10),
+      ],
+      maxLength: 10,
+      style: const TextStyle(fontSize: 12),
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      validator: readOnly ? null : _validateVolunteerCell,
+      decoration: _volunteerBulkFieldDecoration().copyWith(
+        counterText: '',
+        hintText: showLabel ? '10-digit mobile' : null,
+        errorStyle: const TextStyle(fontSize: 11, height: 1.1),
+      ),
+    );
+  }
+
+  Widget _buildVolunteerPhotoColumn({
+    required UserManagementController controller,
+    required VolunteerRow row,
+    required bool readOnly,
+    double previewSize = 48,
+  }) {
+    return Obx(() {
+      final hasPhoto = row.photoUrl.value.isNotEmpty;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (hasPhoto) ...[
+            _buildImagePreview(
+              row.photoFile.value,
+              row.photoBytes.value,
+              previewSize,
+              previewSize,
+              borderRadius: 6,
+            ),
+            const SizedBox(height: 6),
+          ],
+          if (!readOnly)
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildVolunteerPhotoButton(
+                  icon: Icons.upload_file,
+                  label: 'BROWSE',
+                  onPressed: () =>
+                      controller.pickPhotoForVolunteer(row, ImageSource.gallery),
+                ),
+                _buildVolunteerPhotoButton(
+                  icon: Icons.camera_alt_outlined,
+                  label: 'CAMERA',
+                  onPressed: () =>
+                      controller.pickPhotoForVolunteer(row, ImageSource.camera),
+                ),
+              ],
+            ),
+        ],
+      );
+    });
+  }
+
+  Widget _buildVolunteerPhotoButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 14),
+      label: Text(label, style: const TextStyle(fontSize: 10)),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        minimumSize: const Size(0, 30),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
   Widget _buildVolunteersTable(
     BuildContext context,
     UserManagementController controller,
@@ -1433,253 +1647,257 @@ class UserManagementScreen extends StatelessWidget {
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-        if (isMobile)
-          ...controller.volunteerRows.asMap().entries.map((entry) {
-            return _buildVolunteerCard(
-              context,
-              controller,
-              entry.key,
-              entry.value,
-            );
-          }).toList()
-        else
-          _buildVolunteersTableDesktop(context, controller),
-        const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () => controller.addVolunteerRow(),
-            icon: const Icon(Icons.add),
-            label: const Text('Add More'),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.primaryColor),
+        if (!isMobile)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withOpacity(0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: const Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'VOLUNTEER NAME',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'PASSWORD',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'CELL',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'PHOTO',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Obx(
+          () => Column(
+            children: controller.volunteerRows.asMap().entries.map((entry) {
+              return _buildVolunteerTableRow(
+                context,
+                controller,
+                entry.key,
+                entry.value,
+                isMobile,
+              );
+            }).toList(),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Align(
+            alignment: Alignment.center,
+            child: Obx(
+              () => controller.isLoading.value
+                  ? const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: CustomLoader(size: 24),
+                    )
+                  : TextButton.icon(
+                      onPressed: controller.isEditMode
+                          ? null
+                          : () async {
+                              controller.errorMessage.value = '';
+                              await controller.registerCurrentVolunteer(
+                                context: context,
+                              );
+                            },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add More'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppTheme.primaryColor,
+                      ),
+                    ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildVolunteersTableDesktop(
-    BuildContext context,
-    UserManagementController controller,
-  ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SizedBox(
-          width: constraints.maxWidth, // 100% width
-          child: SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: DataTable(
-              headingRowColor: MaterialStateProperty.all(
-                AppTheme.primaryColor.withOpacity(0.1),
-              ),
-              columnSpacing: 30, // Space between columns
-              columns: const [
-                DataColumn(
-                  label: Text(
-                    'VOLUNTEER NO',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'VOLUNTEER NAME',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'PASSWORD',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'CELL',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'PHOTO',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-              rows: controller.volunteerRows.asMap().entries.map((entry) {
-                final index = entry.key;
-                final row = entry.value;
-                return DataRow(
-                  cells: [
-                    DataCell(
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(controller.generateVolunteerNo(index)),
-                      ),
-                    ),
-                    DataCell(
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: SizedBox(
-                          width: 250, // Increased input width
-                          child: TextFormField(
-                            controller: row.nameController,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 8,
-                              ),
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(
-                          'XXXXX',
-                          style: TextStyle(color: Colors.grey[400]),
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: SizedBox(
-                          width: 180, // Increased input width
-                          child: TextFormField(
-                            controller: row.cellController,
-                            keyboardType: TextInputType.phone,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 8,
-                              ),
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            PhotoSourceButtons(
-                              onPick: (source) =>
-                                  controller.pickPhotoForVolunteer(row, source),
-                            ),
-                            Obx(() {
-                              if (row.photoUrl.value.isNotEmpty) {
-                                return Row(
-                                  children: [
-                                    const SizedBox(width: 8),
-                                    _buildImagePreview(
-                                      row.photoFile.value,
-                                      row.photoBytes.value,
-                                      40,
-                                      40,
-                                      borderRadius: 4,
-                                    ),
-                                  ],
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            }),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildVolunteerCard(
+  Widget _buildVolunteerTableRow(
     BuildContext context,
     UserManagementController controller,
     int index,
     VolunteerRow row,
+    bool isMobile,
   ) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    if (isMobile) {
+      return Obx(() {
+        final readOnly = row.isRegistered.value;
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          color: readOnly ? AppTheme.primaryColor.withOpacity(0.06) : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (readOnly)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Saved',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                _buildVolunteerMobileField(
+                  'VOLUNTEER NAME',
+                  SizedBox(
+                    height: _kVolunteerTableFieldHeight,
+                    child: TextFormField(
+                      controller: row.nameController,
+                      readOnly: readOnly,
+                      style: const TextStyle(fontSize: 12),
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      validator: readOnly
+                          ? null
+                          : (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter volunteer name';
+                              }
+                              return null;
+                            },
+                      decoration: _volunteerBulkFieldDecoration(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildVolunteerMobileField(
+                  'PASSWORD',
+                  _buildVolunteerPasswordField(readOnly: readOnly),
+                ),
+                const SizedBox(height: 12),
+                _buildVolunteerMobileField(
+                  'CELL',
+                  SizedBox(
+                    height: _kVolunteerTableFieldHeight,
+                    child: _buildVolunteerCellField(
+                      controller: row.cellController,
+                      readOnly: readOnly,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _buildVolunteerPhotoColumn(
+                    controller: controller,
+                    row: row,
+                    readOnly: readOnly,
+                    previewSize: 56,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      });
+    }
+
+    return Obx(() {
+      final readOnly = row.isRegistered.value;
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: readOnly ? AppTheme.primaryColor.withOpacity(0.06) : null,
+          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  controller.generateVolunteerNo(index),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (controller.volunteerRows.length > 1)
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () => controller.removeVolunteerRow(index),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: row.nameController,
-              decoration: const InputDecoration(
-                labelText: 'VOLUNTEER NAME',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: row.cellController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'CELL',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                PhotoSourceButtons(
-                  onPick: (source) =>
-                      controller.pickPhotoForVolunteer(row, source),
-                ),
-                Obx(() {
-                  if (row.photoUrl.value.isNotEmpty) {
-                    return Row(
-                      children: [
-                        const SizedBox(width: 16),
-                        _buildImagePreview(
-                          row.photoFile.value,
-                          row.photoBytes.value,
-                          60,
-                          60,
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (readOnly)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'Saved',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryColor,
                         ),
-                      ],
-                    );
-                  }
-                  return const SizedBox.shrink();
-                }),
-              ],
+                      ),
+                    ),
+                  SizedBox(
+                    height: _kVolunteerTableFieldHeight,
+                    child: TextFormField(
+                      controller: row.nameController,
+                      readOnly: readOnly,
+                      style: const TextStyle(fontSize: 12),
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      validator: readOnly
+                          ? null
+                          : (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter volunteer name';
+                              }
+                              return null;
+                            },
+                      decoration: _volunteerBulkFieldDecoration(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _buildVolunteerPasswordField(readOnly: readOnly)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: _kVolunteerTableFieldHeight,
+                    child: _buildVolunteerCellField(
+                      controller: row.cellController,
+                      readOnly: readOnly,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: _buildVolunteerPhotoColumn(
+                controller: controller,
+                row: row,
+                readOnly: readOnly,
+                previewSize: 44,
+              ),
             ),
           ],
         ),
-      ),
-    );
+      );
+    });
   }
 
   // Helper widget to display images on all platforms
@@ -2258,11 +2476,11 @@ Widget _buildVolunteerCard(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
-              if (controller.volunteerRows.length > 1)
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => controller.removeVolunteerRow(index),
-                ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => controller.removeVolunteerRow(index),
+                tooltip: 'Remove volunteer',
+              ),
             ],
           ),
           const SizedBox(height: 16),
