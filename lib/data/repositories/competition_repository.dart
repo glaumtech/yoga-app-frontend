@@ -26,6 +26,7 @@ class CompetitionRepository {
     XFile? brochureFile,
     File? brochureFileLocal,
     Uint8List? brochureBytes,
+    String? brochureFilename,
   }) async {
     try {
       // Prepare competition data as JSON string
@@ -36,10 +37,14 @@ class CompetitionRepository {
       http.MultipartFile multipartFile;
 
       if (kIsWeb && brochureBytes != null) {
+        final filename = (brochureFilename != null &&
+                brochureFilename.trim().isNotEmpty)
+            ? brochureFilename.trim()
+            : 'competition_brochure.pdf';
         multipartFile = http.MultipartFile.fromBytes(
           'brochure',
           brochureBytes,
-          filename: 'competition_brochure.pdf',
+          filename: filename,
         );
       } else if (brochureFile != null) {
         final fileBytes = await brochureFile.readAsBytes();
@@ -111,6 +116,7 @@ class CompetitionRepository {
     XFile? brochureFile,
     File? brochureFileLocal,
     Uint8List? brochureBytes,
+    String? brochureFilename,
   }) async {
     try {
       if (competition.id == null) {
@@ -127,45 +133,46 @@ class CompetitionRepository {
 
       print('Update competition request data: $dataJsonString');
 
-      // Prepare brochure file (if provided)
-      http.MultipartFile multipartFile;
-
-      if (kIsWeb && brochureBytes != null) {
+      http.MultipartFile? multipartFile;
+      if (kIsWeb && brochureBytes != null && brochureBytes.isNotEmpty) {
+        final filename = (brochureFilename != null &&
+                brochureFilename.trim().isNotEmpty)
+            ? brochureFilename.trim()
+            : 'competition_brochure.pdf';
         multipartFile = http.MultipartFile.fromBytes(
           'brochure',
           brochureBytes,
-          filename: 'competition_brochure.pdf',
+          filename: filename,
         );
       } else if (brochureFile != null) {
         final fileBytes = await brochureFile.readAsBytes();
-        multipartFile = http.MultipartFile.fromBytes(
-          'brochure',
-          fileBytes,
-          filename: brochureFile.name,
-        );
+        if (fileBytes.isNotEmpty) {
+          multipartFile = http.MultipartFile.fromBytes(
+            'brochure',
+            fileBytes,
+            filename: brochureFile.name,
+          );
+        }
       } else if (brochureFileLocal != null) {
         final fileBytes = await brochureFileLocal.readAsBytes();
-        multipartFile = http.MultipartFile.fromBytes(
-          'brochure',
-          fileBytes,
-          filename: brochureFileLocal.path.split('/').last,
-        );
-      } else {
-        // No brochure provided - send empty file
-        multipartFile = http.MultipartFile.fromBytes(
-          'brochure',
-          [],
-          filename: '',
-        );
+        if (fileBytes.isNotEmpty) {
+          multipartFile = http.MultipartFile.fromBytes(
+            'brochure',
+            fileBytes,
+            filename: brochureFileLocal.path.split('/').last,
+          );
+        }
       }
 
       // Send data as JSON string in 'data' field (backend requirement)
       final fields = <String, String>{'data': dataJsonString};
 
       print('Updating competition with multipart - data: $dataJsonString');
-      print(
-        'Brochure file: ${multipartFile.filename} (${multipartFile.length} bytes)',
-      );
+      if (multipartFile != null) {
+        print(
+          'Brochure file: ${multipartFile.filename} (${multipartFile.length} bytes)',
+        );
+      }
 
       final response = await _apiService.putMultipart<Map<String, dynamic>>(
         url: EndPoints.competitionUpdate(competition.id!),

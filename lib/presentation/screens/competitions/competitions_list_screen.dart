@@ -55,6 +55,41 @@ class CompetitionsListScreen extends StatelessWidget {
     return 'N/A';
   }
 
+  static final DateFormat _eventDateFormat = DateFormat('MMM dd, yyyy');
+
+  String _formatStartDate(CompetitionModel competition) {
+    return _eventDateFormat.format(competition.eventStartDate);
+  }
+
+  String _formatEndDate(CompetitionModel competition) {
+    return _eventDateFormat.format(competition.eventEndDate);
+  }
+
+  Widget _buildDateColumnContent(CompetitionModel competition) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Start: ${_formatStartDate(competition)}',
+          style: const TextStyle(fontSize: 13),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'End: ${_formatEndDate(competition)}',
+          style: const TextStyle(fontSize: 13),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateTableCell(CompetitionModel competition) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: _buildDateColumnContent(competition),
+    );
+  }
+
   // Helper method to get stage names from competition (handles both IDs and names)
   String _getStageNames(
     CompetitionModel competition,
@@ -414,14 +449,7 @@ class CompetitionsListScreen extends StatelessWidget {
                   const Divider(height: 24),
                   _buildInfoRow('Description', competition.description),
                   _buildInfoRow('Address', competition.address),
-                  _buildInfoRow(
-                    'Start Date',
-                    DateFormat('yyyy-MM-dd').format(competition.eventStartDate),
-                  ),
-                  _buildInfoRow(
-                    'End Date',
-                    DateFormat('yyyy-MM-dd').format(competition.eventEndDate),
-                  ),
+                  _buildDateInfoRow(competition),
                   if (competition.displayAdFrom != null)
                     _buildInfoRow(
                       'Display Ad From',
@@ -481,14 +509,13 @@ class CompetitionsListScreen extends StatelessWidget {
                   columnWidths: {
                     0: FlexColumnWidth(1.5),
                     1: FlexColumnWidth(2.0),
-                    2: FlexColumnWidth(1.2),
-                    3: FlexColumnWidth(1.2),
+                    2: FlexColumnWidth(1.6), // Date (start + end)
+                    3: FlexColumnWidth(1.5),
                     4: FlexColumnWidth(1.5),
                     5: FlexColumnWidth(1.5),
-                    6: FlexColumnWidth(1.5),
-                    7: FlexColumnWidth(1.5), // Created
-                    8: FlexColumnWidth(1.5), // Updated
-                    9: FlexColumnWidth(0.8), // Action column
+                    6: FlexColumnWidth(1.5), // Created
+                    7: FlexColumnWidth(1.5), // Updated
+                    8: FlexColumnWidth(0.8), // Action column
                   },
                   children: [
                     // Header Row
@@ -510,13 +537,8 @@ class CompetitionsListScreen extends StatelessWidget {
                           isSortable: false,
                         ),
                         _buildSortableHeader(
-                          'START DATE',
+                          'DATE',
                           'eventStartDate',
-                          controller,
-                        ),
-                        _buildSortableHeader(
-                          'END DATE',
-                          'eventEndDate',
                           controller,
                         ),
                         _buildSortableHeader(
@@ -561,16 +583,7 @@ class CompetitionsListScreen extends StatelessWidget {
                             controller,
                           ),
                           _buildTableCell(competition.address),
-                          _buildTableCell(
-                            DateFormat(
-                              'yyyy-MM-dd',
-                            ).format(competition.eventStartDate),
-                          ),
-                          _buildTableCell(
-                            DateFormat(
-                              'yyyy-MM-dd',
-                            ).format(competition.eventEndDate),
-                          ),
+                          _buildDateTableCell(competition),
                           _buildTableCell(
                             _getPrizeNames(competition, controller),
                           ),
@@ -743,6 +756,29 @@ class CompetitionsListScreen extends StatelessWidget {
         ),
       );
     });
+  }
+
+  Widget _buildDateInfoRow(CompetitionModel competition) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              'Date:',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(child: _buildDateColumnContent(competition)),
+        ],
+      ),
+    );
   }
 
   Widget _buildInfoRow(String label, String value) {

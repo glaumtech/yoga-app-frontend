@@ -26,6 +26,8 @@ class CompetitionModel {
   final Map<String, List<String>>? stageGroupLabels;
   final String? brochureUrl;
   final String? registrationUrl;
+  /// SEPARATE_CATEGORY or FROM_FIRST_PLACE_WINNERS
+  final String? championshipStyle;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -54,6 +56,7 @@ class CompetitionModel {
     this.stageGroupLabels,
     this.brochureUrl,
     this.registrationUrl,
+    this.championshipStyle,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -238,6 +241,9 @@ class CompetitionModel {
       brochureUrl:
           json['brochureUrl']?.toString() ?? json['brochure_url']?.toString(),
       registrationUrl: json['registrationUrl']?.toString(),
+      championshipStyle:
+          json['championshipStyle']?.toString() ??
+          json['championship_style']?.toString(),
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])
@@ -284,6 +290,8 @@ class CompetitionModel {
       if (stageIds != null && stageIds!.isNotEmpty) 'stageIds': stageIds,
       if (stageGroups != null && stageGroups!.isNotEmpty)
         'stageGroups': stageGroups,
+      if (championshipStyle != null && championshipStyle!.trim().isNotEmpty)
+        'championshipStyle': championshipStyle!.trim(),
       // Also include names for backward compatibility/display
       if (prizes != null && prizes!.isNotEmpty && includeMetadata)
         'prizes': prizes,
@@ -322,6 +330,7 @@ class CompetitionModel {
     Map<String, List<String>>? stageGroupLabels,
     String? brochureUrl,
     String? registrationUrl,
+    String? championshipStyle,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -350,6 +359,7 @@ class CompetitionModel {
       stageGroupLabels: stageGroupLabels ?? this.stageGroupLabels,
       brochureUrl: brochureUrl ?? this.brochureUrl,
       registrationUrl: registrationUrl ?? this.registrationUrl,
+      championshipStyle: championshipStyle ?? this.championshipStyle,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,

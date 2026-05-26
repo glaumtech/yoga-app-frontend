@@ -30,14 +30,13 @@ class _SplashScreenState extends State<SplashScreen>
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
     _controller.forward();
-    _navigateToHome();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _navigateToHome());
   }
 
-  void _navigateToHome() async {
-    await Future.delayed(const Duration(seconds: 3));
-    if (mounted) {
-      context.go(AppRoutes.home);
-    }
+  Future<void> _navigateToHome() async {
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
+    context.go(AppRoutes.home);
   }
 
   @override

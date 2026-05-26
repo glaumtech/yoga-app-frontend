@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/keyboard/keyboard_scroll_discovery.dart';
 import '../../../core/theme/app_theme.dart';
 import '../controllers/user_management_controller.dart';
 import 'admin_sidebar.dart';
@@ -23,13 +24,15 @@ class AdminSidebarLayout extends StatelessWidget {
       drawer: isMobile && userController.isAuthenticated
           ? Drawer(
               width: 280, // Reduced width for mobile drawer
-              child: const AdminSidebar(),
+              child: const KeyboardScrollDiscovery(child: AdminSidebar()),
             )
           : null,
-      body: Row(
-        children: [
-          // Persistent Sidebar (hidden on mobile, shown on tablet/desktop)
-          if (!isMobile && userController.isAuthenticated) const AdminSidebar(),
+      body: KeyboardScrollDiscovery(
+        child: Row(
+          children: [
+            // Persistent Sidebar (hidden on mobile, shown on tablet/desktop)
+            if (!isMobile && userController.isAuthenticated)
+              const AdminSidebar(),
           // Main Content Area
           Expanded(
             child: Column(
@@ -181,7 +184,8 @@ class AdminSidebarLayout extends StatelessWidget {
               ],
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

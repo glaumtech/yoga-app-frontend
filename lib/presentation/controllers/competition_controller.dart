@@ -5,12 +5,25 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/constants/championship_style.dart';
+import '../../core/utils/dialog_helper.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
 import '../../data/models/competition_option_model.dart';
 
+enum BrochureFileKind { image, pdf, unknown }
+
 class CompetitionController extends GetxController {
+  static const int brochureMaxImageBytes = 10 * 1024 * 1024;
+  static const int brochureMaxPdfBytes = 25 * 1024 * 1024;
+  static const String brochureUploadNotes =
+      'Accepted: JPG, PNG, or PDF\n'
+      '• Images: max 10 MB\n'
+      '• PDF: max 25 MB';
+
   final CompetitionRepository _repository = CompetitionRepository();
 
   // Form controllers — keys are replaced when the form subtree is (re)shown so one
@@ -49,6 +62,24 @@ class CompetitionController extends GetxController {
 
   void clearCompetitionDateFieldTouches() {
     touchedCompetitionDateFields.clear();
+  }
+
+  void _notifyError(String message) {
+    errorMessage.value = message;
+    SnackbarHelper.showErrorMessage(message);
+  }
+
+  void _notifySuccess(String message) {
+    SnackbarHelper.showSuccessMessage(message);
+  }
+
+  bool _validateFormState() {
+    final state = formKey.currentState;
+    if (state == null) {
+      _notifyError('Form is not ready. Please try again.');
+      return false;
+    }
+    return state.validate();
   }
 
   final competitionNameController = TextEditingController();
@@ -95,6 +126,7 @@ class CompetitionController extends GetxController {
   final Rx<DateTime?> eventEndDate = Rx<DateTime?>(null);
   final Rx<DateTime?> displayAdFrom = Rx<DateTime?>(null);
   final RxBool spotRegistration = false.obs;
+  final Rx<ChampionshipStyle?> championshipStyle = Rx<ChampionshipStyle?>(null);
   final RxInt participantsPerStage = RxInt(0);
   final RxInt minimumMarks = RxInt(0);
   final RxInt maximumMarks = RxInt(0);
@@ -136,7 +168,113 @@ class CompetitionController extends GetxController {
   final Rx<XFile?> brochureFile = Rx<XFile?>(null);
   final Rx<File?> brochureFileLocal = Rx<File?>(null);
   final Rx<Uint8List?> brochureBytes = Rx<Uint8List?>(null);
+  final RxString brochureFileName = ''.obs;
   final RxString brochureUrl = ''.obs;
+
+  bool get hasLocalBrochure =>
+      brochureBytes.value != null ||
+      brochureFile.value != null ||
+      brochureFileLocal.value != null;
+
+  /// Magic-byte sniffing (more reliable than filename alone).
+  static bool brochureBytesLookLikePdf(Uint8List bytes) {
+    final scanLength = bytes.length < 2048 ? bytes.length : 2048;
+    for (var i = 0; i <= scanLength - 4; i++) {
+      if (bytes[i] == 0x25 &&
+          bytes[i + 1] == 0x50 &&
+          bytes[i + 2] == 0x44 &&
+          bytes[i + 3] == 0x46) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// True when the body looks like a JSON API error, not a file.
+  static bool brochureBytesLookLikeJson(Uint8List bytes) {
+    for (var i = 0; i < bytes.length && i < 64; i++) {
+      final b = bytes[i];
+      if (b <= 32) continue;
+      return b == 0x7b || b == 0x5b; // { or [
+    }
+    return false;
+  }
+
+  static bool brochureBytesLookLikeImage(Uint8List bytes) {
+    if (bytes.length >= 4 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return true; // PNG
+    }
+    if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
+      return true; // JPEG
+    }
+    return false;
+  }
+
+  static bool _pathLooksLikePdf(String path) {
+    final lower = path.trim().toLowerCase();
+    return lower.endsWith('.pdf');
+  }
+
+  static bool _pathLooksLikeImage(String path) {
+    final lower = path.trim().toLowerCase();
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp');
+  }
+
+  /// Resolved brochure type for the current selection / saved file.
+  BrochureFileKind get brochureFileKind {
+    final bytes = brochureBytes.value;
+    if (bytes != null && bytes.isNotEmpty) {
+      if (brochureBytesLookLikeImage(bytes)) return BrochureFileKind.image;
+      if (brochureBytesLookLikePdf(bytes)) return BrochureFileKind.pdf;
+    }
+
+    final name = brochureFileName.value.trim().toLowerCase();
+    if (_pathLooksLikePdf(name)) return BrochureFileKind.pdf;
+    if (_pathLooksLikeImage(name)) return BrochureFileKind.image;
+
+    if (hasLocalBrochure) {
+      return BrochureFileKind.unknown;
+    }
+
+    final url = brochureUrl.value.trim().toLowerCase();
+    if (_pathLooksLikePdf(url)) return BrochureFileKind.pdf;
+    if (_pathLooksLikeImage(url)) return BrochureFileKind.image;
+
+    final apiUrl =
+        competitionToEdit.value?.brochureUrl?.trim().toLowerCase() ?? '';
+    if (_pathLooksLikePdf(apiUrl)) return BrochureFileKind.pdf;
+    if (_pathLooksLikeImage(apiUrl)) return BrochureFileKind.image;
+
+    return BrochureFileKind.unknown;
+  }
+
+  bool get isBrochurePdf => brochureFileKind == BrochureFileKind.pdf;
+
+  bool get isBrochureImage => brochureFileKind == BrochureFileKind.image;
+
+  /// Detect type from downloaded brochure bytes (API preview).
+  static BrochureFileKind brochureKindFromBytes(
+    Uint8List bytes, {
+    String? contentType,
+    bool filenameHintPdf = false,
+  }) {
+    if (brochureBytesLookLikeImage(bytes)) return BrochureFileKind.image;
+    if (brochureBytesLookLikePdf(bytes)) return BrochureFileKind.pdf;
+
+    final ct = contentType?.toLowerCase() ?? '';
+    if (ct.contains('image/')) return BrochureFileKind.image;
+    if (ct.contains('pdf')) return BrochureFileKind.pdf;
+
+    return filenameHintPdf ? BrochureFileKind.pdf : BrochureFileKind.image;
+  }
+
   final RxInt brochureUpdateTimestamp =
       0.obs; // Track brochure updates for cache-busting
 
@@ -404,57 +542,75 @@ class CompetitionController extends GetxController {
     });
   }
 
-  // Pick brochure file
+  // Pick brochure file (JPG, PNG, or PDF)
   Future<void> pickBrochure() async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        allowMultiple: false,
+        withData: kIsWeb,
       );
 
-      if (file != null) {
-        // Validate file size (max 10MB)
-        final fileSize = await file.length();
-        const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      if (result == null || result.files.isEmpty) return;
 
-        if (fileSize > maxSize) {
-          errorMessage.value = 'Brochure file size must be less than 10MB';
-          Get.snackbar('Error', errorMessage.value);
-          return;
-        }
-
-        // Validate file type (images: jpg, jpeg, png, pdf)
-        final fileName = file.name.toLowerCase();
-        final validExtensions = ['.jpg', '.jpeg', '.png', '.pdf'];
-        final isValidType = validExtensions.any(
-          (ext) => fileName.endsWith(ext),
-        );
-
-        if (!isValidType) {
-          errorMessage.value =
-              'Brochure must be an image (JPG, PNG) or PDF file';
-          Get.snackbar('Error', errorMessage.value);
-          return;
-        }
-
-        if (kIsWeb) {
-          final bytes = await file.readAsBytes();
-          brochureBytes.value = bytes;
-          brochureFile.value = null;
-          brochureFileLocal.value = null;
-          brochureUrl.value = 'web_file';
-        } else {
-          brochureFile.value = file;
-          brochureFileLocal.value = File(file.path);
-          brochureBytes.value = null;
-          brochureUrl.value = file.path;
-        }
-        errorMessage.value = ''; // Clear error on success
+      final picked = result.files.first;
+      final fileName = picked.name.trim();
+      if (fileName.isEmpty) {
+        _notifyError('Invalid brochure file name');
+        return;
       }
+
+      final lowerName = fileName.toLowerCase();
+      const validExtensions = ['.jpg', '.jpeg', '.png', '.pdf'];
+      final isValidType = validExtensions.any(lowerName.endsWith);
+      if (!isValidType) {
+        _notifyError('Brochure must be an image (JPG, PNG) or PDF file');
+        return;
+      }
+
+      int fileSize = picked.size;
+      if (kIsWeb) {
+        if (picked.bytes == null || picked.bytes!.isEmpty) {
+          _notifyError('Unable to read brochure file');
+          return;
+        }
+        fileSize = picked.bytes!.length;
+      } else if (picked.path != null) {
+        fileSize = await File(picked.path!).length();
+      }
+
+      final isPdf = lowerName.endsWith('.pdf');
+      final maxSize = isPdf ? brochureMaxPdfBytes : brochureMaxImageBytes;
+      if (fileSize > maxSize) {
+        _notifyError(
+          isPdf
+              ? 'PDF brochure must be 25 MB or smaller'
+              : 'Image brochure must be 10 MB or smaller',
+        );
+        return;
+      }
+
+      brochureFileName.value = fileName;
+      if (kIsWeb) {
+        brochureBytes.value = picked.bytes;
+        brochureFile.value = null;
+        brochureFileLocal.value = null;
+        brochureUrl.value = 'web_file';
+      } else if (picked.path != null) {
+        final path = picked.path!;
+        brochureFile.value = XFile(path, name: fileName);
+        brochureFileLocal.value = File(path);
+        brochureBytes.value = null;
+        brochureUrl.value = path;
+      } else {
+        _notifyError('Unable to access brochure file');
+        return;
+      }
+
+      errorMessage.value = '';
     } catch (e) {
-      errorMessage.value = 'Error picking brochure: ${e.toString()}';
-      Get.snackbar('Error', errorMessage.value);
+      _notifyError('Error picking brochure: ${e.toString()}');
     }
   }
 
@@ -605,8 +761,76 @@ class CompetitionController extends GetxController {
     }
   }
 
+  static const String championsCategoryName = 'CHAMPIONS';
+
+  bool isChampionsCategoryName(String categoryName) =>
+      categoryName.trim().toUpperCase() == championsCategoryName;
+
+  bool get canSelectChampionsCategory =>
+      championshipStyle.value == ChampionshipStyle.separateCategory;
+
+  void setChampionshipStyle(ChampionshipStyle? style) {
+    championshipStyle.value = style;
+    if (style == ChampionshipStyle.fromFirstPlaceWinners) {
+      _deselectChampionsCategory();
+    }
+  }
+
+  void _deselectChampionsCategory() {
+    final championsId = getCategoryIdByName(championsCategoryName);
+    if (championsId == null) return;
+    if (selectedCategoryIds.contains(championsId)) {
+      selectedCategoryIds.remove(championsId);
+      categoryAmounts.remove(championsId.toString());
+    }
+  }
+
+  String? validateCategoriesForChampionshipStyle() {
+    if (championshipStyle.value != ChampionshipStyle.fromFirstPlaceWinners) {
+      return null;
+    }
+    for (final id in selectedCategoryIds) {
+      final name = getCategoryNameById(id);
+      if (name != null && isChampionsCategoryName(name)) {
+        return 'Remove the Champions category. For this championship style, '
+            'Champions are derived from 1st-place winners in other categories.';
+      }
+    }
+    return null;
+  }
+
+  Future<bool> confirmChampionshipStyleBeforeSave() async {
+    final style = championshipStyle.value;
+    if (style == null) {
+      _notifyError(
+        'Please select how the Champions category will be determined',
+      );
+      return false;
+    }
+
+    final categoryError = validateCategoriesForChampionshipStyle();
+    if (categoryError != null) {
+      _notifyError(categoryError);
+      return false;
+    }
+
+    return DialogHelper.confirm(
+      title: 'Confirm Champions setup',
+      message: style.confirmationMessage,
+    );
+  }
+
   // Toggle category selection (by name for UI, stores ID internally)
   void toggleCategory(String categoryName) {
+    if (isChampionsCategoryName(categoryName) && !canSelectChampionsCategory) {
+      SnackbarHelper.showErrorMessage(
+        championshipStyle.value == null
+            ? 'Select the championship style above first.'
+            : 'Champions cannot be selected when it is based on 1st-place winners.',
+      );
+      return;
+    }
+
     final categoryId = getCategoryIdByName(categoryName);
     if (categoryId == null) return;
 
@@ -982,44 +1206,49 @@ class CompetitionController extends GetxController {
     try {
       hasAttemptedSubmit.value = true;
       notifyCompetitionDatesChanged();
-      if (!formKey.currentState!.validate()) {
+      if (!_validateFormState()) {
         return false;
       }
 
       final dateError = validateCompetitionDates(forSubmit: true);
       if (dateError != null) {
-        errorMessage.value = dateError;
-        Get.snackbar('Error', dateError);
+        _notifyError(dateError);
         return false;
       }
 
       if (participantsPerStage.value <= 0) {
-        errorMessage.value = 'Please select participants per stage';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select participants per stage');
         return false;
       }
 
       if (selectedCategoryIds.isEmpty) {
-        errorMessage.value = 'Please select at least one category';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one category');
+        return false;
+      }
+
+      final categoryStyleError = validateCategoriesForChampionshipStyle();
+      if (categoryStyleError != null) {
+        _notifyError(categoryStyleError);
+        return false;
+      }
+
+      if (!await confirmChampionshipStyleBeforeSave()) {
         return false;
       }
 
       if (selectedStageIds.isEmpty) {
-        errorMessage.value = 'Please select at least one stage';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one stage');
         return false;
       }
 
       if (selectedPrizeIds.isEmpty) {
-        errorMessage.value = 'Please select at least one prize';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one prize');
         return false;
       }
 
       // Validate brochure upload
       if (!validateBrochure()) {
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError(errorMessage.value);
         return false;
       }
 
@@ -1044,6 +1273,7 @@ class CompetitionController extends GetxController {
         categoryAmounts: Map<String, double>.from(categoryAmounts),
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
+        championshipStyle: championshipStyle.value?.apiValue,
       );
 
       final response = await _repository.createCompetition(
@@ -1051,25 +1281,26 @@ class CompetitionController extends GetxController {
         brochureFile: brochureFile.value,
         brochureFileLocal: brochureFileLocal.value,
         brochureBytes: brochureBytes.value,
+        brochureFilename: brochureFileName.value.isNotEmpty
+            ? brochureFileName.value
+            : null,
       );
 
       if (response.success && response.data != null) {
         lastSavedCompetitionForQr.value = response.data;
         await loadCompetitions(resetPage: true);
         clearForm();
-        Get.snackbar('Success', 'Competition created successfully');
+        _notifySuccess('Competition created successfully');
         toggleViewMode(true);
         return true;
       } else {
         lastSavedCompetitionForQr.value = null;
-        errorMessage.value = response.message ?? 'Failed to create competition';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError(response.message ?? 'Failed to create competition');
         return false;
       }
     } catch (e) {
       lastSavedCompetitionForQr.value = null;
-      errorMessage.value = 'Error creating competition: ${e.toString()}';
-      Get.snackbar('Error', errorMessage.value);
+      _notifyError('Error creating competition: ${e.toString()}');
       return false;
     } finally {
       isLoading.value = false;
@@ -1084,45 +1315,49 @@ class CompetitionController extends GetxController {
   Future<bool> updateCompetition() async {
     try {
       if (competitionToEdit.value == null) {
-        errorMessage.value = 'No competition selected for update';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('No competition selected for update');
         return false;
       }
 
       hasAttemptedSubmit.value = true;
       notifyCompetitionDatesChanged();
-      if (!formKey.currentState!.validate()) {
+      if (!_validateFormState()) {
         return false;
       }
 
       final dateError = validateCompetitionDates(forSubmit: true);
       if (dateError != null) {
-        errorMessage.value = dateError;
-        Get.snackbar('Error', dateError);
+        _notifyError(dateError);
         return false;
       }
 
       if (participantsPerStage.value <= 0) {
-        errorMessage.value = 'Please select participants per stage';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select participants per stage');
         return false;
       }
 
       if (selectedCategoryIds.isEmpty) {
-        errorMessage.value = 'Please select at least one category';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one category');
+        return false;
+      }
+
+      final categoryStyleError = validateCategoriesForChampionshipStyle();
+      if (categoryStyleError != null) {
+        _notifyError(categoryStyleError);
+        return false;
+      }
+
+      if (!await confirmChampionshipStyleBeforeSave()) {
         return false;
       }
 
       if (selectedStageIds.isEmpty) {
-        errorMessage.value = 'Please select at least one stage';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one stage');
         return false;
       }
 
       if (selectedPrizeIds.isEmpty) {
-        errorMessage.value = 'Please select at least one prize';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError('Please select at least one prize');
         return false;
       }
 
@@ -1154,6 +1389,7 @@ class CompetitionController extends GetxController {
         categoryAmounts: Map<String, double>.from(categoryAmounts),
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
+        championshipStyle: championshipStyle.value?.apiValue,
       );
 
       final response = await _repository.updateCompetition(
@@ -1161,6 +1397,9 @@ class CompetitionController extends GetxController {
         brochureFile: hasNewBrochure ? brochureFile.value : null,
         brochureFileLocal: hasNewBrochure ? brochureFileLocal.value : null,
         brochureBytes: hasNewBrochure ? brochureBytes.value : null,
+        brochureFilename: hasNewBrochure && brochureFileName.value.isNotEmpty
+            ? brochureFileName.value
+            : null,
       );
 
       if (response.success) {
@@ -1174,21 +1413,28 @@ class CompetitionController extends GetxController {
           brochureFile.value = null;
           brochureFileLocal.value = null;
           brochureBytes.value = null;
+          final url = competitionToEdit.value?.brochureUrl;
+          if (url != null && url.isNotEmpty) {
+            brochureUrl.value = url;
+            final segments = url.split('/');
+            if (segments.isNotEmpty) {
+              brochureFileName.value = segments.last;
+            }
+          }
         }
 
         await loadCompetitions(resetPage: false);
+        _notifySuccess('Competition updated successfully');
         clearForm();
-        Get.snackbar('Success', 'Competition updated successfully');
         toggleViewMode(true);
         return true;
       } else {
-        errorMessage.value = response.message ?? 'Failed to update competition';
-        Get.snackbar('Error', errorMessage.value);
+        _notifyError(response.message ?? 'Failed to update competition');
         return false;
       }
-    } catch (e) {
-      errorMessage.value = 'Error updating competition: ${e.toString()}';
-      Get.snackbar('Error', errorMessage.value);
+    } catch (e, stackTrace) {
+      debugPrint('updateCompetition error: $e\n$stackTrace');
+      _notifyError('Error updating competition: ${e.toString()}');
       return false;
     } finally {
       isLoading.value = false;
@@ -1353,6 +1599,10 @@ class CompetitionController extends GetxController {
     eventEndDate.value = competition.eventEndDate;
     displayAdFrom.value = competition.displayAdFrom;
     spotRegistration.value = competition.spotRegistration;
+    championshipStyle.value = ChampionshipStyle.fromApiValue(
+          competition.championshipStyle,
+        ) ??
+        ChampionshipStyle.separateCategory;
     participantsPerStage.value = competition.participantsPerStage ?? 0;
     minimumMarks.value = competition.minimumMarks ?? 0;
     maximumMarks.value = competition.maximumMarks ?? 0;
@@ -1424,6 +1674,10 @@ class CompetitionController extends GetxController {
       categoryAmounts.clear();
     }
 
+    if (championshipStyle.value == ChampionshipStyle.fromFirstPlaceWinners) {
+      _deselectChampionsCategory();
+    }
+
     if (competition.stageIds != null && competition.stageIds!.isNotEmpty) {
       selectedStageIds.value = List<int>.from(competition.stageIds!);
       // Load stage groups with IDs
@@ -1487,6 +1741,12 @@ class CompetitionController extends GetxController {
     if (competition.brochureUrl != null &&
         competition.brochureUrl!.isNotEmpty) {
       brochureUrl.value = competition.brochureUrl!;
+      final segments = competition.brochureUrl!.split('/');
+      if (segments.isNotEmpty) {
+        brochureFileName.value = segments.last;
+      }
+    } else {
+      brochureFileName.value = '';
     }
 
     // Switch to create view
@@ -1618,6 +1878,7 @@ class CompetitionController extends GetxController {
     eventEndDate.value = null;
     displayAdFrom.value = null;
     spotRegistration.value = false;
+    championshipStyle.value = null;
     participantsPerStage.value = 0;
     minimumMarks.value = 0;
     maximumMarks.value = 0;
@@ -1629,6 +1890,7 @@ class CompetitionController extends GetxController {
     brochureFile.value = null;
     brochureFileLocal.value = null;
     brochureBytes.value = null;
+    brochureFileName.value = '';
     brochureUrl.value = '';
     errorMessage.value = '';
     hasAttemptedSubmit.value = false;

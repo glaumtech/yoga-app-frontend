@@ -550,7 +550,8 @@ class JuryScoringScreen extends StatelessWidget {
                               spacing: 8,
                               runSpacing: 4,
                               children: [
-                                if (controller.selectedStage.value.isNotEmpty)
+                                if (!controller.hideStageAndGroupSelection &&
+                                    controller.selectedStage.value.isNotEmpty)
                                   _buildSelectionChip(
                                     'STAGE: ${controller.selectedStage.value}',
                                     isMobile,
@@ -563,14 +564,17 @@ class JuryScoringScreen extends StatelessWidget {
                                     'CATEGORY: ${controller.selectedCategory.value}',
                                     isMobile,
                                   ),
-                                if (controller.selectedGroup.value.isNotEmpty)
+                                if (!controller.hideStageAndGroupSelection &&
+                                    controller.selectedGroup.value.isNotEmpty)
                                   _buildSelectionChip(
                                     'GROUP: ${controller.selectedGroup.value}',
                                     isMobile,
                                   ),
-                                if (controller.selectedStage.value.isEmpty &&
-                                    controller.selectedCategory.value.isEmpty &&
-                                    controller.selectedGroup.value.isEmpty)
+                                if ((controller.hideStageAndGroupSelection
+                                        ? controller.selectedCategory.value.isEmpty
+                                        : controller.selectedStage.value.isEmpty &&
+                                              controller.selectedCategory.value.isEmpty &&
+                                              controller.selectedGroup.value.isEmpty))
                                   Text(
                                     'Tap to select filters',
                                     style: TextStyle(
@@ -603,23 +607,26 @@ class JuryScoringScreen extends StatelessWidget {
                 ),
                 child: Obx(() {
                   final hasScores = controller.hasScoresEntered.value;
+                  final hideStageGroup = controller.hideStageAndGroupSelection;
                   return isMobile
                       ? Column(
                           children: [
-                            _buildSelectionDropdown(
-                              context,
-                              label: 'STAGE',
-                              value: controller.selectedStage.value,
-                              items: controller.getAvailableStages(),
-                              onChanged: hasScores
-                                  ? null
-                                  : (value) => controller.setSelectedStage(
-                                      value ?? '',
-                                    ),
-                              isMobile: isMobile,
-                              isTablet: isTablet,
-                            ),
-                            const SizedBox(height: 12),
+                            if (!hideStageGroup) ...[
+                              _buildSelectionDropdown(
+                                context,
+                                label: 'STAGE',
+                                value: controller.selectedStage.value,
+                                items: controller.getAvailableStages(),
+                                onChanged: hasScores
+                                    ? null
+                                    : (value) => controller.setSelectedStage(
+                                        value ?? '',
+                                      ),
+                                isMobile: isMobile,
+                                isTablet: isTablet,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
                             _buildSelectionDropdown(
                               context,
                               label: 'CATEGORY',
@@ -633,42 +640,47 @@ class JuryScoringScreen extends StatelessWidget {
                               isMobile: isMobile,
                               isTablet: isTablet,
                             ),
-                            const SizedBox(height: 12),
-                            _buildSelectionDropdown(
-                              context,
-                              label: 'GROUPS',
-                              value: controller.selectedGroup.value,
-                              items: controller.getAvailableGroups(),
-                              onChanged: hasScores
-                                  ? null
-                                  : (value) => controller.setSelectedGroup(
-                                      value ?? '',
-                                    ),
-                              isMobile: isMobile,
-                              isTablet: isTablet,
-                            ),
+                            if (!hideStageGroup) ...[
+                              const SizedBox(height: 12),
+                              _buildSelectionDropdown(
+                                context,
+                                label: 'GROUPS',
+                                value: controller.selectedGroup.value,
+                                items: controller.getAvailableGroups(),
+                                onChanged: hasScores
+                                    ? null
+                                    : (value) => controller.setSelectedGroup(
+                                        value ?? '',
+                                      ),
+                                isMobile: isMobile,
+                                isTablet: isTablet,
+                              ),
+                            ],
                             const SizedBox(height: 12),
                             _buildInstitutionDropdown(context, controller),
                           ],
                         )
                       : Row(
                           children: [
-                            Expanded(
-                              child: _buildSelectionDropdown(
-                                context,
-                                label: 'STAGE',
-                                value: controller.selectedStage.value,
-                                items: controller.getAvailableStages(),
-                                onChanged: hasScores
-                                    ? null
-                                    : (value) => controller.setSelectedStage(
-                                        value ?? '',
-                                      ),
-                                isMobile: isMobile,
-                                isTablet: isTablet,
+                            if (!hideStageGroup) ...[
+                              Expanded(
+                                child: _buildSelectionDropdown(
+                                  context,
+                                  label: 'STAGE',
+                                  value: controller.selectedStage.value,
+                                  items: controller.getAvailableStages(),
+                                  onChanged: hasScores
+                                      ? null
+                                      : (value) =>
+                                            controller.setSelectedStage(
+                                              value ?? '',
+                                            ),
+                                  isMobile: isMobile,
+                                  isTablet: isTablet,
+                                ),
                               ),
-                            ),
-                            SizedBox(width: isTablet ? 16 : 20),
+                              SizedBox(width: isTablet ? 16 : 20),
+                            ],
                             Expanded(
                               child: _buildSelectionDropdown(
                                 context,
@@ -684,22 +696,24 @@ class JuryScoringScreen extends StatelessWidget {
                                 isTablet: isTablet,
                               ),
                             ),
-                            SizedBox(width: isTablet ? 16 : 20),
-                            Expanded(
-                              child: _buildSelectionDropdown(
-                                context,
-                                label: 'GROUPS',
-                                value: controller.selectedGroup.value,
-                                items: controller.getAvailableGroups(),
-                                onChanged: hasScores
-                                    ? null
-                                    : (value) => controller.setSelectedGroup(
-                                        value ?? '',
-                                      ),
-                                isMobile: isMobile,
-                                isTablet: isTablet,
+                            if (!hideStageGroup) ...[
+                              SizedBox(width: isTablet ? 16 : 20),
+                              Expanded(
+                                child: _buildSelectionDropdown(
+                                  context,
+                                  label: 'GROUPS',
+                                  value: controller.selectedGroup.value,
+                                  items: controller.getAvailableGroups(),
+                                  onChanged: hasScores
+                                      ? null
+                                      : (value) => controller.setSelectedGroup(
+                                          value ?? '',
+                                        ),
+                                  isMobile: isMobile,
+                                  isTablet: isTablet,
+                                ),
                               ),
-                            ),
+                            ],
                             SizedBox(width: isTablet ? 16 : 20),
                             Expanded(
                               child: _buildInstitutionDropdown(
@@ -943,6 +957,8 @@ class JuryScoringScreen extends StatelessWidget {
                         Text(
                           controller.errorMessage.value.isNotEmpty
                               ? controller.errorMessage.value
+                              : controller.hideStageAndGroupSelection
+                              ? 'No participants available. Please select Category to load 1st-place winners from all stages.'
                               : 'No participants available. Please select Stage, Category, and Group.',
                           style: TextStyle(
                             fontSize: isMobile ? 14 : 16,
@@ -957,7 +973,9 @@ class JuryScoringScreen extends StatelessWidget {
                           ElevatedButton(
                             onPressed: () {
                               controller.errorMessage.value = '';
-                              if (controller.selectedStage.value.isNotEmpty) {
+                              if (controller.hideStageAndGroupSelection
+                                  ? controller.selectedCategory.value.isNotEmpty
+                                  : controller.selectedStage.value.isNotEmpty) {
                                 controller.loadParticipantsForSelection();
                               }
                             },

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
@@ -21,9 +22,10 @@ import '../../data/models/competition_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/utils/state_defaults.dart';
+import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/photo_capture_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
-import 'competition_controller.dart';
 import 'competition_controller.dart';
 
 // Web-specific imports
@@ -33,7 +35,6 @@ class ParticipantController extends GetxController {
   final ParticipantRepository _participantRepository = ParticipantRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
   final LocationRepository _locationRepository = LocationRepository();
-  final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
   /// Cleared text controllers during [resetForm] fire `onChanged`, which would otherwise
@@ -113,6 +114,19 @@ class ParticipantController extends GetxController {
       0.obs; // Trigger to force widget rebuilds on form reset
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
+  static const int participantPhotoMaxBytes = 10 * 1024 * 1024;
+  static const String participantPhotoUploadNotes =
+      'Use BROWSE or CAMERA\n'
+      'Accepted: JPG or PNG\n'
+      '• Max size: 10 MB';
+
+  static const int bonafideMaxImageBytes = 10 * 1024 * 1024;
+  static const int bonafideMaxPdfBytes = 25 * 1024 * 1024;
+  static const String bonafideUploadNotes =
+      'Accepted: JPG, PNG, or PDF\n'
+      '• Images: max 10 MB\n'
+      '• PDF: max 25 MB';
+
   final Rx<File?> bonafideFile = Rx<File?>(null);
   final Rx<XFile?> bonafideImage = Rx<XFile?>(null);
   final Rx<Uint8List?> bonafideBytes = Rx<Uint8List?>(null);
@@ -430,32 +444,138 @@ class ParticipantController extends GetxController {
     existingCertificateUrl.value = '';
   }
 
+  static String fileNameFromStoragePath(String path) {
+    final normalized = path.trim().replaceAll('\\', '/');
+    if (normalized.isEmpty) return '';
+    final segments = normalized.split('/');
+    return segments.isNotEmpty ? segments.last : normalized;
+  }
+
+  /// Loads bonafide preview URL and display file name when the registration
+  /// already has a stored certificate (path from API, not the download URL).
+  void _loadExistingBonafideCertificate(ParticipantModel participant) {
+    final storagePath = participant.bonafiedCertificate?.trim() ?? '';
+    final hasLocalPick =
+        bonafideFile.value != null ||
+        bonafideImage.value != null ||
+        bonafideBytes.value != null;
+
+    if (storagePath.isEmpty) {
+      existingCertificateUrl.value = '';
+      if (!hasLocalPick) {
+        bonafideFileName.value = '';
+      }
+      return;
+    }
+
+    if (participant.id != null && participant.id!.isNotEmpty) {
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      existingCertificateUrl.value =
+          getParticipantRegistrationCertificateUrl(
+            participant.id,
+            cacheBuster: timestamp,
+          ) ??
+          '';
+    } else {
+      existingCertificateUrl.value = '';
+    }
+
+    if (!hasLocalPick) {
+      bonafideFileName.value = fileNameFromStoragePath(storagePath);
+    }
+  }
+
   bool get hasBonafideCertificateSelected =>
       bonafideFile.value != null ||
       bonafideImage.value != null ||
       bonafideBytes.value != null ||
       existingCertificateUrl.value.trim().isNotEmpty;
 
+  bool get isBonafidePdf {
+    final name = bonafideFileName.value.trim().toLowerCase();
+    if (name.endsWith('.pdf')) return true;
+    if (name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png')) {
+      return false;
+    }
+    final bytes = bonafideBytes.value;
+    if (bytes != null && bytes.isNotEmpty) {
+      if (CompetitionController.brochureBytesLookLikeImage(bytes)) {
+        return false;
+      }
+      if (CompetitionController.brochureBytesLookLikePdf(bytes)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<bool> pickBonafideCertificate() async {
     try {
-      final XFile? file = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
+      errorMessage.value = '';
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        allowMultiple: false,
+        withData: kIsWeb,
       );
 
-      if (file == null) return false;
+      if (result == null || result.files.isEmpty) return false;
 
-      bonafideFileName.value = file.name;
+      final picked = result.files.first;
+      final fileName = picked.name.trim();
+      if (fileName.isEmpty) {
+        errorMessage.value = 'Invalid file name';
+        return false;
+      }
+
+      final lowerName = fileName.toLowerCase();
+      const validExtensions = ['.jpg', '.jpeg', '.png', '.pdf'];
+      if (!validExtensions.any(lowerName.endsWith)) {
+        errorMessage.value =
+            'Bonafied certificate must be an image (JPG, PNG) or PDF';
+        return false;
+      }
+
+      int fileSize = picked.size;
+      if (kIsWeb) {
+        if (picked.bytes == null || picked.bytes!.isEmpty) {
+          errorMessage.value = 'Unable to read certificate file';
+          return false;
+        }
+        fileSize = picked.bytes!.length;
+      } else if (picked.path != null) {
+        fileSize = await File(picked.path!).length();
+      }
+
+      final isPdf = lowerName.endsWith('.pdf');
+      final maxSize = isPdf ? bonafideMaxPdfBytes : bonafideMaxImageBytes;
+      if (fileSize > maxSize) {
+        errorMessage.value = isPdf
+            ? 'PDF certificate must be 25 MB or smaller'
+            : 'Image certificate must be 10 MB or smaller';
+        return false;
+      }
+
+      bonafideFileName.value = fileName;
       existingCertificateUrl.value = '';
 
       if (kIsWeb) {
-        bonafideBytes.value = await file.readAsBytes();
-        bonafideImage.value = file;
+        bonafideBytes.value = picked.bytes;
+        bonafideImage.value = XFile.fromData(
+          picked.bytes!,
+          name: fileName,
+          mimeType: isPdf ? 'application/pdf' : null,
+        );
         bonafideFile.value = null;
-      } else {
-        bonafideImage.value = file;
-        bonafideFile.value = File(file.path);
+      } else if (picked.path != null) {
+        bonafideImage.value = XFile(picked.path!, name: fileName);
+        bonafideFile.value = File(picked.path!);
         bonafideBytes.value = null;
+      } else {
+        errorMessage.value = 'Unable to access certificate file';
+        return false;
       }
       return true;
     } catch (e) {
@@ -1211,6 +1331,9 @@ class ParticipantController extends GetxController {
           reg['yogaMasterContact'] as String? ??
           '',
       photoUrl: reg['photo'] as String?,
+      bonafiedCertificate:
+          reg['bonafiedCertificate'] as String? ??
+          reg['bonafied_certificate'] as String?,
       participantCode:
           reg['participantCode'] as String? ??
           reg['participant_code'] as String?,
@@ -1569,38 +1692,62 @@ class ParticipantController extends GetxController {
 
   // Form management methods
   Future<void> pickImage() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        selectedImage.value = image;
-        photoFile.value = File(image.path);
-      }
-    } catch (e) {
-      errorMessage.value = 'Failed to pick image: ${e.toString()}';
-    }
+    await pickParticipantPhoto(ImageSource.gallery);
   }
 
   Future<void> takePhoto() async {
+    await pickParticipantPhoto(ImageSource.camera);
+  }
+
+  /// Pick or capture participant photo (gallery or camera).
+  Future<void> pickParticipantPhoto(
+    ImageSource source, {
+    BuildContext? context,
+  }) async {
     try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
+      final XFile? file = await PhotoCaptureService.pickImage(
+        source: source,
+        context: context,
         imageQuality: 85,
       );
 
-      if (image != null) {
-        selectedImage.value = image;
-        photoFile.value = File(image.path);
+      if (file == null) return;
+
+      int fileSize;
+      if (kIsWeb) {
+        final bytes = await file.readAsBytes();
+        fileSize = bytes.length;
+      } else {
+        fileSize = await File(file.path).length();
       }
+
+      if (fileSize > participantPhotoMaxBytes) {
+        final message = 'Participant photo must be 10 MB or smaller';
+        if (context != null && context.mounted) {
+          SnackbarHelper.showError(context, message);
+        } else {
+          errorMessage.value = message;
+        }
+        return;
+      }
+
+      selectedImage.value = file;
+      if (!kIsWeb) {
+        photoFile.value = File(file.path);
+      } else {
+        photoFile.value = null;
+      }
+      existingPhotoUrl.value = '';
+      errorMessage.value = '';
     } catch (e) {
-      errorMessage.value = 'Failed to take photo: ${e.toString()}';
+      final message = source == ImageSource.camera
+          ? 'Failed to take photo: ${e.toString()}'
+          : 'Failed to pick image: ${e.toString()}';
+      if (context != null && context.mounted) {
+        SnackbarHelper.showError(context, message);
+      } else {
+        errorMessage.value = message;
+      }
     }
   }
 
@@ -1807,14 +1954,19 @@ class ParticipantController extends GetxController {
       isLoadingParticipant.value = true;
       errorMessage.value = '';
 
-      final response = await _participantRepository.getParticipantById(
-        participantId,
-      );
+      final response = await _participantRepository
+          .getParticipantRegistrationById(participantId);
 
       if (response.success && response.data != null) {
-        initializeFormForEdit(response.data!);
+        final reg = response.data!['registration'];
+        if (reg is Map<String, dynamic>) {
+          initializeFormForEdit(_mapRegistrationToParticipant(reg));
+          isLoadingParticipant.value = false;
+          return true;
+        }
+        errorMessage.value = 'Invalid participant registration response';
         isLoadingParticipant.value = false;
-        return true;
+        return false;
       } else {
         errorMessage.value =
             response.message ?? 'Failed to fetch participant details';
@@ -1863,22 +2015,17 @@ class ParticipantController extends GetxController {
           cacheBuster: timestamp,
         );
         existingPhotoUrl.value = imageUrl ?? '';
-
-        // Get bonafied certificate URL with cache-busting
-        final certificateUrl = getParticipantRegistrationCertificateUrl(
-          participant.id,
-          cacheBuster: timestamp,
-        );
-        existingCertificateUrl.value = certificateUrl ?? '';
+        _loadExistingBonafideCertificate(participant);
 
         print('Photo URL from API: ${existingPhotoUrl.value}');
         print('Certificate URL from API: ${existingCertificateUrl.value}');
+        print('Bonafide file name: ${bonafideFileName.value}');
         print('Participant ID: ${participant.id}');
         print('Is Edit Mode: ${isEditMode}');
       } else {
         // Fallback to photoUrl if ID is not available
         existingPhotoUrl.value = participant.photoUrl ?? '';
-        existingCertificateUrl.value = '';
+        _loadExistingBonafideCertificate(participant);
         print('Photo URL from model: ${existingPhotoUrl.value}');
       }
 
@@ -2004,22 +2151,17 @@ class ParticipantController extends GetxController {
         cacheBuster: timestamp,
       );
       existingPhotoUrl.value = imageUrl ?? '';
-
-      // Get bonafied certificate URL with cache-busting
-      final certificateUrl = getParticipantRegistrationCertificateUrl(
-        participant.id,
-        cacheBuster: timestamp,
-      );
-      existingCertificateUrl.value = certificateUrl ?? '';
+      _loadExistingBonafideCertificate(participant);
 
       print('Photo URL from API: ${existingPhotoUrl.value}');
       print('Certificate URL from API: ${existingCertificateUrl.value}');
+      print('Bonafide file name: ${bonafideFileName.value}');
       print('Participant ID: ${participant.id}');
       print('Is Edit Mode: ${isEditMode}');
     } else {
       // Fallback to photoUrl if ID is not available
       existingPhotoUrl.value = participant.photoUrl ?? '';
-      existingCertificateUrl.value = '';
+      _loadExistingBonafideCertificate(participant);
       print('Photo URL from model: ${existingPhotoUrl.value}');
     }
 

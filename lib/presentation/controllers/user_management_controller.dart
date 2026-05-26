@@ -11,13 +11,15 @@ import '../../data/models/user_management_model.dart';
 import '../../data/models/user_type_model.dart';
 import '../../data/models/competition_option_model.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/constants/championship_style.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/utils/permission_store.dart';
+import '../../../core/utils/snackbar_helper.dart';
+import '../../../core/utils/photo_capture_service.dart';
 
 class UserManagementController extends GetxController {
   final UserManagementRepository _repository = UserManagementRepository();
   final CompetitionRepository _competitionRepository = CompetitionRepository();
-
   // State
   final RxList<UserManagementModel> users = <UserManagementModel>[].obs;
   final RxBool isLoading = false.obs;
@@ -88,6 +90,9 @@ class UserManagementController extends GetxController {
   // Volunteer table state
   final RxList<VolunteerRow> volunteerRows = <VolunteerRow>[].obs;
 
+  /// Parent VOLUNTEER user created on first "Add More" save in this session.
+  final Set<String> _existingVolunteerNamesLower = {};
+
   // Available options - now loaded from API
   // Get user types as display strings
   List<String> get userTypes {
@@ -123,8 +128,6 @@ class UserManagementController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // Initialize with 4 volunteer rows
-    volunteerRows.value = List.generate(4, (index) => VolunteerRow());
     // Load current user from storage
     loadCurrentUser();
     // Load user types from API
@@ -309,11 +312,56 @@ class UserManagementController extends GetxController {
     return ids;
   }
 
+  static const String _championsCategoryName = 'CHAMPIONS';
+
+  /// When competition uses winner-based Champions, add CHAMPIONS for jury allotment.
+  Future<void> _appendChampionsCategoryForWinnerStyle(int competitionId) async {
+    final compResponse =
+        await _competitionRepository.getCompetitionById(competitionId);
+    if (!compResponse.success || compResponse.data == null) return;
+
+    final style = ChampionshipStyle.fromApiValue(
+      compResponse.data!.championshipStyle,
+    );
+    if (style != ChampionshipStyle.fromFirstPlaceWinners) return;
+
+    final hasChampions = availableCategories.any(
+      (c) => c.name.trim().toUpperCase() == _championsCategoryName,
+    );
+    if (hasChampions) return;
+
+    final allResponse = await _competitionRepository.getAllCategories();
+    if (!allResponse.success || allResponse.data == null) return;
+
+    final champions = allResponse.data!.firstWhereOrNull(
+      (c) => c.name.trim().toUpperCase() == _championsCategoryName,
+    );
+    if (champions != null) {
+      availableCategories.add(champions);
+      availableCategories.refresh();
+    }
+  }
+
+  bool isVolunteersSelectedType([String? type]) {
+    final value = (type ?? selectedType.value).toUpperCase();
+    return value == 'VOLUNTEERS' || value == 'VOLUNTEER';
+  }
+
+  bool _isVolunteerUser(UserManagementModel user) {
+    return isVolunteersSelectedType(user.type);
+  }
+
   // Load stages and categories for selected competition
   Future<void> loadStagesAndCategoriesForCompetition(
     String? competitionId,
   ) async {
     try {
+      if (isVolunteersSelectedType()) {
+        availableStages.clear();
+        availableCategories.clear();
+        return;
+      }
+
       if (competitionId == null || competitionId.isEmpty) {
         // Clear stages and categories if no competition selected
         availableStages.clear();
@@ -349,6 +397,7 @@ class UserManagementController extends GetxController {
       // Update categories
       if (results[1].success && results[1].data != null) {
         availableCategories.value = results[1].data!;
+        await _appendChampionsCategoryForWinnerStyle(competitionIdInt);
       } else {
         print('Failed to load categories: ${results[1].message}');
         availableCategories.clear();
@@ -390,70 +439,303 @@ class UserManagementController extends GetxController {
     }
   }
 
-  // Pick photo
-  Future<void> pickPhoto() async {
+  Future<void> _applyPickedUserPhoto(XFile image) async {
+    if (kIsWeb) {
+      final bytes = await image.readAsBytes();
+      photoBytes.value = bytes;
+      photoUrl.value = 'web_image';
+      photoFile.value = null;
+    } else {
+      photoFile.value = File(image.path);
+      photoBytes.value = null;
+      photoUrl.value = image.path;
+    }
+  }
+
+  Future<void> _applyPickedVolunteerPhoto(VolunteerRow row, XFile image) async {
+    if (kIsWeb) {
+      final bytes = await image.readAsBytes();
+      row.photoBytes.value = bytes;
+      row.photoUrl.value = 'web_image';
+      row.photoFile.value = null;
+    } else {
+      row.photoFile.value = File(image.path);
+      row.photoBytes.value = null;
+      row.photoUrl.value = image.path;
+    }
+  }
+
+  // Pick or capture user photo (gallery or camera).
+  Future<void> pickPhoto(
+    ImageSource source, {
+    BuildContext? context,
+  }) async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
+      final XFile? image = await PhotoCaptureService.pickImage(
+        source: source,
+        context: context,
         imageQuality: 85,
       );
 
       if (image != null) {
-        if (kIsWeb) {
-          // For web, read bytes
-          final bytes = await image.readAsBytes();
-          photoBytes.value = bytes;
-          photoUrl.value =
-              'web_image'; // Placeholder to indicate image is selected
-        } else {
-          // For mobile/desktop, use File
-          photoFile.value = File(image.path);
-          photoUrl.value = image.path;
-        }
+        await _applyPickedUserPhoto(image);
       }
     } catch (e) {
-      errorMessage.value = 'Error picking image: ${e.toString()}';
+      errorMessage.value = source == ImageSource.camera
+          ? 'Error taking photo: ${e.toString()}'
+          : 'Error picking image: ${e.toString()}';
     }
   }
 
-  // Pick photo for volunteer row
-  Future<void> pickPhotoForVolunteer(VolunteerRow row) async {
+  // Pick or capture volunteer row photo (gallery or camera).
+  Future<void> pickPhotoForVolunteer(
+    VolunteerRow row,
+    ImageSource source, {
+    BuildContext? context,
+  }) async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
+      final XFile? image = await PhotoCaptureService.pickImage(
+        source: source,
+        context: context,
         imageQuality: 85,
       );
 
       if (image != null) {
-        if (kIsWeb) {
-          // For web, read bytes
-          final bytes = await image.readAsBytes();
-          row.photoBytes.value = bytes;
-          row.photoUrl.value =
-              'web_image'; // Placeholder to indicate image is selected
-        } else {
-          // For mobile/desktop, use File
-          row.photoFile.value = File(image.path);
-          row.photoUrl.value = image.path;
-        }
+        await _applyPickedVolunteerPhoto(row, image);
       }
     } catch (e) {
-      errorMessage.value = 'Error picking image: ${e.toString()}';
+      errorMessage.value = source == ImageSource.camera
+          ? 'Error taking photo: ${e.toString()}'
+          : 'Error picking image: ${e.toString()}';
     }
   }
 
-  // Add volunteer row
   void addVolunteerRow() {
     volunteerRows.add(VolunteerRow());
+    volunteerRows.refresh();
   }
 
-  // Remove volunteer row
   void removeVolunteerRow(int index) {
-    if (volunteerRows.length > 1) {
-      volunteerRows.removeAt(index);
+    if (index < 0 || index >= volunteerRows.length) return;
+    if (volunteerRows[index].isRegistered.value) {
+      errorMessage.value = 'Saved volunteers cannot be removed here';
+      return;
     }
+    volunteerRows[index].dispose();
+    volunteerRows.removeAt(index);
+    if (volunteerRows.isEmpty) {
+      addVolunteerRow();
+    }
+  }
+
+  void _clearVolunteerGroupSession() {
+    _existingVolunteerNamesLower.clear();
+  }
+
+  /// Loads volunteer names already registered for this competition.
+  Future<void> _loadExistingVolunteerNamesForCompetition(int competitionId) async {
+    _existingVolunteerNamesLower.clear();
+    final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
+    final response = await _repository.getAllUsers(
+      competitionId: competitionId,
+      userTypeId: userTypeId,
+      page: 0,
+      limit: 500,
+    );
+    if (!response.success || response.data == null) return;
+
+    for (final user in response.data!.users) {
+      if (!_isVolunteerGroupUser(user)) continue;
+      final name = user.name.trim();
+      if (name.isEmpty) continue;
+      if (name.startsWith('Volunteers -')) {
+        for (final volunteer in user.volunteers ?? const []) {
+          final volunteerName = (volunteer['volunteerName'] ?? volunteer['name'])
+              ?.toString()
+              .trim();
+          if (volunteerName != null && volunteerName.isNotEmpty) {
+            _existingVolunteerNamesLower.add(volunteerName.toLowerCase());
+          }
+        }
+      } else {
+        _existingVolunteerNamesLower.add(name.toLowerCase());
+      }
+    }
+  }
+
+  /// Clears volunteer rows and group session (navigation / type change).
+  void resetVolunteerEntrySession() {
+    _disposeVolunteerRows();
+    _clearVolunteerGroupSession();
+  }
+
+  /// Same as participant bulk: one empty row ready for entry.
+  Future<void> prepareVolunteerEntry() async {
+    resetVolunteerEntrySession();
+    addVolunteerRow();
+    if (selectedEventId.value.trim().isNotEmpty &&
+        errorMessage.value == 'Please select a competition') {
+      errorMessage.value = '';
+    }
+    final competitionId = int.tryParse(selectedEventId.value.trim());
+    if (competitionId != null) {
+      await _loadExistingVolunteerNamesForCompetition(competitionId);
+    }
+  }
+
+  bool _isVolunteerGroupUser(UserManagementModel user) {
+    final typeId = getUserTypeId('VOLUNTEERS') ?? 4;
+    if (user.userTypeId == typeId) return true;
+    final type = user.type.toUpperCase();
+    return type.contains('VOLUNTEER');
+  }
+
+  /// Saves the active row via API, marks it read-only, and appends a new row.
+  Future<bool> registerCurrentVolunteer({BuildContext? context}) async {
+    final eventId = selectedEventId.value.trim();
+    if (eventId.isEmpty) {
+      errorMessage.value = 'Please select a competition';
+      return false;
+    }
+    if (errorMessage.value == 'Please select a competition') {
+      errorMessage.value = '';
+    }
+
+    if (volunteerRows.isEmpty) {
+      addVolunteerRow();
+    }
+
+    VolunteerRow? row;
+    for (var i = volunteerRows.length - 1; i >= 0; i--) {
+      if (!volunteerRows[i].isRegistered.value) {
+        row = volunteerRows[i];
+        break;
+      }
+    }
+    if (row == null) {
+      addVolunteerRow();
+      row = volunteerRows.last;
+    }
+
+    if (row.isRegistered.value) {
+      addVolunteerRow();
+      row = volunteerRows.last;
+    }
+
+    final volunteerName = row.nameController.text.trim();
+    if (volunteerName.isEmpty) {
+      errorMessage.value = 'Please enter volunteer name';
+      return false;
+    }
+
+    if (_existingVolunteerNamesLower.contains(volunteerName.toLowerCase())) {
+      errorMessage.value = '';
+      addVolunteerRow();
+      volunteerRows.refresh();
+      if (context != null && context.mounted) {
+        SnackbarHelper.showInfo(
+          context,
+          'Volunteer "$volunteerName" already exists. '
+          'Enter a different name in the new row below.',
+        );
+      }
+      return false;
+    }
+
+    final form = formKey.currentState;
+    if (form != null && !form.validate()) {
+      errorMessage.value = '';
+      return false;
+    }
+
+    final competitionId = int.tryParse(selectedEventId.value);
+    if (competitionId == null) {
+      errorMessage.value = 'Invalid competition ID';
+      return false;
+    }
+
+    final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
+    final volunteerPassword = generateRandomPassword();
+    final newVolunteer = <String, dynamic>{
+      'volunteerName': volunteerName,
+      'password': volunteerPassword,
+      'cell': row.cellController.text.trim(),
+    };
+
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      await _loadExistingVolunteerNamesForCompetition(competitionId);
+
+      // Login userName matches display name (must be unique across the system).
+      final loginUserName = volunteerName;
+
+      // One user account per volunteer (unique users.id); one linked volunteers row.
+      final user = UserManagementModel(
+        name: volunteerName,
+        userName: loginUserName,
+        password: volunteerPassword,
+        type: 'VOLUNTEERS',
+        userTypeId: userTypeId,
+        competitionId: competitionId,
+        volunteers: [newVolunteer],
+      );
+
+      final response = await _repository.createUser(user: user);
+      if (response.success) {
+        row.isRegistered.value = true;
+        row.savedPassword = volunteerPassword;
+        row.savedUserId = response.data?.id;
+        _existingVolunteerNamesLower.add(volunteerName.toLowerCase());
+        addVolunteerRow();
+        volunteerRows.refresh();
+        await loadUsers(eventId: competitionId);
+        // Do not show list-load errors on the volunteer create form after a successful save.
+        errorMessage.value = '';
+        if (context != null && context.mounted) {
+          SnackbarHelper.showSuccess(context, 'Volunteer saved successfully');
+        } else {
+          Get.snackbar(
+            'Success',
+            'Volunteer saved successfully',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+        }
+        return true;
+      }
+
+      final failMessage = response.message ?? 'Failed to save volunteer';
+      if (failMessage.toLowerCase().contains('already exists')) {
+        errorMessage.value = '';
+        addVolunteerRow();
+        volunteerRows.refresh();
+        if (context != null && context.mounted) {
+          SnackbarHelper.showInfo(
+            context,
+            'Volunteer "$volunteerName" already exists for this competition. '
+            'Use a different name in the new row below.',
+          );
+        }
+        return false;
+      }
+
+      errorMessage.value = failMessage;
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Error saving volunteer: ${e.toString()}';
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  void _disposeVolunteerRows() {
+    for (final row in volunteerRows) {
+      row.dispose();
+    }
+    volunteerRows.clear();
   }
 
   // Generate random password
@@ -599,26 +881,28 @@ class UserManagementController extends GetxController {
         return false;
       }
 
-      // Prepare volunteers array in new format
-      final volunteersList = validVolunteers.asMap().entries.map((entry) {
-        final index = entry.key;
-        final row = entry.value;
+      final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
+
+      // Volunteer numbers are assigned on the server when omitted.
+      final volunteersList = validVolunteers.map((row) {
         return <String, dynamic>{
-          'volunteerNo': generateVolunteerNo(index),
           'volunteerName': row.nameController.text.trim(),
           'password': generateRandomPassword(),
-          'cell': row.cellController.text.trim().isNotEmpty
-              ? row.cellController.text.trim()
-              : '',
+          'cell': row.cellController.text.trim(),
         };
       }).toList();
 
-      // Create a user with VOLUNTEERS type and volunteers array
+      final suffix = DateTime.now().millisecondsSinceEpoch;
+      final competitionLabel = selectedEventName.value.trim().isNotEmpty
+          ? selectedEventName.value.trim()
+          : 'Competition $competitionId';
+
       final user = UserManagementModel(
-        name: 'Volunteers Group', // Placeholder name
+        name: 'Volunteers - $competitionLabel ($suffix)',
+        userName: 'volunteers_${competitionId}_$suffix',
         password: generateRandomPassword(),
         type: 'VOLUNTEERS',
-        userTypeId: 4,
+        userTypeId: userTypeId,
         competitionId: competitionId,
       );
 
@@ -629,7 +913,9 @@ class UserManagementController extends GetxController {
 
       if (response.success) {
         await loadUsers(eventId: competitionId);
+        resetVolunteerEntrySession();
         resetForm();
+        toggleViewMode(true);
         return true;
       } else {
         errorMessage.value = response.message ?? 'Failed to create volunteers';
@@ -643,8 +929,48 @@ class UserManagementController extends GetxController {
     }
   }
 
+  void _populateVolunteerRowsForEdit(UserManagementModel user) {
+    _disposeVolunteerRows();
+
+    final legacyGroup =
+        user.name.trim().startsWith('Volunteers -') &&
+        user.volunteers != null &&
+        user.volunteers!.isNotEmpty;
+
+    if (legacyGroup) {
+      for (final volunteer in user.volunteers!) {
+        final row = VolunteerRow();
+        row.nameController.text =
+            (volunteer['volunteerName'] ?? volunteer['name'])?.toString().trim() ??
+            '';
+        row.cellController.text = volunteer['cell']?.toString().trim() ?? '';
+        volunteerRows.add(row);
+      }
+    } else {
+      final row = VolunteerRow();
+      String volunteerName = user.name.trim();
+      String cell = user.cell?.trim() ?? '';
+      if (user.volunteers != null && user.volunteers!.isNotEmpty) {
+        final volunteer = user.volunteers!.first;
+        volunteerName =
+            (volunteer['volunteerName'] ?? volunteer['name'])
+                ?.toString()
+                .trim() ??
+            volunteerName;
+        cell = volunteer['cell']?.toString().trim() ?? cell;
+      }
+      row.nameController.text = volunteerName;
+      row.cellController.text = cell;
+      row.savedPassword = user.confirmPassword;
+      volunteerRows.add(row);
+    }
+
+    volunteerRows.refresh();
+  }
+
   // Initialize form for edit
   void initializeFormForEdit(UserManagementModel user) {
+    _refreshFormKey();
     userToEdit.value = user;
     nameController.text = user.name;
     userNameController.text = user.userName ?? '';
@@ -660,31 +986,123 @@ class UserManagementController extends GetxController {
       cellController.text = user.cell!;
     }
 
+    if (_isVolunteerUser(user)) {
+      selectedType.value = 'VOLUNTEERS';
+      _populateVolunteerRowsForEdit(user);
+      photoFile.value = null;
+      photoBytes.value = null;
+      photoUrl.value = '';
+      return;
+    }
+
     // Set photo URL - construct full URL if we have user ID
     if (user.id != null &&
         user.displayPhotoUrl != null &&
         user.displayPhotoUrl!.isNotEmpty) {
       final photoPath = user.displayPhotoUrl!;
-      // If it's already a full URL, use it; otherwise construct it
       if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
         photoUrl.value = photoPath;
       } else {
-        // Construct full URL using the user photo endpoint
-        // Import BaseUrl and EndPoints at the top of the file
         photoUrl.value = '${BaseUrl.baseUrl}${EndPoints.userPhoto(user.id!)}';
       }
     } else {
       photoUrl.value = '';
     }
 
-    // Clear local photo files when loading existing user
     photoFile.value = null;
     photoBytes.value = null;
 
-    // Load stages and categories for the selected competition
-    // This is important for edit mode so that stages and categories are available
     if (selectedEventId.value.isNotEmpty) {
       loadStagesAndCategoriesForCompetition(selectedEventId.value);
+    }
+  }
+
+  /// Updates the volunteer being edited (single-user volunteer model).
+  Future<bool> updateVolunteerUser() async {
+    final userId = userToEdit.value?.id;
+    if (userId == null || userId.isEmpty) {
+      errorMessage.value = 'Invalid volunteer user';
+      return false;
+    }
+
+    if (volunteerRows.isEmpty) {
+      errorMessage.value = 'No volunteer data to update';
+      return false;
+    }
+
+    final row = volunteerRows.first;
+    final volunteerName = row.nameController.text.trim();
+    if (volunteerName.isEmpty) {
+      errorMessage.value = 'Please enter volunteer name';
+      return false;
+    }
+
+    final form = formKey.currentState;
+    if (form != null && !form.validate()) {
+      errorMessage.value = '';
+      return false;
+    }
+
+    if (selectedEventId.value.isEmpty) {
+      errorMessage.value = 'Please select a competition';
+      return false;
+    }
+
+    final competitionId = int.tryParse(selectedEventId.value);
+    if (competitionId == null) {
+      errorMessage.value = 'Invalid competition ID';
+      return false;
+    }
+
+    final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
+    final volunteerPayload = <String, dynamic>{
+      'volunteerName': volunteerName,
+      'cell': row.cellController.text.trim(),
+    };
+    if (row.savedPassword != null && row.savedPassword!.length >= 6) {
+      volunteerPayload['password'] = row.savedPassword;
+    }
+
+    final user = UserManagementModel(
+      id: userId,
+      name: volunteerName,
+      userName: volunteerName,
+      type: 'VOLUNTEERS',
+      userTypeId: userTypeId,
+      competitionId: competitionId,
+      competitionName: selectedEventName.value.isNotEmpty
+          ? selectedEventName.value
+          : null,
+      volunteers: [volunteerPayload],
+    );
+
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      final response = await _repository.updateUser(
+        id: userId,
+        user: user,
+        photoFile: row.photoFile.value,
+        photoBytes: row.photoBytes.value,
+        photoFileName: kIsWeb ? 'volunteer_photo.jpg' : null,
+      );
+
+      if (response.success) {
+        await loadUsers(eventId: competitionId);
+        errorMessage.value = '';
+        resetForm();
+        toggleViewMode(true);
+        return true;
+      }
+
+      errorMessage.value = response.message ?? 'Failed to update volunteer';
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Error updating volunteer: ${e.toString()}';
+      return false;
+    } finally {
+      isLoading.value = false;
     }
   }
 
@@ -836,7 +1254,8 @@ class UserManagementController extends GetxController {
     photoFile.value = null;
     photoBytes.value = null;
     photoUrl.value = '';
-    volunteerRows.value = List.generate(4, (index) => VolunteerRow());
+    _disposeVolunteerRows();
+    _clearVolunteerGroupSession();
     errorMessage.value = '';
 
     // Clear all text controllers
@@ -845,20 +1264,7 @@ class UserManagementController extends GetxController {
     passwordController.clear();
     cellController.clear();
 
-    // Reset form validation state
-    // Try immediately first
-    formKey.currentState?.reset();
-
-    // Also reset after a frame delay to ensure all reactive updates are complete
-    // This handles cases where widgets need to rebuild before form state can be reset
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      formKey.currentState?.reset();
-      // Force clear text controllers again after form reset to ensure they're empty
-      nameController.clear();
-      userNameController.clear();
-      passwordController.clear();
-      cellController.clear();
-    });
+    _refreshFormKey();
   }
 
   // Login user
@@ -980,6 +1386,9 @@ class VolunteerRow {
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<Uint8List?> photoBytes = Rx<Uint8List?>(null);
   final RxString photoUrl = ''.obs;
+  final RxBool isRegistered = false.obs;
+  String? savedPassword;
+  String? savedUserId;
 
   void dispose() {
     nameController.dispose();

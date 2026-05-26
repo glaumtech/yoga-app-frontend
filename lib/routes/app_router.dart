@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:yoga_champ/routes/app_routes.dart';
@@ -23,6 +24,7 @@ import '../presentation/screens/participants/user_competition_registration_scree
 import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../presentation/screens/organization_setup/organization_setup_screen.dart';
 import '../core/constants/app_constants.dart';
+import '../core/navigation/root_navigator_key.dart';
 import '../core/utils/storage_service.dart';
 
 Page<void> _noTransitionPage(GoRouterState state, Widget child) {
@@ -31,10 +33,30 @@ Page<void> _noTransitionPage(GoRouterState state, Widget child) {
 
 class AppRouter {
   static final GoRouter router = GoRouter(
-    initialLocation: AppRoutes.splash,
+    navigatorKey: rootNavigatorKey,
+    initialLocation: kIsWeb ? AppRoutes.home : AppRoutes.splash,
+    debugLogDiagnostics: kDebugMode,
+    errorBuilder: (context, state) => Scaffold(
+      appBar: AppBar(title: const Text('Page not found')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(state.error?.toString() ?? 'Unknown routing error'),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => context.go(AppRoutes.home),
+              child: const Text('Go to home'),
+            ),
+          ],
+        ),
+      ),
+    ),
     redirect: (context, state) {
       final token = StorageService.getString(AppConstants.tokenKey);
-      final location = state.matchedLocation;
+      final location = state.matchedLocation.isEmpty
+          ? AppRoutes.splash
+          : state.matchedLocation;
 
       // Public routes that don't require authentication
       final publicRoutes = [

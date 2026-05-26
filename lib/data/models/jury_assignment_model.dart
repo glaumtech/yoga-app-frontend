@@ -8,6 +8,8 @@ class JuryAssignmentModel {
   final int maximumMarks;
   final bool male;
   final bool female;
+  final String? championshipStyle;
+  final bool hideStageGroupSelection;
 
   JuryAssignmentModel({
     required this.juryId,
@@ -19,7 +21,16 @@ class JuryAssignmentModel {
     required this.maximumMarks,
     this.male = false,
     this.female = false,
+    this.championshipStyle,
+    this.hideStageGroupSelection = false,
   });
+
+  bool get isWinnerBasedChampionship =>
+      championshipStyle?.trim().toUpperCase() == 'FROM_FIRST_PLACE_WINNERS';
+
+  bool get hasChampionsCategoryAssignment => categories.any(
+        (c) => c.categoryName.trim().toUpperCase() == 'CHAMPIONS',
+      );
 
   factory JuryAssignmentModel.fromJson(Map<String, dynamic> json) {
     final stagesList = json['stages'] as List<dynamic>? ?? [];
@@ -45,6 +56,8 @@ class JuryAssignmentModel {
       maximumMarks: json['maximumMarks'] as int? ?? 0,
       male: json['male'] as bool? ?? false,
       female: json['female'] as bool? ?? false,
+      championshipStyle: json['championshipStyle']?.toString(),
+      hideStageGroupSelection: json['hideStageGroupSelection'] as bool? ?? false,
     );
   }
 
@@ -59,6 +72,8 @@ class JuryAssignmentModel {
       'maximumMarks': maximumMarks,
       'male': male,
       'female': female,
+      if (championshipStyle != null) 'championshipStyle': championshipStyle,
+      'hideStageGroupSelection': hideStageGroupSelection,
     };
   }
 }
@@ -119,6 +134,9 @@ class CategoryAssignment {
   final String categoryName;
 
   CategoryAssignment({required this.id, required this.categoryName});
+
+  bool get isChampions =>
+      categoryName.trim().toUpperCase() == 'CHAMPIONS';
 
   factory CategoryAssignment.fromJson(Map<String, dynamic> json) {
     return CategoryAssignment(

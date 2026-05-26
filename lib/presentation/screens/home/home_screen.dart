@@ -7,6 +7,7 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/keyboard/keyboard_scrollable.dart';
 import '../../../core/layout/home_layout.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/permission_store.dart';
@@ -385,31 +386,27 @@ class HomeScreen extends StatelessWidget {
               return const Center(child: CircularProgressIndicator());
             }
 
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildBannerSliderSection(context),
-                      _buildBannerSection(context, competitionController),
-                      _buildCurrentEventsSection(
-                        context,
-                        competitionController,
-                      ),
-                      _buildUpcomingEventsSection(
-                        context,
-                        competitionController,
-                      ),
-                      _buildPastEventsSection(
-                        context,
-                        competitionController,
-                      ),
-                      const FooterSection(),
-                    ],
+            return KeyboardScrollable(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildBannerSliderSection(context),
+                  _buildBannerSection(context, competitionController),
+                  _buildCurrentEventsSection(
+                    context,
+                    competitionController,
                   ),
-                );
-              },
+                  _buildUpcomingEventsSection(
+                    context,
+                    competitionController,
+                  ),
+                  _buildPastEventsSection(
+                    context,
+                    competitionController,
+                  ),
+                  const FooterSection(),
+                ],
+              ),
             );
           }),
         ),

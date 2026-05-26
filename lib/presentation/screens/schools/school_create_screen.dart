@@ -30,6 +30,21 @@ String _villageSelectedDisplay(CityModel c) {
   return '${c.cityName}, $v';
 }
 
+/// Land line: digits only (STD + number), optional, max 50 (matches DB).
+const int _kLandLineMaxDigits = 50;
+
+String? _validateLandLine(String? value) {
+  final v = value?.trim() ?? '';
+  if (v.isEmpty) return null;
+  if (!RegExp(r'^\d+$').hasMatch(v)) {
+    return 'Land line must contain digits only';
+  }
+  if (v.length > _kLandLineMaxDigits) {
+    return 'Land line must be at most $_kLandLineMaxDigits digits';
+  }
+  return null;
+}
+
 class SchoolCreateScreen extends StatelessWidget {
   final bool hideButtons;
 
@@ -225,20 +240,14 @@ class SchoolCreateScreen extends StatelessWidget {
                               label: 'Land line :',
                               controller: controller.landLineController,
                               isMobile: isMobile,
-                              maxLength: 10,
+                              maxLength: _kLandLineMaxDigits,
                               keyboardType: TextInputType.phone,
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
                               ],
-                              validator: (_) {
-                                final v =
-                                    controller.landLineController.text.trim();
-                                if (v.isEmpty) return null;
-                                if (v.length != 10) {
-                                  return 'Land line must be 10 digits';
-                                }
-                                return null;
-                              },
+                              validator: (_) => _validateLandLine(
+                                controller.landLineController.text,
+                              ),
                             ),
                             SizedBox(height: isMobile ? 20 : 24),
                             _buildTextField(
@@ -285,21 +294,14 @@ class SchoolCreateScreen extends StatelessWidget {
                                 label: 'Land line :',
                                 controller: controller.landLineController,
                                 isMobile: isMobile,
-                                maxLength: 10,
+                                maxLength: _kLandLineMaxDigits,
                                 keyboardType: TextInputType.phone,
                                 inputFormatters: [
                                   FilteringTextInputFormatter.digitsOnly,
                                 ],
-                                validator: (_) {
-                                  final v = controller
-                                      .landLineController.text
-                                      .trim();
-                                  if (v.isEmpty) return null;
-                                  if (v.length != 10) {
-                                    return 'Land line must be 10 digits';
-                                  }
-                                  return null;
-                                },
+                                validator: (_) => _validateLandLine(
+                                  controller.landLineController.text,
+                                ),
                               ),
                             ),
                             SizedBox(width: isTablet ? 16 : 20),

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/navigation/root_scaffold_messenger_key.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/jury_assignment_model.dart';
 import '../../data/repositories/user_management_repository.dart';
@@ -100,6 +100,22 @@ class JuryScoringController extends GetxController {
     final max = j.maximumMarks;
     if (min > 0 && max > 0 && min <= max) return max;
     return 10;
+  }
+
+  /// Hide stage/group only for Champions jury on FROM_FIRST_PLACE_WINNERS competitions.
+  bool get hideStageAndGroupSelection {
+    final j = juryAssignment.value;
+    if (j == null ||
+        !j.isWinnerBasedChampionship ||
+        !j.hasChampionsCategoryAssignment) {
+      return false;
+    }
+    // Jury allotted only to Champions — always hide stage/group.
+    if (j.categories.length == 1 && j.categories.first.isChampions) {
+      return true;
+    }
+    // Multiple categories — hide only while Champions is selected.
+    return selectedCategory.value.trim().toUpperCase() == 'CHAMPIONS';
   }
 
   /// Integer buttons for the whole part of the score (inclusive).
@@ -254,20 +270,26 @@ class JuryScoringController extends GetxController {
 
   // Helper method to check if all dropdowns are selected and call API
   void _checkAndCallApiIfAllSelected() {
-    // Only call API if all three dropdowns are selected
-    if (selectedStage.value.isNotEmpty &&
-        selectedCategory.value.isNotEmpty &&
-        selectedGroup.value.isNotEmpty) {
+    final ready = hideStageAndGroupSelection
+        ? selectedCategory.value.isNotEmpty
+        : selectedStage.value.isNotEmpty &&
+              selectedCategory.value.isNotEmpty &&
+              selectedGroup.value.isNotEmpty;
+
+    if (ready) {
       print(
-        'All dropdowns selected - Stage: ${selectedStage.value}, Category: ${selectedCategory.value}, Group: ${selectedGroup.value} - Calling for-scoring API',
+        hideStageAndGroupSelection
+            ? 'Category selected (${selectedCategory.value}) - Calling for-scoring API (Champions from 1st-place winners)'
+            : 'All dropdowns selected - Stage: ${selectedStage.value}, Category: ${selectedCategory.value}, Group: ${selectedGroup.value} - Calling for-scoring API',
       );
       loadParticipantsForSelection();
     } else {
-      // Clear participants if not all are selected
       currentParticipants.clear();
       remainingCount.value = 0;
       print(
-        'Not all dropdowns selected - Stage: ${selectedStage.value}, Category: ${selectedCategory.value}, Group: ${selectedGroup.value} - Skipping API call',
+        hideStageAndGroupSelection
+            ? 'Category not selected - Skipping API call'
+            : 'Not all dropdowns selected - Stage: ${selectedStage.value}, Category: ${selectedCategory.value}, Group: ${selectedGroup.value} - Skipping API call',
       );
     }
   }
@@ -315,6 +337,18 @@ class JuryScoringController extends GetxController {
       currentParticipants.clear();
       remainingCount.value = 0;
       return;
+    }
+
+    // Switching away from Champions on winner-based competitions — clear stage/group
+    // so the jury must pick them again for Common/Special scoring.
+    final j = juryAssignment.value;
+    if (j != null &&
+        j.isWinnerBasedChampionship &&
+        j.hasChampionsCategoryAssignment &&
+        category.trim().toUpperCase() != 'CHAMPIONS') {
+      selectedStage.value = '';
+      selectedGroup.value = '';
+      availableGroups.clear();
     }
 
     // Check if all dropdowns are selected, then call API
@@ -365,8 +399,12 @@ class JuryScoringController extends GetxController {
       return;
     }
 
-    // At least stage must be selected to load participants
-    if (selectedStage.value.isEmpty) {
+    if (!hideStageAndGroupSelection && selectedStage.value.isEmpty) {
+      currentParticipants.clear();
+      return;
+    }
+
+    if (selectedCategory.value.isEmpty) {
       currentParticipants.clear();
       return;
     }
@@ -383,33 +421,36 @@ class JuryScoringController extends GetxController {
         'Loading participants - Stage: ${selectedStage.value}, Category: ${selectedCategory.value}, Group: ${selectedGroup.value}',
       );
 
-      // Get stage ID (required)
-      final stageAssignment = availableStages.firstWhereOrNull(
-        (s) => s.stageName == selectedStage.value,
-      );
-      stageId = stageAssignment?.id;
+      if (!hideStageAndGroupSelection) {
+        final stageAssignment = availableStages.firstWhereOrNull(
+          (s) => s.stageName == selectedStage.value,
+        );
+        stageId = stageAssignment?.id;
 
-      if (stageId == null) {
+        if (stageId == null) {
+          currentParticipants.clear();
+          isLoading.value = false;
+          return;
+        }
+      }
+
+      print(
+        'Available categories: ${availableCategories.map((c) => c.categoryName).toList()}',
+      );
+      print('Selected category: ${selectedCategory.value}');
+      final categoryAssignment = availableCategories.firstWhereOrNull(
+        (c) => c.categoryName == selectedCategory.value,
+      );
+      categoryId = categoryAssignment?.id;
+      print('Category ID found: $categoryId');
+
+      if (categoryId == null) {
         currentParticipants.clear();
         isLoading.value = false;
         return;
       }
 
-      // Get category ID (optional)
-      if (selectedCategory.value.isNotEmpty) {
-        print(
-          'Available categories: ${availableCategories.map((c) => c.categoryName).toList()}',
-        );
-        print('Selected category: ${selectedCategory.value}');
-        final categoryAssignment = availableCategories.firstWhereOrNull(
-          (c) => c.categoryName == selectedCategory.value,
-        );
-        categoryId = categoryAssignment?.id;
-        print('Category ID found: $categoryId');
-      }
-
-      // Get group ID
-      if (selectedGroup.value.isNotEmpty) {
+      if (!hideStageAndGroupSelection && selectedGroup.value.isNotEmpty) {
         print(
           'Available groups: ${availableGroups.map((g) => g.groupName).toList()}',
         );
@@ -760,7 +801,18 @@ class JuryScoringController extends GetxController {
       print('  Category: ${selectedCategory.value}');
       print('  Group: ${selectedGroup.value}');
 
-      if (selectedStage.value.isEmpty ||
+      if (hideStageAndGroupSelection) {
+        if (selectedCategory.value.isEmpty) {
+          print('Validation failed: Missing category');
+          isLoading.value = false;
+          _showSnackbar(
+            title: 'Validation Error',
+            message: 'Please select Category',
+            backgroundColor: Colors.red,
+          );
+          return;
+        }
+      } else if (selectedStage.value.isEmpty ||
           selectedCategory.value.isEmpty ||
           selectedGroup.value.isEmpty) {
         print('Validation failed: Missing stage/category/group');
@@ -906,32 +958,48 @@ class JuryScoringController extends GetxController {
         return;
       }
 
-      // Get stage, category, and group IDs
-      final stageAssignment = availableStages.firstWhereOrNull(
-        (s) => s.stageName == selectedStage.value,
-      );
       final categoryAssignment = availableCategories.firstWhereOrNull(
         (c) => c.categoryName == selectedCategory.value,
       );
-      final groupAssignment = availableGroups.firstWhereOrNull(
-        (g) => g.groupName == selectedGroup.value,
-      );
 
-      if (stageAssignment == null ||
-          categoryAssignment == null ||
-          groupAssignment == null) {
+      if (categoryAssignment == null) {
         isLoading.value = false;
         _showSnackbar(
           title: 'Error',
-          message: 'Invalid stage, category, or group selection',
+          message: 'Invalid category selection',
           backgroundColor: Colors.red,
         );
         return;
       }
 
-      final stageId = stageAssignment.id;
       final categoryId = categoryAssignment.id;
-      final groupId = groupAssignment.id;
+      int? stageId;
+      int? groupId;
+
+      if (hideStageAndGroupSelection) {
+        stageId = null;
+        groupId = null;
+      } else {
+        final stageAssignment = availableStages.firstWhereOrNull(
+          (s) => s.stageName == selectedStage.value,
+        );
+        final groupAssignment = availableGroups.firstWhereOrNull(
+          (g) => g.groupName == selectedGroup.value,
+        );
+
+        if (stageAssignment == null || groupAssignment == null) {
+          isLoading.value = false;
+          _showSnackbar(
+            title: 'Error',
+            message: 'Invalid stage or group selection',
+            backgroundColor: Colors.red,
+          );
+          return;
+        }
+
+        stageId = stageAssignment.id;
+        groupId = groupAssignment.id;
+      }
 
       // isLoading.value is already set at the beginning of the method
       errorMessage.value = '';
@@ -1226,74 +1294,15 @@ class JuryScoringController extends GetxController {
     Color backgroundColor = Colors.red,
     Duration duration = const Duration(seconds: 4),
   }) {
-    final safeTitle = title.trim();
-    final safeMessage = message.trim();
-    final body = safeTitle.isEmpty ? safeMessage : '$safeTitle\n$safeMessage';
-    if (body.isEmpty) return;
-
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (isClosed) return;
-
-      final messenger = rootScaffoldMessengerKey.currentState;
-      if (messenger != null) {
-        try {
-          messenger.clearSnackBars();
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                body,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  height: 1.35,
-                ),
-              ),
-              backgroundColor: backgroundColor,
-              behavior: SnackBarBehavior.floating,
-              duration: duration,
-              margin: const EdgeInsets.all(16),
-            ),
-          );
-        } catch (e, st) {
-          debugPrint('ScaffoldMessenger snackbar failed: $e\n$st');
-          _showSnackbarGetXFallback(
-            safeTitle.isEmpty ? 'Notice' : safeTitle,
-            safeMessage.isEmpty ? body : safeMessage,
-            backgroundColor,
-            duration,
-          );
-        }
-        return;
-      }
-      _showSnackbarGetXFallback(
-        safeTitle.isEmpty ? 'Notice' : safeTitle,
-        safeMessage.isEmpty ? body : safeMessage,
-        backgroundColor,
-        duration,
-      );
-    });
-  }
-
-  void _showSnackbarGetXFallback(
-    String title,
-    String message,
-    Color backgroundColor,
-    Duration duration,
-  ) {
-    if (message.isEmpty) return;
-    try {
-      Get.snackbar(
-        title,
-        message,
-        snackPosition: SnackPosition.BOTTOM,
+      SnackbarHelper.show(
+        title: title,
+        message: message,
         backgroundColor: backgroundColor,
-        colorText: Colors.white,
         duration: duration,
       );
-    } catch (e) {
-      debugPrint('Error showing snackbar: $e');
-      debugPrint('Title: $title, Message: $message');
-    }
+    });
   }
 
   @override
