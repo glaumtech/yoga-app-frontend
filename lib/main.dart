@@ -10,6 +10,7 @@ import 'presentation/controllers/participant_controller.dart';
 import 'presentation/controllers/competition_controller.dart';
 import 'routes/app_router.dart';
 import 'core/constants/app_constants.dart';
+import 'core/keyboard/app_keyboard_scroll_scope.dart';
 import 'core/utils/permission_store.dart';
 
 void main() async {
@@ -44,6 +45,12 @@ class MyApp extends StatelessWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
       routerConfig: AppRouter.router,
+      shortcuts: AppKeyboardScrollScope.mergeAppShortcuts(
+        WidgetsApp.defaultShortcuts,
+      ),
+      builder: (context, child) {
+        return AppKeyboardScrollScope(child: child);
+      },
     );
   }
 }
