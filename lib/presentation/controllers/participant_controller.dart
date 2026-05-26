@@ -23,6 +23,7 @@ import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/utils/state_defaults.dart';
 import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/photo_capture_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
 import 'competition_controller.dart';
@@ -34,7 +35,6 @@ class ParticipantController extends GetxController {
   final ParticipantRepository _participantRepository = ParticipantRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
   final LocationRepository _locationRepository = LocationRepository();
-  final ImagePicker _imagePicker = ImagePicker();
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
   /// Cleared text controllers during [resetForm] fire `onChanged`, which would otherwise
@@ -1705,8 +1705,9 @@ class ParticipantController extends GetxController {
     BuildContext? context,
   }) async {
     try {
-      final XFile? file = await _imagePicker.pickImage(
+      final XFile? file = await PhotoCaptureService.pickImage(
         source: source,
+        context: context,
         imageQuality: 85,
       );
 

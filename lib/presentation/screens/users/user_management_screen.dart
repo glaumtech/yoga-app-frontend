@@ -716,7 +716,8 @@ class UserManagementScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       PhotoSourceButtons(
-                        onPick: controller.pickPhoto,
+                        onPick: (source, ctx) =>
+                            controller.pickPhoto(source, context: ctx),
                       ),
                     ],
                   ),
@@ -1200,7 +1201,8 @@ class UserManagementScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         PhotoSourceButtons(
-                          onPick: controller.pickPhoto,
+                          onPick: (source, ctx) =>
+                              controller.pickPhoto(source, context: ctx),
                         ),
                       ],
                     ),
@@ -1575,6 +1577,7 @@ class UserManagementScreen extends StatelessWidget {
   }
 
   Widget _buildVolunteerPhotoColumn({
+    required BuildContext context,
     required UserManagementController controller,
     required VolunteerRow row,
     required bool readOnly,
@@ -1605,14 +1608,20 @@ class UserManagementScreen extends StatelessWidget {
                 _buildVolunteerPhotoButton(
                   icon: Icons.upload_file,
                   label: 'BROWSE',
-                  onPressed: () =>
-                      controller.pickPhotoForVolunteer(row, ImageSource.gallery),
+                  onPressed: () => controller.pickPhotoForVolunteer(
+                    row,
+                    ImageSource.gallery,
+                    context: context,
+                  ),
                 ),
                 _buildVolunteerPhotoButton(
                   icon: Icons.camera_alt_outlined,
                   label: 'CAMERA',
-                  onPressed: () =>
-                      controller.pickPhotoForVolunteer(row, ImageSource.camera),
+                  onPressed: () => controller.pickPhotoForVolunteer(
+                    row,
+                    ImageSource.camera,
+                    context: context,
+                  ),
                 ),
               ],
             ),
@@ -1812,6 +1821,7 @@ class UserManagementScreen extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: _buildVolunteerPhotoColumn(
+                    context: context,
                     controller: controller,
                     row: row,
                     readOnly: readOnly,
@@ -1897,6 +1907,7 @@ class UserManagementScreen extends StatelessWidget {
             Expanded(
               flex: 2,
               child: _buildVolunteerPhotoColumn(
+                context: context,
                 controller: controller,
                 row: row,
                 readOnly: readOnly,
@@ -2513,8 +2524,11 @@ Widget _buildVolunteerCard(
           Row(
             children: [
               PhotoSourceButtons(
-                onPick: (source) =>
-                    controller.pickPhotoForVolunteer(row, source),
+                onPick: (source, ctx) => controller.pickPhotoForVolunteer(
+                  row,
+                  source,
+                  context: ctx,
+                ),
               ),
               Obx(() {
                 if (row.photoUrl.value.isNotEmpty) {

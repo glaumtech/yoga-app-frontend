@@ -10,7 +10,7 @@ class PhotoSourceButtons extends StatelessWidget {
     this.showCamera = true,
   });
 
-  final Future<void> Function(ImageSource source) onPick;
+  final Future<void> Function(ImageSource source, BuildContext context) onPick;
   final bool enabled;
   final bool showCamera;
 
@@ -27,14 +27,14 @@ class PhotoSourceButtons extends StatelessWidget {
       alignment: WrapAlignment.center,
       children: [
         OutlinedButton.icon(
-          onPressed: enabled ? () => onPick(ImageSource.gallery) : null,
+          onPressed: enabled ? () => onPick(ImageSource.gallery, context) : null,
           icon: const Icon(Icons.upload_file, size: 16),
           label: const Text('BROWSE', style: TextStyle(fontSize: 12)),
           style: buttonStyle,
         ),
         if (showCamera)
           OutlinedButton.icon(
-            onPressed: enabled ? () => onPick(ImageSource.camera) : null,
+            onPressed: enabled ? () => onPick(ImageSource.camera, context) : null,
             icon: const Icon(Icons.camera_alt_outlined, size: 16),
             label: const Text('CAMERA', style: TextStyle(fontSize: 12)),
             style: buttonStyle,

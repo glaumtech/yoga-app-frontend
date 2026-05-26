@@ -1030,9 +1030,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             child: Obx(
               () => PhotoSourceButtons(
                 enabled: !controller.isViewMode.value,
-                onPick: (source) => controller.pickParticipantPhoto(
+                onPick: (source, ctx) => controller.pickParticipantPhoto(
                   source,
-                  context: context,
+                  context: ctx,
                 ),
               ),
             ),

@@ -15,12 +15,11 @@ import '../../../core/constants/championship_style.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../core/utils/snackbar_helper.dart';
+import '../../../core/utils/photo_capture_service.dart';
 
 class UserManagementController extends GetxController {
   final UserManagementRepository _repository = UserManagementRepository();
   final CompetitionRepository _competitionRepository = CompetitionRepository();
-  final ImagePicker _imagePicker = ImagePicker();
-
   // State
   final RxList<UserManagementModel> users = <UserManagementModel>[].obs;
   final RxBool isLoading = false.obs;
@@ -467,10 +466,14 @@ class UserManagementController extends GetxController {
   }
 
   // Pick or capture user photo (gallery or camera).
-  Future<void> pickPhoto(ImageSource source) async {
+  Future<void> pickPhoto(
+    ImageSource source, {
+    BuildContext? context,
+  }) async {
     try {
-      final XFile? image = await _imagePicker.pickImage(
+      final XFile? image = await PhotoCaptureService.pickImage(
         source: source,
+        context: context,
         imageQuality: 85,
       );
 
@@ -485,10 +488,15 @@ class UserManagementController extends GetxController {
   }
 
   // Pick or capture volunteer row photo (gallery or camera).
-  Future<void> pickPhotoForVolunteer(VolunteerRow row, ImageSource source) async {
+  Future<void> pickPhotoForVolunteer(
+    VolunteerRow row,
+    ImageSource source, {
+    BuildContext? context,
+  }) async {
     try {
-      final XFile? image = await _imagePicker.pickImage(
+      final XFile? image = await PhotoCaptureService.pickImage(
         source: source,
+        context: context,
         imageQuality: 85,
       );
 
