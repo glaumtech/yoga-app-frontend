@@ -47,9 +47,6 @@ class AppKeyboardScrollScope extends StatefulWidget {
     return merged;
   }
 
-  static final Map<ShortcutActivator, Intent> _shortcuts =
-      mergeAppShortcuts(WidgetsApp.defaultShortcuts);
-
   @override
   State<AppKeyboardScrollScope> createState() => _AppKeyboardScrollScopeState();
 }
@@ -73,15 +70,12 @@ class _AppKeyboardScrollScopeState extends State<AppKeyboardScrollScope> {
 
   @override
   Widget build(BuildContext context) {
-    return Shortcuts(
-      shortcuts: AppKeyboardScrollScope._shortcuts,
-      child: Actions(
-        actions: <Type, Action<Intent>>{
-          ScrollIntent: KeyboardScrollAction(),
-        },
-        child: KeyboardScrollDiscovery(
-          child: widget.child ?? const SizedBox.shrink(),
-        ),
+    return Actions(
+      actions: <Type, Action<Intent>>{
+        ScrollIntent: KeyboardScrollAction(),
+      },
+      child: KeyboardScrollDiscovery(
+        child: widget.child ?? const SizedBox.shrink(),
       ),
     );
   }

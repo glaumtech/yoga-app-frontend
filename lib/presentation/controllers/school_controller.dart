@@ -18,11 +18,37 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/utils/state_defaults.dart';
 import '../../../core/navigation/root_scaffold_messenger_key.dart';
+import '../../../core/utils/snackbar_helper.dart';
 
 // Conditional import for web
 import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class SchoolController extends GetxController {
+  void _snackSuccess(String message) {
+    SnackbarHelper.show(
+      title: 'Success',
+      message: message,
+      backgroundColor: Colors.green,
+    );
+  }
+
+  void _snackError(String message) {
+    SnackbarHelper.show(
+      title: 'Error',
+      message: message,
+      backgroundColor: Colors.red,
+    );
+  }
+
+  void _snackInfo(String title, String message, {Duration? duration}) {
+    SnackbarHelper.show(
+      title: title,
+      message: message,
+      backgroundColor: Colors.blue,
+      duration: duration ?? const Duration(seconds: 1),
+    );
+  }
+
   static const String districtRequiredMessage = 'Please select district';
   static const String invalidStateMessage =
       'Please select a valid state from the list';
@@ -1414,13 +1440,7 @@ class SchoolController extends GetxController {
       if (duplicate != null) {
         errorMessage.value =
             duplicateInstitutionMessage(address: duplicate.address);
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError(errorMessage.value);
         return;
       }
 
@@ -1484,14 +1504,10 @@ class SchoolController extends GetxController {
         isEditMode.value = false;
         editingSchoolId.value = null;
 
-        Get.snackbar(
-          'Success',
+        _snackSuccess(
           wasEditMode
               ? 'School/College updated successfully'
               : 'School/College added successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
         );
 
         // Reload schools list
@@ -1508,24 +1524,12 @@ class SchoolController extends GetxController {
                 : 'Failed to create institution');
         final friendly = _friendlyInstitutionError(rawMessage);
         errorMessage.value = friendly.isNotEmpty ? friendly : rawMessage;
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError(errorMessage.value);
       }
     } catch (e) {
       errorMessage.value = 'Error submitting school: ${e.toString()}';
       print('Error in submitSchool: $e');
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError(errorMessage.value);
     } finally {
       isLoading.value = false;
     }
@@ -1830,24 +1834,12 @@ class SchoolController extends GetxController {
         );
       } else {
         errorMessage.value = response.message ?? 'Failed to load institution';
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError(errorMessage.value);
       }
     } catch (e) {
       errorMessage.value = 'Error loading institution: ${e.toString()}';
       print('Error in loadSchoolForEdit: $e');
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError(errorMessage.value);
     } finally {
       isLoading.value = false;
     }
@@ -2080,35 +2072,17 @@ class SchoolController extends GetxController {
         selectedInstitutionCategoryId.value = response.data!.id;
         selectedInstitutionCategory.value = response.data!.displayName;
 
-        Get.snackbar(
-          'Success',
-          'Category "$displayName" created successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-        );
+        _snackSuccess('Category "$displayName" created successfully');
         return true;
       } else {
         errorMessage.value = response.message ?? 'Failed to create category';
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError(errorMessage.value);
         return false;
       }
     } catch (e) {
       errorMessage.value = 'Error creating category: ${e.toString()}';
       print('Error in createInstitutionCategory: $e');
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError(errorMessage.value);
       return false;
     } finally {
       isLoadingInstitutionCategories.value = false;
@@ -2121,13 +2095,7 @@ class SchoolController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      Get.snackbar(
-        'Generating',
-        'Preparing report...',
-        backgroundColor: Colors.blue,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 1),
-      );
+      _snackInfo('Generating', 'Preparing report...');
 
       // Get filter values
       int? stateIdForPrint;
@@ -2159,13 +2127,7 @@ class SchoolController extends GetxController {
       // Download PDF from backend
       await _downloadInstitutionsPdf(requestBody);
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Error generating report: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError('Error generating report: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -2203,12 +2165,7 @@ class SchoolController extends GetxController {
             ..click();
           html.Url.revokeObjectUrl(blobUrl);
 
-          Get.snackbar(
-            'Success',
-            'Report download started',
-            backgroundColor: Colors.green,
-            colorText: Colors.white,
-          );
+          _snackSuccess('Report download started');
         } else {
           // Mobile: Open PDF
           final dataUri = Uri.dataFromBytes(
@@ -2217,38 +2174,16 @@ class SchoolController extends GetxController {
           );
           if (await canLaunchUrl(dataUri)) {
             await launchUrl(dataUri, mode: LaunchMode.externalApplication);
-            Get.snackbar(
-              'Success',
-              'Report opened',
-              backgroundColor: Colors.green,
-              colorText: Colors.white,
-            );
+            _snackSuccess('Report opened');
           } else {
-            Get.snackbar(
-              'Error',
-              'Could not open report',
-              backgroundColor: Colors.red,
-              colorText: Colors.white,
-            );
+            _snackError('Could not open report');
           }
         }
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to generate report (status ${response.statusCode})',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError('Failed to generate report (status ${response.statusCode})');
       }
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to download report: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError('Failed to download report: ${e.toString()}');
     }
   }
 }
