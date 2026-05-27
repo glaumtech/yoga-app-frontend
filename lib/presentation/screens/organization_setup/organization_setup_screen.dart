@@ -428,6 +428,8 @@ class OrganizationSetupScreen extends StatelessWidget {
 
     Widget buildPackageCards() {
       return Obx(() {
+        final selectedId = c.selectedPackageId.value;
+        final isSubmitting = c.isLoading.value;
         if (c.isLoadingPackages.value) {
           return const Center(
             child: Padding(
@@ -469,9 +471,9 @@ class OrganizationSetupScreen extends StatelessWidget {
               itemCount: c.subscriptionPackages.length,
               itemBuilder: (context, index) {
                 final pkg = c.subscriptionPackages[index];
-                final selected = c.selectedPackageId.value == pkg.id;
+                final selected = selectedId == pkg.id;
                 return InkWell(
-                  onTap: c.isLoading.value ? null : () => c.applySelectedPackage(pkg.id),
+                  onTap: isSubmitting ? null : () => c.applySelectedPackage(pkg.id),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
