@@ -27,6 +27,7 @@ class OrganizationSetupController extends GetxController {
       Rx<OrganizationSetupFoundationResponseModel?>(null);
   final RxBool subscriptionPaymentCompleted = false.obs;
   final RxBool isProcessingPayment = false.obs;
+  final RxString selectedCheckoutMethod = 'RAZORPAY'.obs;
 
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
@@ -208,6 +209,7 @@ class OrganizationSetupController extends GetxController {
     currentStep.value = 0;
     foundationResult.value = null;
     subscriptionPaymentCompleted.value = false;
+    selectedCheckoutMethod.value = 'RAZORPAY';
   }
 
   SubscriptionPackageModel? get selectedPackage =>
@@ -457,6 +459,18 @@ class OrganizationSetupController extends GetxController {
       return false;
     }
 
+    // Manual/offline confirmation path for branch operators.
+    if (selectedCheckoutMethod.value == 'CASH') {
+      subscriptionPaymentCompleted.value = true;
+      currentStep.value = 2;
+      Get.snackbar(
+        'Payment marked complete',
+        'Cash payment marked as received. Continue to create admin users.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return true;
+    }
+
     try {
       isProcessingPayment.value = true;
       errorMessage.value = '';
@@ -482,7 +496,9 @@ class OrganizationSetupController extends GetxController {
         keyId: key,
         orderId: orderId,
         amountPaise: amount,
-        description: selectedPackage?.name ?? 'Subscription',
+        description: selectedCheckoutMethod.value == 'GPAY'
+            ? '${selectedPackage?.name ?? 'Subscription'} (UPI)'
+            : (selectedPackage?.name ?? 'Subscription'),
         mockMode: mockMode,
       );
 

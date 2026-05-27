@@ -603,6 +603,51 @@ class OrganizationSetupScreen extends StatelessWidget {
                   ],
                 ),
               ),
+            const SizedBox(height: 4),
+            const Text(
+              'Choose payment method',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('Razorpay'),
+                  selected: c.selectedCheckoutMethod.value == 'RAZORPAY',
+                  onSelected: (_) => c.selectedCheckoutMethod.value = 'RAZORPAY',
+                ),
+                ChoiceChip(
+                  label: const Text('GPay (UPI)'),
+                  selected: c.selectedCheckoutMethod.value == 'GPAY',
+                  onSelected: (_) => c.selectedCheckoutMethod.value = 'GPAY',
+                ),
+                ChoiceChip(
+                  label: const Text('Cash'),
+                  selected: c.selectedCheckoutMethod.value == 'CASH',
+                  onSelected: (_) => c.selectedCheckoutMethod.value = 'CASH',
+                ),
+              ],
+            ),
+            if (c.selectedCheckoutMethod.value == 'GPAY' &&
+                c.manualPaymentUpiIdController.text.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'UPI ID: ${c.manualPaymentUpiIdController.text.trim()}',
+                  style: TextStyle(color: Colors.grey[700]),
+                ),
+              ),
+            if (c.selectedCheckoutMethod.value == 'CASH')
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Cash mode marks payment as received and continues to admin setup.',
+                  style: TextStyle(color: Colors.orange[800], fontSize: 12),
+                ),
+              ),
+            const SizedBox(height: 10),
             SizedBox(
               height: 52,
               child: ElevatedButton.icon(
@@ -622,7 +667,11 @@ class OrganizationSetupScreen extends StatelessWidget {
                 label: Text(
                   c.subscriptionPaymentCompleted.value
                       ? 'Payment completed'
-                      : 'Pay with Razorpay',
+                      : (c.selectedCheckoutMethod.value == 'CASH'
+                          ? 'Confirm cash payment'
+                          : (c.selectedCheckoutMethod.value == 'GPAY'
+                              ? 'Pay with GPay (UPI)'
+                              : 'Pay with Razorpay')),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
