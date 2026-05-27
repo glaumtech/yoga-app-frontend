@@ -403,6 +403,12 @@ class HomeCompetitionModel {
   final String? brochureFilePath;
   final String status;
   final String? registrationUrl;
+  final String? paymentModel;
+  final List<String> allowedPaymentModes;
+  final String? manualPaymentUpiId;
+  final String? manualPaymentQrUrl;
+  final bool maintenanceFeePaid;
+  final bool registrationOpen;
 
   HomeCompetitionModel({
     this.id,
@@ -418,7 +424,18 @@ class HomeCompetitionModel {
     this.brochureFilePath,
     this.status = 'upcoming',
     this.registrationUrl,
+    this.paymentModel,
+    this.allowedPaymentModes = const [],
+    this.manualPaymentUpiId,
+    this.manualPaymentQrUrl,
+    this.maintenanceFeePaid = true,
+    this.registrationOpen = true,
   });
+
+  bool get isPayPerParticipant => paymentModel == 'PAY_PER_PARTICIPANT';
+  bool get isManualPaymentModel =>
+      paymentModel == 'ORG_SUBSCRIPTION' ||
+      paymentModel == 'USER_PACK_SUBSCRIPTION';
 
   factory HomeCompetitionModel.fromJson(Map<String, dynamic> json) {
     Map<String, double> amounts = {};
@@ -448,6 +465,14 @@ class HomeCompetitionModel {
       brochureFilePath: json['brochureFilePath']?.toString(),
       status: json['status']?.toString() ?? 'upcoming',
       registrationUrl: json['registrationUrl']?.toString(),
+      paymentModel: json['paymentModel']?.toString(),
+      allowedPaymentModes: json['allowedPaymentModes'] != null
+          ? List<String>.from(json['allowedPaymentModes'])
+          : const [],
+      manualPaymentUpiId: json['manualPaymentUpiId']?.toString(),
+      manualPaymentQrUrl: json['manualPaymentQrUrl']?.toString(),
+      maintenanceFeePaid: json['maintenanceFeePaid'] == true,
+      registrationOpen: json['registrationOpen'] != false,
     );
   }
 

@@ -118,6 +118,21 @@ class EndPoints {
   /// Public competitions list (home / unauthenticated)
   static String competitionPublic = '/competition/public';
 
+  /// Payment gateway
+  static String paymentPackages = '/payment/packages';
+  static String paymentSubscriptionOrder = '/payment/subscription/order';
+  static String paymentSubscriptionVerify = '/payment/subscription/verify';
+  static String paymentRegistrationOrder = '/payment/registration/order';
+  static String paymentRegistrationVerify = '/payment/registration/verify';
+  static String paymentCompetitionMaintenanceOrder(int competitionId) =>
+      '/payment/competition/$competitionId/maintenance-order';
+  static String paymentCompetitionMaintenanceVerify(int competitionId) =>
+      '/payment/competition/$competitionId/maintenance-verify';
+  static String participantRegistrationPaymentVerify(String id) =>
+      '/participant-registration/$id/payment/verify';
+  static String participantRegistrationPaymentReject(String id) =>
+      '/participant-registration/$id/payment/reject';
+
   /// COMPETITION OPTIONS
   static String categoryList = '/category';
   static String categoryCreate = '/category';
@@ -193,6 +208,8 @@ class EndPoints {
 
   /// ORGANIZATION / BRANCH SETUP
   static String organizationSetup = '/organization/setup';
+  static String organizationSetupFoundation = '/organization/setup/foundation';
+  static String organizationSetupAdmins = '/organization/setup/admins';
 
   /// Branch-level certificate template CRUD.
   static String certificateTemplates = '/settings/certificate-templates';

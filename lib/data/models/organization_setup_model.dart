@@ -23,15 +23,32 @@ class SetupAdminUserRequestModel {
 class OrganizationRequestModel {
   final String organizationName;
   final String? organizationCode;
+  final String? paymentModel;
+  final String? manualPaymentUpiId;
+  final String? manualPaymentQrImagePath;
+  final int? subscriptionCreditsRemaining;
+  final int? packCreditsRemaining;
 
   OrganizationRequestModel({
     required this.organizationName,
     this.organizationCode,
+    this.paymentModel,
+    this.manualPaymentUpiId,
+    this.manualPaymentQrImagePath,
+    this.subscriptionCreditsRemaining,
+    this.packCreditsRemaining,
   });
 
   Map<String, dynamic> toJson() => {
     'organizationName': organizationName,
     if (organizationCode != null) 'organizationCode': organizationCode,
+    if (paymentModel != null) 'paymentModel': paymentModel,
+    if (manualPaymentUpiId != null) 'manualPaymentUpiId': manualPaymentUpiId,
+    if (manualPaymentQrImagePath != null)
+      'manualPaymentQrImagePath': manualPaymentQrImagePath,
+    if (subscriptionCreditsRemaining != null)
+      'subscriptionCreditsRemaining': subscriptionCreditsRemaining,
+    if (packCreditsRemaining != null) 'packCreditsRemaining': packCreditsRemaining,
   };
 }
 
@@ -208,6 +225,78 @@ class BranchDtoModel {
       logoPath: json['logoPath']?.toString(),
     );
   }
+}
+
+class OrganizationSetupFoundationRequestModel {
+  final OrganizationRequestModel organization;
+  final BranchRequestModel branch;
+  final int? selectedPackageId;
+
+  OrganizationSetupFoundationRequestModel({
+    required this.organization,
+    required this.branch,
+    this.selectedPackageId,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'organization': organization.toJson(),
+    'branch': branch.toJson(),
+    if (selectedPackageId != null) 'selectedPackageId': selectedPackageId,
+  };
+
+  String toDataField() => jsonEncode(toJson());
+}
+
+class OrganizationSetupFoundationResponseModel {
+  final OrganizationDtoModel organization;
+  final BranchDtoModel branch;
+
+  OrganizationSetupFoundationResponseModel({
+    required this.organization,
+    required this.branch,
+  });
+
+  factory OrganizationSetupFoundationResponseModel.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return OrganizationSetupFoundationResponseModel(
+      organization: OrganizationDtoModel.fromJson(
+        Map<String, dynamic>.from(json['organization'] as Map),
+      ),
+      branch: BranchDtoModel.fromJson(
+        Map<String, dynamic>.from(json['branch'] as Map),
+      ),
+    );
+  }
+}
+
+class OrganizationSetupAdminsRequestModel {
+  final int organizationId;
+  final int branchId;
+  final SetupAdminUserRequestModel orgAdminUser;
+  final SetupAdminUserRequestModel branchAdminUser;
+  final List<int>? orgAdminPermissionIds;
+  final List<int>? branchAdminPermissionIds;
+
+  OrganizationSetupAdminsRequestModel({
+    required this.organizationId,
+    required this.branchId,
+    required this.orgAdminUser,
+    required this.branchAdminUser,
+    this.orgAdminPermissionIds,
+    this.branchAdminPermissionIds,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'organizationId': organizationId,
+    'branchId': branchId,
+    'orgAdminUser': orgAdminUser.toJson(),
+    'branchAdminUser': branchAdminUser.toJson(),
+    if (orgAdminPermissionIds != null)
+      'orgAdminPermissionIds': orgAdminPermissionIds,
+    if (branchAdminPermissionIds != null)
+      'branchAdminPermissionIds': branchAdminPermissionIds,
+  };
 }
 
 class OrganizationSetupResponseModel {

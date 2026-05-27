@@ -360,26 +360,277 @@ class OrganizationSetupScreen extends StatelessWidget {
     }
 
     Future<void> onSubmit() async {
-      if (c.isLoading.value) return;
+      if (c.isLoading.value || c.isProcessingPayment.value) return;
       final ok = await c.submitSetup();
       if (!context.mounted) return;
 
-      if (ok) {
-        final orgName = c.lastResult.value?.organization.organizationName ?? '';
-        Get.snackbar(
-          'Success',
-          orgName.isEmpty
-              ? 'Organization setup completed'
-              : 'Organization setup completed for $orgName',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      } else {
+      if (!ok && c.errorMessage.value.isNotEmpty) {
         Get.snackbar(
           'Failed',
-          c.errorMessage.value.isEmpty ? 'Setup failed' : c.errorMessage.value,
+          c.errorMessage.value,
           snackPosition: SnackPosition.BOTTOM,
         );
       }
+    }
+
+    Widget buildStepIndicator() {
+      return Obx(() {
+        final step = c.currentStep.value;
+        Widget chip(int index, String label) {
+          final active = step == index;
+          final done = step > index;
+          return Expanded(
+            child: Column(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: done
+                      ? Colors.green
+                      : (active ? AppTheme.primaryColor : Colors.grey[300]),
+                  child: Text(
+                    '${index + 1}',
+                    style: TextStyle(
+                      color: active || done ? Colors.white : Colors.grey[700],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                    color: active ? AppTheme.primaryColor : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Row(
+            children: [
+              chip(0, 'Org & Plan'),
+              Expanded(child: Container(height: 2, color: Colors.grey[300])),
+              chip(1, 'Payment'),
+              Expanded(child: Container(height: 2, color: Colors.grey[300])),
+              chip(2, 'Admin Users'),
+            ],
+          ),
+        );
+      });
+    }
+
+    Widget buildPackageCards() {
+      return Obx(() {
+        if (c.isLoadingPackages.value) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
+          );
+        }
+        if (c.packagesError.value.isNotEmpty && c.subscriptionPackages.isEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(c.packagesError.value, style: TextStyle(color: Colors.red[700])),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: c.loadSubscriptionPackages,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          );
+        }
+        if (c.subscriptionPackages.isEmpty) {
+          return const Text('No subscription packages available.');
+        }
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final crossCount = constraints.maxWidth >= 700 ? 2 : 1;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossCount,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                mainAxisExtent: crossCount == 1 ? 96 : 104,
+              ),
+              itemCount: c.subscriptionPackages.length,
+              itemBuilder: (context, index) {
+                final pkg = c.subscriptionPackages[index];
+                final selected = c.selectedPackageId.value == pkg.id;
+                return InkWell(
+                  onTap: c.isLoading.value ? null : () => c.applySelectedPackage(pkg.id),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selected
+                            ? AppTheme.primaryColor
+                            : Colors.grey[300]!,
+                        width: selected ? 2 : 1,
+                      ),
+                      color: selected
+                          ? AppTheme.primaryColor.withOpacity(0.06)
+                          : Colors.grey[50],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                pkg.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ),
+                            if (selected)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: AppTheme.primaryColor,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '₹${pkg.price.toStringAsFixed(0)} • ${pkg.credits} credits',
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            height: 1.2,
+                          ),
+                        ),
+                        Text(
+                          pkg.paymentModelLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                            height: 1.2,
+                          ),
+                        ),
+                        if (pkg.description != null &&
+                            pkg.description!.trim().isNotEmpty)
+                          Text(
+                            pkg.description!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11, height: 1.2),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      });
+    }
+
+    Widget buildPaymentStepPanel(BuildContext context) {
+      return Obx(() {
+        final pkg = c.selectedPackage;
+        final foundation = c.foundationResult.value;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            sectionTitle('Complete Subscription Payment'),
+            if (foundation != null)
+              Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Text(
+                  'Organization "${foundation.organization.organizationName}" and branch "${foundation.branch.branchName}" are created. Pay to activate your plan before creating admin users.',
+                ),
+              ),
+            if (pkg != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.shade100),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(pkg.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 6),
+                    Text('Amount: ₹${pkg.price.toStringAsFixed(0)}'),
+                    Text('Credits: ${pkg.credits}'),
+                    Text(pkg.paymentModelLabel),
+                  ],
+                ),
+              ),
+            SizedBox(
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: c.isProcessingPayment.value || c.subscriptionPaymentCompleted.value
+                    ? null
+                    : c.completeSubscriptionPayment,
+                icon: c.isProcessingPayment.value
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.payment),
+                label: Text(
+                  c.subscriptionPaymentCompleted.value
+                      ? 'Payment completed'
+                      : 'Pay with Razorpay',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        );
+      });
     }
 
     return Scaffold(
@@ -462,6 +713,56 @@ class OrganizationSetupScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 16),
+                        sectionTitle('Subscription Package'),
+                        const Text(
+                          'Choose a plan from the database. Payment is collected before admin users are created.',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                        const SizedBox(height: 12),
+                        buildPackageCards(),
+                        const SizedBox(height: 8),
+                        singleColumnFields(
+                          children: [
+                            TextFormField(
+                              controller: c.manualPaymentUpiIdController,
+                              textInputAction: TextInputAction.next,
+                              decoration: deco(
+                                label: 'Manual Payment UPI ID (optional)',
+                                icon: Icons.account_balance_wallet_outlined,
+                                hint: 'example@upi',
+                              ),
+                            ),
+                            TextFormField(
+                              controller: c.manualPaymentQrPathController,
+                              textInputAction: TextInputAction.next,
+                              decoration: deco(
+                                label: 'Manual Payment QR Path (optional)',
+                                icon: Icons.qr_code_outlined,
+                                hint: 'uploads/payment-qr/org1.png',
+                              ),
+                            ),
+                            TextFormField(
+                              controller: c.subscriptionCreditsController,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              decoration: deco(
+                                label: 'Subscription Credits (optional)',
+                                icon: Icons.confirmation_num_outlined,
+                              ),
+                            ),
+                            TextFormField(
+                              controller: c.packCreditsController,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              decoration: deco(
+                                label: 'Pack Credits (optional)',
+                                icon: Icons.inventory_2_outlined,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
                         sectionTitle('Branch'),
                         gridOrColumn(
                           desktopColumns: 3,
@@ -588,12 +889,7 @@ class OrganizationSetupScreen extends StatelessWidget {
                             icon: Icons.home_outlined,
                           ),
                         ),
-                      ],
-                    );
-
-                    final usersRight = Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                        const SizedBox(height: 16),
                         sectionTitle('Branch logo (optional)'),
                         Obx(
                           () => Row(
@@ -624,42 +920,21 @@ class OrganizationSetupScreen extends StatelessWidget {
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                child: Wrap(
+                                  spacing: 10,
                                   children: [
-                                    Text(
-                                      c.logoFileName.value.isEmpty
-                                          ? 'No logo selected'
-                                          : c.logoFileName.value,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey[800],
-                                          ),
+                                    OutlinedButton.icon(
+                                      onPressed: c.isLoading.value
+                                          ? null
+                                          : c.pickLogoFromGallery,
+                                      icon: const Icon(Icons.upload_file),
+                                      label: const Text('Choose logo'),
                                     ),
-                                    const SizedBox(height: 6),
-                                    Wrap(
-                                      spacing: 10,
-                                      runSpacing: 10,
-                                      children: [
-                                        OutlinedButton.icon(
-                                          onPressed: c.isLoading.value
-                                              ? null
-                                              : c.pickLogoFromGallery,
-                                          icon: const Icon(Icons.upload_file),
-                                          label: const Text('Choose'),
-                                        ),
-                                        TextButton(
-                                          onPressed: c.isLoading.value
-                                              ? null
-                                              : c.clearLogo,
-                                          child: const Text('Clear'),
-                                        ),
-                                      ],
+                                    TextButton(
+                                      onPressed: c.isLoading.value
+                                          ? null
+                                          : c.clearLogo,
+                                      child: const Text('Clear'),
                                     ),
                                   ],
                                 ),
@@ -667,7 +942,12 @@ class OrganizationSetupScreen extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 24),
+                      ],
+                    );
+
+                    final usersRight = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         sectionTitle('Organization Admin User'),
                         singleColumnFields(
                           children: [
@@ -814,83 +1094,127 @@ class OrganizationSetupScreen extends StatelessWidget {
                                 )
                               : const SizedBox.shrink(),
                         ),
-                        Obx(
-                          () => SizedBox(
-                            height: 56,
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: c.isLoading.value ? null : onSubmit,
-                              style: ElevatedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                        Obx(() {
+                          final step = c.currentStep.value;
+                          final busy = c.isLoading.value || c.isProcessingPayment.value;
+                          String label;
+                          if (step == 0) {
+                            label = c.requiresSubscriptionPayment
+                                ? 'Continue to Payment'
+                                : 'Continue to Admin Users';
+                          } else if (step == 1) {
+                            label = 'Pay & Continue to Admin Users';
+                          } else {
+                            label = 'Complete Setup';
+                          }
+                          return Row(
+                            children: [
+                              if (step > 0)
+                                TextButton(
+                                  onPressed: busy ? null : c.goBackStep,
+                                  child: const Text('Back'),
                                 ),
-                                backgroundColor: AppTheme.primaryColor,
-                              ),
-                              child: c.isLoading.value
-                                  ? const SizedBox(
-                                      height: 24,
-                                      width: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                          Colors.white,
-                                        ),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 56,
+                                  child: ElevatedButton(
+                                    onPressed: busy ? null : onSubmit,
+                                    style: ElevatedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
-                                    )
-                                  : const Text(
-                                      'Setup Organization',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      backgroundColor: AppTheme.primaryColor,
                                     ),
-                            ),
-                          ),
-                        ),
+                                    child: busy
+                                        ? const SizedBox(
+                                            height: 24,
+                                            width: 24,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                            ),
+                                          )
+                                        : Text(
+                                            label,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
                       ],
                     );
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          'Setup your organization and branch',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey[800],
-                              ),
+                        buildStepIndicator(),
+                        Obx(
+                          () => Text(
+                            c.stepTitle,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[800],
+                                ),
+                          ),
                         ),
-                        Text(
-                          'Fill details below and create admin users.',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: Colors.grey[600]),
+                        Obx(
+                          () => Text(
+                            c.currentStep.value == 0
+                                ? 'Enter organization details and select a subscription package.'
+                                : c.currentStep.value == 1
+                                    ? 'Pay for your subscription, then create admin users.'
+                                    : 'Create organization and branch admin accounts.',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: Colors.grey[600]),
+                          ),
                         ),
                         const SizedBox(height: 15),
-                        if (!isWide) ...[
-                          detailsLeft,
-                          const SizedBox(height: 24),
-                          usersRight,
-                          footer,
-                        ] else
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        Obx(() {
+                          final step = c.currentStep.value;
+                          if (step == 1) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                buildPaymentStepPanel(context),
+                                footer,
+                              ],
+                            );
+                          }
+                          if (step == 2) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                usersRight,
+                                footer,
+                              ],
+                            );
+                          }
+                          if (!isWide) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                detailsLeft,
+                                footer,
+                              ],
+                            );
+                          }
+                          return Column(
                             children: [
-                              Expanded(flex: 8, child: detailsLeft),
-                              const SizedBox(width: 24),
-                              Expanded(
-                                flex: 4,
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 440,
-                                  ),
-                                  child: usersRight,
-                                ),
-                              ),
+                              detailsLeft,
+                              footer,
                             ],
-                          ),
-                        if (isWide) footer,
+                          );
+                        }),
                       ],
                     );
                   },

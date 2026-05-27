@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +22,7 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
+import '../../widgets/adaptive_payment_section.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
@@ -50,6 +51,17 @@ CompetitionModel? _competitionForRegistration(
   final id = participantController.selectedEventId.value;
   if (id.isEmpty) return null;
   return competitionController.competitions.firstWhereOrNull((c) => c.id == id);
+}
+
+HomeCompetitionModel? _homeCompetitionForRegistration(
+  ParticipantController participantController,
+  CompetitionController competitionController,
+) {
+  final id = participantController.selectedEventId.value;
+  if (id.isEmpty) return null;
+  return competitionController.homeCompetitions.firstWhereOrNull(
+    (c) => c.id?.toString() == id,
+  );
 }
 
 List<String> _categoriesForRegistration(
@@ -485,6 +497,24 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                   ),
                 ],
                 SizedBox(height: isMobile ? 24 : 32),
+
+                if (!participantController.isViewMode.value) ...[
+                  AdaptivePaymentSection(
+                    controller: participantController,
+                    homeCompetition: _homeCompetitionForRegistration(
+                      participantController,
+                      competitionController,
+                    ),
+                    competitionController: competitionController,
+                    categoryId: participantController.selectedCategories.isNotEmpty
+                        ? competitionController.getCategoryIdByName(
+                            participantController.selectedCategories.first,
+                          )
+                        : null,
+                    isMobile: isMobile,
+                  ),
+                  SizedBox(height: isMobile ? 24 : 32),
+                ],
 
                 // Error Message (only show when not in list view)
                 Obx(() {

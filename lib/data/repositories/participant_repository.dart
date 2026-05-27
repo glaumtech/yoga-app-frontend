@@ -509,6 +509,7 @@ class ParticipantRepository {
     XFile? photoXFile,
     dynamic bonafiedCertificateFile,
     XFile? bonafiedCertificateXFile,
+    XFile? paymentProofXFile,
   }) async {
     try {
       // Encode registration data as JSON string
@@ -599,6 +600,22 @@ class ParticipantRepository {
           request.files.add(multipartFile);
         } catch (e) {
           print('Error reading bonafied certificate File: $e');
+        }
+      }
+
+      if (paymentProofXFile != null) {
+        try {
+          final fileBytes = await paymentProofXFile.readAsBytes();
+          final fileName = paymentProofXFile.name.split('/').last;
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'paymentProof',
+              fileBytes,
+              filename: fileName,
+            ),
+          );
+        } catch (e) {
+          print('Error reading payment proof: $e');
         }
       }
 
