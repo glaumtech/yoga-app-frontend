@@ -19,6 +19,8 @@ class WebcamCaptureDialog extends StatefulWidget {
 
 class _WebcamCaptureDialogState extends State<WebcamCaptureDialog> {
   CameraController? _controller;
+  List<CameraDescription> _cameras = [];
+  int _cameraIndex = 0;
   bool _initializing = true;
   bool _capturing = false;
   String? _error;
@@ -29,10 +31,25 @@ class _WebcamCaptureDialogState extends State<WebcamCaptureDialog> {
     _initCamera();
   }
 
-  Future<void> _initCamera() async {
+  int _preferredCameraIndex(List<CameraDescription> cameras) {
+    final backIndex = cameras.indexWhere(
+      (c) => c.lensDirection == CameraLensDirection.back,
+    );
+    if (backIndex >= 0) return backIndex;
+    return 0;
+  }
+
+  Future<void> _initCamera({int? cameraIndex}) async {
+    setState(() {
+      _initializing = true;
+      _error = null;
+    });
+
     try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
+      if (_cameras.isEmpty) {
+        _cameras = await availableCameras();
+      }
+      if (_cameras.isEmpty) {
         setState(() {
           _error = 'No camera found on this device.';
           _initializing = false;
@@ -40,13 +57,13 @@ class _WebcamCaptureDialogState extends State<WebcamCaptureDialog> {
         return;
       }
 
-      final camera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first,
-      );
+      _cameraIndex = cameraIndex ?? _preferredCameraIndex(_cameras);
+
+      await _controller?.dispose();
+      _controller = null;
 
       final controller = CameraController(
-        camera,
+        _cameras[_cameraIndex],
         ResolutionPreset.medium,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.jpeg,
@@ -71,6 +88,12 @@ class _WebcamCaptureDialogState extends State<WebcamCaptureDialog> {
         _initializing = false;
       });
     }
+  }
+
+  Future<void> _switchCamera() async {
+    if (_cameras.length < 2 || _initializing || _capturing) return;
+    final nextIndex = (_cameraIndex + 1) % _cameras.length;
+    await _initCamera(cameraIndex: nextIndex);
   }
 
   Future<void> _capture() async {
@@ -167,9 +190,28 @@ class _WebcamCaptureDialogState extends State<WebcamCaptureDialog> {
       );
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: CameraPreview(controller),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: CameraPreview(controller),
+        ),
+        if (_cameras.length > 1)
+          Positioned(
+            right: 8,
+            bottom: 8,
+            child: Material(
+              color: Colors.black54,
+              shape: const CircleBorder(),
+              child: IconButton(
+                tooltip: 'Switch camera',
+                onPressed: _initializing || _capturing ? null : _switchCamera,
+                icon: const Icon(Icons.cameraswitch, color: Colors.white),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
