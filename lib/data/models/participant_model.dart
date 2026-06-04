@@ -32,6 +32,8 @@ class ParticipantModel {
   final int? stageId;
   final int? categoryId;
   final int? groupId;
+  final String? paymentMode;
+  final String? paymentProofPath;
 
   ParticipantModel({
     this.id,
@@ -64,6 +66,8 @@ class ParticipantModel {
     this.stageId,
     this.categoryId,
     this.groupId,
+    this.paymentMode,
+    this.paymentProofPath,
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory ParticipantModel.fromJson(Map<String, dynamic> json) {

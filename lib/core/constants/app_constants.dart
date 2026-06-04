@@ -120,6 +120,7 @@ class EndPoints {
 
   /// Payment gateway
   static String paymentPackages = '/payment/packages';
+  static String subscriptionModes = '/subscription-mode';
   static String paymentSubscriptionOrder = '/payment/subscription/order';
   static String paymentSubscriptionVerify = '/payment/subscription/verify';
   static String paymentRegistrationOrder = '/payment/registration/order';
@@ -207,8 +208,10 @@ class EndPoints {
       '/reports/competition/$competitionId/print/participant-e-certificate';
 
   /// ORGANIZATION / BRANCH SETUP
-  static String organizationSetup = '/organization/setup';
   static String organizationSetupFoundation = '/organization/setup/foundation';
+  static String organizationSetupFoundationWithPayment =
+      '/organization/setup/foundation-with-payment';
+  static String organizationSetupComplete = '/organization/setup/complete';
   static String organizationSetupAdmins = '/organization/setup/admins';
 
   /// Branch-level certificate template CRUD.

@@ -39,7 +39,8 @@ class ParticipantController extends GetxController {
   final SchoolRepository _schoolRepository = SchoolRepository();
   final RazorpayCheckoutService _razorpayCheckout = RazorpayCheckoutService();
   final LocationRepository _locationRepository = LocationRepository();
-  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  /// Replaced on [resetForm] so field validators do not linger after save/cancel.
+  GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
   /// Cleared text controllers during [resetForm] fire `onChanged`, which would otherwise
   /// call [validateRegistrationFormOnFieldChange] and show validation errors after Cancel.
@@ -112,12 +113,16 @@ class ParticipantController extends GetxController {
   final RxBool isSpotRegistration = false.obs;
   final RxString selectedPaymentMode = 'GPAY'.obs;
   final Rx<XFile?> paymentProofImage = Rx<XFile?>(null);
+  /// Server path from existing registration (edit mode — no re-upload required).
+  final RxString existingPaymentProofPath = ''.obs;
   final RxBool optForECertificate = false.obs;
   final RxList<String> selectedCategories = <String>[].obs;
   final RxString selectedStage = ''.obs; // Selected stage name
   final RxString standard = ''.obs;
   final RxInt formResetTrigger =
       0.obs; // Trigger to force widget rebuilds on form reset
+  /// Bumped when institution name is set programmatically (edit load) so UI rebuilds.
+  final RxInt institutionFieldRevision = 0.obs;
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
   static const int participantPhotoMaxBytes = 10 * 1024 * 1024;
@@ -606,6 +611,7 @@ class ParticipantController extends GetxController {
     );
     if (fromSuggestions != null) {
       selectedInstitution.value = fromSuggestions;
+      _applyInstitutionNameToForm(fromSuggestions);
       _applyBonafideRulesForSelectedInstitution();
       return;
     }
@@ -614,10 +620,24 @@ class ParticipantController extends GetxController {
       final response = await _schoolRepository.getInstitutionById(id);
       if (response.success && response.data != null) {
         selectedInstitution.value = response.data;
+        _applyInstitutionNameToForm(response.data!);
         _applyBonafideRulesForSelectedInstitution();
       }
     } catch (e) {
       print('Error loading institution details: $e');
+    }
+  }
+
+  void _applyInstitutionNameToForm(SchoolModel institution) {
+    final name = institution.institutionName.trim();
+    if (name.isEmpty) return;
+    if (isBulkMode.value) {
+      if (bulkInstitutionNameController.text != name) {
+        bulkInstitutionNameController.text = name;
+      }
+    } else if (schoolNameController.text != name) {
+      schoolNameController.text = name;
+      institutionFieldRevision.value++;
     }
   }
 
@@ -1370,7 +1390,38 @@ class ParticipantController extends GetxController {
       groupId: reg['groupId'] is int
           ? reg['groupId'] as int
           : int.tryParse(reg['groupId']?.toString() ?? ''),
+      paymentMode: reg['paymentMode']?.toString(),
+      paymentProofPath: reg['paymentProofPath']?.toString(),
     );
+  }
+
+  String _normalizeRegistrationPaymentMode(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return 'GPAY';
+    final upper = raw.trim().toUpperCase();
+    if (upper == 'CASH') return 'CASH';
+    if (upper == 'GPAY') return 'GPAY';
+    if (upper == 'ONLINE') return 'ONLINE';
+    return upper;
+  }
+
+  void _applyPaymentFieldsForEdit(ParticipantModel participant) {
+    paymentProofImage.value = null;
+    existingPaymentProofPath.value = '';
+    selectedPaymentMode.value = 'GPAY';
+    final mode = participant.paymentMode;
+    if (mode != null && mode.trim().isNotEmpty) {
+      selectedPaymentMode.value = _normalizeRegistrationPaymentMode(mode);
+    }
+    final proof = participant.paymentProofPath?.trim();
+    if (proof != null && proof.isNotEmpty) {
+      existingPaymentProofPath.value = proof;
+    }
+  }
+
+  bool _requiresGpayProofUpload() {
+    if (selectedPaymentMode.value != 'GPAY') return false;
+    if (paymentProofImage.value != null) return false;
+    return existingPaymentProofPath.value.trim().isEmpty;
   }
 
   /// Normalize API/UI gender variants into values used by the form radio group.
@@ -1809,6 +1860,11 @@ class ParticipantController extends GetxController {
     }
   }
 
+  void _renewRegistrationFormKey() {
+    formKey = GlobalKey<FormState>();
+    formResetTrigger.value = formResetTrigger.value + 1;
+  }
+
   void resetForm() {
     _suppressRegistrationValidate = true;
     _registrationSubmitOwner = Object();
@@ -1827,6 +1883,7 @@ class ParticipantController extends GetxController {
     _clearBonafideCertificateFiles();
     selectedPaymentMode.value = 'GPAY';
     paymentProofImage.value = null;
+    existingPaymentProofPath.value = '';
     selectedInstitutionId.value = null;
     selectedInstitution.value = null;
     participantInstitutionId.value = null;
@@ -1846,39 +1903,17 @@ class ParticipantController extends GetxController {
     isLoadingParticipant.value = false;
     isViewMode.value = false;
 
-    // Increment reset trigger to force widget rebuilds (especially for Autocomplete)
-    formResetTrigger.value = formResetTrigger.value + 1;
+    institutionFieldRevision.value = 0;
+
+    // Fresh Form + remount fields (see KeyedSubtree in form screen).
+    _renewRegistrationFormKey();
 
     // Don't clear selectedEventId - keep the competition selected for convenience
     // selectedEventId.value = '';
 
-    // Reset form state - this must happen after clearing values
-    // Use a safe callback that checks if the form key is still valid
-    if (formKey.currentContext != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          if (formKey.currentState != null && formKey.currentContext != null) {
-            formKey.currentState?.reset();
-            // Force clear text controllers again after form reset to ensure they're empty
-            nameController.text = '';
-            schoolNameController.text = '';
-            addressController.text = '';
-            yogaMasterNameController.text = '';
-            yogaMasterContactController.text = '';
-          }
-        } finally {
-          _suppressRegistrationValidate = false;
-        }
-      });
-    } else {
-      // If context is not available, still clear the controllers
-      nameController.text = '';
-      schoolNameController.text = '';
-      addressController.text = '';
-      yogaMasterNameController.text = '';
-      yogaMasterContactController.text = '';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _suppressRegistrationValidate = false;
-    }
+    });
   }
 
   /// Initialize form for registration screen
@@ -1912,14 +1947,14 @@ class ParticipantController extends GetxController {
     }
   }
 
-  /// Initialize form directly from ParticipantModel without API call
-  /// Used when participant data is already available (e.g., from list)
+  /// Initialize form for edit — loads full registration (incl. payment proof) from API.
   void initializeFormFromModel(ParticipantModel participant) {
     isBulkMode.value = false;
-    // Clear all form data first
+    if (participant.id != null && participant.id!.isNotEmpty) {
+      unawaited(fetchParticipantById(participant.id!));
+      return;
+    }
     _clearFormData();
-
-    // Initialize form with participant data directly
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (formKey.currentState != null && formKey.currentContext != null) {
         formKey.currentState?.reset();
@@ -1948,6 +1983,8 @@ class ParticipantController extends GetxController {
     errorMessage.value = '';
     existingPhotoUrl.value = '';
     _clearBonafideCertificateFiles();
+    existingPaymentProofPath.value = '';
+    paymentProofImage.value = null;
     selectedInstitutionId.value = null;
     selectedInstitution.value = null;
     participantInstitutionId.value = null;
@@ -2039,10 +2076,11 @@ class ParticipantController extends GetxController {
 
       // Set form fields
       nameController.text = participant.participantName;
-      // Set institution name - use a small delay to ensure Autocomplete widget is ready
-      Future.microtask(() {
-        schoolNameController.text = participant.schoolName;
-      });
+      final viewInstitutionName = participant.schoolName.trim();
+      if (viewInstitutionName.isNotEmpty) {
+        schoolNameController.text = viewInstitutionName;
+        institutionFieldRevision.value++;
+      }
       // Set institution ID from participantInstitutionId (stored from API response)
       if (participantInstitutionId.value != null &&
           participantInstitutionId.value!.isNotEmpty) {
@@ -2143,6 +2181,7 @@ class ParticipantController extends GetxController {
 
     // Set participant to edit first (this sets isEditMode to true)
     participantToEdit.value = participant;
+    _applyPaymentFieldsForEdit(participant);
 
     // Set competition/event ID first (needed for category dropdown)
     if (participant.eventId != null && participant.eventId!.isNotEmpty) {
@@ -2175,12 +2214,11 @@ class ParticipantController extends GetxController {
 
     // Set form fields
     nameController.text = participant.participantName;
-    // Set institution name - use a small delay to ensure Autocomplete widget is ready
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (formKey.currentContext != null) {
-        schoolNameController.text = participant.schoolName;
-      }
-    });
+    final institutionName = participant.schoolName.trim();
+    if (institutionName.isNotEmpty) {
+      schoolNameController.text = institutionName;
+      institutionFieldRevision.value++;
+    }
     // Set institution ID from participantInstitutionId (stored from API response)
     // This is critical - must be set before validation
     if (participantInstitutionId.value != null &&
@@ -2189,7 +2227,7 @@ class ParticipantController extends GetxController {
       print(
         'Set selectedInstitutionId from participantInstitutionId: ${selectedInstitutionId.value}',
       );
-      _loadSelectedInstitutionForEdit();
+      unawaited(_loadSelectedInstitutionForEdit());
     } else {
       // If participantInstitutionId is not set, try to find it by name
       // Note: This is async and might complete after widget disposal, so we check if still needed
@@ -2215,6 +2253,7 @@ class ParticipantController extends GetxController {
                   selectedInstitutionId.value = matchingInstitution.id;
                   participantInstitutionId.value = matchingInstitution.id;
                   selectedInstitution.value = matchingInstitution;
+                  _applyInstitutionNameToForm(matchingInstitution);
                   _applyBonafideRulesForSelectedInstitution();
                   print(
                     'Found and set institution ID by name: ${selectedInstitutionId.value}',
@@ -2697,11 +2736,9 @@ class ParticipantController extends GetxController {
     };
 
     final paymentModel = _resolvePaymentModel(compController, eventId);
-    if (_isManualPaymentModel(paymentModel)) {
-      if (paymentProofImage.value == null) {
-        errorMessage.value = 'Please upload payment proof';
-        return false;
-      }
+    if (_isManualPaymentModel(paymentModel) && _requiresGpayProofUpload()) {
+      errorMessage.value = 'Please upload payment proof';
+      return false;
     }
 
     try {
@@ -2749,7 +2786,7 @@ class ParticipantController extends GetxController {
           }
           registrationSaved.value = true;
 
-          // Reset form immediately after successful update
+          // Reset form immediately after successful update (clears validators)
           resetForm();
           return true;
         } else {
@@ -2804,7 +2841,7 @@ class ParticipantController extends GetxController {
 
           registrationSaved.value = true;
 
-          // Reset form immediately after successful save
+          // Reset form immediately after successful save (clears validators)
           resetForm();
           return true;
         } else {

@@ -55,69 +55,95 @@ class AdaptivePaymentSection extends StatelessWidget {
           ),
         const SizedBox(height: 12),
         Obx(
-          () => Row(
-            children: [
-              Expanded(
-                child: RadioListTile<String>(
-                  title: const Text('GPay (UPI/QR)'),
-                  value: 'GPAY',
-                  groupValue: controller.selectedPaymentMode.value,
-                  onChanged: controller.isViewMode.value
-                      ? null
-                      : (v) => controller.selectedPaymentMode.value = v!,
+          () {
+            final mode = controller.selectedPaymentMode.value;
+            final isCash = mode == 'CASH';
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: RadioListTile<String>(
+                        title: const Text('GPay (UPI/QR)'),
+                        value: 'GPAY',
+                        groupValue: mode,
+                        onChanged: controller.isViewMode.value
+                            ? null
+                            : (v) {
+                                controller.selectedPaymentMode.value = v!;
+                              },
+                      ),
+                    ),
+                    Expanded(
+                      child: RadioListTile<String>(
+                        title: const Text('Cash'),
+                        value: 'CASH',
+                        groupValue: mode,
+                        onChanged: controller.isViewMode.value
+                            ? null
+                            : (v) {
+                                controller.selectedPaymentMode.value = v!;
+                                controller.paymentProofImage.value = null;
+                              },
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              Expanded(
-                child: RadioListTile<String>(
-                  title: const Text('Cash'),
-                  value: 'CASH',
-                  groupValue: controller.selectedPaymentMode.value,
-                  onChanged: controller.isViewMode.value
-                      ? null
-                      : (v) => controller.selectedPaymentMode.value = v!,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (upi != null && upi.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text('UPI ID: $upi'),
-        ],
-        if (qrUrl != null && qrUrl.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Image.network(
-            '${AppConfig.baseUrl}$qrUrl',
-            height: 160,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-          ),
-        ],
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: controller.isViewMode.value
-              ? null
-              : () async {
-                  final picker = ImagePicker();
-                  final file =
-                      await picker.pickImage(source: ImageSource.gallery);
-                  if (file != null) {
-                    controller.paymentProofImage.value = file;
-                  }
-                },
-          icon: const Icon(Icons.upload_file),
-          label: Obx(
-            () => Text(
-              controller.paymentProofImage.value != null
-                  ? 'Proof selected'
-                  : 'Upload payment proof',
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Registration will remain pending until admin verifies your payment.',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
+                if (!isCash) ...[
+                  if (upi != null && upi.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('UPI ID: $upi'),
+                  ],
+                  if (qrUrl != null && qrUrl.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Image.network(
+                      '${AppConfig.baseUrl}$qrUrl',
+                      height: 160,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: controller.isViewMode.value
+                        ? null
+                        : () async {
+                            final picker = ImagePicker();
+                            final file = await picker.pickImage(
+                              source: ImageSource.gallery,
+                            );
+                            if (file != null) {
+                              controller.paymentProofImage.value = file;
+                            }
+                          },
+                    icon: const Icon(Icons.upload_file),
+                    label: Text(
+                      controller.paymentProofImage.value != null
+                          ? 'Proof selected'
+                          : controller.existingPaymentProofPath.value
+                                  .trim()
+                                  .isNotEmpty
+                              ? 'Payment proof on file'
+                              : 'Upload payment proof',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Registration will remain pending until admin verifies your GPay payment.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Cash payment — no proof upload required. Registration will remain pending until admin confirms payment received.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ],
+            );
+          },
         ),
       ],
     );

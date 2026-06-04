@@ -162,9 +162,10 @@ class APIService {
         final String? status = parsed['status']?.toString().toLowerCase();
         final String? message = parsed['message']?.toString();
         final dynamic data = parsed['data'];
+        final bool successFlag = parsed['success'] == true;
 
-        // Handle success response: {"status":"success","message":"...","data":{...}}
-        if (status == 'success') {
+        // Handle success response: {"success":true,...} or {"status":"success",...}
+        if (successFlag || status == 'success') {
           T? resultData;
           if (fromJson != null && data != null) {
             resultData = fromJson(data);
@@ -186,8 +187,8 @@ class APIService {
           );
         }
 
-        // Handle error response: {"status":"error","message":"...","errorCode":"..."}
-        if (status == 'error') {
+        // Handle error response: {"success":false,...} or {"status":"error",...}
+        if (parsed['success'] == false || status == 'error') {
           return ApiResponse<T>(
             success: false,
             message: message ?? 'An error occurred',

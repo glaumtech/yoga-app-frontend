@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-import 'package:yoga_champ/data/models/user_management_model.dart';
-
 class SetupAdminUserRequestModel {
   final String name;
   final String userName;
@@ -28,6 +26,7 @@ class OrganizationRequestModel {
   final String? manualPaymentQrImagePath;
   final int? subscriptionCreditsRemaining;
   final int? packCreditsRemaining;
+  final double? maintenanceFeeAmount;
 
   OrganizationRequestModel({
     required this.organizationName,
@@ -37,6 +36,7 @@ class OrganizationRequestModel {
     this.manualPaymentQrImagePath,
     this.subscriptionCreditsRemaining,
     this.packCreditsRemaining,
+    this.maintenanceFeeAmount,
   });
 
   Map<String, dynamic> toJson() => {
@@ -49,6 +49,7 @@ class OrganizationRequestModel {
     if (subscriptionCreditsRemaining != null)
       'subscriptionCreditsRemaining': subscriptionCreditsRemaining,
     if (packCreditsRemaining != null) 'packCreditsRemaining': packCreditsRemaining,
+    if (maintenanceFeeAmount != null) 'maintenanceFeeAmount': maintenanceFeeAmount,
   };
 }
 
@@ -231,17 +232,20 @@ class OrganizationSetupFoundationRequestModel {
   final OrganizationRequestModel organization;
   final BranchRequestModel branch;
   final int? selectedPackageId;
+  final String? checkoutMethod;
 
   OrganizationSetupFoundationRequestModel({
     required this.organization,
     required this.branch,
     this.selectedPackageId,
+    this.checkoutMethod,
   });
 
   Map<String, dynamic> toJson() => {
     'organization': organization.toJson(),
     'branch': branch.toJson(),
     if (selectedPackageId != null) 'selectedPackageId': selectedPackageId,
+    if (checkoutMethod != null) 'checkoutMethod': checkoutMethod,
   };
 
   String toDataField() => jsonEncode(toJson());
@@ -268,6 +272,77 @@ class OrganizationSetupFoundationResponseModel {
       ),
     );
   }
+}
+
+class OrganizationSetupFoundationWithPaymentResponseModel {
+  final OrganizationSetupFoundationResponseModel foundation;
+  final Map<String, dynamic> paymentOrder;
+
+  OrganizationSetupFoundationWithPaymentResponseModel({
+    required this.foundation,
+    required this.paymentOrder,
+  });
+
+  factory OrganizationSetupFoundationWithPaymentResponseModel.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final Map<String, dynamic> foundationJson;
+    if (json['foundation'] is Map) {
+      foundationJson = Map<String, dynamic>.from(json['foundation'] as Map);
+    } else {
+      foundationJson = <String, dynamic>{
+        'organization': json['organization'],
+        'branch': json['branch'],
+      };
+    }
+    return OrganizationSetupFoundationWithPaymentResponseModel(
+      foundation: OrganizationSetupFoundationResponseModel.fromJson(
+        foundationJson,
+      ),
+      paymentOrder:
+          json['paymentOrder'] is Map
+              ? Map<String, dynamic>.from(json['paymentOrder'] as Map)
+              : <String, dynamic>{},
+    );
+  }
+}
+
+/// Foundation + admin users — single atomic setup request.
+class OrganizationSetupCompleteRequestModel {
+  final OrganizationRequestModel organization;
+  final BranchRequestModel branch;
+  final int? selectedPackageId;
+  final String? checkoutMethod;
+  final SetupAdminUserRequestModel orgAdminUser;
+  final SetupAdminUserRequestModel branchAdminUser;
+  final List<int>? orgAdminPermissionIds;
+  final List<int>? branchAdminPermissionIds;
+
+  OrganizationSetupCompleteRequestModel({
+    required this.organization,
+    required this.branch,
+    this.selectedPackageId,
+    this.checkoutMethod,
+    required this.orgAdminUser,
+    required this.branchAdminUser,
+    this.orgAdminPermissionIds,
+    this.branchAdminPermissionIds,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'organization': organization.toJson(),
+    'branch': branch.toJson(),
+    if (selectedPackageId != null) 'selectedPackageId': selectedPackageId,
+    if (checkoutMethod != null) 'checkoutMethod': checkoutMethod,
+    'orgAdminUser': orgAdminUser.toJson(),
+    'branchAdminUser': branchAdminUser.toJson(),
+    if (orgAdminPermissionIds != null)
+      'orgAdminPermissionIds': orgAdminPermissionIds,
+    if (branchAdminPermissionIds != null)
+      'branchAdminPermissionIds': branchAdminPermissionIds,
+  };
+
+  String toDataField() => jsonEncode(toJson());
 }
 
 class OrganizationSetupAdminsRequestModel {
@@ -299,33 +374,3 @@ class OrganizationSetupAdminsRequestModel {
   };
 }
 
-class OrganizationSetupResponseModel {
-  final OrganizationDtoModel organization;
-  final BranchDtoModel branch;
-  final UserManagementModel orgAdminUser;
-  final UserManagementModel branchAdminUser;
-
-  OrganizationSetupResponseModel({
-    required this.organization,
-    required this.branch,
-    required this.orgAdminUser,
-    required this.branchAdminUser,
-  });
-
-  factory OrganizationSetupResponseModel.fromJson(Map<String, dynamic> json) {
-    return OrganizationSetupResponseModel(
-      organization: OrganizationDtoModel.fromJson(
-        Map<String, dynamic>.from(json['organization'] as Map),
-      ),
-      branch: BranchDtoModel.fromJson(
-        Map<String, dynamic>.from(json['branch'] as Map),
-      ),
-      orgAdminUser: UserManagementModel.fromJson(
-        Map<String, dynamic>.from(json['orgAdminUser'] as Map),
-      ),
-      branchAdminUser: UserManagementModel.fromJson(
-        Map<String, dynamic>.from(json['branchAdminUser'] as Map),
-      ),
-    );
-  }
-}

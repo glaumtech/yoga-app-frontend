@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -194,13 +194,20 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
-        child: Form(
-          key: participantController.formKey,
-          // Per-field `autovalidateMode: onUserInteraction` — Form-level
-          // `onUserInteraction` validates *all* fields after any field is touched
-          // (Flutter behavior; see flutter/flutter#107350).
-          autovalidateMode: AutovalidateMode.disabled,
-          child: SingleChildScrollView(
+        child: Obx(
+          () => KeyedSubtree(
+            // Remount form after save/cancel so per-field validators do not linger
+            // on cleared fields (AutovalidateMode.onUserInteraction).
+            key: ValueKey(
+              'participant-reg-form-${participantController.formResetTrigger.value}',
+            ),
+            child: Form(
+              key: participantController.formKey,
+              // Per-field `autovalidateMode: onUserInteraction` — Form-level
+              // `onUserInteraction` validates *all* fields after any field is touched
+              // (Flutter behavior; see flutter/flutter#107350).
+              autovalidateMode: AutovalidateMode.disabled,
+              child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -798,6 +805,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    ),
       ),
     );
   }
@@ -1735,12 +1744,13 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         FormLabelWithHint(label: 'Institution Name :', bottomSpacing: 8),
         Obx(() {
           final resetTrigger = controller.formResetTrigger.value;
+          final institutionRevision = controller.institutionFieldRevision.value;
           final isEdit = controller.isEditMode;
-          final hasText = controller.schoolNameController.text.isNotEmpty;
           final participantId = controller.participantToEdit.value?.id ?? '';
-          final institutionKey = isEdit && hasText
-              ? 'institution-edit-$participantId-${controller.schoolNameController.text}'
-              : 'institution-new-$resetTrigger';
+          final institutionName = controller.schoolNameController.text.trim();
+          final institutionKey = isEdit && participantId.isNotEmpty
+              ? 'institution-edit-$participantId-$institutionRevision-$institutionName'
+              : 'institution-new-$resetTrigger-$institutionRevision';
 
           return InstitutionNameAutocompleteField(
             autocompleteKey: institutionKey,

@@ -13,6 +13,11 @@ import '../../core/utils/snackbar_helper.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
 import '../../data/models/competition_option_model.dart';
+import '../../core/utils/subscription_catalog_filter.dart';
+import '../../data/models/subscription_mode_model.dart';
+import '../../data/models/subscription_package_model.dart';
+import '../../data/repositories/payment_repository.dart';
+import '../../services/razorpay_checkout_service.dart';
 
 enum BrochureFileKind { image, pdf, unknown }
 
@@ -25,6 +30,8 @@ class CompetitionController extends GetxController {
       '• PDF: max 25 MB';
 
   final CompetitionRepository _repository = CompetitionRepository();
+  final PaymentRepository _paymentRepository = PaymentRepository();
+  final RazorpayCheckoutService _razorpayCheckout = RazorpayCheckoutService();
 
   // Form controllers — keys are replaced when the form subtree is (re)shown so one
   // GlobalKey is never attached to two widgets during list/form transitions.
@@ -107,8 +114,26 @@ class CompetitionController extends GetxController {
   ); // Competition being edited
 
   /// Set after successful create; used to show registration QR dialog.
-  final Rx<CompetitionModel?> lastSavedCompetitionForQr =
-      Rx<CompetitionModel?>(null);
+  final Rx<CompetitionModel?> lastSavedCompetitionForQr = Rx<CompetitionModel?>(
+    null,
+  );
+
+  final RxBool showSubscriptionTopUp = false.obs;
+  final RxBool isLoadingSubscriptionModes = false.obs;
+  final RxBool isLoadingSubscriptionPackages = false.obs;
+  final RxBool isProcessingSubscriptionPayment = false.obs;
+  final RxString subscriptionModesError = ''.obs;
+  final RxString subscriptionPackagesError = ''.obs;
+  final RxList<SubscriptionModeModel> subscriptionModes =
+      <SubscriptionModeModel>[].obs;
+  final RxList<SubscriptionPackageModel> subscriptionPackages =
+      <SubscriptionPackageModel>[].obs;
+  final RxList<SubscriptionPackageModel> _allSubscriptionPackages =
+      <SubscriptionPackageModel>[].obs;
+  int _subscriptionPackageLoadSeq = 0;
+  final RxnInt selectedSubscriptionModeId = RxnInt();
+  final RxnInt selectedSubscriptionPackageId = RxnInt();
+  final RxBool showSubscriptionAddonOptions = false.obs;
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -323,7 +348,6 @@ class CompetitionController extends GetxController {
     return mappings;
   }
 
-  @override
   /// Load competitions for home screen (public API, no auth required for display)
   Future<void> loadCompetitionsForHome() async {
     try {
@@ -345,12 +369,15 @@ class CompetitionController extends GetxController {
 
   /// Loads full competition data for the public/admin registration form.
   /// Safe after logout: does not rely on a prior [loadCompetitions] admin list call.
-  Future<void> ensureCompetitionLoadedForRegistration(String competitionId) async {
+  Future<void> ensureCompetitionLoadedForRegistration(
+    String competitionId,
+  ) async {
     final id = competitionId.trim();
     if (id.isEmpty) return;
 
     final existing = competitions.firstWhereOrNull((c) => c.id == id);
-    final hasGroupData = existing != null &&
+    final hasGroupData =
+        existing != null &&
         ((existing.stageGroups != null && existing.stageGroups!.isNotEmpty) ||
             (existing.stageGroupLabels != null &&
                 existing.stageGroupLabels!.isNotEmpty));
@@ -528,11 +555,282 @@ class CompetitionController extends GetxController {
   @override
   void onClose() {
     _debounceTimer?.cancel();
+    _razorpayCheckout.dispose();
     competitionNameController.dispose();
     descriptionController.dispose();
     addressController.dispose();
     searchController.dispose();
     super.onClose();
+  }
+
+  SubscriptionPackageModel? get selectedSubscriptionPackage {
+    final id = selectedSubscriptionPackageId.value;
+    if (id == null) return null;
+    return subscriptionPackages.firstWhereOrNull((p) => p.id == id);
+  }
+
+  bool _isSubscriptionCreditError(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('no subscription credits remaining') ||
+        lower.contains('purchase a package') ||
+        lower.contains('purchase subscription credits') ||
+        lower.contains('competition limit reached') ||
+        lower.contains('no pack credits remaining') ||
+        lower.contains('no subscription credits') ||
+        lower.contains('yearly subscription has expired') ||
+        lower.contains('subscription has expired') ||
+        lower.contains('add-on does not match');
+  }
+
+  bool get shouldShowSubscriptionBuyNow {
+    final message = errorMessage.value;
+    return message.isNotEmpty && _isSubscriptionCreditError(message);
+  }
+
+  List<SubscriptionPackageModel> get subscriptionBasePackages {
+    return SubscriptionCatalogFilter.sortPackages(
+      subscriptionPackages.where((p) => !p.isAddon),
+    );
+  }
+
+  List<SubscriptionPackageModel> get subscriptionAddonPackages {
+    return SubscriptionCatalogFilter.sortPackages(
+      subscriptionPackages.where((p) => p.isAddon),
+    );
+  }
+
+  SubscriptionModeModel? get selectedSubscriptionMode {
+    final id = selectedSubscriptionModeId.value;
+    if (id == null) return null;
+    return subscriptionModes.firstWhereOrNull((m) => m.id == id);
+  }
+
+  Future<void> prepareSubscriptionTopUpFlow() async {
+    showSubscriptionTopUp.value = true;
+    showSubscriptionAddonOptions.value = false;
+    await loadSubscriptionModes();
+    await loadAllSubscriptionPackages();
+  }
+
+  String get subscriptionPlanStepTitle {
+    final mode = selectedSubscriptionMode?.modeKey ?? '';
+    if (mode == 'PAY_PER_PARTICIPANT') {
+      return 'Step 2 — Choose maintenance plan';
+    }
+    return 'Step 2 — Choose a plan';
+  }
+
+  void toggleSubscriptionAddonOptions() {
+    showSubscriptionAddonOptions.value = !showSubscriptionAddonOptions.value;
+    if (!showSubscriptionAddonOptions.value) {
+      final selected = selectedSubscriptionPackage;
+      if (selected?.isAddon == true) {
+        final base = subscriptionBasePackages.isNotEmpty
+            ? subscriptionBasePackages.first
+            : null;
+        if (base != null) {
+          selectedSubscriptionPackageId.value = base.id;
+        }
+      }
+    }
+  }
+
+  Future<void> loadSubscriptionModes() async {
+    if (isLoadingSubscriptionModes.value) return;
+    try {
+      isLoadingSubscriptionModes.value = true;
+      subscriptionModesError.value = '';
+      final response = await _paymentRepository.listSubscriptionModes();
+      if (response.success && response.data != null) {
+        final modes = SubscriptionCatalogFilter.sortModes(response.data!);
+        subscriptionModes.assignAll(modes);
+        if (modes.isEmpty) {
+          selectedSubscriptionModeId.value = null;
+          subscriptionModesError.value = 'No subscription modes available';
+        } else {
+          final current = selectedSubscriptionModeId.value;
+          final exists = current != null && modes.any((m) => m.id == current);
+          if (!exists) {
+            selectedSubscriptionModeId.value = modes.first.id;
+          }
+        }
+      } else {
+        subscriptionModes.clear();
+        selectedSubscriptionModeId.value = null;
+        subscriptionModesError.value =
+            response.message ?? 'Failed to load subscription modes';
+      }
+    } catch (e) {
+      subscriptionModes.clear();
+      selectedSubscriptionModeId.value = null;
+      subscriptionModesError.value =
+          'Failed to load subscription modes: ${e.toString()}';
+    } finally {
+      isLoadingSubscriptionModes.value = false;
+    }
+  }
+
+  Future<void> onSubscriptionModeSelected(SubscriptionModeModel mode) async {
+    if (selectedSubscriptionModeId.value == mode.id) return;
+    selectedSubscriptionModeId.value = mode.id;
+    selectedSubscriptionPackageId.value = null;
+    showSubscriptionAddonOptions.value = false;
+    _applyPackagesForSelectedMode();
+  }
+
+  void onSubscriptionPackageSelected(SubscriptionPackageModel package) {
+    selectedSubscriptionPackageId.value = package.id;
+    if (!package.isAddon) {
+      showSubscriptionAddonOptions.value = false;
+    }
+  }
+
+  Future<void> loadAllSubscriptionPackages() async {
+    final seq = ++_subscriptionPackageLoadSeq;
+    try {
+      isLoadingSubscriptionPackages.value = true;
+      subscriptionPackagesError.value = '';
+      final response = await _paymentRepository.listAllPackages();
+      if (seq != _subscriptionPackageLoadSeq) return;
+
+      if (response.success && response.data != null) {
+        _allSubscriptionPackages.assignAll(
+          response.data!.where((p) => p.isEligibleForCompetitionTopUp),
+        );
+        _applyPackagesForSelectedMode();
+        if (subscriptionPackages.isEmpty &&
+            subscriptionPackagesError.value.isEmpty) {
+          subscriptionPackagesError.value =
+              'No packages available. Check that the server is running.';
+        }
+      } else {
+        _allSubscriptionPackages.clear();
+        subscriptionPackages.clear();
+        selectedSubscriptionPackageId.value = null;
+        subscriptionPackagesError.value =
+            response.message ?? 'Failed to load subscription packages';
+      }
+    } catch (e) {
+      if (seq != _subscriptionPackageLoadSeq) return;
+      _allSubscriptionPackages.clear();
+      subscriptionPackages.clear();
+      selectedSubscriptionPackageId.value = null;
+      subscriptionPackagesError.value =
+          'Failed to load subscription packages: ${e.toString()}';
+    } finally {
+      if (seq == _subscriptionPackageLoadSeq) {
+        isLoadingSubscriptionPackages.value = false;
+      }
+    }
+  }
+
+  void _applyPackagesForSelectedMode() {
+    final modeId = selectedSubscriptionModeId.value;
+    if (modeId == null) {
+      subscriptionPackages.clear();
+      selectedSubscriptionPackageId.value = null;
+      return;
+    }
+    final mode = selectedSubscriptionMode;
+    final packages = SubscriptionCatalogFilter.sortPackages(
+      _allSubscriptionPackages.where((p) {
+        if (p.subscriptionModeId != null && p.subscriptionModeId != modeId) {
+          return false;
+        }
+        if (mode != null &&
+            p.paymentModel.isNotEmpty &&
+            p.paymentModel != mode.modeKey) {
+          return false;
+        }
+        return true;
+      }),
+    );
+    subscriptionPackages.assignAll(packages);
+    if (packages.isEmpty) {
+      selectedSubscriptionPackageId.value = null;
+      final modeName = mode?.name ?? 'this type';
+      subscriptionPackagesError.value =
+          'No plans found for $modeName. Try another subscription type.';
+    } else {
+      subscriptionPackagesError.value = '';
+      final current = selectedSubscriptionPackageId.value;
+      final exists = current != null && packages.any((p) => p.id == current);
+      if (!exists) {
+        selectedSubscriptionPackageId.value = null;
+      }
+    }
+  }
+
+  /// Retry loading packages (used by plan picker).
+  Future<void> loadSubscriptionPackages() async {
+    await loadAllSubscriptionPackages();
+  }
+
+  Future<bool> purchaseSubscriptionPackageAndRetryCreate() async {
+    final packageId = selectedSubscriptionPackageId.value;
+    if (packageId == null) {
+      _notifyError('Please select a subscription package');
+      return false;
+    }
+
+    try {
+      isProcessingSubscriptionPayment.value = true;
+      final packageName = selectedSubscriptionPackage?.name ?? 'Subscription';
+
+      final orderResponse = await _paymentRepository
+          .createSubscriptionOrderForCurrentOrg(packageId: packageId);
+      if (!orderResponse.success || orderResponse.data == null) {
+        _notifyError(orderResponse.message ?? 'Failed to create payment order');
+        return false;
+      }
+
+      final order = orderResponse.data!;
+      final orderId = order['orderId']?.toString() ?? '';
+      final key = order['key']?.toString() ?? '';
+      final amount = order['amount'] is int
+          ? order['amount'] as int
+          : int.tryParse(order['amount']?.toString() ?? '') ?? 0;
+      final mockMode = order['mockMode'] == true;
+
+      if (orderId.isEmpty || amount <= 0) {
+        _notifyError('Invalid payment order details');
+        return false;
+      }
+      if (!mockMode && key.isEmpty) {
+        _notifyError('Payment gateway is not configured. Contact support.');
+        return false;
+      }
+
+      final paymentResult = await _razorpayCheckout.openCheckout(
+        keyId: key,
+        orderId: orderId,
+        amountPaise: amount,
+        description: packageName,
+        mockMode: mockMode,
+      );
+
+      final verifyResponse = await _paymentRepository
+          .verifySubscriptionPaymentForCurrentOrg(
+            orderId: paymentResult['razorpay_order_id'] ?? orderId,
+            paymentId: paymentResult['razorpay_payment_id'] ?? '',
+            signature: paymentResult['razorpay_signature'] ?? '',
+          );
+      if (!verifyResponse.success) {
+        _notifyError(verifyResponse.message ?? 'Payment verification failed');
+        return false;
+      }
+
+      _notifySuccess('Subscription activated. Retrying competition save...');
+      showSubscriptionTopUp.value = false;
+      errorMessage.value = '';
+      return await createCompetition();
+    } catch (e) {
+      _notifyError('Payment failed: ${e.toString()}');
+      return false;
+    } finally {
+      isProcessingSubscriptionPayment.value = false;
+      _razorpayCheckout.dispose();
+    }
   }
 
   void _onSearchChanged() {
@@ -1115,8 +1413,7 @@ class CompetitionController extends GetxController {
     bool requireWhenEmpty = false,
   }) {
     if (value == null) {
-      if (requireWhenEmpty ||
-          shouldShowCompetitionDateError(dateFieldStart)) {
+      if (requireWhenEmpty || shouldShowCompetitionDateError(dateFieldStart)) {
         return 'Please select event start date';
       }
       return null;
@@ -1175,14 +1472,8 @@ class CompetitionController extends GetxController {
           eventStartDate.value,
           requireWhenEmpty: forSubmit,
         ) ??
-        validateEventEndDate(
-          eventEndDate.value,
-          requireWhenEmpty: forSubmit,
-        ) ??
-        validateDisplayAdFrom(
-          displayAdFrom.value,
-          requireWhenEmpty: forSubmit,
-        );
+        validateEventEndDate(eventEndDate.value, requireWhenEmpty: forSubmit) ??
+        validateDisplayAdFrom(displayAdFrom.value, requireWhenEmpty: forSubmit);
   }
 
   void alertCompetitionDateValidationIssue() {
@@ -1295,12 +1586,20 @@ class CompetitionController extends GetxController {
         return true;
       } else {
         lastSavedCompetitionForQr.value = null;
-        _notifyError(response.message ?? 'Failed to create competition');
+        final message = response.message ?? 'Failed to create competition';
+        _notifyError(message);
+        if (_isSubscriptionCreditError(message)) {
+          await prepareSubscriptionTopUpFlow();
+        }
         return false;
       }
     } catch (e) {
       lastSavedCompetitionForQr.value = null;
-      _notifyError('Error creating competition: ${e.toString()}');
+      final message = 'Error creating competition: ${e.toString()}';
+      _notifyError(message);
+      if (_isSubscriptionCreditError(message)) {
+        await prepareSubscriptionTopUpFlow();
+      }
       return false;
     } finally {
       isLoading.value = false;
@@ -1599,9 +1898,8 @@ class CompetitionController extends GetxController {
     eventEndDate.value = competition.eventEndDate;
     displayAdFrom.value = competition.displayAdFrom;
     spotRegistration.value = competition.spotRegistration;
-    championshipStyle.value = ChampionshipStyle.fromApiValue(
-          competition.championshipStyle,
-        ) ??
+    championshipStyle.value =
+        ChampionshipStyle.fromApiValue(competition.championshipStyle) ??
         ChampionshipStyle.separateCategory;
     participantsPerStage.value = competition.participantsPerStage ?? 0;
     minimumMarks.value = competition.minimumMarks ?? 0;

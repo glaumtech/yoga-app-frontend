@@ -403,9 +403,15 @@ class AuthController extends GetxController {
           Get.delete<UserManagementController>(force: true);
         }
       } catch (_) {}
+      // Avoid force-deleting CompetitionController during route transition.
+      // It owns TextEditingControllers used by create_competition_screen and
+      // can trigger "used after being disposed" if the widget tree has not
+      // fully unmounted yet.
       try {
         if (Get.isRegistered<CompetitionController>()) {
-          Get.delete<CompetitionController>(force: true);
+          final competitionController = Get.find<CompetitionController>();
+          competitionController.clearForm();
+          competitionController.toggleViewMode(true);
         }
       } catch (_) {}
       try {

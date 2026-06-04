@@ -18,6 +18,8 @@ import '../../widgets/toggle_button_group.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/form_label_with_hint.dart';
 import '../../widgets/competition_registration_qr_panel.dart';
+import '../../widgets/subscription/subscription_plan_picker.dart';
+import '../../../data/models/subscription_package_model.dart';
 import 'competitions_list_screen.dart';
 
 class CreateCompetitionScreen extends StatelessWidget {
@@ -30,18 +32,6 @@ class CreateCompetitionScreen extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
-
-    // Clear form when switching to create view (if not in edit mode)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!controller.isListView.value && !controller.isEditMode.value) {
-        // Check if form has values that shouldn't be there
-        if (controller.competitionNameController.text.isNotEmpty ||
-            controller.descriptionController.text.isNotEmpty ||
-            controller.addressController.text.isNotEmpty) {
-          controller.clearForm();
-        }
-      }
-    });
 
     return AdminSidebarLayout(
       title: 'COMPETITIONS',
@@ -200,8 +190,12 @@ class CreateCompetitionScreen extends StatelessWidget {
                   ),
 
                 // Error Message
-                if (controller.errorMessage.value.isNotEmpty)
-                  Container(
+                Obx(() {
+                  if (controller.errorMessage.value.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  final showBuyNow = controller.shouldShowSubscriptionBuyNow;
+                  return Container(
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
@@ -209,18 +203,59 @@ class CreateCompetitionScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.red.withOpacity(0.3)),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Icon(Icons.error_outline, color: Colors.red),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            controller.errorMessage.value,
-                            style: TextStyle(color: Colors.red[700]),
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.red),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                controller.errorMessage.value,
+                                style: TextStyle(color: Colors.red[700]),
+                              ),
+                            ),
+                          ],
                         ),
+                        if (showBuyNow) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton.icon(
+                              onPressed: controller
+                                      .isProcessingSubscriptionPayment.value
+                                  ? null
+                                  : () async {
+                                      await controller
+                                          .prepareSubscriptionTopUpFlow();
+                                    },
+                              icon: const Icon(Icons.shopping_cart_outlined),
+                              label: const Text('Buy credits'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
+                  );
+                }),
+
+                if (controller.showSubscriptionTopUp.value &&
+                    !controller.isEditMode.value &&
+                    !controller.isViewMode.value)
+                  _buildSubscriptionTopUpSection(
+                    context,
+                    controller,
+                    isMobile,
                   ),
 
                 // Submit and Cancel Buttons
@@ -570,6 +605,406 @@ class CreateCompetitionScreen extends StatelessWidget {
               : const SizedBox.shrink(),
         ),
       ],
+    );
+  }
+
+  Widget _buildSubscriptionTopUpSection(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+  ) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+        color: Colors.orange.shade50,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.credit_card_outlined,
+                    color: Colors.orange.shade900,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Get competition credits',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.orange.shade900,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Obx(
+                        () {
+                          final isPerParticipant =
+                              controller.selectedSubscriptionMode?.modeKey ==
+                              'PAY_PER_PARTICIPANT';
+                          return Text(
+                            isPerParticipant
+                                ? 'Select the per-participant maintenance plan, then pay to unlock saving this competition.'
+                                : 'Pick your subscription type and plan, then pay to unlock saving this competition.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.35,
+                              color: Colors.orange.shade900
+                                  .withValues(alpha: 0.85),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Obx(
+                  () {
+                    final isPerParticipant =
+                        controller.selectedSubscriptionMode?.modeKey ==
+                        'PAY_PER_PARTICIPANT';
+                    return SubscriptionPlanPicker(
+                      modes: controller.subscriptionModes.toList(),
+                      packages: controller.subscriptionBasePackages,
+                      selectedModeId:
+                          controller.selectedSubscriptionModeId.value,
+                      selectedPackageId:
+                          controller.selectedSubscriptionPackageId.value,
+                      onModeSelected: controller.onSubscriptionModeSelected,
+                      onPackageSelected:
+                          controller.onSubscriptionPackageSelected,
+                      isLoadingModes:
+                          controller.isLoadingSubscriptionModes.value,
+                      isLoadingPackages:
+                          controller.isLoadingSubscriptionPackages.value,
+                      modesError:
+                          controller.subscriptionModesError.value.isEmpty
+                          ? null
+                          : controller.subscriptionModesError.value,
+                      packagesError:
+                          controller.subscriptionPackagesError.value.isEmpty
+                          ? null
+                          : controller.subscriptionPackagesError.value,
+                      onRetryModes: controller.loadSubscriptionModes,
+                      onRetryPackages: controller.loadSubscriptionPackages,
+                      enabled:
+                          !controller.isProcessingSubscriptionPayment.value,
+                      excludeAddons: true,
+                      modeSectionTitle: 'Step 1 — Subscription type',
+                      packageSectionTitle: controller.subscriptionPlanStepTitle,
+                      modeSelectorStyle:
+                          SubscriptionModeSelectorStyle.dropdown,
+                    );
+                  },
+                ),
+                Obx(() {
+                  final addons = controller.subscriptionAddonPackages;
+                  if (addons.isEmpty) return const SizedBox.shrink();
+                  final expanded = controller.showSubscriptionAddonOptions.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 14),
+                      const Divider(height: 1),
+                      const SizedBox(height: 10),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: controller.isProcessingSubscriptionPayment.value
+                              ? null
+                              : controller.toggleSubscriptionAddonOptions,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 4,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.add_circle_outline,
+                                  size: 20,
+                                  color: Colors.grey.shade700,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Need only one extra competition?',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  expanded ? 'Hide add-on' : 'View add-on',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  expanded
+                                      ? Icons.expand_less
+                                      : Icons.expand_more,
+                                  color: AppTheme.primaryColor,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (expanded) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Optional — buy a single extra credit without changing your main plan.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildAddonPackageGrid(context, controller, addons),
+                      ],
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ),
+          Obx(() {
+            final selected = controller.selectedSubscriptionPackage;
+            if (selected == null) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: AppTheme.primaryColor,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selected.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            selected.creditsSummary,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '₹${selected.price.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: isMobile
+                ? Column(
+                    children: [
+                      saveButton(
+                        onPressed: () async {
+                          await controller
+                              .purchaseSubscriptionPackageAndRetryCreate();
+                        },
+                        text: 'Pay & save competition',
+                        isLoading: controller.isProcessingSubscriptionPayment,
+                        isFullWidth: true,
+                      ),
+                      const SizedBox(height: 8),
+                      cancelButton(
+                        onPressed: () {
+                          controller.showSubscriptionTopUp.value = false;
+                          controller.showSubscriptionAddonOptions.value = false;
+                        },
+                        text: 'Cancel',
+                        isFullWidth: true,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: saveButton(
+                          onPressed: () async {
+                            await controller
+                                .purchaseSubscriptionPackageAndRetryCreate();
+                          },
+                          text: 'Pay & save competition',
+                          isLoading: controller.isProcessingSubscriptionPayment,
+                          isFullWidth: true,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      cancelButton(
+                        onPressed: () {
+                          controller.showSubscriptionTopUp.value = false;
+                          controller.showSubscriptionAddonOptions.value = false;
+                        },
+                        text: 'Cancel',
+                        width: 140,
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddonPackageGrid(
+    BuildContext context,
+    CompetitionController controller,
+    List<SubscriptionPackageModel> addons,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossCount = constraints.maxWidth >= 480 && addons.length >= 2
+            ? 2
+            : 1;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossCount,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            mainAxisExtent: 76,
+          ),
+          itemCount: addons.length,
+          itemBuilder: (context, index) {
+            final pkg = addons[index];
+            return Obx(() {
+              final selected =
+                  controller.selectedSubscriptionPackageId.value == pkg.id;
+              final enabled =
+                  !controller.isProcessingSubscriptionPayment.value;
+              return InkWell(
+                onTap: enabled
+                    ? () => controller.onSubscriptionPackageSelected(pkg)
+                    : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selected
+                          ? AppTheme.primaryColor
+                          : Colors.grey[300]!,
+                      width: selected ? 2 : 1,
+                    ),
+                    color: selected
+                        ? AppTheme.primaryColor.withValues(alpha: 0.06)
+                        : Colors.grey[50],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              pkg.tierWithPriceLine,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          if (selected)
+                            Icon(
+                              Icons.check_circle,
+                              size: 18,
+                              color: AppTheme.primaryColor,
+                            ),
+                        ],
+                      ),
+                      if (pkg.description != null &&
+                          pkg.description!.trim().isNotEmpty)
+                        Text(
+                          pkg.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10.5),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            });
+          },
+        );
+      },
     );
   }
 
@@ -1431,6 +1866,7 @@ class CreateCompetitionScreen extends StatelessWidget {
             Expanded(
               child: Obx(
                 () => DropdownButtonFormField<int>(
+                  isExpanded: true,
                   value: controller.minimumMarks.value > 0
                       ? controller.minimumMarks.value
                       : null,
@@ -1470,6 +1906,7 @@ class CreateCompetitionScreen extends StatelessWidget {
             Expanded(
               child: Obx(
                 () => DropdownButtonFormField<int>(
+                  isExpanded: true,
                   value: controller.maximumMarks.value > 0
                       ? controller.maximumMarks.value
                       : null,
@@ -1523,6 +1960,7 @@ class CreateCompetitionScreen extends StatelessWidget {
         FormLabelWithHint(label: 'PARTICIPANTS PER STAGE :'),
         Obx(
           () => DropdownButtonFormField<int>(
+            isExpanded: true,
             value: controller.participantsPerStage.value > 0
                 ? controller.participantsPerStage.value
                 : null,
@@ -1551,7 +1989,10 @@ class CreateCompetitionScreen extends StatelessWidget {
             onChanged: controller.isViewMode.value
                 ? null
                 : (value) => controller.participantsPerStage.value = value ?? 0,
-            hint: const Text('Select participants per stage'),
+            hint: const Text(
+              'Select participants per stage',
+              overflow: TextOverflow.ellipsis,
+            ),
             validator: controller.isViewMode.value
                 ? null
                 : (value) {

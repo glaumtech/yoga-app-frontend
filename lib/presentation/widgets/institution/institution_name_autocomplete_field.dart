@@ -100,66 +100,73 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
             );
           }
 
-          return Obx(() {
-            // Do not assign to TextEditingController during build (e.g. after resetForm).
-            if (textEditingController.text != formTextController.text) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                syncAutocompleteFromForm();
-              });
-            }
-            final hasText = textEditingController.text.trim().isNotEmpty;
-            return TextFormField(
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              controller: textEditingController,
-              readOnly: isViewMode.value,
-              focusNode: focusNode,
-              onFieldSubmitted: (String value) => onFieldSubmitted(),
-              onChanged: isViewMode.value
-                  ? null
-                  : (value) {
-                      if (formTextController.text != value) {
-                        formTextController.text = value;
-                      }
-                      onValueChanged?.call();
-                    },
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                suffixIcon: isLoading.value
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : (hasText
-                        ? IconButton(
-                            tooltip: 'Clear',
-                            icon: const Icon(Icons.close),
-                            onPressed: () {
-                              textEditingController.clear();
-                              formTextController.clear();
-                              suggestions.clear();
-                              FocusScope.of(context).unfocus();
-                              onClear?.call();
-                              onValueChanged?.call();
-                            },
+          return ListenableBuilder(
+            listenable: formTextController,
+            builder: (context, _) {
+              // Keep Autocomplete's inner controller aligned when edit mode sets text programmatically.
+              if (textEditingController.text != formTextController.text) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!context.mounted) return;
+                  syncAutocompleteFromForm();
+                });
+              }
+              return Obx(() {
+                final hasText = textEditingController.text.trim().isNotEmpty;
+                return TextFormField(
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  controller: textEditingController,
+                  readOnly: isViewMode.value,
+                  focusNode: focusNode,
+                  onFieldSubmitted: (String value) => onFieldSubmitted(),
+                  onChanged: isViewMode.value
+                      ? null
+                      : (value) {
+                          if (formTextController.text != value) {
+                            formTextController.text = value;
+                          }
+                          onValueChanged?.call();
+                        },
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    suffixIcon: isLoading.value
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                           )
-                        : const Icon(Icons.search)),
-                hintText: hintText,
-                filled: true,
-                fillColor: isViewMode.value ? Colors.grey[200] : Colors.white,
-              ),
-              validator: validator,
-            );
-          });
+                        : (hasText
+                            ? IconButton(
+                                tooltip: 'Clear',
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  textEditingController.clear();
+                                  formTextController.clear();
+                                  suggestions.clear();
+                                  FocusScope.of(context).unfocus();
+                                  onClear?.call();
+                                  onValueChanged?.call();
+                                },
+                              )
+                            : const Icon(Icons.search)),
+                    hintText: hintText,
+                    filled: true,
+                    fillColor:
+                        isViewMode.value ? Colors.grey[200] : Colors.white,
+                  ),
+                  validator: validator,
+                );
+              });
+            },
+          );
         },
         optionsViewBuilder: (
           BuildContext context,
