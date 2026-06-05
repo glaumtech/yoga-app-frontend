@@ -184,7 +184,12 @@ class ReportsParticipantsTab extends StatelessWidget {
         onRefresh: tabController.refresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.all(isMobile ? 12 : 16),
+          padding: EdgeInsets.fromLTRB(
+            isMobile ? 12 : 16,
+            4,
+            isMobile ? 12 : 16,
+            8,
+          ),
           children: [
             _buildFilters(
               context,
@@ -193,7 +198,7 @@ class ReportsParticipantsTab extends StatelessWidget {
               onPrint: _printParticipants,
               onDownloadExcel: _downloadParticipantsExcel,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
             if (!hasCompetition)
               _infoCard('Select a competition to view participant scores.')
             else
@@ -203,16 +208,13 @@ class ReportsParticipantsTab extends StatelessWidget {
                   clipBehavior: Clip.hardEdge,
                   alignment: Alignment.center,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _buildParticipantTableBody(
-                        context,
-                        tabController,
-                        items,
-                        q,
-                        isMobile,
-                        loading,
-                      ),
+                    _buildParticipantTableBody(
+                      context,
+                      tabController,
+                      items,
+                      q,
+                      isMobile,
+                      loading,
                     ),
                     if (loading && items.isNotEmpty)
                       Positioned.fill(
@@ -281,7 +283,7 @@ class ReportsParticipantsTab extends StatelessWidget {
           items,
           isMobile,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
       ],
     );
   }
@@ -311,53 +313,15 @@ class ReportsParticipantsTab extends StatelessWidget {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: EdgeInsets.all(isMobile ? 10 : 12),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 10 : 12,
+          vertical: isMobile ? 8 : 10,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              children: [
-                Icon(
-                  Icons.filter_list,
-                  color: AppTheme.primaryColor,
-                  size: isMobile ? 18 : 20,
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Filters',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    controller.clearFilters();
-                    await controller.refresh();
-                  },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: const Size(0, 0),
-                  ),
-                  child: Text(
-                    'Clear',
-                    style: TextStyle(
-                      fontSize: isMobile ? 12 : 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: TextField(
@@ -376,33 +340,52 @@ class ReportsParticipantsTab extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                Obx(
+                  () => IconButton(
+                    tooltip: 'Clear filters and search',
+                    onPressed: controller.hasReportFiltersOrSearch
+                        ? () async {
+                            await controller.clearFiltersAndReload();
+                          }
+                        : null,
+                    icon: Icon(
+                      Icons.clear,
+                      color: controller.hasReportFiltersOrSearch
+                          ? Colors.grey[700]
+                          : Colors.grey[400],
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Obx(() {
                   final n = controller.activeFilterCount;
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        showDialog<void>(
-                          context: context,
-                          builder: (ctx) =>
-                              _ParticipantFiltersDialog(controller: controller),
-                        );
-                      },
-                      icon: Badge(
-                        isLabelVisible: n > 0,
-                        label: Text('$n'),
-                        child: const Icon(
-                          Icons.tune,
-                          color: AppTheme.primaryColor,
+                  return OutlinedButton.icon(
+                    onPressed: () {
+                      showDialog<void>(
+                        context: context,
+                        builder: (ctx) => ReportsParticipantFiltersDialog(
+                          controller: controller,
                         ),
+                      );
+                    },
+                    icon: Badge(
+                      isLabelVisible: n > 0,
+                      label: Text('$n'),
+                      child: const Icon(
+                        Icons.tune,
+                        color: AppTheme.primaryColor,
                       ),
-                      label: Text(
-                        isMobile ? 'Filters' : 'Report filters',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.primaryColor,
-                        ),
+                    ),
+                    label: Text(
+                      isMobile ? 'Filters' : 'Report filters',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primaryColor,
                       ),
                     ),
                   );
@@ -441,15 +424,65 @@ class ReportsParticipantsTab extends StatelessWidget {
                 }),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Use Report filters for stage, category, group, state, district, institution, and gender.',
-              style: TextStyle(
-                fontSize: isMobile ? 11 : 12,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Obx(() {
+              final chips = controller.buildActiveFilterChips();
+              if (chips.isEmpty) {
+                return Text(
+                  'Use Report filters for stage, category, group, state, district, institution, and gender.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1.2,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Filtered by',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: chips
+                        .map(
+                          (chip) => Chip(
+                            label: Text(
+                              chip.label,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onDeleted: () =>
+                                controller.removeActiveFilter(chip.key),
+                            deleteIcon: const Icon(Icons.close, size: 16),
+                            deleteIconColor: AppTheme.primaryColor,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            backgroundColor:
+                                AppTheme.primaryColor.withValues(alpha: 0.08),
+                            side: BorderSide(
+                              color: AppTheme.primaryColor
+                                  .withValues(alpha: 0.25),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              );
+            }),
           ],
         ),
       ),
@@ -1091,17 +1124,18 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
   }
 }
 
-class _ParticipantFiltersDialog extends StatefulWidget {
-  const _ParticipantFiltersDialog({required this.controller});
+class ReportsParticipantFiltersDialog extends StatefulWidget {
+  const ReportsParticipantFiltersDialog({required this.controller});
 
   final ReportsParticipantsTabController controller;
 
   @override
-  State<_ParticipantFiltersDialog> createState() =>
-      _ParticipantFiltersDialogState();
+  State<ReportsParticipantFiltersDialog> createState() =>
+      ReportsParticipantFiltersDialogState();
 }
 
-class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
+class ReportsParticipantFiltersDialogState
+    extends State<ReportsParticipantFiltersDialog> {
   late Set<int> _stages;
   late Set<int> _categories;
   late Set<int> _groups;

@@ -186,6 +186,9 @@ class EndPoints {
   static String competitionParticipantScoresTable(int competitionId) =>
       '/reports/competition/$competitionId/participant-scores/table';
 
+  static String competitionParticipantsTable(int competitionId) =>
+      '/reports/competition/$competitionId/participants/table';
+
   static String competitionParticipantScoreDetails(int competitionId) =>
       '/reports/competition/$competitionId/participant-scores/details';
 

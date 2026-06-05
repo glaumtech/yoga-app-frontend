@@ -18,6 +18,12 @@ class ReportsRepository {
     int? institutionId,
     int? districtId,
     List<String>? genders,
+    List<String>? categoryTypes,
+    bool? spotRegistration,
+    int? age,
+    String? registrationPrefix,
+    String? institutionKind,
+    bool? hasInstitution,
   }) {
     final segments = <String>[];
     if (stageIds != null) {
@@ -56,7 +62,83 @@ class ReportsRepository {
         }
       }
     }
+    if (categoryTypes != null) {
+      for (final ct in categoryTypes) {
+        if (ct.isNotEmpty) {
+          segments.add(
+            'categoryType=${Uri.encodeQueryComponent(ct.toUpperCase())}',
+          );
+        }
+      }
+    }
+    if (spotRegistration != null) {
+      segments.add('spotRegistration=$spotRegistration');
+    }
+    if (age != null) {
+      segments.add('age=${Uri.encodeQueryComponent(age.toString())}');
+    }
+    if (registrationPrefix != null && registrationPrefix.trim().isNotEmpty) {
+      segments.add(
+        'registrationPrefix=${Uri.encodeQueryComponent(registrationPrefix.trim().toUpperCase())}',
+      );
+    }
+    if (institutionKind != null && institutionKind.trim().isNotEmpty) {
+      segments.add(
+        'institutionKind=${Uri.encodeQueryComponent(institutionKind.trim().toUpperCase())}',
+      );
+    }
+    if (hasInstitution == true) {
+      segments.add('hasInstitution=true');
+    }
     if (segments.isEmpty) return '';
+    return '?${segments.join('&')}';
+  }
+
+  /// Filters + pagination + optional name/reg search for participants registration table API.
+  static String participantsTableQuery({
+    required int page,
+    required int size,
+    String? search,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    int? districtId,
+    List<String>? genders,
+    List<String>? categoryTypes,
+    bool? spotRegistration,
+    int? age,
+    String? registrationPrefix,
+    String? institutionKind,
+    bool? hasInstitution,
+  }) {
+    final segments = <String>[];
+    final filter = participantReportQuery(
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      districtId: districtId,
+      genders: genders,
+      categoryTypes: categoryTypes,
+      spotRegistration: spotRegistration,
+      age: age,
+      registrationPrefix: registrationPrefix,
+      institutionKind: institutionKind,
+      hasInstitution: hasInstitution,
+    );
+    if (filter.isNotEmpty) {
+      segments.add(filter.substring(1));
+    }
+    segments.add('page=${Uri.encodeQueryComponent(page.toString())}');
+    segments.add('size=${Uri.encodeQueryComponent(size.toString())}');
+    if (search != null && search.trim().isNotEmpty) {
+      segments.add('search=${Uri.encodeQueryComponent(search.trim())}');
+    }
     return '?${segments.join('&')}';
   }
 
@@ -238,6 +320,63 @@ class ReportsRepository {
     return ApiResponse(
       success: false,
       message: response.message ?? 'Failed to load participant scores table',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> getCompetitionParticipantsTable(
+    int competitionId, {
+    required int page,
+    int size = 20,
+    String? search,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    int? districtId,
+    List<String>? genders,
+    List<String>? categoryTypes,
+    bool? spotRegistration,
+    int? age,
+    String? registrationPrefix,
+    String? institutionKind,
+    bool? hasInstitution,
+  }) async {
+    final q = participantsTableQuery(
+      page: page,
+      size: size,
+      search: search,
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      districtId: districtId,
+      genders: genders,
+      categoryTypes: categoryTypes,
+      spotRegistration: spotRegistration,
+      age: age,
+      registrationPrefix: registrationPrefix,
+      institutionKind: institutionKind,
+      hasInstitution: hasInstitution,
+    );
+
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: '${EndPoints.competitionParticipantsTable(competitionId)}$q',
+      apiType: APIType.aGet,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load participants table',
       statusCode: response.statusCode,
     );
   }

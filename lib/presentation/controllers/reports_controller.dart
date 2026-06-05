@@ -1,8 +1,11 @@
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 
 import '../../data/models/competition_model.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/repositories/reports_repository.dart';
+import 'reports_participants_list_preset.dart';
+import 'reports_registered_participants_tab_controller.dart';
 
 class ReportsController extends GetxController {
   final CompetitionRepository _competitionRepository = CompetitionRepository();
@@ -23,6 +26,41 @@ class ReportsController extends GetxController {
   ///   prizeWinners: [...]
   /// }
   final Rxn<Map<String, dynamic>> report = Rxn<Map<String, dynamic>>();
+
+  /// Index of Reports tab to open (0 = Dashboard, …).
+  final RxnInt navigateToTabIndex = RxnInt();
+
+  /// Applied when opening the registered participants tab from dashboard counts.
+  final Rxn<ReportsParticipantsListPreset> pendingParticipantsPreset =
+      Rxn<ReportsParticipantsListPreset>();
+
+  /// Registered participants report tab (immediately after Dashboard).
+  static const int registeredParticipantsReportTabIndex = 1;
+
+  void openParticipantsReport(ReportsParticipantsListPreset preset) {
+    pendingParticipantsPreset.value = preset;
+    navigateToTabIndex.value = registeredParticipantsReportTabIndex;
+    _scheduleApplyPendingPreset();
+  }
+
+  /// Applies dashboard preset after the registered tab controller is created.
+  void _scheduleApplyPendingPreset([int attempt = 0]) {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      final pending = pendingParticipantsPreset.value;
+      if (pending == null) return;
+
+      if (Get.isRegistered<ReportsRegisteredParticipantsTabController>()) {
+        Get.find<ReportsRegisteredParticipantsTabController>()
+            .applyDashboardPreset(pending);
+        pendingParticipantsPreset.value = null;
+        return;
+      }
+
+      if (attempt < 10) {
+        _scheduleApplyPendingPreset(attempt + 1);
+      }
+    });
+  }
 
   @override
   void onInit() {

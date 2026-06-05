@@ -10,8 +10,10 @@ import '../../../data/models/competition_model.dart';
 import '../../../data/repositories/reports_repository.dart';
 import '../../controllers/reports_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
+import '../../controllers/reports_participants_list_preset.dart';
 import 'reports_users_tab.dart';
 import 'reports_participants_tab.dart';
+import 'reports_registered_participants_tab.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Reports Screen
@@ -23,20 +25,42 @@ class ReportsScreen extends StatefulWidget {
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
-class _ReportsScreenState extends State<ReportsScreen> {
+class _ReportsScreenState extends State<ReportsScreen>
+    with SingleTickerProviderStateMixin {
   late final ReportsController controller;
   final ReportsRepository _printRepository = ReportsRepository();
+  late final TabController _tabController;
+  Worker? _tabNavWorker;
 
   @override
   void initState() {
     super.initState();
     controller = Get.put(ReportsController(), permanent: false);
+    _tabController = TabController(length: 5, vsync: this);
+    _tabNavWorker = ever<int?>(controller.navigateToTabIndex, (index) {
+      if (index == null || !mounted) return;
+      if (index >= 0 && index < _tabController.length) {
+        _tabController.animateTo(index);
+      }
+      controller.navigateToTabIndex.value = null;
+    });
     // Refresh competition list (/competition/list) + report summary on every
     // navigation to Reports (GetX controller may be reused across visits).
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       controller.loadCompetitionsAndMaybeReport();
     });
+  }
+
+  @override
+  void dispose() {
+    _tabNavWorker?.dispose();
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _openRegisteredParticipants(ReportsParticipantsListPreset preset) {
+    controller.openParticipantsReport(preset);
   }
 
   @override
@@ -52,9 +76,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         final error = controller.errorMessage.value;
         final report = controller.report.value;
 
-        return DefaultTabController(
-          length: 4,
-          child: Column(
+        return Column(
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -75,6 +97,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               const SizedBox(height: 0),
               Expanded(
                 child: TabBarView(
+                  controller: _tabController,
                   children: [
                     RefreshIndicator(
                       onRefresh: () async =>
@@ -103,6 +126,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ],
                       ),
                     ),
+                    const ReportsRegisteredParticipantsTab(),
                     RefreshIndicator(
                       onRefresh: () async =>
                           controller.loadCompetitionsAndMaybeReport(),
@@ -127,15 +151,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ],
                       ),
                     ),
-                    // Users tab (created users list)
                     const ReportsUsersTab(),
-                    // Participants scores tab
                     const ReportsParticipantsTab(),
                   ],
                 ),
               ),
             ],
-          ),
         );
       }),
     );
@@ -154,6 +175,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         border: Border.all(color: Colors.grey[300]!),
       ),
       child: TabBar(
+        controller: _tabController,
         isScrollable: true,
         dividerColor: Colors.transparent,
         labelPadding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 8),
@@ -183,6 +205,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
             height: isMobile ? 30 : 34,
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 15),
+              child: Text('Registered participants'),
+            ),
+          ),
+          Tab(
+            height: isMobile ? 30 : 34,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 15),
               child: Text('Prize Winners'),
             ),
           ),
@@ -197,7 +226,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             height: isMobile ? 30 : 34,
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 15),
-              child: Text('Participants'),
+              child: Text('Score of participants'),
             ),
           ),
         ],
@@ -340,14 +369,62 @@ class _ReportsScreenState extends State<ReportsScreen> {
               runSpacing: 10,
               spacing: 10,
               children: [
-                _statTile('Total Participants', '$totalParticipants'),
-                _statTile('No of Boys', '$boys'),
-                _statTile('No of Girls', '$girls'),
-                _statTile('Common Category', '$common'),
-                _statTile('Special Category', '$special'),
-                _statTile('Champions Category', '$champions'),
-                _statTile('Online Registration', '$onlineRegistrations'),
-                _statTile('Spot Registration', '$spotRegistrations'),
+                _statTile(
+                  'Total Participants',
+                  '$totalParticipants',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.all,
+                  ),
+                ),
+                _statTile(
+                  'No of Boys',
+                  '$boys',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.boys(),
+                  ),
+                ),
+                _statTile(
+                  'No of Girls',
+                  '$girls',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.girls(),
+                  ),
+                ),
+                _statTile(
+                  'Common Category',
+                  '$common',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.categoryType('COMMON'),
+                  ),
+                ),
+                _statTile(
+                  'Special Category',
+                  '$special',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.categoryType('SPECIAL'),
+                  ),
+                ),
+                _statTile(
+                  'Champions Category',
+                  '$champions',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.categoryType('CHAMPIONS'),
+                  ),
+                ),
+                _statTile(
+                  'Online Registration',
+                  '$onlineRegistrations',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.onlineRegistration(),
+                  ),
+                ),
+                _statTile(
+                  'Spot Registration',
+                  '$spotRegistrations',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.spotRegistration(),
+                  ),
+                ),
               ],
             ),
           ],
@@ -385,13 +462,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
               runSpacing: 8,
               children: entries
                   .map(
-                    (e) => Chip(
+                    (e) => ActionChip(
                       label: Text('${e.key}: ${e.value}'),
                       backgroundColor: AppTheme.primaryColor.withOpacity(0.08),
                       side: BorderSide(
                         color: AppTheme.primaryColor.withOpacity(0.25),
                       ),
                       labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+                      onPressed: () => _openRegisteredParticipants(
+                        ReportsParticipantsListPreset.categoryType(e.key),
+                      ),
                     ),
                   )
                   .toList(),
@@ -455,8 +535,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       runSpacing: 8,
                       children: ageKeys
                           .map(
-                            (age) =>
-                                _miniPill('Age $age', '${agesMap[age] ?? 0}'),
+                            (age) => _miniPill(
+                              'Age $age',
+                              '${agesMap[age] ?? 0}',
+                              onTap: () {
+                                final ageInt = int.tryParse(age);
+                                if (ageInt == null) return;
+                                _openRegisteredParticipants(
+                                  ReportsParticipantsListPreset.prefixAndAge(
+                                    prefix: prefix,
+                                    age: ageInt,
+                                  ),
+                                );
+                              },
+                            ),
                           )
                           .toList(),
                     ),
@@ -495,9 +587,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
               runSpacing: 10,
               spacing: 10,
               children: [
-                _statTile('Total Institutions', '$totalInstitutions'),
-                _statTile('Total Schools', '$totalSchools'),
-                _statTile('Total Colleges', '$totalColleges'),
+                _statTile(
+                  'Total Institutions',
+                  '$totalInstitutions',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.allInstitutions(),
+                  ),
+                ),
+                _statTile(
+                  'Total Schools',
+                  '$totalSchools',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.schoolsOnly(),
+                  ),
+                ),
+                _statTile(
+                  'Total Colleges',
+                  '$totalColleges',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.collegesOnly(),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -514,9 +624,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   final count = (m['participantCount'] ?? 0).toString();
                   final type = (m['institutionType'] ?? '').toString();
 
+                  final institutionId = (m['institutionId'] as num?)?.toInt();
+
                   return ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
+                    onTap: institutionId != null
+                        ? () => _openRegisteredParticipants(
+                            ReportsParticipantsListPreset.institution(
+                              institutionId,
+                              institutionName:
+                                  name.isNotEmpty ? name : null,
+                            ),
+                          )
+                        : null,
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
                       child: Text(
@@ -1064,8 +1185,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _statTile(String label, String value) {
-    return Container(
+  Widget _statTile(String label, String value, {VoidCallback? onTap}) {
+    final tile = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.grey[50],
@@ -1089,10 +1210,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ],
       ),
     );
+
+    if (onTap == null) return tile;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: tile,
+      ),
+    );
   }
 
-  Widget _miniPill(String label, String value) {
-    return Container(
+  Widget _miniPill(String label, String value, {VoidCallback? onTap}) {
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.grey[100],
@@ -1102,6 +1234,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Text(
         '$label: $value',
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+
+    if (onTap == null) return pill;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: pill,
       ),
     );
   }
