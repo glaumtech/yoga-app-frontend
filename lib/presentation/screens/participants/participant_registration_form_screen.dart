@@ -152,10 +152,18 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
   /// the competition selector is hidden; [initialCompetitionId] / [selectedEventId] is used.
   final bool showCompetitionDropdown;
 
+  /// When set, view-mode Cancel uses this instead of returning to participant list.
+  final VoidCallback? onViewBack;
+
+  /// Hide the view-mode Cancel button when navigation is handled externally.
+  final bool showViewCancelButton;
+
   const ParticipantRegistrationFormScreen({
     super.key,
     this.initialCompetitionId,
     this.showCompetitionDropdown = true,
+    this.onViewBack,
+    this.showViewCancelButton = true,
   });
 
   @override
@@ -558,11 +566,17 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 Obx(() {
                   // Show cancel button in view mode, hide save button
                   if (participantController.isViewMode.value) {
+                    if (!showViewCancelButton) {
+                      return const SizedBox.shrink();
+                    }
                     return Center(
                       child: cancelButton(
                         onPressed: () {
-                          // Clear error message, reset form and redirect to list view
                           participantController.errorMessage.value = '';
+                          if (onViewBack != null) {
+                            onViewBack!();
+                            return;
+                          }
                           participantController.resetForm();
                           participantController.toggleViewMode(true);
                         },

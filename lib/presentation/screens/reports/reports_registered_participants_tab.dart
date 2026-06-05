@@ -5,7 +5,10 @@ import 'dart:html' as html show Blob, Url, AnchorElement;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../../routes/app_routes.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/reports_repository.dart';
@@ -181,11 +184,14 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
             8,
           ),
           children: [
-            _FiltersBar(
+            ReportsParticipantFiltersBar(
               controller: tabController,
               isMobile: isMobile,
               onPrint: printReport,
               onDownloadExcel: downloadExcel,
+              searchHint: 'Search participant name or reg. no.',
+              emptyFiltersHint:
+                  'Filter by stage, category, group, gender, institution, category type, and registration type. Click dashboard counts to open with presets.',
             ),
             const SizedBox(height: 4),
             if (!hasCompetition)
@@ -223,180 +229,6 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
             const Icon(Icons.info_outline, color: AppTheme.primaryColor),
             const SizedBox(width: 12),
             Expanded(child: Text(message)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FiltersBar extends StatelessWidget {
-  const _FiltersBar({
-    required this.controller,
-    required this.isMobile,
-    required this.onPrint,
-    required this.onDownloadExcel,
-  });
-
-  final ReportsRegisteredParticipantsTabController controller;
-  final bool isMobile;
-  final VoidCallback onPrint;
-  final VoidCallback onDownloadExcel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 10 : 12,
-          vertical: isMobile ? 8 : 10,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller.participantSearchFieldController,
-                    onChanged: controller.setParticipantSearchQuery,
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: AppTheme.primaryColor,
-                      ),
-                      hintText: 'Search participant name or reg. no.',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                Obx(
-                  () => IconButton(
-                    tooltip: 'Clear filters and search',
-                    onPressed: controller.hasReportFiltersOrSearch
-                        ? () async {
-                            await controller.clearFiltersAndReload();
-                          }
-                        : null,
-                    icon: Icon(
-                      Icons.clear,
-                      color: controller.hasReportFiltersOrSearch
-                          ? Colors.grey[700]
-                          : Colors.grey[400],
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Obx(() {
-                  final n = controller.activeFilterCount;
-                  return OutlinedButton.icon(
-                    onPressed: () {
-                      showDialog<void>(
-                        context: context,
-                        builder: (ctx) =>
-                            ReportsParticipantFiltersDialog(controller: controller),
-                      );
-                    },
-                    icon: Badge(
-                      isLabelVisible: n > 0,
-                      label: Text('$n'),
-                      child: const Icon(
-                        Icons.tune,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                    label: Text(isMobile ? 'Filters' : 'Report filters'),
-                  );
-                }),
-                IconButton(
-                  tooltip: 'Print',
-                  onPressed: onPrint,
-                  icon: const Icon(Icons.print, color: AppTheme.primaryColor),
-                ),
-                Obx(() {
-                  final ok = controller.selectedStageIds.length == 1;
-                  return IconButton(
-                    tooltip: ok
-                        ? 'Download Excel'
-                        : 'Select one stage for Excel',
-                    onPressed: ok ? onDownloadExcel : null,
-                    icon: Icon(
-                      Icons.download,
-                      color: ok ? AppTheme.primaryColor : Colors.grey,
-                    ),
-                  );
-                }),
-              ],
-            ),
-            Obx(() {
-              final chips = controller.buildActiveFilterChips();
-              if (chips.isEmpty) {
-                return Text(
-                  'Filter by stage, category, group, gender, institution, category type, and registration type. Click dashboard counts to open with presets.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.2,
-                    color: Colors.grey[700],
-                  ),
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Filtered by',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: chips
-                        .map(
-                          (chip) => Chip(
-                            label: Text(
-                              chip.label,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onDeleted: () =>
-                                controller.removeActiveFilter(chip.key),
-                            deleteIcon: const Icon(Icons.close, size: 16),
-                            deleteIconColor: AppTheme.primaryColor,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            backgroundColor:
-                                AppTheme.primaryColor.withValues(alpha: 0.08),
-                            side: BorderSide(
-                              color: AppTheme.primaryColor
-                                  .withValues(alpha: 0.25),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-              );
-            }),
           ],
         ),
       ),
@@ -512,7 +344,13 @@ class _RegisteredParticipantsTable extends StatelessWidget {
                       child: Column(
                         children: [
                           _headerRow(),
-                          for (final row in items) _dataRow(context, row),
+                          for (final row in items)
+                            _dataRow(
+                              context,
+                              row,
+                              competitionName:
+                                  controller.tableCompetitionName.value,
+                            ),
                         ],
                       ),
                     ),
@@ -574,10 +412,45 @@ class _RegisteredParticipantsTable extends StatelessWidget {
     );
   }
 
-  Widget _dataRow(BuildContext context, Map<String, dynamic> row) {
+  void _openRegistrationDetails(
+    BuildContext context,
+    Map<String, dynamic> row,
+    String competitionName,
+  ) {
+    final registrationId = (row['participantRegistrationId'] as num?)?.toInt();
+    if (registrationId == null) {
+      Get.snackbar(
+        'Unavailable',
+        'Registration id is missing for this participant.',
+        backgroundColor: Colors.orange.shade800,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    context.push(
+      AppRoutes.participantRegistrationDetailsPath(
+        registrationId.toString(),
+        participantName: row['participantName']?.toString(),
+        competitionName: competitionName,
+        registrationNo: row['registrationNo']?.toString(),
+      ),
+    );
+  }
+
+  Widget _dataRow(
+    BuildContext context,
+    Map<String, dynamic> row, {
+    required String competitionName,
+  }) {
     final spot = row['isSpotRegistration'] == true;
     final regType = spot ? 'Spot' : 'Online';
     final age = row['age']?.toString() ?? '—';
+    final participantName = (row['participantName'] ?? '—').toString().trim();
+    final displayName =
+        participantName.isEmpty ? '—' : participantName;
+    final registrationId = (row['participantRegistrationId'] as num?)?.toInt();
+    final canOpenDetails = registrationId != null && displayName != '—';
 
     return IntrinsicHeight(
       child: Row(
@@ -616,16 +489,29 @@ class _RegisteredParticipantsTable extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  (row['participantName'] ?? '—').toString().trim().isEmpty
-                      ? '—'
-                      : (row['participantName'] ?? '—').toString(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                    color: Color(0xFF212121),
+                InkWell(
+                  onTap: canOpenDetails
+                      ? () => _openRegistrationDetails(
+                            context,
+                            row,
+                            competitionName,
+                          )
+                      : null,
+                  child: Text(
+                    displayName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      color: canOpenDetails
+                          ? AppTheme.primaryColor
+                          : const Color(0xFF212121),
+                      decoration: canOpenDetails
+                          ? TextDecoration.underline
+                          : TextDecoration.none,
+                      decorationColor: AppTheme.primaryColor,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 2),

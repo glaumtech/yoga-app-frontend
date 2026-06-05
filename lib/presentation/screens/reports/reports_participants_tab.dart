@@ -191,12 +191,14 @@ class ReportsParticipantsTab extends StatelessWidget {
             8,
           ),
           children: [
-            _buildFilters(
-              context,
-              tabController,
-              isMobile,
+            ReportsParticipantFiltersBar(
+              controller: tabController,
+              isMobile: isMobile,
               onPrint: _printParticipants,
               onDownloadExcel: _downloadParticipantsExcel,
+              searchHint: 'Search participant name',
+              emptyFiltersHint:
+                  'Use Report filters for stage, category, group, state, district, institution, and gender.',
             ),
             const SizedBox(height: 4),
             if (!hasCompetition)
@@ -299,193 +301,6 @@ class ReportsParticipantsTab extends StatelessWidget {
       controller: tabController,
       items: items,
       isMobile: isMobile,
-    );
-  }
-
-  Widget _buildFilters(
-    BuildContext context,
-    ReportsParticipantsTabController controller,
-    bool isMobile, {
-    required VoidCallback onPrint,
-    required VoidCallback onDownloadExcel,
-  }) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 10 : 12,
-          vertical: isMobile ? 8 : 10,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller.participantSearchFieldController,
-                    onChanged: controller.setParticipantSearchQuery,
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: AppTheme.primaryColor,
-                      ),
-                      hintText: 'Search participant name',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                Obx(
-                  () => IconButton(
-                    tooltip: 'Clear filters and search',
-                    onPressed: controller.hasReportFiltersOrSearch
-                        ? () async {
-                            await controller.clearFiltersAndReload();
-                          }
-                        : null,
-                    icon: Icon(
-                      Icons.clear,
-                      color: controller.hasReportFiltersOrSearch
-                          ? Colors.grey[700]
-                          : Colors.grey[400],
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Obx(() {
-                  final n = controller.activeFilterCount;
-                  return OutlinedButton.icon(
-                    onPressed: () {
-                      showDialog<void>(
-                        context: context,
-                        builder: (ctx) => ReportsParticipantFiltersDialog(
-                          controller: controller,
-                        ),
-                      );
-                    },
-                    icon: Badge(
-                      isLabelVisible: n > 0,
-                      label: Text('$n'),
-                      child: const Icon(
-                        Icons.tune,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                    label: Text(
-                      isMobile ? 'Filters' : 'Report filters',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(width: 6),
-                IconButton(
-                  tooltip: 'Print Participants',
-                  icon: const Icon(Icons.print, color: AppTheme.primaryColor),
-                  onPressed: onPrint,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 40,
-                    minHeight: 40,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Obx(() {
-                  final stageSelected = controller.selectedStageIds.length == 1;
-                  return IconButton(
-                    tooltip: stageSelected
-                        ? 'Download Participants Excel'
-                        : 'Select exactly one stage in Report filters (Excel)',
-                    icon: Icon(
-                      Icons.download,
-                      color: stageSelected
-                          ? AppTheme.primaryColor
-                          : Colors.grey,
-                    ),
-                    onPressed: stageSelected ? onDownloadExcel : null,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 40,
-                      minHeight: 40,
-                    ),
-                  );
-                }),
-              ],
-            ),
-            Obx(() {
-              final chips = controller.buildActiveFilterChips();
-              if (chips.isEmpty) {
-                return Text(
-                  'Use Report filters for stage, category, group, state, district, institution, and gender.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.2,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w600,
-                  ),
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Filtered by',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: chips
-                        .map(
-                          (chip) => Chip(
-                            label: Text(
-                              chip.label,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onDeleted: () =>
-                                controller.removeActiveFilter(chip.key),
-                            deleteIcon: const Icon(Icons.close, size: 16),
-                            deleteIconColor: AppTheme.primaryColor,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            backgroundColor:
-                                AppTheme.primaryColor.withValues(alpha: 0.08),
-                            side: BorderSide(
-                              color: AppTheme.primaryColor
-                                  .withValues(alpha: 0.25),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-              );
-            }),
-          ],
-        ),
-      ),
     );
   }
 
@@ -1120,6 +935,223 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Search + filter toolbar shared by registered participants and scores tabs.
+class ReportsParticipantFiltersBar extends StatelessWidget {
+  const ReportsParticipantFiltersBar({
+    super.key,
+    required this.controller,
+    required this.isMobile,
+    required this.onPrint,
+    required this.onDownloadExcel,
+    required this.searchHint,
+    required this.emptyFiltersHint,
+  });
+
+  final ReportsParticipantsTabController controller;
+  final bool isMobile;
+  final VoidCallback onPrint;
+  final VoidCallback onDownloadExcel;
+  final String searchHint;
+  final String emptyFiltersHint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 10 : 12,
+          vertical: isMobile ? 10 : 10,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildToolbar(context),
+            const SizedBox(height: 8),
+            Obx(() {
+              final chips = controller.buildActiveFilterChips();
+              if (chips.isEmpty) {
+                return Text(
+                  emptyFiltersHint,
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1.3,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Filtered by',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: chips
+                        .map(
+                          (chip) => Chip(
+                            label: Text(
+                              chip.label,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onDeleted: () =>
+                                controller.removeActiveFilter(chip.key),
+                            deleteIcon: const Icon(Icons.close, size: 16),
+                            deleteIconColor: AppTheme.primaryColor,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            backgroundColor:
+                                AppTheme.primaryColor.withValues(alpha: 0.08),
+                            side: BorderSide(
+                              color: AppTheme.primaryColor
+                                  .withValues(alpha: 0.25),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolbar(BuildContext context) {
+    final searchField = TextField(
+      controller: controller.participantSearchFieldController,
+      onChanged: controller.setParticipantSearchQuery,
+      decoration: InputDecoration(
+        prefixIcon: Icon(Icons.search, color: AppTheme.primaryColor),
+        hintText: searchHint,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: isMobile ? 12 : 10,
+        ),
+      ),
+    );
+
+    final clearButton = Obx(
+      () => IconButton(
+        tooltip: 'Clear filters and search',
+        onPressed: controller.hasReportFiltersOrSearch
+            ? () async {
+                await controller.clearFiltersAndReload();
+              }
+            : null,
+        icon: Icon(
+          Icons.clear,
+          color: controller.hasReportFiltersOrSearch
+              ? Colors.grey[700]
+              : Colors.grey[400],
+        ),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      ),
+    );
+
+    final filtersButton = Obx(() {
+      final n = controller.activeFilterCount;
+      return OutlinedButton.icon(
+        onPressed: () {
+          showDialog<void>(
+            context: context,
+            builder: (ctx) =>
+                ReportsParticipantFiltersDialog(controller: controller),
+          );
+        },
+        icon: Badge(
+          isLabelVisible: n > 0,
+          label: Text('$n'),
+          child: const Icon(Icons.tune, color: AppTheme.primaryColor),
+        ),
+        label: Text(isMobile ? 'Filters' : 'Report filters'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.primaryColor,
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 12 : 14,
+            vertical: isMobile ? 10 : 8,
+          ),
+        ),
+      );
+    });
+
+    final printButton = IconButton(
+      tooltip: 'Print',
+      onPressed: onPrint,
+      icon: const Icon(Icons.print, color: AppTheme.primaryColor),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+    );
+
+    final downloadButton = Obx(() {
+      final stageSelected = controller.selectedStageIds.length == 1;
+      return IconButton(
+        tooltip: stageSelected
+            ? 'Download Excel'
+            : 'Select exactly one stage for Excel',
+        onPressed: stageSelected ? onDownloadExcel : null,
+        icon: Icon(
+          Icons.download,
+          color: stageSelected ? AppTheme.primaryColor : Colors.grey,
+        ),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      );
+    });
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          searchField,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              clearButton,
+              const SizedBox(width: 4),
+              Expanded(child: filtersButton),
+              printButton,
+              downloadButton,
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: searchField),
+        clearButton,
+        const SizedBox(width: 6),
+        filtersButton,
+        printButton,
+        downloadButton,
+      ],
     );
   }
 }

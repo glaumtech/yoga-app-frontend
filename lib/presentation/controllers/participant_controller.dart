@@ -1993,6 +1993,39 @@ class ParticipantController extends GetxController {
     isViewMode.value = false;
   }
 
+  /// Load registration from API and open the form in read-only view mode.
+  Future<bool> loadRegistrationForView(String registrationId) async {
+    try {
+      isLoadingParticipant.value = true;
+      errorMessage.value = '';
+      isListView.value = false;
+
+      final response = await _participantRepository
+          .getParticipantRegistrationById(registrationId);
+
+      if (response.success && response.data != null) {
+        final reg = response.data!['registration'];
+        if (reg is Map<String, dynamic>) {
+          initializeFormForView(_mapRegistrationToParticipant(reg));
+          isLoadingParticipant.value = false;
+          return true;
+        }
+        errorMessage.value = 'Invalid participant registration response';
+        isLoadingParticipant.value = false;
+        return false;
+      }
+
+      errorMessage.value =
+          response.message ?? 'Failed to fetch participant details';
+      isLoadingParticipant.value = false;
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Error loading participant: ${e.toString()}';
+      isLoadingParticipant.value = false;
+      return false;
+    }
+  }
+
   /// Fetch participant details by ID from API
   Future<bool> fetchParticipantById(String participantId) async {
     try {

@@ -53,16 +53,16 @@ class FormLabelWithHint extends StatelessWidget {
               ),
         ),
         if (hintText != null && hintText!.isNotEmpty) ...[
-          SizedBox(height: hintSpacing ?? 0),
+          SizedBox(height: hintSpacing ?? (isMobile ? 4 : 3)),
           Text(
             hintText!,
             style:
                 hintStyle ??
                 TextStyle(
-                  fontSize: isMobile ? 11 : 10,
+                  fontSize: isMobile ? 12 : 11,
                   color: Colors.grey[600],
                   fontStyle: FontStyle.italic,
-                  height: 0.5,
+                  height: isMobile ? 1.35 : 1.3,
                 ),
           ),
         ],

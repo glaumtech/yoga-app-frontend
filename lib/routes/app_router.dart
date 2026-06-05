@@ -14,6 +14,7 @@ import '../presentation/screens/admin/admin_dashboard_screen.dart';
 
 import '../presentation/screens/schools/schools_screen.dart';
 import '../presentation/screens/reports/reports_screen.dart';
+import '../presentation/screens/reports/participant_registration_details_screen.dart';
 import '../presentation/screens/settings/settings_screen.dart';
 import '../presentation/screens/sponsors/sponsors_screen.dart';
 import '../presentation/screens/users/user_management_screen.dart';
@@ -295,6 +296,28 @@ class AppRouter {
         name: 'reports',
         pageBuilder: (context, state) =>
             _noTransitionPage(state, const ReportsScreen()),
+        routes: [
+          GoRoute(
+            path: 'registration/:registrationId',
+            name: 'participant-registration-details',
+            pageBuilder: (context, state) {
+              final registrationId =
+                  state.pathParameters['registrationId'] ?? '';
+              final participantName = state.uri.queryParameters['name'];
+              final competitionName = state.uri.queryParameters['competition'];
+              final registrationNo = state.uri.queryParameters['regNo'];
+              return _noTransitionPage(
+                state,
+                ParticipantRegistrationDetailsScreen(
+                  registrationId: registrationId,
+                  participantName: participantName,
+                  competitionName: competitionName,
+                  registrationNo: registrationNo,
+                ),
+              );
+            },
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoutes.settings,

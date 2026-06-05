@@ -2162,8 +2162,9 @@ class CreateCompetitionScreen extends StatelessWidget {
           label: 'CHAMPIONS / CHAMPIONSHIP STYLE :',
           hintText:
               'Choose whether Champions is a separate registration category or filled from 1st-place winners (boys & girls) in other categories.',
+          hintSpacing: isMobile ? 6 : 4,
+          bottomSpacing: isMobile ? 10 : 8,
         ),
-        const SizedBox(height: 8),
         _optionSectionCard(
           child: Obx(() {
             final selected = controller.championshipStyle.value;
@@ -2193,10 +2194,14 @@ class CreateCompetitionScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: isMobile ? 12 : 13,
                         color: Colors.grey[700],
+                        height: isMobile ? 1.35 : 1.3,
                       ),
                     ),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 0,
+                      vertical: isMobile ? 4 : 0,
+                    ),
+                    dense: !isMobile,
                   );
                 }),
                 if (controller.hasAttemptedSubmit.value &&
