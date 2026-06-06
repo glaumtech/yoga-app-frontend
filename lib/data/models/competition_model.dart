@@ -10,6 +10,8 @@ class CompetitionModel {
   final int? participantsPerStage; // 1-5
   final int? minimumMarks;
   final int? maximumMarks;
+  /// Schools with at least this many participants qualify for Best School Award in reports.
+  final int? bestSchoolAwardMinParticipants;
   final List<String>?
   prizes; // e.g., ["1st", "2nd", "3rd"] - for display/parsing
   final List<int>? prizeIds; // e.g., [1, 2, 3] - for API submission
@@ -45,6 +47,7 @@ class CompetitionModel {
     this.participantsPerStage,
     this.minimumMarks,
     this.maximumMarks,
+    this.bestSchoolAwardMinParticipants,
     this.prizes,
     this.prizeIds,
     this.categories,
@@ -132,6 +135,9 @@ class CompetitionModel {
           json['participantsPerStage'] ?? json['participants_per_stage'],
       minimumMarks: json['minimumMarks'] ?? json['minimum_marks'],
       maximumMarks: json['maximumMarks'] ?? json['maximum_marks'],
+      bestSchoolAwardMinParticipants:
+          json['bestSchoolAwardMinParticipants'] ??
+          json['best_school_award_min_participants'],
       prizes: json['prizes'] != null ? List<String>.from(json['prizes']) : null,
       prizeIds: json['prizeIds'] != null
           ? (json['prizeIds'] as List)
@@ -281,6 +287,7 @@ class CompetitionModel {
         'participantsPerStage': participantsPerStage,
       if (minimumMarks != null) 'minimumMarks': minimumMarks,
       if (maximumMarks != null) 'maximumMarks': maximumMarks,
+      'bestSchoolAwardMinParticipants': bestSchoolAwardMinParticipants,
       // Send IDs for API submission
       if (prizeIds != null && prizeIds!.isNotEmpty) 'prizeIds': prizeIds,
       if (categoryIds != null && categoryIds!.isNotEmpty)
@@ -319,6 +326,7 @@ class CompetitionModel {
     int? participantsPerStage,
     int? minimumMarks,
     int? maximumMarks,
+    int? bestSchoolAwardMinParticipants,
     List<String>? prizes,
     List<int>? prizeIds,
     List<String>? categories,
@@ -348,6 +356,8 @@ class CompetitionModel {
       participantsPerStage: participantsPerStage ?? this.participantsPerStage,
       minimumMarks: minimumMarks ?? this.minimumMarks,
       maximumMarks: maximumMarks ?? this.maximumMarks,
+      bestSchoolAwardMinParticipants: bestSchoolAwardMinParticipants ??
+          this.bestSchoolAwardMinParticipants,
       prizes: prizes ?? this.prizes,
       prizeIds: prizeIds ?? this.prizeIds,
       categories: categories ?? this.categories,

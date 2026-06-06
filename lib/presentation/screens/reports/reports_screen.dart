@@ -350,6 +350,8 @@ class _ReportsScreenState extends State<ReportsScreen>
       const SizedBox(height: 12),
       if (isWideWeb) ...[
         sectionsRow,
+        const SizedBox(height: 12),
+        _buildBestSchoolAwardSection(report, isMobile),
         const SizedBox(height: 20),
       ] else ...[
         _buildCategoryCountsSection(report, isMobile),
@@ -357,6 +359,8 @@ class _ReportsScreenState extends State<ReportsScreen>
         _buildPrefixAgeSection(report, isMobile),
         const SizedBox(height: 12),
         _buildInstitutionsSection(report, isMobile),
+        const SizedBox(height: 12),
+        _buildBestSchoolAwardSection(report, isMobile),
         const SizedBox(height: 20),
       ],
     ];
@@ -651,6 +655,97 @@ class _ReportsScreenState extends State<ReportsScreen>
                 ),
               );
             }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBestSchoolAwardSection(
+    Map<String, dynamic> report,
+    bool isMobile,
+  ) {
+    final institutions =
+        (report['institutions'] as Map?)?.cast<String, dynamic>() ?? {};
+    final threshold = (institutions['bestSchoolAwardMinParticipants'] as num?)
+        ?.toInt();
+    final awards =
+        (institutions['bestSchoolAwards'] as List?)?.cast() ?? const [];
+
+    if (threshold == null || threshold <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle('Best School Award'),
+            const SizedBox(height: 6),
+            Text(
+              'Schools with above $threshold participants',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (awards.isEmpty)
+              _buildInfoCard(
+                'No schools have reached the Best School Award threshold yet.',
+                icon: Icons.emoji_events_outlined,
+              )
+            else
+              Column(
+                children: awards.map((row) {
+                  final m = (row as Map).cast<String, dynamic>();
+                  final name = (m['institutionName'] ?? '').toString();
+                  final count = (m['participantCount'] ?? 0).toString();
+                  final institutionId = (m['institutionId'] as num?)?.toInt();
+
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    onTap: institutionId != null
+                        ? () => _openRegisteredParticipants(
+                            ReportsParticipantsListPreset.institution(
+                              institutionId,
+                              institutionName:
+                                  name.isNotEmpty ? name : null,
+                            ),
+                          )
+                        : null,
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          AppTheme.primaryColor.withOpacity(0.12),
+                      child: Icon(
+                        Icons.emoji_events,
+                        color: AppTheme.primaryColor,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      name.isNotEmpty ? name : 'Unknown institution',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    trailing: Text(
+                      '$count participants',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primaryColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
           ],
         ),
       ),

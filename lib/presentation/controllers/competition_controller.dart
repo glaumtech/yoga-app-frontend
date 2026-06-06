@@ -155,6 +155,8 @@ class CompetitionController extends GetxController {
   final RxInt participantsPerStage = RxInt(0);
   final RxInt minimumMarks = RxInt(0);
   final RxInt maximumMarks = RxInt(0);
+  final TextEditingController bestSchoolAwardMinParticipantsController =
+      TextEditingController();
   // Track selected IDs (for API submission)
   final RxList<int> selectedPrizeIds = <int>[].obs;
   final RxList<int> selectedCategoryIds = <int>[].obs;
@@ -1565,6 +1567,7 @@ class CompetitionController extends GetxController {
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
         championshipStyle: championshipStyle.value?.apiValue,
+        bestSchoolAwardMinParticipants: _parsedBestSchoolAwardMinParticipants(),
       );
 
       final response = await _repository.createCompetition(
@@ -1608,6 +1611,14 @@ class CompetitionController extends GetxController {
 
   void clearLastSavedCompetitionForQr() {
     lastSavedCompetitionForQr.value = null;
+  }
+
+  int? _parsedBestSchoolAwardMinParticipants() {
+    final raw = bestSchoolAwardMinParticipantsController.text.trim();
+    if (raw.isEmpty) return null;
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
   }
 
   // Update competition
@@ -1689,6 +1700,7 @@ class CompetitionController extends GetxController {
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
         championshipStyle: championshipStyle.value?.apiValue,
+        bestSchoolAwardMinParticipants: _parsedBestSchoolAwardMinParticipants(),
       );
 
       final response = await _repository.updateCompetition(
@@ -1904,6 +1916,11 @@ class CompetitionController extends GetxController {
     participantsPerStage.value = competition.participantsPerStage ?? 0;
     minimumMarks.value = competition.minimumMarks ?? 0;
     maximumMarks.value = competition.maximumMarks ?? 0;
+    bestSchoolAwardMinParticipantsController.text =
+        competition.bestSchoolAwardMinParticipants != null &&
+                competition.bestSchoolAwardMinParticipants! > 0
+            ? '${competition.bestSchoolAwardMinParticipants}'
+            : '';
     // Load IDs if available, otherwise convert names to IDs
     if (competition.prizeIds != null && competition.prizeIds!.isNotEmpty) {
       selectedPrizeIds.value = List<int>.from(competition.prizeIds!);
@@ -2180,6 +2197,7 @@ class CompetitionController extends GetxController {
     participantsPerStage.value = 0;
     minimumMarks.value = 0;
     maximumMarks.value = 0;
+    bestSchoolAwardMinParticipantsController.clear();
     selectedPrizeIds.clear();
     selectedCategoryIds.clear();
     categoryAmounts.clear();

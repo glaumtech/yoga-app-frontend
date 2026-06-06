@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -582,6 +583,8 @@ class CreateCompetitionScreen extends StatelessWidget {
           ),
         gap,
         _buildChampionshipStyleField(context, controller, isMobile, isTablet),
+        gap,
+        _buildBestSchoolAwardField(context, controller, isMobile, isTablet),
         gap,
         _buildPrizesField(context, controller, isMobile, isTablet),
         gap,
@@ -2144,6 +2147,79 @@ class CreateCompetitionScreen extends StatelessWidget {
               );
             },
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBestSchoolAwardField(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(
+          label: 'BEST SCHOOL AWARD :',
+          hintText:
+              'Optional. Schools with at least this many registered participants appear in Reports as Best School Award winners.',
+          hintSpacing: isMobile ? 6 : 4,
+          bottomSpacing: isMobile ? 10 : 8,
+        ),
+        _optionSectionCard(
+          child: Obx(() {
+            final readOnly = controller.isViewMode.value;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Best School Award above:',
+                  style: TextStyle(
+                    fontSize: isMobile ? 14 : 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: isMobile ? 72 : 84,
+                  child: TextFormField(
+                    controller:
+                        controller.bestSchoolAwardMinParticipantsController,
+                    readOnly: readOnly,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    decoration: InputDecoration(
+                      hintText: 'e.g. 15',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      filled: true,
+                      fillColor: readOnly ? Colors.grey[200] : Colors.white,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: isMobile ? 12 : 14,
+                      ),
+                      isDense: isMobile,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'participants',
+                  style: TextStyle(
+                    fontSize: isMobile ? 14 : 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            );
+          }),
         ),
       ],
     );
