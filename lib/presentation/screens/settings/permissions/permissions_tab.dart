@@ -6,16 +6,25 @@ import '../../../../data/models/app_permission_record_model.dart';
 import '../../../controllers/settings_controller.dart';
 import '../../../widgets/buttons.dart';
 
+SettingsController? _activeSettingsController() {
+  return Get.isRegistered<SettingsController>()
+      ? Get.find<SettingsController>()
+      : null;
+}
+
 class SettingsPermissionsTab extends StatelessWidget {
   const SettingsPermissionsTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<SettingsController>();
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
     return Obx(() {
+      final controller = _activeSettingsController();
+      if (controller == null) {
+        return const SizedBox.shrink();
+      }
       if (controller.isLoading.value && controller.permissions.isEmpty) {
         return const Center(child: CircularProgressIndicator());
       }
@@ -145,7 +154,10 @@ class _CreatePermissionTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<SettingsController>();
+    final controller = _activeSettingsController();
+    if (controller == null) {
+      return const SizedBox.shrink();
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -160,7 +172,11 @@ class _CreatePermissionTab extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Obx(() {
-                final isEdit = controller.isEditMode.value;
+                final active = _activeSettingsController();
+                if (active == null) {
+                  return const SizedBox.shrink();
+                }
+                final isEdit = active.isEditMode.value;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -174,8 +190,12 @@ class _CreatePermissionTab extends StatelessWidget {
                     ),
                     SizedBox(height: isMobile ? 16 : 20),
                     Obx(() {
+                      final active = _activeSettingsController();
+                      if (active == null) {
+                        return const SizedBox.shrink();
+                      }
                       // Force rebuild after update/reset so field state is cleared.
-                      final trigger = controller.formResetTrigger.value;
+                      final trigger = active.formResetTrigger.value;
                       return KeyedSubtree(
                         key: ValueKey('permission_form_$trigger'),
                         child: Form(
@@ -263,7 +283,7 @@ class _CreatePermissionTab extends StatelessWidget {
                             label: 'PERMISSION NAME :',
                             isMobile: isMobile,
                             child: TextFormField(
-                              controller: controller.nameController,
+                              controller: active.nameController,
                               textCapitalization: TextCapitalization.characters,
                               decoration: _fieldDecoration(isMobile),
                               validator: (v) => (v == null || v.trim().isEmpty)
@@ -275,7 +295,7 @@ class _CreatePermissionTab extends StatelessWidget {
                             label: 'PERMISSION KEY :',
                             isMobile: isMobile,
                             child: TextFormField(
-                              controller: controller.permissionKeyController,
+                              controller: active.permissionKeyController,
                               decoration: _fieldDecoration(isMobile),
                               validator: (v) => (v == null || v.trim().isEmpty)
                                   ? 'Permission key is required'
@@ -286,7 +306,7 @@ class _CreatePermissionTab extends StatelessWidget {
                             label: 'MENU (OPTIONAL)',
                             isMobile: isMobile,
                             child: TextFormField(
-                              controller: controller.menuController,
+                              controller: active.menuController,
                               decoration: _fieldDecoration(isMobile),
                             ),
                           );
@@ -294,7 +314,7 @@ class _CreatePermissionTab extends StatelessWidget {
                             label: 'SUB-MENU (OPTIONAL)',
                             isMobile: isMobile,
                             child: TextFormField(
-                              controller: controller.subMenuController,
+                              controller: active.subMenuController,
                               decoration: _fieldDecoration(isMobile),
                             ),
                           );
@@ -302,7 +322,7 @@ class _CreatePermissionTab extends StatelessWidget {
                             label: 'TYPE :',
                             isMobile: isMobile,
                             child: TextFormField(
-                              controller: controller.typeController,
+                              controller: active.typeController,
                               decoration: _fieldDecoration(isMobile),
                               validator: (v) => (v == null || v.trim().isEmpty)
                                   ? 'Type is required'
@@ -313,7 +333,7 @@ class _CreatePermissionTab extends StatelessWidget {
                             label: 'TAB (OPTIONAL)',
                             isMobile: isMobile,
                             child: TextFormField(
-                              controller: controller.tabController,
+                              controller: active.tabController,
                               decoration: _fieldDecoration(isMobile),
                             ),
                           );
@@ -321,7 +341,7 @@ class _CreatePermissionTab extends StatelessWidget {
                             label: 'DESCRIPTION (OPTIONAL)',
                             isMobile: isMobile,
                             child: TextFormField(
-                              controller: controller.descriptionController,
+                              controller: active.descriptionController,
                               maxLines: 2,
                               decoration: _fieldDecoration(isMobile),
                             ),
@@ -344,14 +364,14 @@ class _CreatePermissionTab extends StatelessWidget {
                       );
                     }),
                     Obx(
-                      () => controller.errorMessage.value.isNotEmpty
+                      () => active.errorMessage.value.isNotEmpty
                           ? Padding(
                               padding: const EdgeInsets.only(
                                 top: 12,
                                 bottom: 12,
                               ),
                               child: Text(
-                                controller.errorMessage.value,
+                                active.errorMessage.value,
                                 style: TextStyle(color: Colors.red[700]),
                               ),
                             )
@@ -363,8 +383,8 @@ class _CreatePermissionTab extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           saveButton(
-                            onPressed: controller.submitUpdatePermission,
-                            isLoading: controller.isSaving,
+                            onPressed: active.submitUpdatePermission,
+                            isLoading: active.isSaving,
                             text: 'UPDATE',
                             width: isMobile ? null : 160,
                             height: 42,
@@ -373,7 +393,7 @@ class _CreatePermissionTab extends StatelessWidget {
                           if (!isMobile) ...[
                             const SizedBox(width: 16),
                             cancelButton(
-                              onPressed: controller.resetForm,
+                              onPressed: active.resetForm,
                               text: 'CANCEL',
                               width: 160,
                               height: 42,
@@ -385,8 +405,8 @@ class _CreatePermissionTab extends StatelessWidget {
                       Align(
                         alignment: Alignment.center,
                         child: saveButton(
-                          onPressed: controller.submitCreatePermission,
-                          isLoading: controller.isSaving,
+                          onPressed: active.submitCreatePermission,
+                          isLoading: active.isSaving,
                           text: 'SAVE',
                           width: isMobile ? null : 160,
                           height: 42,
@@ -398,7 +418,7 @@ class _CreatePermissionTab extends StatelessWidget {
                       Align(
                         alignment: Alignment.center,
                         child: cancelButton(
-                          onPressed: controller.resetForm,
+                          onPressed: active.resetForm,
                           text: 'CANCEL',
                           width: isMobile ? null : 160,
                           height: 42,
@@ -534,7 +554,10 @@ class _AssignPermissionTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<SettingsController>();
+    final controller = _activeSettingsController();
+    if (controller == null) {
+      return const SizedBox.shrink();
+    }
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),

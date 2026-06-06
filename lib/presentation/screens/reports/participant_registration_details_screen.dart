@@ -9,12 +9,6 @@ import '../../../data/repositories/participant_repository.dart';
 import '../../controllers/participant_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 
-const Color _kSectionHeaderBg = Color(0xFFE8F5E9);
-const Color _kSectionBorder = Color(0xFFE0E0E0);
-const Color _kTitleGreen = Color(0xFF1B5E20);
-const Color _kLabelColor = Color(0xFF424242);
-const Color _kRowAltBg = Color(0xFFFAFAFA);
-
 /// Read-only participant registration details (matches PDF/HTML template).
 class ParticipantRegistrationDetailsScreen extends StatefulWidget {
   final String registrationId;
@@ -195,7 +189,7 @@ class _ParticipantRegistrationDetailsScreenState
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[700],
+                              color: AppTheme.textMuted,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -206,7 +200,7 @@ class _ParticipantRegistrationDetailsScreenState
                             'Reg. No: $headerRegNo',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[700],
+                              color: AppTheme.textMuted,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -311,7 +305,7 @@ class _ParticipantRegistrationDetailsScreenState
           Container(
             padding: const EdgeInsets.only(bottom: 16),
             decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: _kSectionBorder)),
+              border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Column(
               children: [
@@ -319,10 +313,10 @@ class _ParticipantRegistrationDetailsScreenState
                   Text(
                     _text(reg['competitionName']),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: _kTitleGreen,
+                      color: AppTheme.sectionHeaderText(),
                       height: 1.35,
                     ),
                   ),
@@ -333,7 +327,7 @@ class _ParticipantRegistrationDetailsScreenState
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey[800],
+                      color: AppTheme.textSecondary,
                       height: 1.45,
                     ),
                   ),
@@ -343,12 +337,12 @@ class _ParticipantRegistrationDetailsScreenState
           ),
           const SizedBox(height: 16),
         ],
-        const Text(
+        Text(
           'Participant registration details',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            color: _kTitleGreen,
+            color: AppTheme.sectionHeaderText(),
             letterSpacing: 0.3,
           ),
         ),
@@ -394,14 +388,14 @@ class _ParticipantRegistrationDetailsScreenState
         Container(
           padding: const EdgeInsets.only(top: 12),
           decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: _kSectionBorder)),
+            border: Border(top: BorderSide(color: AppColors.border)),
           ),
           child: Column(
             children: [
               Text(
                 'Yogasana championship registration system',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 11, color: AppTheme.textHint),
               ),
               const SizedBox(height: 6),
               Align(
@@ -410,7 +404,7 @@ class _ParticipantRegistrationDetailsScreenState
                   'Official receipt — keep for your records',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[700],
+                    color: AppTheme.textMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -430,7 +424,7 @@ class _ParticipantRegistrationDetailsScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _kSectionBorder),
+        border: Border.all(color: AppTheme.border),
       ),
       child: Column(
         children: [
@@ -440,7 +434,7 @@ class _ParticipantRegistrationDetailsScreenState
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.6,
-              color: _kTitleGreen,
+              color: AppTheme.sectionHeaderText(),
             ),
           ),
           const SizedBox(height: 12),
@@ -493,7 +487,7 @@ class _DetailSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: _kSectionBorder),
+        border: Border.all(color: AppTheme.border),
         borderRadius: BorderRadius.circular(6),
       ),
       child: ClipRRect(
@@ -504,14 +498,14 @@ class _DetailSection extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              color: _kSectionHeaderBg,
+              color: AppTheme.sectionHeaderBackground(),
               child: Text(
                 title.toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.6,
-                  color: _kTitleGreen,
+                  color: AppTheme.sectionHeaderText(),
                 ),
               ),
             ),
@@ -559,8 +553,8 @@ class _DetailFieldTableRow extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: altBackground ? _kRowAltBg : Colors.white,
-          border: const Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+          color: altBackground ? AppColors.rowAlt : AppColors.surface,
+          border: const Border(bottom: BorderSide(color: AppColors.divider)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -570,7 +564,7 @@ class _DetailFieldTableRow extends StatelessWidget {
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 12,
-                color: _kLabelColor,
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 4),
@@ -578,7 +572,7 @@ class _DetailFieldTableRow extends StatelessWidget {
               value,
               style: const TextStyle(
                 fontSize: 13,
-                color: Color(0xFF212121),
+                color: AppColors.textPrimary,
                 height: 1.35,
               ),
             ),
@@ -589,8 +583,8 @@ class _DetailFieldTableRow extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: altBackground ? _kRowAltBg : Colors.white,
-        border: const Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+        color: altBackground ? AppColors.rowAlt : AppColors.surface,
+        border: const Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: IntrinsicHeight(
         child: Row(
@@ -607,7 +601,7 @@ class _DetailFieldTableRow extends StatelessWidget {
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
-                      color: _kLabelColor,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ),
@@ -622,7 +616,7 @@ class _DetailFieldTableRow extends StatelessWidget {
                     value,
                     style: const TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF212121),
+                      color: AppColors.textPrimary,
                       height: 1.35,
                     ),
                   ),

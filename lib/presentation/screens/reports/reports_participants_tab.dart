@@ -17,13 +17,6 @@ import '../../../data/models/state_model.dart';
 import '../../../data/repositories/reports_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Mint header and grid styling for the participant scores table (reports).
-const Color _kParticipantTableHeaderBg = Color(0xFFE8F5E9);
-const Color _kParticipantTableBorder = Color(0xFFE0E0E0);
-
-/// Header label when not the active (green) sort column — dark blue-grey.
-const Color _kParticipantTableHeaderMuted = Color(0xFF37474F);
-
 enum _ParticipantHeaderSort {
   /// No sort affordance (e.g. ICON, TYPE).
   none,
@@ -260,7 +253,7 @@ class ReportsParticipantsTab extends StatelessWidget {
         elevation: 1,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: _kParticipantTableBorder),
+          side: const BorderSide(color: AppColors.border),
         ),
         child: const SizedBox(
           height: 220,
@@ -313,7 +306,7 @@ class ReportsParticipantsTab extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            const Icon(Icons.info_outline, color: AppTheme.primaryColor),
+            Icon(Icons.info_outline, color: AppTheme.primaryColor),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -331,7 +324,7 @@ class ReportsParticipantsTab extends StatelessWidget {
   }
 }
 
-/// Dashboard-style grid table with mint header and numbered pagination.
+/// Dashboard-style grid table with themed header and numbered pagination.
 class _ReportsParticipantScoresTable extends StatelessWidget {
   const _ReportsParticipantScoresTable({
     required this.hostContext,
@@ -349,7 +342,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
   static const double _kMinParticipantTableWidth = 968.0;
 
   static const BorderSide _cellBorderSide = BorderSide(
-    color: _kParticipantTableBorder,
+    color: AppColors.border,
     width: 1,
   );
 
@@ -362,7 +355,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
     final showSortIcon = sort == _ParticipantHeaderSort.inactive || isActive;
     final labelColor = isActive
         ? AppTheme.primaryColor
-        : _kParticipantTableHeaderMuted;
+        : AppTheme.sectionHeaderText();
 
     return Row(
       mainAxisAlignment: align == TextAlign.right
@@ -403,15 +396,15 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
         style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF424242),
+          color: AppColors.textSecondary,
         ),
       ),
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       padding: EdgeInsets.zero,
       labelPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-      backgroundColor: const Color(0xFFEEEEEE),
-      side: BorderSide(color: Colors.grey[400]!),
+      backgroundColor: AppTheme.chipNeutralBackground,
+      side: BorderSide(color: AppTheme.chipNeutralBorder),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
     );
   }
@@ -427,7 +420,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: _kParticipantTableHeaderBg,
+          color: AppTheme.sectionHeaderBackground(),
           border: Border(
             right: last ? BorderSide.none : _cellBorderSide,
             bottom: _cellBorderSide,
@@ -449,7 +442,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: _kParticipantTableHeaderBg,
+          color: AppTheme.sectionHeaderBackground(),
           border: Border(
             right: last ? BorderSide.none : _cellBorderSide,
             bottom: _cellBorderSide,
@@ -516,7 +509,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: _kParticipantTableBorder),
+        side: const BorderSide(color: AppColors.border),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -553,7 +546,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                   child: Icon(
                                     Icons.workspace_premium,
                                     size: 18,
-                                    color: _kParticipantTableHeaderMuted,
+                                    color: AppTheme.sectionHeaderText(),
                                   ),
                                 ),
                               ),
@@ -791,7 +784,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                                 ) ??
                                                 0.0)
                                             .toStringAsFixed(2),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w900,
                                           fontSize: 13,
                                           color: AppTheme.primaryColor,
@@ -823,9 +816,9 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                 ),
                 Container(
                   decoration: const BoxDecoration(
-                    color: Color(0xFFFAFAFA),
+                    color: AppColors.rowAlt,
                     border: Border(
-                      top: BorderSide(color: _kParticipantTableBorder),
+                      top: BorderSide(color: AppColors.border),
                     ),
                   ),
                   padding: const EdgeInsets.symmetric(
@@ -1086,7 +1079,7 @@ class ReportsParticipantFiltersBar extends StatelessWidget {
         icon: Badge(
           isLabelVisible: n > 0,
           label: Text('$n'),
-          child: const Icon(Icons.tune, color: AppTheme.primaryColor),
+          child: Icon(Icons.tune, color: AppTheme.primaryColor),
         ),
         label: Text(isMobile ? 'Filters' : 'Report filters'),
         style: OutlinedButton.styleFrom(
@@ -1102,7 +1095,7 @@ class ReportsParticipantFiltersBar extends StatelessWidget {
     final printButton = IconButton(
       tooltip: 'Print',
       onPressed: onPrint,
-      icon: const Icon(Icons.print, color: AppTheme.primaryColor),
+      icon: Icon(Icons.print, color: AppTheme.primaryColor),
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
     );

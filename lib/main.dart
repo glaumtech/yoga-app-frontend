@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:get/get.dart';
-import 'core/theme/app_theme.dart';
+import 'core/theme/role_theme_controller.dart';
 import 'core/navigation/root_scaffold_messenger_key.dart';
 import 'core/utils/storage_service.dart';
 import 'presentation/controllers/auth_controller.dart';
@@ -29,6 +29,9 @@ void main() async {
   Get.put(CompetitionController(), permanent: true);
   await Get.put(PermissionStore(), permanent: true).init();
 
+  final roleThemeController = Get.put(RoleThemeController(), permanent: true);
+  await roleThemeController.restoreFromStorage();
+
   runApp(const MyApp());
 }
 
@@ -37,12 +40,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
+    final roleTheme = Get.find<RoleThemeController>();
+    return Obx(
+      () => MaterialApp.router(
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      theme: roleTheme.lightTheme,
+      darkTheme: roleTheme.darkTheme,
       themeMode: ThemeMode.light,
       routerConfig: AppRouter.router,
       shortcuts: AppKeyboardScrollScope.mergeAppShortcuts(
@@ -51,6 +56,7 @@ class MyApp extends StatelessWidget {
       builder: (context, child) {
         return AppKeyboardScrollScope(child: child);
       },
+    ),
     );
   }
 }

@@ -10,6 +10,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/keyboard/keyboard_scrollable.dart';
 import '../../../core/layout/home_layout.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/role_display_name.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../routes/app_routes.dart';
 import '../../widgets/footer_section.dart';
@@ -132,7 +133,7 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.self_improvement,
                         color: AppTheme.primaryColor,
                         size: 32,
@@ -283,7 +284,7 @@ class HomeScreen extends StatelessWidget {
                                             6,
                                           ),
                                         ),
-                                        child: const Icon(
+                                        child: Icon(
                                           Icons.person,
                                           size: 18,
                                           color: AppTheme.primaryColor,
@@ -302,7 +303,7 @@ class HomeScreen extends StatelessWidget {
                                                       .value
                                                       ?.name ??
                                                   'Profile',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 color: AppTheme.primaryColor,
                                                 fontWeight: FontWeight.w500,
                                                 fontSize: 14,
@@ -314,10 +315,12 @@ class HomeScreen extends StatelessWidget {
                                                     ?.userTypeName !=
                                                 null)
                                               Text(
-                                                userController
-                                                    .currentUser
-                                                    .value!
-                                                    .userTypeName!,
+                                                displayRoleName(
+                                                  userController
+                                                      .currentUser
+                                                      .value!
+                                                      .userTypeName,
+                                                ),
                                                 style: TextStyle(
                                                   color: AppTheme.primaryColor
                                                       .withOpacity(0.7),

@@ -182,8 +182,8 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: () => _copyLink(context),
-                  child: const Padding(
-                    padding: EdgeInsets.all(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
                     child: Icon(Icons.share, size: 18, color: AppTheme.primaryColor),
                   ),
                 ),

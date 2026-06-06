@@ -14,6 +14,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/championship_style.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/utils/permission_store.dart';
+import '../../../core/theme/role_theme_controller.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/photo_capture_service.dart';
 
@@ -140,7 +141,11 @@ class UserManagementController extends GetxController {
       final userJson = StorageService.getString(AppConstants.userKey);
       if (userJson != null && userJson.isNotEmpty) {
         final userData = jsonDecode(userJson) as Map<String, dynamic>;
-        currentUser.value = UserManagementModel.fromJson(userData);
+        final user = UserManagementModel.fromJson(userData);
+        currentUser.value = user;
+        if (Get.isRegistered<RoleThemeController>()) {
+          Get.find<RoleThemeController>().applyThemeColor(user.themeColor);
+        }
       }
     } catch (e) {
       print('Error loading current user: $e');
@@ -177,10 +182,7 @@ class UserManagementController extends GetxController {
 
   @override
   void onClose() {
-    nameController.dispose();
-    userNameController.dispose();
-    passwordController.dispose();
-    cellController.dispose();
+    // See CompetitionController.onClose — avoid dispose during logout teardown.
     super.onClose();
   }
 
@@ -1292,6 +1294,9 @@ class UserManagementController extends GetxController {
           if (Get.isRegistered<PermissionStore>()) {
             Get.find<PermissionStore>().setKeys(user.permissions);
           }
+          if (Get.isRegistered<RoleThemeController>()) {
+            Get.find<RoleThemeController>().applyThemeColor(user.themeColor);
+          }
         }
         isLoading.value = false;
         return true;
@@ -1321,6 +1326,9 @@ class UserManagementController extends GetxController {
         if (Get.isRegistered<PermissionStore>()) {
           Get.find<PermissionStore>().setKeys(const []);
         }
+        if (Get.isRegistered<RoleThemeController>()) {
+          Get.find<RoleThemeController>().resetToDefault();
+        }
         isLoading.value = false;
         return true;
       } else {
@@ -1328,6 +1336,9 @@ class UserManagementController extends GetxController {
         currentUser.value = null;
         if (Get.isRegistered<PermissionStore>()) {
           Get.find<PermissionStore>().setKeys(const []);
+        }
+        if (Get.isRegistered<RoleThemeController>()) {
+          Get.find<RoleThemeController>().resetToDefault();
         }
         errorMessage.value = response.message ?? 'Logout failed';
         isLoading.value = false;
@@ -1338,6 +1349,9 @@ class UserManagementController extends GetxController {
       currentUser.value = null;
       if (Get.isRegistered<PermissionStore>()) {
         Get.find<PermissionStore>().setKeys(const []);
+      }
+      if (Get.isRegistered<RoleThemeController>()) {
+        Get.find<RoleThemeController>().resetToDefault();
       }
       errorMessage.value = 'Error during logout: ${e.toString()}';
       isLoading.value = false;

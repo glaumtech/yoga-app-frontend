@@ -16,10 +16,6 @@ import '../../controllers/reports_registered_participants_tab_controller.dart';
 import '../../controllers/reports_participants_tab_logic.dart';
 import 'reports_participants_tab.dart';
 
-const Color _kTableHeaderBg = Color(0xFFE8F5E9);
-const Color _kTableBorder = Color(0xFFE0E0E0);
-const Color _kTableHeaderMuted = Color(0xFF37474F);
-
 /// Registered participants report (table view, competition filters).
 class ReportsRegisteredParticipantsTab extends StatelessWidget {
   const ReportsRegisteredParticipantsTab({super.key});
@@ -226,7 +222,7 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            const Icon(Icons.info_outline, color: AppTheme.primaryColor),
+            Icon(Icons.info_outline, color: AppTheme.primaryColor),
             const SizedBox(width: 12),
             Expanded(child: Text(message)),
           ],
@@ -250,7 +246,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
   static const double _minWidth = 1000;
 
   static const BorderSide _cellBorderSide = BorderSide(
-    color: _kTableBorder,
+    color: AppColors.border,
     width: 1,
   );
 
@@ -260,11 +256,11 @@ class _RegisteredParticipantsTable extends StatelessWidget {
       textAlign: align,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w800,
         letterSpacing: 0.35,
-        color: _kTableHeaderMuted,
+        color: AppTheme.sectionHeaderText(),
       ),
     );
   }
@@ -277,15 +273,15 @@ class _RegisteredParticipantsTable extends StatelessWidget {
         style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF424242),
+          color: AppColors.textSecondary,
         ),
       ),
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       padding: EdgeInsets.zero,
       labelPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-      backgroundColor: const Color(0xFFEEEEEE),
-      side: BorderSide(color: Colors.grey[400]!),
+      backgroundColor: AppTheme.chipNeutralBackground,
+      side: BorderSide(color: AppTheme.chipNeutralBorder),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
     );
   }
@@ -311,7 +307,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
       child: Icon(
         optedIn ? Icons.check_circle : Icons.cancel_outlined,
         size: 22,
-        color: optedIn ? AppTheme.primaryColor : Colors.grey[400],
+        color: optedIn ? AppTheme.accent : AppTheme.iconDisabled,
       ),
     );
   }
@@ -324,7 +320,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: _kTableBorder),
+        side: const BorderSide(color: AppColors.border),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -385,7 +381,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
               child: Icon(
                 Icons.workspace_premium,
                 size: 18,
-                color: _kTableHeaderMuted,
+                color: AppTheme.sectionHeaderText(),
               ),
             ),
           ),
@@ -506,7 +502,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
                       fontSize: 12,
                       color: canOpenDetails
                           ? AppTheme.primaryColor
-                          : const Color(0xFF212121),
+                          : AppTheme.textPrimary,
                       decoration: canOpenDetails
                           ? TextDecoration.underline
                           : TextDecoration.none,
@@ -521,7 +517,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
-                    color: Colors.grey[700],
+                    color: AppTheme.textMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -555,7 +551,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
                 fontSize: 11,
                 height: 1.25,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+                color: AppTheme.textSecondary,
               ),
             ),
           ),
@@ -615,8 +611,8 @@ class _RegisteredParticipantsTable extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: const BoxDecoration(
-          color: Color(0xFFFAFAFA),
-          border: Border(top: BorderSide(color: _kTableBorder)),
+          color: AppColors.rowAlt,
+          border: Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Row(
           children: [
@@ -630,7 +626,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
                   ),
                   Text(
                     'Total: $te participants',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                    style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                   ),
                 ],
               ),
@@ -656,7 +652,9 @@ class _RegisteredParticipantsTable extends StatelessWidget {
                           '${i + 1}',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: i == pg ? Colors.white : Colors.grey[800],
+                            color: i == pg
+                                ? AppTheme.textOnAccent
+                                : AppTheme.textSecondary,
                           ),
                         ),
                       ),
@@ -690,7 +688,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
             : Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: _kTableHeaderBg,
+          color: AppTheme.sectionHeaderBackground(),
           border: Border(
             right: last ? BorderSide.none : _cellBorderSide,
             bottom: _cellBorderSide,
@@ -712,7 +710,7 @@ class _RegisteredParticipantsTable extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: _kTableHeaderBg,
+          color: AppTheme.sectionHeaderBackground(),
           border: Border(
             right: last ? BorderSide.none : _cellBorderSide,
             bottom: _cellBorderSide,

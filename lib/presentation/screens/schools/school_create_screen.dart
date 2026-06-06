@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
@@ -1158,7 +1159,7 @@ class SchoolCreateScreen extends StatelessWidget {
                                   .loadInstitutionCategoriesByTypeId(value);
                             }
                           },
-                          activeColor: Colors.green,
+                          activeColor: AppTheme.accent,
                           materialTapTargetSize:
                               MaterialTapTargetSize.shrinkWrap,
                           visualDensity: VisualDensity.compact,
@@ -1226,8 +1227,8 @@ class SchoolCreateScreen extends StatelessWidget {
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add New'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.green[700],
-                  side: BorderSide(color: Colors.green[700]!),
+                  foregroundColor: AppTheme.buttonOutlinedForeground,
+                  side: BorderSide(color: AppTheme.buttonOutlinedBorder),
                   padding: EdgeInsets.symmetric(
                     horizontal: isMobile ? 12 : 14,
                     vertical: isMobile ? 10 : 10,
@@ -1304,7 +1305,7 @@ class SchoolCreateScreen extends StatelessWidget {
                           ..add(value);
                         syncSelectedNames();
                       },
-                      activeColor: Colors.green,
+                      activeColor: AppTheme.accent,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                     ),
@@ -1349,7 +1350,7 @@ class SchoolCreateScreen extends StatelessWidget {
                         }
                         syncSelectedNames();
                       },
-                      activeColor: Colors.green,
+                      activeColor: AppTheme.accent,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                     ),
@@ -1372,15 +1373,15 @@ class SchoolCreateScreen extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green[50],
+                  color: AppTheme.sectionHeaderBackground(),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green[300]!),
+                  border: Border.all(color: AppTheme.accentBorder()),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.check_circle,
-                      color: Colors.green[700],
+                      color: AppTheme.accent,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -1389,14 +1390,14 @@ class SchoolCreateScreen extends StatelessWidget {
                         'Selected: ${controller.selectedInstitutionCategory.value}',
                         style: TextStyle(
                           fontSize: isMobile ? 13 : 14,
-                          color: Colors.green[900],
+                          color: AppTheme.sectionHeaderText(),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
-                      color: Colors.green[700],
+                      color: AppTheme.accent,
                       onPressed: () {
                         controller.selectedInstitutionCategory.value = '';
                         controller.selectedInstitutionCategoryId.value = 0;
@@ -1473,7 +1474,7 @@ class SchoolCreateScreen extends StatelessWidget {
                         }
                       }
                     },
-              style: TextButton.styleFrom(foregroundColor: Colors.green),
+              style: AppTheme.textButtonStyle,
               child: controller.isLoadingInstitutionCategories.value
                   ? const SizedBox(
                       width: 16,

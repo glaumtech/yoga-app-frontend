@@ -538,6 +538,44 @@ class UserManagementRepository {
     }
   }
 
+  Future<ApiResponse<UserTypeModel>> updateUserTypeThemeColor({
+    required int userTypeId,
+    required String themeColor,
+  }) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: '${EndPoints.userTypes}/$userTypeId/theme-color',
+        apiType: APIType.aPut,
+        body: {'themeColor': themeColor},
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+        final userTypeRaw = data['userType'];
+        if (userTypeRaw is Map<String, dynamic>) {
+          return ApiResponse<UserTypeModel>(
+            success: true,
+            data: UserTypeModel.fromJson(userTypeRaw),
+            message: response.message ?? 'Theme colour updated successfully',
+          );
+        }
+      }
+
+      return ApiResponse<UserTypeModel>(
+        success: false,
+        message: response.message ?? 'Failed to update theme colour',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse<UserTypeModel>(
+        success: false,
+        message: e.toString(),
+        statusCode: 0,
+      );
+    }
+  }
+
   Future<ApiResponse<UserTypeModel>> updateUserTypePermissions({
     required int userTypeId,
     int? branchId,

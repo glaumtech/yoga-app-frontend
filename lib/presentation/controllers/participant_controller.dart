@@ -1090,21 +1090,7 @@ class ParticipantController extends GetxController {
 
   @override
   void onClose() {
-    nameController.dispose();
-    schoolNameController.dispose();
-    addressController.dispose();
-    yogaMasterNameController.dispose();
-    yogaMasterContactController.dispose();
-    bulkYogaTeacherNameController.dispose();
-    bulkYogaTeacherCellController.dispose();
-    bulkInstitutionNameController.dispose();
-    institutionFilterStateTextController.dispose();
-    institutionFilterStateFocusNode.dispose();
-    institutionFilterDistrictTextController.dispose();
-    institutionFilterDistrictFocusNode.dispose();
-    for (final row in bulkRegistrationRows) {
-      row.dispose();
-    }
+    // See CompetitionController.onClose — avoid dispose during logout teardown.
     bulkRegistrationRows.clear();
     super.onClose();
   }

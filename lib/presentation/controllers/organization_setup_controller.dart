@@ -384,7 +384,9 @@ class OrganizationSetupController extends GetxController {
     await loadSubscriptionPackagesForMode(mode);
   }
 
-  Future<void> loadSubscriptionPackagesForMode(SubscriptionModeModel mode) async {
+  Future<void> loadSubscriptionPackagesForMode(
+    SubscriptionModeModel mode,
+  ) async {
     if (isLoadingPackages.value) return;
     try {
       isLoadingPackages.value = true;
@@ -520,7 +522,10 @@ class OrganizationSetupController extends GetxController {
     assignAllPermissions();
   }
 
-  Future<void> pickOrgAdminPhoto(ImageSource source, BuildContext context) async {
+  Future<void> pickOrgAdminPhoto(
+    ImageSource source,
+    BuildContext context,
+  ) async {
     try {
       final picked = await _imagePicker.pickImage(
         source: source,
@@ -534,7 +539,10 @@ class OrganizationSetupController extends GetxController {
     }
   }
 
-  Future<void> pickBranchAdminPhoto(ImageSource source, BuildContext context) async {
+  Future<void> pickBranchAdminPhoto(
+    ImageSource source,
+    BuildContext context,
+  ) async {
     try {
       final picked = await _imagePicker.pickImage(
         source: source,
@@ -820,11 +828,11 @@ class OrganizationSetupController extends GetxController {
 
       if (!requiresSubscriptionPayment ||
           selectedCheckoutMethod.value == 'CASH') {
-      subscriptionPaymentCompleted.value = true;
-      prepareAdminStep();
-      currentStep.value = 2;
-      SnackbarHelper.show(
-        title: 'Payment recorded',
+        subscriptionPaymentCompleted.value = true;
+        prepareAdminStep();
+        currentStep.value = 2;
+        SnackbarHelper.show(
+          title: 'Payment recorded',
           message: 'Create admin users to complete setup.',
           backgroundColor: Colors.green,
         );
@@ -979,8 +987,7 @@ class OrganizationSetupController extends GetxController {
       // 2) Setup API — admin users
       if (!await _createAdminsAfterFoundation()) return false;
 
-      final orgName =
-          foundationResult.value!.organization.organizationName;
+      final orgName = foundationResult.value!.organization.organizationName;
       isLoading.value = false;
       _finishSetup(orgName);
       return true;

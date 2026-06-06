@@ -1049,28 +1049,10 @@ class SchoolController extends GetxController {
 
   @override
   void onClose() {
-    institutionNameController.dispose();
-    institutionShortNameController.dispose();
-    addressController.dispose();
-    pincodeController.dispose();
-    emailController.dispose();
-    websiteController.dispose();
-    landLineController.dispose();
-    mobileController.dispose();
-    contributorNameController.dispose();
-    contributorMobileController.dispose();
-    searchController.dispose();
-    createFormStateTextController.removeListener(_onCreateFormStateTextEdited);
-    createFormStateTextController.dispose();
-    createFormStateFocusNode.dispose();
-    createFormDistrictTextController.dispose();
-    createFormDistrictFocusNode.dispose();
-    createFormCityTextController.dispose();
-    createFormCityFocusNode.dispose();
-    listFilterStateTextController.dispose();
-    listFilterStateFocusNode.dispose();
-    listFilterCityTextController.dispose();
-    listFilterCityFocusNode.dispose();
+    try {
+      createFormStateTextController.removeListener(_onCreateFormStateTextEdited);
+    } catch (_) {}
+    // See CompetitionController.onClose — avoid dispose during logout teardown.
     super.onClose();
   }
 

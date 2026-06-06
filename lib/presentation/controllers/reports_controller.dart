@@ -27,19 +27,19 @@ class ReportsController extends GetxController {
   /// }
   final Rxn<Map<String, dynamic>> report = Rxn<Map<String, dynamic>>();
 
-  /// Index of Reports tab to open (0 = Dashboard, …).
-  final RxnInt navigateToTabIndex = RxnInt();
+  /// Reports tab id to open (e.g. [registeredParticipantsReportTabId]).
+  final RxnString navigateToReportTabId = RxnString();
 
   /// Applied when opening the registered participants tab from dashboard counts.
   final Rxn<ReportsParticipantsListPreset> pendingParticipantsPreset =
       Rxn<ReportsParticipantsListPreset>();
 
-  /// Registered participants report tab (immediately after Dashboard).
-  static const int registeredParticipantsReportTabIndex = 1;
+  static const String registeredParticipantsReportTabId =
+      'registered_participants';
 
   void openParticipantsReport(ReportsParticipantsListPreset preset) {
     pendingParticipantsPreset.value = preset;
-    navigateToTabIndex.value = registeredParticipantsReportTabIndex;
+    navigateToReportTabId.value = registeredParticipantsReportTabId;
     _scheduleApplyPendingPreset();
   }
 

@@ -8,6 +8,10 @@ import 'permissions/permissions_tab.dart';
 import 'institutions/institution_config_tab.dart';
 import 'imports/imports_tab.dart';
 import 'certificate/certificate_template_tab.dart';
+import 'theme/theme_tab.dart';
+
+/// Re-enable when Imports settings are ready to ship.
+const bool _kShowImportsTab = false;
 
 /// Settings area with tabbed sections (same pattern as [ReportsScreen]).
 class SettingsScreen extends StatefulWidget {
@@ -21,7 +25,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    Get.put(SettingsController(), permanent: false);
+    if (!Get.isRegistered<SettingsController>()) {
+      Get.put(SettingsController(), permanent: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (Get.isRegistered<SettingsController>()) {
+      Get.delete<SettingsController>(force: true);
+    }
+    super.dispose();
   }
 
   @override
@@ -48,10 +62,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         view: const CertificateTemplateTab(),
         requiredKey: 'SHOW_INSTITUTION_CONFIG_TAB',
       ),
+      if (_kShowImportsTab)
+        (
+          label: 'Imports',
+          view: const SettingsImportsTab(),
+          requiredKey: 'SHOW_IMPORT_TAB',
+        ),
       (
-        label: 'Imports',
-        view: const SettingsImportsTab(),
-        requiredKey: 'SHOW_IMPORT_TAB',
+        label: 'Theme',
+        view: const SettingsThemeTab(),
+        requiredKey: 'SHOW_SETTINGS_THEME_TAB',
       ),
     ].where((t) => permissionStore.has(t.requiredKey)).toList();
 

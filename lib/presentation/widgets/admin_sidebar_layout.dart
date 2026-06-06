@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/keyboard/keyboard_scroll_discovery.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/role_display_name.dart';
 import '../controllers/user_management_controller.dart';
 import 'admin_sidebar.dart';
 
@@ -139,7 +140,7 @@ class AdminSidebarLayout extends StatelessWidget {
                                           ),
                                         if (type.isNotEmpty)
                                           Text(
-                                            type.replaceAll('_', ' '),
+                                            displayRoleName(type),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(

@@ -11,10 +11,6 @@ import '../../core/theme/app_theme.dart';
 import '../../data/repositories/reports_repository.dart';
 import 'reports_participants_tab_controller.dart';
 
-/// Styling shared with score-details dialog (matches participants table mint header).
-const Color _kScoreDetailsHeaderBg = Color(0xFFE8F5E9);
-const Color _kScoreDetailsBorder = Color(0xFFE0E0E0);
-
 /// Business logic and side-effects for [ReportsParticipantsTab] (keeps the screen file UI-focused).
 class ReportsParticipantsTabLogic {
   ReportsParticipantsTabLogic._();
@@ -225,9 +221,9 @@ class ReportsParticipantsTabLogic {
                     children: [
                       DecoratedBox(
                         decoration: BoxDecoration(
-                          color: _kScoreDetailsHeaderBg,
+                          color: AppTheme.sectionHeaderBackground(),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _kScoreDetailsBorder),
+                          border: Border.all(color: AppTheme.border),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(12),
@@ -324,7 +320,7 @@ class ReportsParticipantsTabLogic {
                                   ),
                                   Text(
                                     total,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.w900,
                                       color: AppTheme.primaryColor,
@@ -406,7 +402,7 @@ class ReportsParticipantsTabLogic {
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
                                 border:
-                                    Border.all(color: _kScoreDetailsBorder),
+                                    Border.all(color: AppTheme.border),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black
@@ -481,7 +477,7 @@ class ReportsParticipantsTabLogic {
                                                       ),
                                                       child: Text(
                                                         jt,
-                                                        style: const TextStyle(
+                                                        style: TextStyle(
                                                           fontWeight:
                                                               FontWeight.w900,
                                                           fontSize: 14,
@@ -510,9 +506,8 @@ class ReportsParticipantsTabLogic {
                                                         ),
                                                         decoration:
                                                             BoxDecoration(
-                                                          color: const Color(
-                                                            0xFFF1F8E9,
-                                                          ),
+                                                          color: AppTheme
+                                                              .softTintSurface(),
                                                           borderRadius:
                                                               BorderRadius
                                                                   .circular(8),
@@ -526,14 +521,12 @@ class ReportsParticipantsTabLogic {
                                                         ),
                                                         child: Text(
                                                           '${entry.key}: ${entry.value}',
-                                                          style:
-                                                              const TextStyle(
+                                                          style: TextStyle(
                                                             fontSize: 11,
                                                             fontWeight:
                                                                 FontWeight.w700,
-                                                            color: Color(
-                                                              0xFF33691E,
-                                                            ),
+                                                            color: AppTheme
+                                                                .chipTintText(),
                                                           ),
                                                         ),
                                                       ),

@@ -919,7 +919,7 @@ class JuryScoringScreen extends StatelessWidget {
                           ? null
                           : () => controller.refreshAndReallocate(),
                       icon: controller.isLoading.value
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
