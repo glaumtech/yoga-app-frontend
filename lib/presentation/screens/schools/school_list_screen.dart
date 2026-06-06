@@ -477,16 +477,34 @@ class SchoolListScreen extends StatelessWidget {
               final permissionStore = Get.isRegistered<PermissionStore>()
                   ? Get.find<PermissionStore>()
                   : Get.put(PermissionStore());
-              if (!permissionStore.has('SHOW_INSTITUTION_DOWNLOAD_ICON')) {
-                return const SizedBox.shrink();
-              }
+              final busy = controller.isLoading.value;
+              final showPostalPdf = permissionStore.has(
+                'SHOW_INSTITUTION_POSTAL_PDF_ICON',
+              );
+
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (showPostalPdf) ...[
+                    SizedBox(width: isMobile ? 8 : 12),
+                    IconButton(
+                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                      onPressed: busy
+                          ? null
+                          : () => controller.downloadPostalList(),
+                      tooltip: 'Download institution list PDF (postal format)',
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.grey[100],
+                        padding: const EdgeInsets.all(12),
+                      ),
+                    ),
+                  ],
                   SizedBox(width: isMobile ? 8 : 12),
                   IconButton(
                     icon: const Icon(Icons.print),
-                    onPressed: () => controller.generateReport('all'),
+                    onPressed: busy
+                        ? null
+                        : () => controller.generateReport('all'),
                     tooltip: 'Download / print institutions report',
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.grey[100],

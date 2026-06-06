@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
@@ -2071,6 +2073,53 @@ class SchoolController extends GetxController {
     }
   }
 
+  Map<String, dynamic> _buildInstitutionExportFilters() {
+    int? stateIdForExport;
+    if (reportState.value.isNotEmpty) {
+      final state = states.firstWhereOrNull(
+        (s) => s.stateName == reportState.value,
+      );
+      stateIdForExport = state?.id;
+    }
+
+    final filters = <String, dynamic>{
+      'sortBy': sortBy.value,
+      'order': sortOrder.value,
+    };
+    if (searchQuery.value.isNotEmpty) {
+      filters['search'] = searchQuery.value;
+    }
+    if (stateIdForExport != null) {
+      filters['stateId'] = stateIdForExport;
+    }
+    if (reportDistrictId.value > 0) {
+      filters['districtId'] = reportDistrictId.value;
+    }
+    if (reportInstitutionTypeId.value > 0) {
+      filters['institutionTypeId'] = reportInstitutionTypeId.value;
+    }
+    return filters;
+  }
+
+  Future<void> downloadPostalList() async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      _snackInfo('Preparing download', 'Generating postal list PDF...');
+
+      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      await _downloadInstitutionsPostalPdf(
+        _buildInstitutionExportFilters(),
+        'institutions_postal_list_$timestamp.pdf',
+      );
+    } catch (e) {
+      _snackError('Error downloading list: ${e.toString()}');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   // Generate report and print
   Future<void> generateReport(String reportType) async {
     try {
@@ -2079,35 +2128,7 @@ class SchoolController extends GetxController {
 
       _snackInfo('Generating', 'Preparing report...');
 
-      // Get filter values
-      int? stateIdForPrint;
-
-      if (reportState.value.isNotEmpty) {
-        final state = states.firstWhereOrNull(
-          (s) => s.stateName == reportState.value,
-        );
-        stateIdForPrint = state?.id;
-      }
-
-      // Prepare request body
-      final requestBody = <String, dynamic>{};
-      if (searchQuery.value.isNotEmpty) {
-        requestBody['search'] = searchQuery.value;
-      }
-      if (stateIdForPrint != null) {
-        requestBody['stateId'] = stateIdForPrint;
-      }
-      if (reportDistrictId.value > 0) {
-        requestBody['districtId'] = reportDistrictId.value;
-      }
-      if (reportInstitutionTypeId.value > 0) {
-        requestBody['institutionTypeId'] = reportInstitutionTypeId.value;
-      }
-      requestBody['sortBy'] = sortBy.value;
-      requestBody['order'] = sortOrder.value;
-
-      // Download PDF from backend
-      await _downloadInstitutionsPdf(requestBody);
+      await _downloadInstitutionsPdf(_buildInstitutionExportFilters());
     } catch (e) {
       _snackError('Error generating report: ${e.toString()}');
     } finally {
@@ -2119,11 +2140,36 @@ class SchoolController extends GetxController {
   Future<void> _downloadInstitutionsPdf(
     Map<String, dynamic> requestBody,
   ) async {
+    await _downloadInstitutionsPdfFromEndpoint(
+      EndPoints.institutionPrint,
+      requestBody,
+      'institutions_report.pdf',
+      successMessage: 'Report download started',
+    );
+  }
+
+  Future<void> _downloadInstitutionsPostalPdf(
+    Map<String, dynamic> requestBody,
+    String filename,
+  ) async {
+    await _downloadInstitutionsPdfFromEndpoint(
+      EndPoints.institutionPostalPrint,
+      requestBody,
+      filename,
+      successMessage: 'Postal list PDF download started',
+    );
+  }
+
+  Future<void> _downloadInstitutionsPdfFromEndpoint(
+    String endpoint,
+    Map<String, dynamic> requestBody,
+    String filename, {
+    required String successMessage,
+  }) async {
     try {
-      final url = '${BaseUrl.baseUrl}${EndPoints.institutionPrint}';
+      final url = '${BaseUrl.baseUrl}$endpoint';
       final uri = Uri.parse(url);
 
-      // Include auth token if available
       final token = StorageService.getString(AppConstants.tokenKey);
       final headers = <String, String>{
         'Accept': 'application/pdf',
@@ -2133,39 +2179,39 @@ class SchoolController extends GetxController {
         headers['Authorization'] = 'Bearer $token';
       }
 
-      // Use proper JSON encoding
       final jsonBody = jsonEncode(requestBody);
       final response = await http.post(uri, headers: headers, body: jsonBody);
 
       if (response.statusCode == 200) {
-        if (kIsWeb) {
-          // Web: Create blob and trigger download/print
-          final blob = html.Blob([response.bodyBytes]);
-          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-          html.AnchorElement(href: blobUrl)
-            ..setAttribute('download', 'institutions_report.pdf')
-            ..click();
-          html.Url.revokeObjectUrl(blobUrl);
-
-          _snackSuccess('Report download started');
-        } else {
-          // Mobile: Open PDF
-          final dataUri = Uri.dataFromBytes(
-            response.bodyBytes,
-            mimeType: 'application/pdf',
-          );
-          if (await canLaunchUrl(dataUri)) {
-            await launchUrl(dataUri, mode: LaunchMode.externalApplication);
-            _snackSuccess('Report opened');
-          } else {
-            _snackError('Could not open report');
-          }
-        }
+        await _saveInstitutionPdfBytes(response.bodyBytes, filename);
+        _snackSuccess(successMessage);
       } else {
         _snackError('Failed to generate report (status ${response.statusCode})');
       }
     } catch (e) {
       _snackError('Failed to download report: ${e.toString()}');
+    }
+  }
+
+  Future<void> _saveInstitutionPdfBytes(
+    Uint8List bytes,
+    String filename,
+  ) async {
+    if (kIsWeb) {
+      final blob = html.Blob([bytes], 'application/pdf');
+      final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: blobUrl)
+        ..setAttribute('download', filename)
+        ..click();
+      html.Url.revokeObjectUrl(blobUrl);
+      return;
+    }
+
+    final dataUri = Uri.dataFromBytes(bytes, mimeType: 'application/pdf');
+    if (await canLaunchUrl(dataUri)) {
+      await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+    } else {
+      throw Exception('Could not open downloaded file');
     }
   }
 }
