@@ -2101,16 +2101,24 @@ class SchoolController extends GetxController {
     return filters;
   }
 
-  Future<void> downloadPostalList() async {
+  Future<void> downloadPostalList({String? recipientName}) async {
     try {
       isLoading.value = true;
       errorMessage.value = '';
 
       _snackInfo('Preparing download', 'Generating postal list PDF...');
 
+      final filters = _buildInstitutionExportFilters();
+      final trimmedName = recipientName?.trim();
+      if (trimmedName != null && trimmedName.isNotEmpty) {
+        filters['recipientName'] = trimmedName.length > 35
+            ? trimmedName.substring(0, 35)
+            : trimmedName;
+      }
+
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       await _downloadInstitutionsPostalPdf(
-        _buildInstitutionExportFilters(),
+        filters,
         'institutions_postal_list_$timestamp.pdf',
       );
     } catch (e) {
