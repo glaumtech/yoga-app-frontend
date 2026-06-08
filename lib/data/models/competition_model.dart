@@ -1,10 +1,15 @@
+import 'package:flutter/material.dart';
+
 class CompetitionModel {
   final String? id;
   final String competitionName;
   final String description;
   final String address;
   final DateTime eventStartDate;
+  final String? eventStartTime;
   final DateTime eventEndDate;
+  final String? eventEndTime;
+  final bool publishResultNow;
   final DateTime? displayAdFrom;
   final bool spotRegistration;
   final int? participantsPerStage; // 1-5
@@ -41,7 +46,10 @@ class CompetitionModel {
     required this.description,
     required this.address,
     required this.eventStartDate,
+    this.eventStartTime,
     required this.eventEndDate,
+    this.eventEndTime,
+    this.publishResultNow = false,
     this.displayAdFrom,
     this.spotRegistration = false,
     this.participantsPerStage,
@@ -65,6 +73,49 @@ class CompetitionModel {
     this.createdBy,
     this.updatedBy,
   });
+
+  static String? formatTimeOfDay(TimeOfDay? time) {
+    if (time == null) return null;
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  static TimeOfDay? parseTime(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final parts = value.trim().split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  static bool parseBool(dynamic value, {bool defaultValue = false}) {
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final normalized = value.toString().trim().toLowerCase();
+    if (normalized.isEmpty) return defaultValue;
+    return normalized == 'true' || normalized == '1' || normalized == 'yes';
+  }
+
+  /// Handles null API values and hot-reload instances missing newer bool fields.
+  bool get resolvedPublishResultNow {
+    try {
+      return parseBool(publishResultNow);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool get resolvedSpotRegistration {
+    try {
+      return parseBool(spotRegistration);
+    } catch (_) {
+      return false;
+    }
+  }
 
   static Map<String, List<String>>? _parseStageGroupLabelMap(dynamic raw) {
     if (raw is! Map) return null;
@@ -95,7 +146,38 @@ class CompetitionModel {
     return result.isEmpty ? null : result;
   }
 
+  static DateTime _parseEventDate(dynamic raw, {required DateTime fallback}) {
+    if (raw == null) return fallback;
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return fallback;
+      return DateTime.parse(trimmed);
+    }
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    return fallback;
+  }
+
+  static String? _timeFromDateTime(DateTime? value) {
+    if (value == null) return null;
+    if (value.hour == 0 && value.minute == 0 && value.second == 0) {
+      return null;
+    }
+    return formatTimeOfDay(TimeOfDay(hour: value.hour, minute: value.minute));
+  }
+
   factory CompetitionModel.fromJson(Map<String, dynamic> json) {
+    final startDatetimeRaw =
+        json['eventStartDatetime'] ?? json['event_start_datetime'];
+    final endDatetimeRaw = json['eventEndDatetime'] ?? json['event_end_datetime'];
+    final parsedStartDatetime = startDatetimeRaw != null
+        ? _parseEventDate(startDatetimeRaw, fallback: DateTime.now())
+        : null;
+    final parsedEndDatetime = endDatetimeRaw != null
+        ? _parseEventDate(endDatetimeRaw, fallback: DateTime.now())
+        : null;
+
     return CompetitionModel(
       id: json['id']?.toString() ?? json['_id']?.toString(),
       competitionName:
@@ -104,20 +186,25 @@ class CompetitionModel {
           '',
       description: json['description']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
-      eventStartDate: json['eventStartDate'] != null
-          ? (json['eventStartDate'] is String
-                ? DateTime.parse(json['eventStartDate'])
-                : json['eventStartDate'] is int
-                ? DateTime.fromMillisecondsSinceEpoch(json['eventStartDate'])
-                : DateTime.now())
-          : DateTime.now(),
-      eventEndDate: json['eventEndDate'] != null
-          ? (json['eventEndDate'] is String
-                ? DateTime.parse(json['eventEndDate'])
-                : json['eventEndDate'] is int
-                ? DateTime.fromMillisecondsSinceEpoch(json['eventEndDate'])
-                : DateTime.now())
-          : DateTime.now(),
+      eventStartDate: parsedStartDatetime ??
+          _parseEventDate(
+            json['eventStartDate'] ?? json['event_start_date'],
+            fallback: DateTime.now(),
+          ),
+      eventEndDate: parsedEndDatetime ??
+          _parseEventDate(
+            json['eventEndDate'] ?? json['event_end_date'],
+            fallback: DateTime.now(),
+          ),
+      eventStartTime: _timeFromDateTime(parsedStartDatetime) ??
+          json['eventStartTime']?.toString() ??
+          json['event_start_time']?.toString(),
+      eventEndTime: _timeFromDateTime(parsedEndDatetime) ??
+          json['eventEndTime']?.toString() ??
+          json['event_end_time']?.toString(),
+      publishResultNow: parseBool(
+        json['publishResultNow'] ?? json['publish_result_now'],
+      ),
       displayAdFrom: json['displayAdFrom'] != null
           ? (json['displayAdFrom'] is String
                 ? DateTime.parse(json['displayAdFrom'])
@@ -129,8 +216,9 @@ class CompetitionModel {
                 ? DateTime.parse(json['display_ad_from'])
                 : null)
           : null,
-      spotRegistration:
-          json['spotRegistration'] ?? json['spot_registration'] ?? false,
+      spotRegistration: parseBool(
+        json['spotRegistration'] ?? json['spot_registration'],
+      ),
       participantsPerStage:
           json['participantsPerStage'] ?? json['participants_per_stage'],
       minimumMarks: json['minimumMarks'] ?? json['minimum_marks'],
@@ -280,7 +368,12 @@ class CompetitionModel {
       'description': description,
       'address': address,
       'eventStartDate': formatDate(eventStartDate),
+      if (eventStartTime != null && eventStartTime!.trim().isNotEmpty)
+        'eventStartTime': eventStartTime,
       'eventEndDate': formatDate(eventEndDate),
+      if (eventEndTime != null && eventEndTime!.trim().isNotEmpty)
+        'eventEndTime': eventEndTime,
+      'publishResultNow': publishResultNow,
       if (displayAdFrom != null) 'displayAdFrom': formatDate(displayAdFrom!),
       'spotRegistration': spotRegistration,
       if (participantsPerStage != null)
@@ -320,7 +413,10 @@ class CompetitionModel {
     String? description,
     String? address,
     DateTime? eventStartDate,
+    String? eventStartTime,
     DateTime? eventEndDate,
+    String? eventEndTime,
+    bool? publishResultNow,
     DateTime? displayAdFrom,
     bool? spotRegistration,
     int? participantsPerStage,
@@ -350,9 +446,12 @@ class CompetitionModel {
       description: description ?? this.description,
       address: address ?? this.address,
       eventStartDate: eventStartDate ?? this.eventStartDate,
+      eventStartTime: eventStartTime ?? this.eventStartTime,
       eventEndDate: eventEndDate ?? this.eventEndDate,
+      eventEndTime: eventEndTime ?? this.eventEndTime,
+      publishResultNow: publishResultNow ?? resolvedPublishResultNow,
       displayAdFrom: displayAdFrom ?? this.displayAdFrom,
-      spotRegistration: spotRegistration ?? this.spotRegistration,
+      spotRegistration: spotRegistration ?? resolvedSpotRegistration,
       participantsPerStage: participantsPerStage ?? this.participantsPerStage,
       minimumMarks: minimumMarks ?? this.minimumMarks,
       maximumMarks: maximumMarks ?? this.maximumMarks,
@@ -395,6 +494,34 @@ class CompetitionModel {
 
   /// True when today's date is on or between event start and end (inclusive).
   bool get isEventOngoing => containsEventDate(DateTime.now());
+
+  /// Event end as a single [DateTime] (uses [eventEndTime] when set, else end of day).
+  DateTime get eventEndDateTime {
+    final endTime = parseTime(eventEndTime);
+    if (endTime != null) {
+      return DateTime(
+        eventEndDate.year,
+        eventEndDate.month,
+        eventEndDate.day,
+        endTime.hour,
+        endTime.minute,
+      );
+    }
+    return DateTime(
+      eventEndDate.year,
+      eventEndDate.month,
+      eventEndDate.day,
+      23,
+      59,
+      59,
+    );
+  }
+
+  /// E-certificates may be downloaded when results are published early or the event has ended.
+  bool get areCertificatesAvailable {
+    if (resolvedPublishResultNow) return true;
+    return !DateTime.now().isBefore(eventEndDateTime);
+  }
 }
 
 /// Lightweight model for public competition list (home screen).
@@ -406,6 +533,8 @@ class HomeCompetitionModel {
   final String address;
   final String? eventStartDate;
   final String? eventEndDate;
+  final String? eventEndTime;
+  final bool publishResultNow;
   final String? displayAdFrom;
   final List<String> categories;
   final Map<String, double> categoryAmounts;
@@ -427,6 +556,8 @@ class HomeCompetitionModel {
     this.address = '',
     this.eventStartDate,
     this.eventEndDate,
+    this.eventEndTime,
+    this.publishResultNow = false,
     this.displayAdFrom,
     this.categories = const [],
     this.categoryAmounts = const {},
@@ -466,6 +597,11 @@ class HomeCompetitionModel {
       address: json['address']?.toString() ?? '',
       eventStartDate: json['eventStartDate']?.toString(),
       eventEndDate: json['eventEndDate']?.toString(),
+      eventEndTime:
+          json['eventEndTime']?.toString() ?? json['event_end_time']?.toString(),
+      publishResultNow: CompetitionModel.parseBool(
+        json['publishResultNow'] ?? json['publish_result_now'],
+      ),
       displayAdFrom: json['displayAdFrom']?.toString(),
       categories: json['categories'] != null
           ? List<String>.from(json['categories'])
@@ -487,4 +623,43 @@ class HomeCompetitionModel {
   }
 
   String? get idStr => id?.toString();
+
+  DateTime? get eventEndDateTime {
+    final endDateRaw = eventEndDate?.trim();
+    if (endDateRaw == null || endDateRaw.isEmpty) return null;
+    final parsedDate = DateTime.tryParse(endDateRaw);
+    if (parsedDate == null) return null;
+
+    final endTime = CompetitionModel.parseTime(eventEndTime);
+    if (endTime != null) {
+      return DateTime(
+        parsedDate.year,
+        parsedDate.month,
+        parsedDate.day,
+        endTime.hour,
+        endTime.minute,
+      );
+    }
+    return DateTime(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day,
+      23,
+      59,
+      59,
+    );
+  }
+
+  /// E-certificates are available after event end or when results are published early.
+  bool get areCertificatesAvailable {
+    if (publishResultNow) return true;
+    final end = eventEndDateTime;
+    if (end != null) {
+      return !DateTime.now().isBefore(end);
+    }
+    return status.toLowerCase() == 'completed';
+  }
+
+  /// Alias used by competition cards navigating to the public participants list.
+  bool get areResultsAvailable => areCertificatesAvailable;
 }

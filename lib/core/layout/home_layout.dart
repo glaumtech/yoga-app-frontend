@@ -24,7 +24,7 @@ class HomeLayout {
   static double competitionCarouselHeight(double sectionWidth) {
     if (sectionWidth < mobile) return 400;
     if (sectionWidth < tablet) return 540;
-    return 500;
+    return 560;
   }
 
   /// Fixed width for each card in horizontal list (fraction of section, clamped).

@@ -206,6 +206,7 @@ class PublicCompetitionsScreen extends StatelessWidget {
                           showShareLinkOption: _isUpcoming,
                           showRegistrationQr: _isOngoing || _isUpcoming,
                           showRegistrationButton: !_isPast,
+                          showResultsButton: _isOngoing,
                         );
                       },
                     ),

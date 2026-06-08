@@ -45,6 +45,8 @@ class CompetitionController extends GetxController {
 
   static const String dateFieldStart = 'start';
   static const String dateFieldEnd = 'end';
+  static const String dateFieldStartTime = 'startTime';
+  static const String dateFieldEndTime = 'endTime';
   static const String dateFieldDisplayAd = 'displayAd';
 
   final RxSet<String> touchedCompetitionDateFields = <String>{}.obs;
@@ -149,7 +151,10 @@ class CompetitionController extends GetxController {
   final RxString sortOrder = 'desc'.obs; // asc, desc
   final Rx<DateTime?> eventStartDate = Rx<DateTime?>(null);
   final Rx<DateTime?> eventEndDate = Rx<DateTime?>(null);
+  final Rx<TimeOfDay?> eventStartTime = Rx<TimeOfDay?>(null);
+  final Rx<TimeOfDay?> eventEndTime = Rx<TimeOfDay?>(null);
   final Rx<DateTime?> displayAdFrom = Rx<DateTime?>(null);
+  final RxBool publishResultNow = false.obs;
   final RxBool spotRegistration = false.obs;
   final Rx<ChampionshipStyle?> championshipStyle = Rx<ChampionshipStyle?>(null);
   final RxInt participantsPerStage = RxInt(0);
@@ -446,6 +451,10 @@ class CompetitionController extends GetxController {
       address: home.address,
       eventStartDate: parseDate(home.eventStartDate),
       eventEndDate: parseDate(home.eventEndDate),
+      eventStartTime: existing?.eventStartTime,
+      eventEndTime: existing?.eventEndTime,
+      publishResultNow: existing?.resolvedPublishResultNow ?? false,
+      spotRegistration: existing?.resolvedSpotRegistration ?? false,
       displayAdFrom: home.displayAdFrom != null
           ? parseDate(home.displayAdFrom)
           : null,
@@ -1469,12 +1478,65 @@ class CompetitionController extends GetxController {
     return null;
   }
 
+  int _minutesFromMidnight(TimeOfDay time) => time.hour * 60 + time.minute;
+
+  String? validateEventStartTime(
+    TimeOfDay? value, {
+    bool requireWhenEmpty = false,
+  }) {
+    if (value == null) {
+      return null;
+    }
+
+    final startDate = eventStartDate.value;
+    final endDate = eventEndDate.value;
+    final endTime = eventEndTime.value;
+    if (startDate != null &&
+        endDate != null &&
+        _dateOnly(startDate) == _dateOnly(endDate) &&
+        endTime != null &&
+        _minutesFromMidnight(value) >= _minutesFromMidnight(endTime)) {
+      return 'Start time must be before end time on the same day';
+    }
+    return null;
+  }
+
+  String? validateEventEndTime(
+    TimeOfDay? value, {
+    bool requireWhenEmpty = false,
+  }) {
+    if (value == null) {
+      if (requireWhenEmpty ||
+          shouldShowCompetitionDateError(dateFieldEndTime)) {
+        return 'Please select event end time';
+      }
+      return null;
+    }
+
+    final startDate = eventStartDate.value;
+    final endDate = eventEndDate.value;
+    final startTime = eventStartTime.value;
+    if (startDate != null &&
+        endDate != null &&
+        _dateOnly(startDate) == _dateOnly(endDate) &&
+        startTime != null &&
+        _minutesFromMidnight(value) <= _minutesFromMidnight(startTime)) {
+      return 'End time must be after start time on the same day';
+    }
+    return null;
+  }
+
   String? validateCompetitionDates({bool forSubmit = false}) {
     return validateEventStartDate(
           eventStartDate.value,
           requireWhenEmpty: forSubmit,
         ) ??
         validateEventEndDate(eventEndDate.value, requireWhenEmpty: forSubmit) ??
+        validateEventStartTime(
+          eventStartTime.value,
+          requireWhenEmpty: forSubmit,
+        ) ??
+        validateEventEndTime(eventEndTime.value, requireWhenEmpty: forSubmit) ??
         validateDisplayAdFrom(displayAdFrom.value, requireWhenEmpty: forSubmit);
   }
 
@@ -1484,6 +1546,8 @@ class CompetitionController extends GetxController {
     final hasAnyDate =
         eventStartDate.value != null ||
         eventEndDate.value != null ||
+        eventStartTime.value != null ||
+        eventEndTime.value != null ||
         displayAdFrom.value != null;
     if (!hasAnyDate) return;
     Get.snackbar(
@@ -1553,7 +1617,10 @@ class CompetitionController extends GetxController {
         description: descriptionController.text.trim(),
         address: addressController.text.trim(),
         eventStartDate: eventStartDate.value!,
+        eventStartTime: CompetitionModel.formatTimeOfDay(eventStartTime.value),
         eventEndDate: eventEndDate.value!,
+        eventEndTime: CompetitionModel.formatTimeOfDay(eventEndTime.value),
+        publishResultNow: publishResultNow.value,
         displayAdFrom: displayAdFrom.value,
         spotRegistration: spotRegistration.value,
         participantsPerStage: participantsPerStage.value > 0
@@ -1686,7 +1753,10 @@ class CompetitionController extends GetxController {
         description: descriptionController.text.trim(),
         address: addressController.text.trim(),
         eventStartDate: eventStartDate.value!,
+        eventStartTime: CompetitionModel.formatTimeOfDay(eventStartTime.value),
         eventEndDate: eventEndDate.value!,
+        eventEndTime: CompetitionModel.formatTimeOfDay(eventEndTime.value),
+        publishResultNow: publishResultNow.value,
         displayAdFrom: displayAdFrom.value,
         spotRegistration: spotRegistration.value,
         participantsPerStage: participantsPerStage.value > 0
@@ -1908,8 +1978,13 @@ class CompetitionController extends GetxController {
     addressController.text = competition.address;
     eventStartDate.value = competition.eventStartDate;
     eventEndDate.value = competition.eventEndDate;
+    eventStartTime.value = CompetitionModel.parseTime(
+      competition.eventStartTime,
+    );
+    eventEndTime.value = CompetitionModel.parseTime(competition.eventEndTime);
     displayAdFrom.value = competition.displayAdFrom;
-    spotRegistration.value = competition.spotRegistration;
+    publishResultNow.value = competition.resolvedPublishResultNow;
+    spotRegistration.value = competition.resolvedSpotRegistration;
     championshipStyle.value =
         ChampionshipStyle.fromApiValue(competition.championshipStyle) ??
         ChampionshipStyle.separateCategory;
@@ -1918,9 +1993,9 @@ class CompetitionController extends GetxController {
     maximumMarks.value = competition.maximumMarks ?? 0;
     bestSchoolAwardMinParticipantsController.text =
         competition.bestSchoolAwardMinParticipants != null &&
-                competition.bestSchoolAwardMinParticipants! > 0
-            ? '${competition.bestSchoolAwardMinParticipants}'
-            : '';
+            competition.bestSchoolAwardMinParticipants! > 0
+        ? '${competition.bestSchoolAwardMinParticipants}'
+        : '';
     // Load IDs if available, otherwise convert names to IDs
     if (competition.prizeIds != null && competition.prizeIds!.isNotEmpty) {
       selectedPrizeIds.value = List<int>.from(competition.prizeIds!);
@@ -2191,7 +2266,10 @@ class CompetitionController extends GetxController {
     // Clear reactive values
     eventStartDate.value = null;
     eventEndDate.value = null;
+    eventStartTime.value = null;
+    eventEndTime.value = null;
     displayAdFrom.value = null;
+    publishResultNow.value = false;
     spotRegistration.value = false;
     championshipStyle.value = null;
     participantsPerStage.value = 0;

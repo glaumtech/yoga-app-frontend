@@ -23,6 +23,9 @@ class FormLabelWithHint extends StatelessWidget {
   /// Spacing after the entire label section
   final double? bottomSpacing;
 
+  /// Keeps label rows the same height when some fields have hint text and others do not.
+  final bool reserveHintSpace;
+
   const FormLabelWithHint({
     super.key,
     required this.label,
@@ -31,6 +34,7 @@ class FormLabelWithHint extends StatelessWidget {
     this.hintStyle,
     this.hintSpacing,
     this.bottomSpacing = 3,
+    this.reserveHintSpace = false,
   });
 
   @override
@@ -52,10 +56,10 @@ class FormLabelWithHint extends StatelessWidget {
                 color: Colors.grey[800],
               ),
         ),
-        if (hintText != null && hintText!.isNotEmpty) ...[
+        if ((hintText != null && hintText!.isNotEmpty) || reserveHintSpace) ...[
           SizedBox(height: hintSpacing ?? (isMobile ? 4 : 3)),
           Text(
-            hintText!,
+            hintText != null && hintText!.isNotEmpty ? hintText! : '',
             style:
                 hintStyle ??
                 TextStyle(

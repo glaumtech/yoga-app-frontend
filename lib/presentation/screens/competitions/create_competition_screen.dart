@@ -12,6 +12,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../config/app_config.dart';
 import '../../../core/utils/storage_service.dart';
+import '../../../data/models/competition_model.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/form_title.dart';
@@ -551,6 +552,77 @@ class CreateCompetitionScreen extends StatelessWidget {
         if (isMobile)
           Column(
             children: [
+              _buildTimeField(
+                context,
+                controller,
+                label: 'EVENT START TIME :',
+                isStartTime: true,
+                isRequired: false,
+                isMobile: isMobile,
+                isTablet: isTablet,
+              ),
+              gap,
+              _buildTimeField(
+                context,
+                controller,
+                label: 'EVENT END TIME :',
+                isStartTime: false,
+                isRequired: true,
+                isMobile: isMobile,
+                isTablet: isTablet,
+              ),
+              gap,
+              _buildPublishResultNowField(
+                context,
+                controller,
+                isMobile: isMobile,
+              ),
+            ],
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _buildTimeField(
+                      context,
+                      controller,
+                      label: 'EVENT START TIME :',
+                      isStartTime: true,
+                      isRequired: false,
+                      isMobile: isMobile,
+                      isTablet: isTablet,
+                    ),
+                  ),
+                  gapSm,
+                  Expanded(
+                    child: _buildTimeField(
+                      context,
+                      controller,
+                      label: 'EVENT END TIME :',
+                      isStartTime: false,
+                      isRequired: true,
+                      isMobile: isMobile,
+                      isTablet: isTablet,
+                    ),
+                  ),
+                ],
+              ),
+              gap,
+              _buildPublishResultNowField(
+                context,
+                controller,
+                isMobile: isMobile,
+              ),
+            ],
+          ),
+        gap,
+        if (isMobile)
+          Column(
+            children: [
               _buildParticipantsPerStageField(
                 context,
                 controller,
@@ -577,7 +649,12 @@ class CreateCompetitionScreen extends StatelessWidget {
               gapSm,
               Expanded(
                 flex: 2,
-                child: _buildMarksField(context, controller, isMobile, isTablet),
+                child: _buildMarksField(
+                  context,
+                  controller,
+                  isMobile,
+                  isTablet,
+                ),
               ),
             ],
           ),
@@ -1102,9 +1179,7 @@ class CreateCompetitionScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const FormLabelWithHint(
-          label: 'UPLOAD BROCHURE :',
-        ),
+        const FormLabelWithHint(label: 'UPLOAD BROCHURE :'),
         FormField<bool>(
           initialValue:
               controller.brochureFile.value != null ||
@@ -1244,7 +1319,9 @@ class CreateCompetitionScreen extends StatelessWidget {
                     Positioned.fill(
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Obx(() => _buildBrochureContentPreview(controller)),
+                        child: Obx(
+                          () => _buildBrochureContentPreview(controller),
+                        ),
                       ),
                     ),
                     if (showImageOverlay)
@@ -1333,10 +1410,7 @@ class CreateCompetitionScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            height: 4,
-            color: const Color(0xFFE53935),
-          ),
+          Container(height: 4, color: const Color(0xFFE53935)),
           Padding(
             padding: EdgeInsets.symmetric(
               horizontal: expanded ? 14 : 12,
@@ -1577,48 +1651,46 @@ class CreateCompetitionScreen extends StatelessWidget {
             width: dialogWidth,
             height: dialogHeight,
             child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.preview, color: Colors.white),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Brochure Preview',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.preview, color: Colors.white),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Brochure Preview',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              // Preview content (PDF: full-height scrollable viewer)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Obx(
-                    () => _buildBrochureDialogPreview(controller),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                // Preview content (PDF: full-height scrollable viewer)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Obx(() => _buildBrochureDialogPreview(controller)),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -1665,7 +1737,7 @@ class CreateCompetitionScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FormLabelWithHint(label: label),
+        FormLabelWithHint(label: label, bottomSpacing: 0),
         Obx(() {
           final _ = controller.competitionDatesRevision.value;
           final showErrors = controller.shouldShowCompetitionDateError(
@@ -1852,6 +1924,264 @@ class CreateCompetitionScreen extends StatelessWidget {
     }
     controller.notifyCompetitionDatesChanged();
     return true;
+  }
+
+  String _timeFieldKey({required bool isStartTime}) {
+    return isStartTime
+        ? CompetitionController.dateFieldStartTime
+        : CompetitionController.dateFieldEndTime;
+  }
+
+  String? Function(TimeOfDay?) _timeFieldValidator(
+    CompetitionController controller, {
+    required bool isStartTime,
+  }) {
+    return isStartTime
+        ? controller.validateEventStartTime
+        : controller.validateEventEndTime;
+  }
+
+  String _formatTimeOfDay(TimeOfDay time) {
+    final formatted = CompetitionModel.formatTimeOfDay(time);
+    return formatted ?? '';
+  }
+
+  Widget _buildTimeField(
+    BuildContext context,
+    CompetitionController controller, {
+    required String label,
+    required bool isStartTime,
+    required bool isRequired,
+    bool isMobile = false,
+    bool isTablet = false,
+  }) {
+    final validateTime = _timeFieldValidator(
+      controller,
+      isStartTime: isStartTime,
+    );
+    final timeFieldKey = _timeFieldKey(isStartTime: isStartTime);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(
+          label: label,
+          hintText: isRequired ? null : 'Optional',
+          reserveHintSpace: true,
+          bottomSpacing: 0,
+        ),
+        Obx(() {
+          final _ = controller.competitionDatesRevision.value;
+          final showErrors = controller.shouldShowCompetitionDateError(
+            timeFieldKey,
+          );
+          return FormField<TimeOfDay?>(
+            initialValue: isStartTime
+                ? controller.eventStartTime.value
+                : controller.eventEndTime.value,
+            validator: validateTime,
+            builder: (FormFieldState<TimeOfDay?> field) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!field.mounted) return;
+                final syncedTime = isStartTime
+                    ? controller.eventStartTime.value
+                    : controller.eventEndTime.value;
+                if (field.value != syncedTime) {
+                  field.didChange(syncedTime);
+                }
+                if (showErrors || syncedTime != null) {
+                  field.validate();
+                }
+              });
+
+              return Obx(() {
+                final displayedTime = isStartTime
+                    ? controller.eventStartTime.value
+                    : controller.eventEndTime.value;
+
+                return InkWell(
+                  onTap: controller.isViewMode.value
+                      ? null
+                      : () async {
+                          final didPick = await _selectTime(
+                            context,
+                            controller,
+                            isStartTime: isStartTime,
+                          );
+                          if (didPick) {
+                            controller.markCompetitionDateFieldTouched(
+                              timeFieldKey,
+                            );
+                          }
+                          final updatedTime = isStartTime
+                              ? controller.eventStartTime.value
+                              : controller.eventEndTime.value;
+                          field.didChange(updatedTime);
+                          field.validate();
+                          controller.notifyCompetitionDatesChanged();
+                          if (updatedTime != null) {
+                            controller.alertCompetitionDateValidationIssue();
+                          }
+                        },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      hintText: isRequired ? 'Select time' : 'Optional',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      filled: true,
+                      fillColor: controller.isViewMode.value
+                          ? Colors.grey[200]
+                          : Colors.grey[50],
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: isMobile ? 12 : 16,
+                      ),
+                      isDense: isMobile,
+                      suffixIcon: controller.isViewMode.value
+                          ? null
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isStartTime && displayedTime != null)
+                                  IconButton(
+                                    tooltip: 'Clear start time',
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      controller.eventStartTime.value = null;
+                                      field.didChange(null);
+                                      field.validate();
+                                      controller
+                                          .markCompetitionDateFieldTouched(
+                                            timeFieldKey,
+                                          );
+                                      controller
+                                          .notifyCompetitionDatesChanged();
+                                    },
+                                  ),
+                                const Icon(Icons.access_time),
+                              ],
+                            ),
+                      errorText: showErrors ? field.errorText : null,
+                    ),
+                    child: Text(
+                      displayedTime != null
+                          ? _formatTimeOfDay(displayedTime)
+                          : '',
+                      style: TextStyle(
+                        color: displayedTime != null
+                            ? Colors.black
+                            : Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                );
+              });
+            },
+          );
+        }),
+      ],
+    );
+  }
+
+  Future<bool> _selectTime(
+    BuildContext context,
+    CompetitionController controller, {
+    required bool isStartTime,
+  }) async {
+    final current = isStartTime
+        ? controller.eventStartTime.value
+        : controller.eventEndTime.value;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime:
+          current ??
+          (isStartTime
+              ? const TimeOfDay(hour: 9, minute: 0)
+              : const TimeOfDay(hour: 18, minute: 0)),
+    );
+    if (picked == null) return false;
+
+    if (isStartTime) {
+      controller.eventStartTime.value = picked;
+    } else {
+      controller.eventEndTime.value = picked;
+    }
+    controller.notifyCompetitionDatesChanged();
+    return true;
+  }
+
+  Widget _buildPublishResultNowField(
+    BuildContext context,
+    CompetitionController controller, {
+    bool isMobile = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const FormLabelWithHint(
+          label: 'PUBLISH THE RESULT NOW :',
+          hintText: 'Optional',
+          reserveHintSpace: true,
+          bottomSpacing: 0,
+        ),
+        Obx(
+          () {
+            final enabled = !controller.isViewMode.value;
+            return InkWell(
+              onTap: enabled
+                  ? () {
+                      controller.publishResultNow.value =
+                          !controller.publishResultNow.value;
+                    }
+                  : null,
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  filled: true,
+                  fillColor: controller.isViewMode.value
+                      ? Colors.grey[200]
+                      : Colors.grey[50],
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: isMobile ? 4 : 8,
+                  ),
+                  isDense: isMobile,
+                ),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: controller.publishResultNow.value,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      onChanged: enabled
+                          ? (value) {
+                              controller.publishResultNow.value =
+                                  value ?? false;
+                            }
+                          : null,
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Publish results immediately',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: isMobile ? 13 : 14,
+                          color: enabled ? Colors.black : Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   Widget _buildMarksField(
@@ -2190,9 +2520,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                         controller.bestSchoolAwardMinParticipantsController,
                     readOnly: readOnly,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     decoration: InputDecoration(
                       hintText: 'e.g. 15',
                       border: OutlineInputBorder(
@@ -2357,9 +2685,10 @@ class CreateCompetitionScreen extends StatelessWidget {
                         ...controller.categoryOptionNames.map((category) {
                           final isSelected = controller.selectedCategories
                               .contains(category);
-                          final isChampions =
-                              controller.isChampionsCategoryName(category);
-                          final championsDisabled = isChampions &&
+                          final isChampions = controller
+                              .isChampionsCategoryName(category);
+                          final championsDisabled =
+                              isChampions &&
                               !controller.canSelectChampionsCategory;
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2370,13 +2699,12 @@ class CreateCompetitionScreen extends StatelessWidget {
                                 children: [
                                   Checkbox(
                                     value: isSelected,
-                                    onChanged: controller.isViewMode.value ||
+                                    onChanged:
+                                        controller.isViewMode.value ||
                                             championsDisabled
                                         ? null
                                         : (value) {
-                                            controller.toggleCategory(
-                                              category,
-                                            );
+                                            controller.toggleCategory(category);
                                             field.didChange(
                                               controller.selectedCategories
                                                   .toList(),
@@ -2401,9 +2729,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                                 SizedBox(
                                   width: isMobile ? 160 : 180,
                                   child: _CategoryAmountField(
-                                    key: ValueKey(
-                                      'category_amount_$category',
-                                    ),
+                                    key: ValueKey('category_amount_$category'),
                                     category: category,
                                     controller: controller,
                                     isMobile: isMobile,
@@ -3309,10 +3635,7 @@ class _CategoryAmountFieldState extends State<_CategoryAmountField> {
             ? null
             : (value) {
                 final amount = double.tryParse(value) ?? 0.0;
-                widget.controller.updateCategoryAmount(
-                  widget.category,
-                  amount,
-                );
+                widget.controller.updateCategoryAmount(widget.category, amount);
               },
       ),
     );
@@ -3552,8 +3875,11 @@ class _BrochureDialogContentState extends State<_BrochureDialogContent> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.broken_image_outlined,
-                  size: 48, color: Colors.grey[500]),
+              Icon(
+                Icons.broken_image_outlined,
+                size: 48,
+                color: Colors.grey[500],
+              ),
               const SizedBox(height: 12),
               Text(
                 _errorMessage ?? 'Unable to load brochure',

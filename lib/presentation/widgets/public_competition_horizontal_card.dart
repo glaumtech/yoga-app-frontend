@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/competition_brochure_banner_url.dart';
 import '../../core/utils/competition_registration_url.dart';
 import '../../data/models/competition_model.dart';
+import '../../routes/app_routes.dart';
 import 'competition_registration_qr_image.dart';
 import 'primary_button.dart';
 
@@ -18,6 +19,7 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   final bool showRegistrationQr;
   final bool showShareLinkOption;
   final bool showRegistrationButton;
+  final bool showResultsButton;
 
   const PublicCompetitionHorizontalCard({
     super.key,
@@ -27,6 +29,7 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
     this.showRegistrationQr = false,
     this.showShareLinkOption = false,
     this.showRegistrationButton = true,
+    this.showResultsButton = false,
   });
 
   static const double bannerHeight = 180;
@@ -36,9 +39,12 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   double get computedHeight {
     final hasQr = showRegistrationQr &&
         (competition.idStr ?? '${competition.id}').isNotEmpty;
-    if (!showRegistrationButton && !hasQr) return 400;
-    if (hasQr) return 488;
-    return 448;
+    final extraResults = showResultsButton && competition.areCertificatesAvailable
+        ? 52.0
+        : 0.0;
+    if (!showRegistrationButton && !hasQr) return 400 + extraResults;
+    if (hasQr) return 488 + extraResults;
+    return 448 + extraResults;
   }
 
   String? get _bannerUrl => competitionBrochureBannerUrl(competition);
@@ -120,6 +126,11 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     _buildActions(context, id),
+                    if (showResultsButton &&
+                        competition.areCertificatesAvailable) ...[
+                      const SizedBox(height: 8),
+                      _buildDownloadCertificateButton(context),
+                    ],
                   ],
                 ),
               ),
@@ -347,6 +358,29 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
     );
   }
 
+  Widget _buildDownloadCertificateButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: actionButtonHeight,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          final id = competition.idStr ?? '${competition.id}';
+          if (id.isEmpty) return;
+          context.push(
+            AppRoutes.publicCompetitionParticipantsPath(
+              id,
+              competitionName: competition.competitionName,
+              isPastCompetition: competition.areCertificatesAvailable,
+            ),
+          );
+        },
+        icon: const Icon(Icons.download_outlined, size: 18),
+        label: const Text('Download Certificate'),
+        style: _actionButtonStyle,
+      ),
+    );
+  }
+
   Widget _buildActions(BuildContext context, String id) {
     if (!showRegistrationButton) {
       return SizedBox(
@@ -354,8 +388,8 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
         height: actionButtonHeight,
         child: OutlinedButton.icon(
           onPressed: () => _navigateToParticipants(context),
-          icon: const Icon(Icons.people_outline, size: 18),
-          label: const Text('View participants'),
+          icon: const Icon(Icons.download_outlined, size: 18),
+          label: const Text('Download e certificate'),
           style: _actionButtonStyle,
         ),
       );

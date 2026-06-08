@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/participant_e_certificate_download.dart';
 import '../../../data/models/participant_model.dart';
+import '../../../data/repositories/competition_repository.dart';
 import '../../../data/repositories/participant_repository.dart';
 import '../../widgets/app_navbar.dart';
 import '../../widgets/footer_section.dart';
@@ -30,6 +31,7 @@ class PublicCompetitionParticipantsScreen extends StatefulWidget {
 class _PublicCompetitionParticipantsScreenState
     extends State<PublicCompetitionParticipantsScreen> {
   final ParticipantRepository _repository = ParticipantRepository();
+  final CompetitionRepository _competitionRepository = CompetitionRepository();
   final TextEditingController _searchController = TextEditingController();
 
   static const int _pageSize = 10;
@@ -39,6 +41,7 @@ class _PublicCompetitionParticipantsScreenState
   String? _error;
   String _searchQuery = '';
   int? _downloadingId;
+  bool _certificatesReleased = false;
 
   int _currentPage = 1;
   int _totalPages = 1;
@@ -49,7 +52,25 @@ class _PublicCompetitionParticipantsScreenState
   @override
   void initState() {
     super.initState();
+    _certificatesReleased = widget.isPastCompetition;
+    _loadCompetitionMeta();
     _loadParticipants();
+  }
+
+  Future<void> _loadCompetitionMeta() async {
+    final competitionId = int.tryParse(widget.competitionId);
+    if (competitionId == null) return;
+
+    final response = await _competitionRepository.getCompetitionById(
+      competitionId,
+    );
+    if (!mounted) return;
+
+    if (response.success && response.data != null) {
+      setState(() {
+        _certificatesReleased = response.data!.areCertificatesAvailable;
+      });
+    }
   }
 
   @override
@@ -141,8 +162,7 @@ class _PublicCompetitionParticipantsScreenState
       } catch (_) {}
     }
 
-    int? parseId(dynamic v) =>
-        v is int ? v : int.tryParse(v?.toString() ?? '');
+    int? parseId(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '');
 
     bool parseBool(dynamic v) {
       if (v == null) return false;
@@ -165,7 +185,8 @@ class _PublicCompetitionParticipantsScreenState
       yogaMasterName: reg['yogaTeacherName']?.toString() ?? '',
       yogaMasterContact: reg['yogaTeacherCell']?.toString() ?? '',
       registrationNo: reg['registrationNo']?.toString(),
-      optForECertificate: parseBool(reg['optForECertificate']) ||
+      optForECertificate:
+          parseBool(reg['optForECertificate']) ||
           parseBool(reg['opt_for_e_certificate']),
       stageId: parseId(reg['stageId']),
       categoryId: parseId(reg['categoryId']),
@@ -191,7 +212,7 @@ class _PublicCompetitionParticipantsScreenState
   }
 
   bool _canDownloadCert(ParticipantModel p) {
-    return widget.isPastCompetition &&
+    return _certificatesReleased &&
         p.optForECertificate &&
         p.stageId != null &&
         p.categoryId != null;
@@ -255,9 +276,7 @@ class _PublicCompetitionParticipantsScreenState
                 },
               )
             : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         isDense: true,
       ),
       onChanged: (v) {
@@ -357,7 +376,10 @@ class _PublicCompetitionParticipantsScreenState
     }
 
     return RefreshIndicator(
-      onRefresh: () => _loadParticipants(page: _currentPage),
+      onRefresh: () async {
+        await _loadCompetitionMeta();
+        await _loadParticipants(page: _currentPage);
+      },
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
         itemCount: _participants.length + 1,
@@ -368,15 +390,15 @@ class _PublicCompetitionParticipantsScreenState
           if (index == 0) {
             return Text(
               '$_totalItems participant${_totalItems == 1 ? '' : 's'}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[700],
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
             );
           }
           final p = _participants[index - 1];
           return _ParticipantTile(
             participant: p,
-            showCertificateDownload: widget.isPastCompetition,
+            showCertificateDownload: _certificatesReleased,
             downloading: _downloadingId == int.tryParse(p.id ?? ''),
             onDownload: _canDownloadCert(p) ? () => _onDownloadCert(p) : null,
           );
@@ -444,16 +466,14 @@ class _ParticipantTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     [
-                      if (participant.category.isNotEmpty)
-                        participant.category,
-                      if (participant.standard.isNotEmpty)
-                        participant.standard,
+                      if (participant.category.isNotEmpty) participant.category,
+                      if (participant.standard.isNotEmpty) participant.standard,
                       if (participant.schoolName.isNotEmpty)
                         participant.schoolName,
                     ].join(' · '),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[700],
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
                   ),
                 ],
               ),

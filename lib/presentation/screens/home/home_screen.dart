@@ -1028,6 +1028,7 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: Colors.grey.shade50,
       itemKeyPrefix: 'current_comp',
       showRegistrationQr: true,
+      showResultsButton: true,
       viewMoreStatus: 'ongoing',
     );
   }
@@ -1072,6 +1073,7 @@ class HomeScreen extends StatelessWidget {
     bool showStatusBadge = true,
     bool showRegistrationButton = true,
     bool showViewParticipantsButton = false,
+    bool showResultsButton = false,
     String? viewMoreStatus,
   }) {
     if (competitions.isEmpty) {
@@ -1131,6 +1133,7 @@ class HomeScreen extends StatelessWidget {
                       showStatusBadge: showStatusBadge,
                       showRegistrationButton: showRegistrationButton,
                       showViewParticipantsButton: showViewParticipantsButton,
+                      showResultsButton: showResultsButton,
                     );
                   }
 
@@ -1179,6 +1182,7 @@ class HomeScreen extends StatelessWidget {
                           showStatusBadge: showStatusBadge,
                           showRegistrationButton: showRegistrationButton,
                           showViewParticipantsButton: showViewParticipantsButton,
+                          showResultsButton: showResultsButton,
                         );
                       },
                     );
@@ -1200,7 +1204,10 @@ class HomeScreen extends StatelessWidget {
                               '${itemKeyPrefix}_${idOf(competition)}_$index',
                             ),
                             padding: const EdgeInsets.only(right: 16),
-                            child: buildCard(competition),
+                            child: SizedBox(
+                              height: HomeLayout.competitionCarouselHeight(cw),
+                              child: buildCard(competition),
+                            ),
                           );
                         },
                       ),
