@@ -1269,6 +1269,19 @@ class UserManagementController extends GetxController {
     _refreshFormKey();
   }
 
+  Future<void> _applyLoginSession(Map<String, dynamic> data) async {
+    final user = data['user'] as UserManagementModel?;
+    if (user != null) {
+      currentUser.value = user;
+      if (Get.isRegistered<PermissionStore>()) {
+        Get.find<PermissionStore>().setKeys(user.permissions);
+      }
+      if (Get.isRegistered<RoleThemeController>()) {
+        Get.find<RoleThemeController>().applyThemeColor(user.themeColor);
+      }
+    }
+  }
+
   // Login user
   Future<bool> login({
     required String name,
@@ -1286,18 +1299,7 @@ class UserManagementController extends GetxController {
       );
 
       if (response.success && response.data != null) {
-        // Extract and store user data
-        final data = response.data as Map<String, dynamic>;
-        final user = data['user'] as UserManagementModel?;
-        if (user != null) {
-          currentUser.value = user;
-          if (Get.isRegistered<PermissionStore>()) {
-            Get.find<PermissionStore>().setKeys(user.permissions);
-          }
-          if (Get.isRegistered<RoleThemeController>()) {
-            Get.find<RoleThemeController>().applyThemeColor(user.themeColor);
-          }
-        }
+        await _applyLoginSession(response.data as Map<String, dynamic>);
         isLoading.value = false;
         return true;
       } else {
@@ -1309,6 +1311,49 @@ class UserManagementController extends GetxController {
       errorMessage.value = 'Error during login: ${e.toString()}';
       isLoading.value = false;
       return false;
+    }
+  }
+
+  Future<bool> loginWithToken({required String token}) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      final response = await _repository.loginWithToken(token: token);
+
+      if (response.success && response.data != null) {
+        await _applyLoginSession(response.data as Map<String, dynamic>);
+        isLoading.value = false;
+        return true;
+      }
+
+      errorMessage.value =
+          response.message ?? 'Invalid or expired login link';
+      isLoading.value = false;
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Error during login: ${e.toString()}';
+      isLoading.value = false;
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> generateJuryLoginToken(String userId) async {
+    try {
+      errorMessage.value = '';
+
+      final response = await _repository.generateJuryLoginToken(userId);
+
+      if (response.success && response.data != null) {
+        return response.data;
+      }
+
+      errorMessage.value =
+          response.message ?? 'Failed to generate login link';
+      return null;
+    } catch (e) {
+      errorMessage.value = 'Error generating login link: ${e.toString()}';
+      return null;
     }
   }
 

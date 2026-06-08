@@ -314,6 +314,52 @@ class UserManagementRepository {
     }
   }
 
+  Future<ApiResponse<Map<String, dynamic>>> _persistLoginPayload(
+    Map<String, dynamic> data, {
+    String? fallbackMessage,
+  }) async {
+    final token = data['token']?.toString();
+    final tokenType = data['tokenType']?.toString() ?? 'Bearer';
+    final userData = data['user'] as Map<String, dynamic>?;
+
+    if (token == null || token.isEmpty) {
+      return ApiResponse(
+        success: false,
+        message: 'Token not received from server',
+      );
+    }
+
+    await StorageService.setString(AppConstants.tokenKey, token);
+
+    if (userData != null) {
+      await StorageService.setString(
+        AppConstants.userKey,
+        jsonEncode(userData),
+      );
+
+      final rawPermissions = userData['permissions'];
+      if (rawPermissions is List) {
+        final keys = rawPermissions.map((e) => e.toString()).toList();
+        await StorageService.setStringList(
+          AppConstants.permissionKeysKey,
+          keys,
+        );
+      } else {
+        await StorageService.remove(AppConstants.permissionKeysKey);
+      }
+    }
+
+    return ApiResponse(
+      success: true,
+      data: {
+        'token': token,
+        'tokenType': tokenType,
+        'user': userData != null ? UserManagementModel.fromJson(userData) : null,
+      },
+      message: fallbackMessage ?? 'Login successful',
+    );
+  }
+
   /// Login user
   /// Returns token and user data
   Future<ApiResponse<Map<String, dynamic>>> login({
@@ -339,64 +385,81 @@ class UserManagementRepository {
       );
 
       if (response.success && response.data != null) {
-        final data = response.data as Map<String, dynamic>;
-
-        // Extract token and user data
-        final token = data['token']?.toString();
-        final tokenType = data['tokenType']?.toString() ?? 'Bearer';
-        final userData = data['user'] as Map<String, dynamic>?;
-
-        if (token != null && token.isNotEmpty) {
-          // Store token
-          await StorageService.setString(AppConstants.tokenKey, token);
-
-          // Store user data if available
-          if (userData != null) {
-            await StorageService.setString(
-              AppConstants.userKey,
-              jsonEncode(userData),
-            );
-
-            // Store permission keys separately for common access across the app
-            final rawPermissions = userData['permissions'];
-            if (rawPermissions is List) {
-              final keys = rawPermissions.map((e) => e.toString()).toList();
-              await StorageService.setStringList(
-                AppConstants.permissionKeysKey,
-                keys,
-              );
-            } else {
-              await StorageService.remove(AppConstants.permissionKeysKey);
-            }
-          }
-
-          return ApiResponse(
-            success: true,
-            data: {
-              'token': token,
-              'tokenType': tokenType,
-              'user': userData != null
-                  ? UserManagementModel.fromJson(userData)
-                  : null,
-            },
-            message: response.message ?? 'Login successful',
-          );
-        } else {
-          return ApiResponse(
-            success: false,
-            message: 'Token not received from server',
-          );
-        }
-      } else {
-        return ApiResponse(
-          success: false,
-          message: response.message ?? 'Login failed',
+        return _persistLoginPayload(
+          response.data as Map<String, dynamic>,
+          fallbackMessage: response.message,
         );
       }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Login failed',
+      );
     } catch (e) {
       return ApiResponse(
         success: false,
         message: 'Error during login: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> loginWithToken({
+    required String token,
+  }) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.userLoginWithToken,
+        apiType: APIType.aPost,
+        body: {'token': token},
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        return _persistLoginPayload(
+          response.data as Map<String, dynamic>,
+          fallbackMessage: response.message,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Invalid or expired login link',
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error during login: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> generateJuryLoginToken(
+    String userId,
+  ) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.juryLoginTokenGenerate(userId),
+        apiType: APIType.aPost,
+        body: const {},
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        return ApiResponse(
+          success: true,
+          data: Map<String, dynamic>.from(response.data as Map),
+          message: response.message,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to generate login link',
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error generating login link: ${e.toString()}',
       );
     }
   }

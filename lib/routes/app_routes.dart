@@ -86,7 +86,8 @@ class AppRoutes {
   static const String participantManagement = '/admin/participants';
   static const String schoolsList = '/admin/schools';
 
-  // Jury Scoring
+  // Jury
+  static const String juryLogin = '/jury/login';
   static const String juryScoring = '/jury/scoring';
 
   // Organization Setup

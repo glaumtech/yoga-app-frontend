@@ -101,7 +101,12 @@ class EndPoints {
   static String userById(String id) => '/user/$id';
   static String userPhoto(String id) => '/user/$id/photo';
   static String userLogin = '/user/login';
+  static const String userLoginWithToken = '/user/login/token';
   static String userLogout = '/user/logout';
+  static String juryLoginTokenGenerate(String userId) =>
+      '/juries/user/$userId/login-token';
+  static String juryLoginTokenRevoke(String userId) =>
+      '/juries/user/$userId/login-token';
   static String userTypes = '/user-type';
   static String juryAssignments(String userId) =>
       '/juries/user/$userId/assignments';

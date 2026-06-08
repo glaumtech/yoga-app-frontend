@@ -24,8 +24,10 @@ class APIService {
           header ?? {'Content-Type': 'application/json'};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint =
-          url == EndPoints.logIn || url == EndPoints.register;
+      final isAuthEndpoint = url == EndPoints.logIn ||
+          url == EndPoints.register ||
+          url == EndPoints.userLogin ||
+          url == EndPoints.userLoginWithToken;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
@@ -381,8 +383,10 @@ class APIService {
       Map<String, String> headers = header ?? {};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint =
-          url == EndPoints.logIn || url == EndPoints.register;
+      final isAuthEndpoint = url == EndPoints.logIn ||
+          url == EndPoints.register ||
+          url == EndPoints.userLogin ||
+          url == EndPoints.userLoginWithToken;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
@@ -460,8 +464,10 @@ class APIService {
       Map<String, String> headers = header ?? {};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint =
-          url == EndPoints.logIn || url == EndPoints.register;
+      final isAuthEndpoint = url == EndPoints.logIn ||
+          url == EndPoints.register ||
+          url == EndPoints.userLogin ||
+          url == EndPoints.userLoginWithToken;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:yoga_champ/routes/app_routes.dart';
 import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
+import '../presentation/screens/auth/jury_token_login_screen.dart';
 import '../presentation/screens/auth/signup_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/home/public_competitions_screen.dart';
@@ -64,6 +65,7 @@ class AppRouter {
         AppRoutes.splash,
         AppRoutes.login,
         AppRoutes.signUp,
+        AppRoutes.juryLogin,
         AppRoutes.about,
         AppRoutes.contact,
       ];
@@ -81,7 +83,9 @@ class AppRouter {
       final isPublicSchools = location.startsWith('/admin/schools');
 
       // Always allow navigation to auth routes (login/signup)
-      if (location == AppRoutes.login || location == AppRoutes.signUp) {
+      if (location == AppRoutes.login ||
+          location == AppRoutes.signUp ||
+          location == AppRoutes.juryLogin) {
         return null;
       }
 
@@ -117,6 +121,7 @@ class AppRouter {
           if (isJury &&
               location != AppRoutes.juryScoring &&
               location != AppRoutes.login &&
+              location != AppRoutes.juryLogin &&
               location != AppRoutes.signUp &&
               location != AppRoutes.splash &&
               !isPublicRoute &&
@@ -329,6 +334,14 @@ class AppRouter {
         path: AppRoutes.sponsors,
         name: 'sponsors',
         builder: (context, state) => const SponsorsScreen(),
+      ),
+
+      GoRoute(
+        path: AppRoutes.juryLogin,
+        name: 'jury-login',
+        builder: (context, state) => JuryTokenLoginScreen(
+          token: state.uri.queryParameters['token'],
+        ),
       ),
 
       // Scoring

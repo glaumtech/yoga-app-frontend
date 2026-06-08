@@ -9,6 +9,7 @@ import '../../controllers/user_management_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../controllers/users_list_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/jury_login_qr_dialog.dart';
 import '../../../data/models/user_management_model.dart';
 
 class UsersListScreen extends StatelessWidget {
@@ -915,6 +916,18 @@ class UsersListScreen extends StatelessWidget {
     return dateTime;
   }
 
+  bool _isJuryUser(UserManagementModel user) {
+    final type = (user.userTypeName ?? user.type).toUpperCase();
+    return type == 'JURY' || type.contains('JURY');
+  }
+
+  void _showJuryLoginQrDialog(BuildContext context, UserManagementModel user) {
+    showDialog(
+      context: context,
+      builder: (context) => JuryLoginQrDialog(user: user),
+    );
+  }
+
   Widget _buildActionCell(
     BuildContext context,
     UserManagementModel user,
@@ -926,6 +939,15 @@ class UsersListScreen extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          if (_isJuryUser(user)) ...[
+            IconButton(
+              icon: Icon(Icons.qr_code, size: 18, color: AppTheme.primaryColor),
+              onPressed: () => _showJuryLoginQrDialog(context, user),
+              tooltip: 'Jury login QR',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          ],
           IconButton(
             icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
             onPressed: () {

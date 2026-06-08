@@ -46,6 +46,8 @@ dependencies:
 
   # Payment gateway
   razorpay_flutter: ^1.4.0
+  # QR codes (jury login links)
+  qr_flutter: ^4.1.0
   
   # Image Picker
   image_picker: ^1.0.7
