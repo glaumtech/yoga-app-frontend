@@ -205,7 +205,7 @@ class APIService {
         }
 
         // Handle success response: {"success":true,...} or {"status":"success",...}
-        if (successFlag || status == 'success') {
+        if (explicitSuccess == true || status == 'success') {
           T? resultData;
           if (fromJson != null && data != null) {
             resultData = fromJson(data);

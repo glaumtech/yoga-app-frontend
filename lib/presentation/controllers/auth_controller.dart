@@ -401,7 +401,7 @@ class AuthController extends GetxController {
     // Important: do this AFTER the current frame. If we delete controllers
     // synchronously while widgets are still building/unmounting, Flutter can
     // throw `_dependents.isEmpty is not true` assertions (InheritedWidget/Obx).
-    SchedulerBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         if (Get.isRegistered<UserManagementController>()) {
           Get.delete<UserManagementController>(force: true);
