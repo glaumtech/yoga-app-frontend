@@ -359,10 +359,16 @@ class OrganizationSetupController extends GetxController {
       final res = await _paymentRepo.listSubscriptionModes();
       if (res.success && res.data != null) {
         subscriptionModes.assignAll(
-          SubscriptionCatalogFilter.sortModes(res.data!),
+          SubscriptionCatalogFilter.modesForOrganizationSetup(res.data!),
         );
         if (subscriptionModes.isEmpty) {
-          modesError.value = 'No subscription modes configured on the server';
+          modesError.value = 'On Demand subscription mode is not configured on the server';
+        } else {
+          final mode = subscriptionModes.first;
+          if (selectedSubscriptionModeId.value != mode.id) {
+            selectedSubscriptionModeId.value = mode.id;
+            await loadSubscriptionPackagesForMode(mode);
+          }
         }
       } else {
         modesError.value = res.message ?? 'Failed to load subscription modes';

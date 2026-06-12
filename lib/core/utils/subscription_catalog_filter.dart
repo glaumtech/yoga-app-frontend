@@ -5,11 +5,14 @@ import '../../data/models/subscription_package_model.dart';
 class SubscriptionCatalogFilter {
   SubscriptionCatalogFilter._();
 
-  /// Yearly → User pack → Per Participant.
+  static const String onDemandModeKey = 'PAY_PER_PARTICIPANT';
+  static const String onDemandDisplayName = 'On Demand';
+
+  /// Yearly → User pack → On Demand.
   static const List<String> modeKeyOrder = [
     'ORG_SUBSCRIPTION',
     'USER_PACK_SUBSCRIPTION',
-    'PAY_PER_PARTICIPANT',
+    onDemandModeKey,
   ];
 
   /// Basic → Standard → Pro → maintenance → other.
@@ -31,6 +34,22 @@ class SubscriptionCatalogFilter {
     }
     final i = tierTypeOrder.indexOf(subscriptionType.toUpperCase());
     return i >= 0 ? i : tierTypeOrder.length;
+  }
+
+  static String displayModeName(SubscriptionModeModel mode) {
+    if (mode.modeKey.toUpperCase() == onDemandModeKey) {
+      return onDemandDisplayName;
+    }
+    return mode.name;
+  }
+
+  /// Organization setup currently supports On Demand only.
+  static List<SubscriptionModeModel> modesForOrganizationSetup(
+    Iterable<SubscriptionModeModel> modes,
+  ) {
+    return sortModes(
+      modes.where((m) => m.modeKey.toUpperCase() == onDemandModeKey),
+    );
   }
 
   static List<SubscriptionModeModel> sortModes(

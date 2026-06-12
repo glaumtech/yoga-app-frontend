@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../controllers/competition_controller.dart';
 import '../../controllers/participant_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
+import '../../widgets/registration_success_panel.dart';
 import '../../widgets/toggle_button_group.dart';
 import 'participants_list_screen.dart';
 import 'participant_registration_form_screen.dart';
@@ -24,6 +26,10 @@ class _ParticipantManagementScreenState
   void initState() {
     super.initState();
     participantController = Get.put(ParticipantController());
+    final competitionController = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
+    competitionController.loadOnDemandContext();
   }
 
   @override
@@ -36,7 +42,6 @@ class _ParticipantManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
@@ -94,7 +99,9 @@ class _ParticipantManagementScreenState
                                 participantController.resetForm();
                               }
                             } else {
-                              // Switching to create view - always reset form to ensure clean state
+                              // Switching to create view - fresh registration form
+                              participantController
+                                  .clearRegistrationConfirmation();
                               participantController.resetForm();
                             }
                             participantController.toggleViewMode(index == 1);
@@ -130,12 +137,30 @@ class _ParticipantManagementScreenState
                         )
                       : SingleChildScrollView(
                           padding: EdgeInsets.all(isMobile ? 16 : 16),
-                          child:
-                              !participantController.isEditMode &&
-                                  !participantController.isViewMode.value &&
-                                  participantController.isBulkMode.value
-                              ? const BulkRegistrationScreen()
-                              : const ParticipantRegistrationFormScreen(),
+                          child: Obx(() {
+                            if (participantController.registrationSaved.value &&
+                                !participantController.isEditMode &&
+                                !participantController.isViewMode.value &&
+                                !participantController.isBulkMode.value) {
+                              return RegistrationSuccessPanel(
+                                participantController: participantController,
+                                participant: participantController
+                                    .lastRegisteredParticipant
+                                    .value,
+                                onRegisterAnother: () {
+                                  participantController
+                                      .clearRegistrationConfirmation();
+                                  participantController.resetForm();
+                                },
+                              );
+                            }
+                            if (!participantController.isEditMode &&
+                                !participantController.isViewMode.value &&
+                                participantController.isBulkMode.value) {
+                              return const BulkRegistrationScreen();
+                            }
+                            return const ParticipantRegistrationFormScreen();
+                          }),
                         ),
                 ),
               ),

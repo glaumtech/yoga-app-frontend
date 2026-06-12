@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,7 +22,7 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
-import '../../widgets/adaptive_payment_section.dart';
+import '../../widgets/registration_payment_section.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
@@ -216,434 +216,536 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               // (Flutter behavior; see flutter/flutter#107350).
               autovalidateMode: AutovalidateMode.disabled,
               child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Title
-                FormTitle(
-                  text: 'REGISTRATION',
-                  isMobile: isMobile,
-                  isTablet: isTablet,
-                ),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title
+                    FormTitle(
+                      text: 'REGISTRATION',
+                      isMobile: isMobile,
+                      isTablet: isTablet,
+                    ),
 
-                // Main content: Left side (fields in columns) and Right side (Photo & Certificate)
-                isMobile
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (showCompetitionDropdown) ...[
-                            _buildCompetitionField(
-                              context,
-                              participantController,
-                              competitionController,
-                              isMobile,
-                              isTablet,
-                            ),
-                            SizedBox(height: isMobile ? 20 : 24),
-                          ],
-                          _buildNameField(
-                            context,
-                            participantController,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildDateOfBirthField(
-                            context,
-                            participantController,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildAgeField(
-                            context,
-                            participantController,
-                            isMobile,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildGenderField(
-                            context,
-                            participantController,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildCategoryField(
-                            context,
-                            participantController,
-                            competitionController,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildGroupField(
-                            context,
-                            participantController,
-                            competitionController,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildPhotoField(
-                            context,
-                            participantController,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildBonafideCertificateField(
-                            context,
-                            participantController,
-                            isMobile,
-                            isTablet,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildEcoCertificateOptInField(
-                            context,
-                            participantController,
-                            isMobile,
-                          ),
-                          SizedBox(height: isMobile ? 20 : 24),
-                          _buildSpotRegistrationSection(
-                            context,
-                            participantController,
-                            competitionController,
-                            isMobile,
-                            isTablet,
-                            includeBottomSpacing: true,
-                          ),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left side: Fields in two columns
-                          Expanded(
-                            flex: 3,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (showCompetitionDropdown) ...[
-                                  _buildCompetitionField(
-                                    context,
-                                    participantController,
-                                    competitionController,
-                                    isMobile,
-                                    isTablet,
-                                  ),
-                                  SizedBox(height: isMobile ? 20 : 24),
-                                ],
-                                _buildNameField(
-                                  context,
-                                  participantController,
-                                  isMobile,
-                                  isTablet,
-                                ),
-                                SizedBox(height: isMobile ? 20 : 24),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Column 1
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            spacing: 12,
-                                            children: [
-                                              Expanded(
-                                                flex: 2,
-                                                child: _buildDateOfBirthField(
-                                                  context,
-                                                  participantController,
-                                                  isMobile,
-                                                  isTablet,
-                                                ),
-                                              ),
-                                              Expanded(
-                                                child: _buildAgeField(
-                                                  context,
-                                                  participantController,
-                                                  isMobile,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          SizedBox(height: isMobile ? 20 : 24),
-                                          _buildCategoryField(
-                                            context,
-                                            participantController,
-                                            competitionController,
-                                            isMobile,
-                                            isTablet,
-                                          ),
-                                          SizedBox(height: isMobile ? 20 : 24),
-                                        ],
-                                      ),
-                                    ),
-                                    SizedBox(width: isTablet ? 12 : 16),
-                                    // Column 2
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          _buildGenderField(
-                                            context,
-                                            participantController,
-                                            isMobile,
-                                            isTablet,
-                                          ),
-                                          SizedBox(height: isMobile ? 20 : 24),
-                                          _buildGroupField(
-                                            context,
-                                            participantController,
-                                            competitionController,
-                                            isMobile,
-                                            isTablet,
-                                          ),
-                                          SizedBox(height: isMobile ? 20 : 24),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                // SizedBox(height: isMobile ? 20 : 10),
-                                _buildInstitutionSection(
-                                  context,
-                                  participantController,
-                                  isMobile,
-                                  isTablet,
-                                ),
-                                SizedBox(height: isMobile ? 20 : 24),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: _buildYogaTeacherNameField(
-                                        context,
-                                        participantController,
-                                        isMobile,
-                                        isTablet,
-                                      ),
-                                    ),
-                                    SizedBox(width: isTablet ? 12 : 16),
-                                    Expanded(
-                                      child: _buildYogaTeacherCellField(
-                                        context,
-                                        participantController,
-                                        isMobile,
-                                        isTablet,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 24),
-                          // Right side: Photo and Bonafide Certificate
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildPhotoField(
-                                  context,
-                                  participantController,
-                                  isMobile,
-                                  isTablet,
-                                ),
-                                SizedBox(height: isMobile ? 20 : 24),
-                                _buildBonafideCertificateField(
-                                  context,
-                                  participantController,
-                                  isMobile,
-                                  isTablet,
-                                ),
-                                SizedBox(height: isMobile ? 20 : 24),
-                                _buildEcoCertificateOptInField(
-                                  context,
-                                  participantController,
-                                  isMobile,
-                                ),
-                                SizedBox(height: isMobile ? 20 : 24),
-                                _buildSpotRegistrationSection(
+                    // Main content: Left side (fields in columns) and Right side (Photo & Certificate)
+                    isMobile
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (showCompetitionDropdown) ...[
+                                _buildCompetitionField(
                                   context,
                                   participantController,
                                   competitionController,
                                   isMobile,
                                   isTablet,
                                 ),
+                                SizedBox(height: isMobile ? 20 : 24),
                               ],
-                            ),
-                          ),
-                        ],
-                      ),
-                if (isMobile) ...[
-                  // SizedBox(height: isMobile ? 20 : 10),
-                  _buildInstitutionSection(
-                    context,
-                    participantController,
-                    isMobile,
-                    isTablet,
-                  ),
-                  SizedBox(height: isMobile ? 20 : 24),
-                  _buildYogaTeacherNameField(
-                    context,
-                    participantController,
-                    isMobile,
-                    isTablet,
-                  ),
-                  SizedBox(height: isMobile ? 20 : 24),
-                  _buildYogaTeacherCellField(
-                    context,
-                    participantController,
-                    isMobile,
-                    isTablet,
-                  ),
-                ],
-                SizedBox(height: isMobile ? 24 : 32),
-
-                if (!participantController.isViewMode.value) ...[
-                  AdaptivePaymentSection(
-                    controller: participantController,
-                    homeCompetition: _homeCompetitionForRegistration(
-                      participantController,
-                      competitionController,
-                    ),
-                    competitionController: competitionController,
-                    categoryId: participantController.selectedCategories.isNotEmpty
-                        ? competitionController.getCategoryIdByName(
-                            participantController.selectedCategories.first,
-                          )
-                        : null,
-                    isMobile: isMobile,
-                  ),
-                  SizedBox(height: isMobile ? 24 : 32),
-                ],
-
-                // Error Message (only show when not in list view)
-                Obx(() {
-                  if (participantController.isListView.value) {
-                    return const SizedBox.shrink();
-                  }
-                  if (participantController.errorMessage.value.isNotEmpty) {
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.error_outline, color: Colors.red),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              participantController.errorMessage.value,
-                              style: TextStyle(color: Colors.red[700]),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return const SizedBox.shrink();
-                }),
-
-                // Action Buttons (Save and Cancel)
-                Obx(() {
-                  // Show cancel button in view mode, hide save button
-                  if (participantController.isViewMode.value) {
-                    if (!showViewCancelButton) {
-                      return const SizedBox.shrink();
-                    }
-                    return Center(
-                      child: cancelButton(
-                        onPressed: () {
-                          participantController.errorMessage.value = '';
-                          if (onViewBack != null) {
-                            onViewBack!();
-                            return;
-                          }
-                          participantController.resetForm();
-                          participantController.toggleViewMode(true);
-                        },
-                        width: isMobile ? null : 200,
-                        isFullWidth: isMobile,
-                      ),
-                    );
-                  }
-
-                  // Hide buttons if not in edit mode (create mode shows buttons)
-                  if (!participantController.isEditMode) {
-                    return isMobile
-                        ? Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              saveButton(
-                                onPressed: () async {
-                                  // Clear any previous error messages
-                                  participantController.errorMessage.value = '';
-
-                                  final eventId = _eventIdForRegistrationSave(
-                                    participantController,
-                                    competitionController,
-                                  );
-                                  if (eventId == null || eventId.isEmpty) {
-                                    participantController.errorMessage.value =
-                                        'Please select a competition';
-                                    return;
-                                  }
-
-                                  final success = await participantController
-                                      .submitRegistrationForm(
-                                        eventId: eventId,
-                                        competitionController:
-                                            competitionController,
-                                      );
-
-                                  if (success && context.mounted) {
-                                    // Clear error message on success
-                                    participantController.errorMessage.value =
-                                        '';
-                                    SnackbarHelper.showSuccess(
-                                      context,
-                                      'Participant registered successfully',
-                                    );
-                                    // Form is already reset in submitRegistrationForm method
-                                  }
-                                },
-                                isLoading: participantController.isLoading,
-                                text: 'SAVE',
-                                isFullWidth: true,
+                              _buildNameField(
+                                context,
+                                participantController,
+                                isMobile,
+                                isTablet,
                               ),
-                              const SizedBox(height: 12),
-                              cancelButton(
-                                onPressed: () {
-                                  // Clear error message and reset form
-                                  participantController.errorMessage.value = '';
-                                  participantController.resetForm();
-                                },
-                                isFullWidth: true,
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildDateOfBirthField(
+                                context,
+                                participantController,
+                                isMobile,
+                                isTablet,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildAgeField(
+                                context,
+                                participantController,
+                                isMobile,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildGenderField(
+                                context,
+                                participantController,
+                                isMobile,
+                                isTablet,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildCategoryField(
+                                context,
+                                participantController,
+                                competitionController,
+                                isMobile,
+                                isTablet,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildGroupField(
+                                context,
+                                participantController,
+                                competitionController,
+                                isMobile,
+                                isTablet,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildPhotoField(
+                                context,
+                                participantController,
+                                isMobile,
+                                isTablet,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildBonafideCertificateField(
+                                context,
+                                participantController,
+                                isMobile,
+                                isTablet,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildEcoCertificateOptInField(
+                                context,
+                                participantController,
+                                isMobile,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                              _buildSpotRegistrationSection(
+                                context,
+                                participantController,
+                                competitionController,
+                                isMobile,
+                                isTablet,
+                                includeBottomSpacing: true,
                               ),
                             ],
                           )
-                        : Center(
-                            child: Row(
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Left side: Fields in two columns
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (showCompetitionDropdown) ...[
+                                      _buildCompetitionField(
+                                        context,
+                                        participantController,
+                                        competitionController,
+                                        isMobile,
+                                        isTablet,
+                                      ),
+                                      SizedBox(height: isMobile ? 20 : 24),
+                                    ],
+                                    _buildNameField(
+                                      context,
+                                      participantController,
+                                      isMobile,
+                                      isTablet,
+                                    ),
+                                    SizedBox(height: isMobile ? 20 : 24),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Column 1
+                                        Expanded(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                spacing: 12,
+                                                children: [
+                                                  Expanded(
+                                                    flex: 2,
+                                                    child:
+                                                        _buildDateOfBirthField(
+                                                          context,
+                                                          participantController,
+                                                          isMobile,
+                                                          isTablet,
+                                                        ),
+                                                  ),
+                                                  Expanded(
+                                                    child: _buildAgeField(
+                                                      context,
+                                                      participantController,
+                                                      isMobile,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              SizedBox(
+                                                height: isMobile ? 20 : 24,
+                                              ),
+                                              _buildCategoryField(
+                                                context,
+                                                participantController,
+                                                competitionController,
+                                                isMobile,
+                                                isTablet,
+                                              ),
+                                              SizedBox(
+                                                height: isMobile ? 20 : 24,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        SizedBox(width: isTablet ? 12 : 16),
+                                        // Column 2
+                                        Expanded(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              _buildGenderField(
+                                                context,
+                                                participantController,
+                                                isMobile,
+                                                isTablet,
+                                              ),
+                                              SizedBox(
+                                                height: isMobile ? 20 : 24,
+                                              ),
+                                              _buildGroupField(
+                                                context,
+                                                participantController,
+                                                competitionController,
+                                                isMobile,
+                                                isTablet,
+                                              ),
+                                              SizedBox(
+                                                height: isMobile ? 20 : 24,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    // SizedBox(height: isMobile ? 20 : 10),
+                                    _buildInstitutionSection(
+                                      context,
+                                      participantController,
+                                      isMobile,
+                                      isTablet,
+                                    ),
+                                    SizedBox(height: isMobile ? 20 : 24),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: _buildYogaTeacherNameField(
+                                            context,
+                                            participantController,
+                                            isMobile,
+                                            isTablet,
+                                          ),
+                                        ),
+                                        SizedBox(width: isTablet ? 12 : 16),
+                                        Expanded(
+                                          child: _buildYogaTeacherCellField(
+                                            context,
+                                            participantController,
+                                            isMobile,
+                                            isTablet,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(width: isTablet ? 16 : 24),
+                              // Right side: Photo and Bonafide Certificate
+                              Expanded(
+                                flex: 1,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildPhotoField(
+                                      context,
+                                      participantController,
+                                      isMobile,
+                                      isTablet,
+                                    ),
+                                    SizedBox(height: isMobile ? 20 : 24),
+                                    _buildBonafideCertificateField(
+                                      context,
+                                      participantController,
+                                      isMobile,
+                                      isTablet,
+                                    ),
+                                    SizedBox(height: isMobile ? 20 : 24),
+                                    _buildEcoCertificateOptInField(
+                                      context,
+                                      participantController,
+                                      isMobile,
+                                    ),
+                                    SizedBox(height: isMobile ? 20 : 24),
+                                    _buildSpotRegistrationSection(
+                                      context,
+                                      participantController,
+                                      competitionController,
+                                      isMobile,
+                                      isTablet,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                    if (isMobile) ...[
+                      // SizedBox(height: isMobile ? 20 : 10),
+                      _buildInstitutionSection(
+                        context,
+                        participantController,
+                        isMobile,
+                        isTablet,
+                      ),
+                      SizedBox(height: isMobile ? 20 : 24),
+                      _buildYogaTeacherNameField(
+                        context,
+                        participantController,
+                        isMobile,
+                        isTablet,
+                      ),
+                      SizedBox(height: isMobile ? 20 : 24),
+                      _buildYogaTeacherCellField(
+                        context,
+                        participantController,
+                        isMobile,
+                        isTablet,
+                      ),
+                    ],
+                    SizedBox(height: isMobile ? 24 : 32),
+
+                    if (!participantController.isViewMode.value) ...[
+                      Obx(
+                        () => RegistrationPaymentSection(
+                          participantController: participantController,
+                          paymentController: participantController
+                              .registrationPaymentController,
+                          homeCompetition: _homeCompetitionForRegistration(
+                            participantController,
+                            competitionController,
+                          ),
+                          competitionController: competitionController,
+                          categoryId:
+                              participantController
+                                  .selectedCategories
+                                  .isNotEmpty
+                              ? competitionController.getCategoryIdByName(
+                                  participantController
+                                      .selectedCategories
+                                      .first,
+                                )
+                              : null,
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      SizedBox(height: isMobile ? 24 : 32),
+                    ],
+
+                    // Error Message (only show when not in list view)
+                    Obx(() {
+                      if (participantController.isListView.value) {
+                        return const SizedBox.shrink();
+                      }
+                      if (participantController.errorMessage.value.isNotEmpty) {
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.red),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  participantController.errorMessage.value,
+                                  style: TextStyle(color: Colors.red[700]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }),
+
+                    // Action Buttons (Save and Cancel)
+                    Obx(() {
+                      // Show cancel button in view mode, hide save button
+                      if (participantController.isViewMode.value) {
+                        if (!showViewCancelButton) {
+                          return const SizedBox.shrink();
+                        }
+                        return Center(
+                          child: cancelButton(
+                            onPressed: () {
+                              participantController.errorMessage.value = '';
+                              if (onViewBack != null) {
+                                onViewBack!();
+                                return;
+                              }
+                              participantController.resetForm();
+                              participantController.toggleViewMode(true);
+                            },
+                            width: isMobile ? null : 200,
+                            isFullWidth: isMobile,
+                          ),
+                        );
+                      }
+
+                      // Hide buttons if not in edit mode (create mode shows buttons)
+                      if (!participantController.isEditMode) {
+                        final _ = competitionController.isOnDemandOrg.value;
+                        final eventIdForLabel =
+                            _eventIdForRegistrationSave(
+                              participantController,
+                              competitionController,
+                            ) ??
+                            '';
+                        final submitLabel = participantController
+                            .registrationSubmitButtonLabel(
+                              competitionController,
+                              eventIdForLabel,
+                            );
+                        return isMobile
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  saveButton(
+                                    onPressed: () async {
+                                      // Clear any previous error messages
+                                      participantController.errorMessage.value =
+                                          '';
+
+                                      final eventId =
+                                          _eventIdForRegistrationSave(
+                                            participantController,
+                                            competitionController,
+                                          );
+                                      if (eventId == null || eventId.isEmpty) {
+                                        participantController
+                                                .errorMessage
+                                                .value =
+                                            'Please select a competition';
+                                        return;
+                                      }
+
+                                      final success =
+                                          await participantController
+                                              .submitRegistrationForm(
+                                                eventId: eventId,
+                                                competitionController:
+                                                    competitionController,
+                                              );
+
+                                      if (success && context.mounted) {
+                                        participantController
+                                                .errorMessage
+                                                .value =
+                                            '';
+                                      }
+                                    },
+                                    isLoading: participantController
+                                        .registrationSubmitBusy,
+                                    text: submitLabel,
+                                    isFullWidth: true,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  cancelButton(
+                                    onPressed: () {
+                                      // Clear error message and reset form
+                                      participantController.errorMessage.value =
+                                          '';
+                                      participantController.resetForm();
+                                    },
+                                    isFullWidth: true,
+                                  ),
+                                ],
+                              )
+                            : Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    saveButton(
+                                      onPressed: () async {
+                                        // Clear any previous error messages
+                                        participantController
+                                                .errorMessage
+                                                .value =
+                                            '';
+
+                                        final eventId =
+                                            _eventIdForRegistrationSave(
+                                              participantController,
+                                              competitionController,
+                                            );
+                                        if (eventId == null ||
+                                            eventId.isEmpty) {
+                                          participantController
+                                                  .errorMessage
+                                                  .value =
+                                              'Please select a competition';
+                                          return;
+                                        }
+
+                                        final success =
+                                            await participantController
+                                                .submitRegistrationForm(
+                                                  eventId: eventId,
+                                                  competitionController:
+                                                      competitionController,
+                                                );
+
+                                        if (success && context.mounted) {
+                                          participantController
+                                                  .errorMessage
+                                                  .value =
+                                              '';
+                                        }
+                                      },
+                                      isLoading: participantController
+                                          .registrationSubmitBusy,
+                                      text: submitLabel,
+                                      width: 280,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    cancelButton(
+                                      onPressed: () {
+                                        // Clear error message and reset form
+                                        participantController
+                                                .errorMessage
+                                                .value =
+                                            '';
+                                        participantController.resetForm();
+                                      },
+                                      width: 200,
+                                    ),
+                                  ],
+                                ),
+                              );
+                      }
+
+                      // Edit mode: show both save and cancel buttons
+                      return isMobile
+                          ? Column(
                               mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 saveButton(
                                   onPressed: () async {
@@ -672,155 +774,116 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                       // Clear error message on success
                                       participantController.errorMessage.value =
                                           '';
-                                      SnackbarHelper.showSuccess(
+                                      ScaffoldMessenger.of(
                                         context,
-                                        'Participant registered successfully',
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: const Text(
+                                            'Participant updated successfully',
+                                          ),
+                                          backgroundColor: Colors.green,
+                                        ),
                                       );
-                                      // Form is already reset in submitRegistrationForm method
+                                      // Redirect to list view after successful update
+                                      participantController.resetForm();
+                                      participantController.toggleViewMode(
+                                        true,
+                                      );
                                     }
                                   },
                                   isLoading: participantController.isLoading,
-                                  text: 'SAVE',
-                                  width: 200,
+                                  text: 'UPDATE',
+                                  isFullWidth: true,
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(height: 12),
                                 cancelButton(
                                   onPressed: () {
-                                    // Clear error message and reset form
+                                    // Clear error message, reset form and redirect to list view
                                     participantController.errorMessage.value =
                                         '';
-                                    participantController.resetForm();
-                                  },
-                                  width: 200,
-                                ),
-                              ],
-                            ),
-                          );
-                  }
-
-                  // Edit mode: show both save and cancel buttons
-                  return isMobile
-                      ? Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            saveButton(
-                              onPressed: () async {
-                                // Clear any previous error messages
-                                participantController.errorMessage.value = '';
-
-                                final eventId = _eventIdForRegistrationSave(
-                                  participantController,
-                                  competitionController,
-                                );
-                                if (eventId == null || eventId.isEmpty) {
-                                  participantController.errorMessage.value =
-                                      'Please select a competition';
-                                  return;
-                                }
-
-                                final success = await participantController
-                                    .submitRegistrationForm(
-                                      eventId: eventId,
-                                      competitionController:
-                                          competitionController,
-                                    );
-
-                                if (success && context.mounted) {
-                                  // Clear error message on success
-                                  participantController.errorMessage.value = '';
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Text(
-                                        'Participant updated successfully',
-                                      ),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                  // Redirect to list view after successful update
-                                  participantController.resetForm();
-                                  participantController.toggleViewMode(true);
-                                }
-                              },
-                              isLoading: participantController.isLoading,
-                              text: 'UPDATE',
-                              isFullWidth: true,
-                            ),
-                            const SizedBox(height: 12),
-                            cancelButton(
-                              onPressed: () {
-                                // Clear error message, reset form and redirect to list view
-                                participantController.errorMessage.value = '';
-                                participantController.resetForm();
-                                participantController.toggleViewMode(true);
-                              },
-                              isFullWidth: true,
-                            ),
-                          ],
-                        )
-                      : Center(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              saveButton(
-                                onPressed: () async {
-                                  // Clear any previous error messages
-                                  participantController.errorMessage.value = '';
-
-                                  final eventId = _eventIdForRegistrationSave(
-                                    participantController,
-                                    competitionController,
-                                  );
-                                  if (eventId == null || eventId.isEmpty) {
-                                    participantController.errorMessage.value =
-                                        'Please select a competition';
-                                    return;
-                                  }
-
-                                  final success = await participantController
-                                      .submitRegistrationForm(
-                                        eventId: eventId,
-                                        competitionController:
-                                            competitionController,
-                                      );
-
-                                  if (success && context.mounted) {
-                                    // Clear error message on success
-                                    participantController.errorMessage.value =
-                                        '';
-                                    SnackbarHelper.showSuccess(
-                                      context,
-                                      'Participant updated successfully',
-                                    );
-                                    // Redirect to list view after successful update
                                     participantController.resetForm();
                                     participantController.toggleViewMode(true);
-                                  }
-                                },
-                                isLoading: participantController.isLoading,
-                                text: 'UPDATE',
-                                width: 200,
+                                  },
+                                  isFullWidth: true,
+                                ),
+                              ],
+                            )
+                          : Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  saveButton(
+                                    onPressed: () async {
+                                      // Clear any previous error messages
+                                      participantController.errorMessage.value =
+                                          '';
+
+                                      final eventId =
+                                          _eventIdForRegistrationSave(
+                                            participantController,
+                                            competitionController,
+                                          );
+                                      if (eventId == null || eventId.isEmpty) {
+                                        participantController
+                                                .errorMessage
+                                                .value =
+                                            'Please select a competition';
+                                        return;
+                                      }
+
+                                      final success =
+                                          await participantController
+                                              .submitRegistrationForm(
+                                                eventId: eventId,
+                                                competitionController:
+                                                    competitionController,
+                                              );
+
+                                      if (success && context.mounted) {
+                                        // Clear error message on success
+                                        participantController
+                                                .errorMessage
+                                                .value =
+                                            '';
+                                        SnackbarHelper.showSuccess(
+                                          context,
+                                          'Participant updated successfully',
+                                        );
+                                        // Redirect to list view after successful update
+                                        participantController.resetForm();
+                                        participantController.toggleViewMode(
+                                          true,
+                                        );
+                                      }
+                                    },
+                                    isLoading: participantController.isLoading,
+                                    text: 'UPDATE',
+                                    width: 200,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  cancelButton(
+                                    onPressed: () {
+                                      // Clear error message, reset form and redirect to list view
+                                      participantController.errorMessage.value =
+                                          '';
+                                      participantController.resetForm();
+                                      participantController.toggleViewMode(
+                                        true,
+                                      );
+                                    },
+                                    width: 200,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 16),
-                              cancelButton(
-                                onPressed: () {
-                                  // Clear error message, reset form and redirect to list view
-                                  participantController.errorMessage.value = '';
-                                  participantController.resetForm();
-                                  participantController.toggleViewMode(true);
-                                },
-                                width: 200,
-                              ),
-                            ],
-                          ),
-                        );
-                }),
-              ],
+                            );
+                    }),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-      ),
-    ),
       ),
     );
   }
@@ -877,6 +940,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 ? (value) {
                     if (value != null) {
                       controller.selectedEventId.value = value;
+                      competitionController
+                          .ensureCompetitionLoadedForRegistration(value);
                       // Clear category, stage and group when competition changes
                       controller.selectedCategories.clear();
                       controller.selectedStage.value = '';
@@ -1083,10 +1148,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             child: Obx(
               () => PhotoSourceButtons(
                 enabled: !controller.isViewMode.value,
-                onPick: (source, ctx) => controller.pickParticipantPhoto(
-                  source,
-                  context: ctx,
-                ),
+                onPick: (source, ctx) =>
+                    controller.pickParticipantPhoto(source, context: ctx),
               ),
             ),
           ),

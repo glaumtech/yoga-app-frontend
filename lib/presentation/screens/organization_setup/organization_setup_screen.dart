@@ -472,13 +472,30 @@ class OrganizationSetupScreen extends StatelessWidget {
                 onRetryPackages: c.reloadSubscriptionPackages,
                 enabled: !c.isLoading.value && !c.isProcessingPayment.value,
                 excludeAddons: true,
-                modeSectionTitle: 'Subscription mode',
+                modeSectionTitle: 'Plan type',
                 packageSectionTitle: 'Package',
                 onModeSelected: c.selectSubscriptionMode,
                 onPackageSelected: (pkg) => c.applySelectedPackage(pkg.id),
               ),
             ),
             const SizedBox(height: 14),
+            if (!c.requiresSubscriptionPayment) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.shade100),
+                ),
+                child: const Text(
+                  'On Demand has no upfront subscription payment. '
+                  'Select a package, then continue to create admin users. '
+                  'Competition fees are collected when you create each competition.',
+                ),
+              ),
+            ],
+            if (c.requiresSubscriptionPayment) ...[
             sectionTitle('Complete Subscription Payment'),
             if (foundation != null)
               Container(
@@ -593,6 +610,41 @@ class OrganizationSetupScreen extends StatelessWidget {
                 ),
               ),
             ),
+            ],
+            if (!c.requiresSubscriptionPayment) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.center,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420, minWidth: 240),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: c.isProcessingPayment.value
+                          ? null
+                          : (c.subscriptionPaymentCompleted.value
+                                ? c.continueToAdminStep
+                                : c.completeSubscriptionPayment),
+                      icon: Icon(
+                        c.subscriptionPaymentCompleted.value
+                            ? Icons.arrow_forward
+                            : Icons.arrow_forward_outlined,
+                      ),
+                      label: Text(
+                        c.subscriptionPaymentCompleted.value
+                            ? 'Continue to Admin Users'
+                            : 'Continue to Admin Users',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         );
       });
@@ -1444,7 +1496,7 @@ class OrganizationSetupScreen extends StatelessWidget {
                                   c.currentStep.value == 0
                                       ? 'Enter organization details.'
                                       : c.currentStep.value == 1
-                                      ? 'Select package and complete payment before creating admin users.'
+                                      ? 'Select your On Demand package to continue setup.'
                                       : 'Create the primary admin account for this organization.',
                                   style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(color: Colors.grey[600]),

@@ -20,6 +20,28 @@ class SessionExpiryHandler {
         requestUrl == EndPoints.logOut;
   }
 
+  /// Payment gateway errors (e.g. invalid Razorpay keys) must not sign the user out.
+  static bool _isPaymentRequest(String requestUrl) {
+    return requestUrl.contains('/api/create-order') ||
+        requestUrl.contains('/api/verify-payment') ||
+        requestUrl.contains('/api/mark-payment-failed') ||
+        requestUrl.contains('/payment/') ||
+        (requestUrl.contains('/participant-registration/') &&
+            requestUrl.contains('/payment/'));
+  }
+
+  static bool _isPaymentGatewayError({
+    String? message,
+    Map<String, dynamic>? body,
+  }) {
+    final combinedMessage = [
+      message,
+      body?['message']?.toString(),
+    ].whereType<String>().join(' ').toLowerCase();
+
+    return combinedMessage.contains('razorpay');
+  }
+
   static bool _hasStoredSession() {
     final token = StorageService.getString(AppConstants.tokenKey);
     return token != null && token.isNotEmpty;
@@ -62,7 +84,14 @@ class SessionExpiryHandler {
     String? message,
     Map<String, dynamic>? body,
   }) {
-    if (_isHandling || _isAuthRequest(requestUrl) || !_hasStoredSession()) {
+    if (_isHandling ||
+        _isAuthRequest(requestUrl) ||
+        _isPaymentRequest(requestUrl) ||
+        !_hasStoredSession()) {
+      return;
+    }
+
+    if (_isPaymentGatewayError(message: message, body: body)) {
       return;
     }
 

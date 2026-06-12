@@ -163,7 +163,7 @@ class SubscriptionPackageModel {
     String paymentModel,
   ) {
     if (paymentModel == 'PAY_PER_PARTICIPANT') {
-      return '$name — ₹${price.toStringAsFixed(0)} (maintenance / competition)';
+      return '$name — ₹${price.toStringAsFixed(0)} (per competition)';
     }
     return '$name — ₹${price.toStringAsFixed(0)} ($credits credits)';
   }
@@ -174,7 +174,7 @@ class SubscriptionPackageModel {
     String paymentModel,
   ) {
     if (paymentModel == 'PAY_PER_PARTICIPANT') {
-      return 'Maintenance fee: ₹${price.toStringAsFixed(0)} per competition (from organization)';
+      return 'On Demand fee: ₹${price.toStringAsFixed(0)} per competition';
     }
     return '$credits credits';
   }

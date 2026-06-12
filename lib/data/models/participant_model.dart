@@ -11,6 +11,7 @@ class ParticipantModel {
   final String yogaMasterName;
   final String yogaMasterContact;
   final String? photoUrl;
+
   /// Server storage path for bonafied certificate (e.g. certificates/abc.pdf).
   final String? bonafiedCertificate;
   final String? participantCode; // Participant code like 'MEM0006'
@@ -34,6 +35,16 @@ class ParticipantModel {
   final int? groupId;
   final String? paymentMode;
   final String? paymentProofPath;
+  final String? paymentStatus;
+  final double? amount;
+  final String? razorpayOrderId;
+  final String? razorpayPaymentId;
+  final String? competitionName;
+  final String? competitionAddress;
+  final String? competitionEventDateDisplay;
+  final String? competitionEventTimeDisplay;
+  final String? venueMapsUrl;
+  final String? venueMapPreviewUrl;
 
   ParticipantModel({
     this.id,
@@ -68,6 +79,16 @@ class ParticipantModel {
     this.groupId,
     this.paymentMode,
     this.paymentProofPath,
+    this.paymentStatus,
+    this.amount,
+    this.razorpayOrderId,
+    this.razorpayPaymentId,
+    this.competitionName,
+    this.competitionAddress,
+    this.competitionEventDateDisplay,
+    this.competitionEventTimeDisplay,
+    this.venueMapsUrl,
+    this.venueMapPreviewUrl,
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory ParticipantModel.fromJson(Map<String, dynamic> json) {
@@ -99,19 +120,23 @@ class ParticipantModel {
       standard: (json['standard'] ?? json['standard'])?.toString() ?? '',
       schoolName: (json['schoolName'] ?? json['school_name'])?.toString() ?? '',
       address: (json['address'] ?? json['address'])?.toString() ?? '',
-      yogaMasterName:
-          (json['yogaMasterName'] ?? json['yoga_master_name'])?.toString() ??
+      yogaMasterName: (json['yogaMasterName'] ??
+              json['yoga_master_name'] ??
+              json['yogaTeacherName'])
+          ?.toString() ??
           '',
-      yogaMasterContact:
-          (json['yogaMasterContact'] ?? json['yoga_master_contact'])
-              ?.toString() ??
+      yogaMasterContact: (json['yogaMasterContact'] ??
+              json['yoga_master_contact'] ??
+              json['yogaTeacherCell'])
+          ?.toString() ??
           '',
       photoUrl: (json['photoUrl'] ?? json['photo_url'] ?? json['photo'])
           ?.toString(),
-      bonafiedCertificate: (json['bonafiedCertificate'] ??
-              json['bonafied_certificate'] ??
-              json['bonafideCertificate'])
-          ?.toString(),
+      bonafiedCertificate:
+          (json['bonafiedCertificate'] ??
+                  json['bonafied_certificate'] ??
+                  json['bonafideCertificate'])
+              ?.toString(),
       participantCode: (json['participantCode'] ?? json['participant_code'])
           ?.toString(),
       registrationNo:
@@ -166,18 +191,63 @@ class ParticipantModel {
             )
           : null,
       eventId: json['eventId']?.toString(),
-      isSpotRegistration: _parseBool(json['isSpotRegistration']) ??
+      isSpotRegistration:
+          _parseBool(json['isSpotRegistration']) ??
           _parseBool(json['is_spot_registration']) ??
           _parseBool(json['spotRegistration']) ??
           _parseBool(json['spot_registration']) ??
           false,
-      optForECertificate: _parseBool(json['optForECertificate']) ??
+      optForECertificate:
+          _parseBool(json['optForECertificate']) ??
           _parseBool(json['opt_for_e_certificate']) ??
           false,
       stageId: _parseInt(json['stageId'] ?? json['stage_id']),
       categoryId: _parseInt(json['categoryId'] ?? json['category_id']),
       groupId: _parseInt(json['groupId'] ?? json['group_id']),
+      paymentMode: json['paymentMode']?.toString(),
+      paymentProofPath: json['paymentProofPath']?.toString(),
+      paymentStatus:
+          (json['paymentStatus'] ?? json['payment_status'])?.toString(),
+      amount: _parseAmount(json['amount']),
+      razorpayOrderId: (json['razorpayOrderId'] ?? json['razorpay_order_id'])
+          ?.toString(),
+      razorpayPaymentId:
+          (json['razorpayPaymentId'] ?? json['razorpay_payment_id'])
+              ?.toString(),
+      competitionName: json['competitionName']?.toString(),
+      competitionAddress: json['competitionAddress']?.toString(),
+      competitionEventDateDisplay:
+          json['competitionEventDateDisplay']?.toString(),
+      competitionEventTimeDisplay:
+          json['competitionEventTimeDisplay']?.toString(),
+      venueMapsUrl: json['venueMapsUrl']?.toString(),
+      venueMapPreviewUrl: json['venueMapPreviewUrl']?.toString(),
     );
+  }
+
+  /// Maps `ParticipantRegistrationDto` from POST /participant-registration.
+  factory ParticipantModel.fromRegistrationResponse(Map<String, dynamic> json) {
+    final normalized = Map<String, dynamic>.from(json);
+    normalized.putIfAbsent('gender', () => normalized['sex']);
+    normalized.putIfAbsent('category', () => normalized['categoryName']);
+    normalized.putIfAbsent('standard', () => normalized['groupName']);
+    normalized.putIfAbsent('schoolName', () => normalized['institutionName']);
+    normalized.putIfAbsent(
+      'yogaMasterName',
+      () => normalized['yogaTeacherName'],
+    );
+    normalized.putIfAbsent(
+      'yogaMasterContact',
+      () => normalized['yogaTeacherCell'],
+    );
+    return ParticipantModel.fromJson(normalized);
+  }
+
+  static double? _parseAmount(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return double.tryParse(value.toString());
   }
 
   static int? _parseInt(dynamic value) {

@@ -9,9 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import '../../data/repositories/participant_repository.dart';
-import '../../data/repositories/payment_repository.dart';
 import '../../data/repositories/school_repository.dart';
-import '../../services/razorpay_checkout_service.dart';
+import 'payment_controller.dart';
 import '../../data/repositories/location_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/api_response.dart';
@@ -27,6 +26,7 @@ import '../../core/utils/state_defaults.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/photo_capture_service.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/subscription_catalog_filter.dart';
 import '../models/bulk_registration_row.dart';
 import 'competition_controller.dart';
 
@@ -35,10 +35,17 @@ import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class ParticipantController extends GetxController {
   final ParticipantRepository _participantRepository = ParticipantRepository();
-  final PaymentRepository _paymentRepository = PaymentRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
-  final RazorpayCheckoutService _razorpayCheckout = RazorpayCheckoutService();
   final LocationRepository _locationRepository = LocationRepository();
+  PaymentController get registrationPaymentController {
+    if (!Get.isRegistered<PaymentController>(
+      tag: 'participant_registration_payment',
+    )) {
+      Get.put(PaymentController(), tag: 'participant_registration_payment');
+    }
+    return Get.find<PaymentController>(tag: 'participant_registration_payment');
+  }
+
   /// Replaced on [resetForm] so field validators do not linger after save/cancel.
   GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
@@ -113,6 +120,7 @@ class ParticipantController extends GetxController {
   final RxBool isSpotRegistration = false.obs;
   final RxString selectedPaymentMode = 'GPAY'.obs;
   final Rx<XFile?> paymentProofImage = Rx<XFile?>(null);
+
   /// Server path from existing registration (edit mode — no re-upload required).
   final RxString existingPaymentProofPath = ''.obs;
   final RxBool optForECertificate = false.obs;
@@ -761,6 +769,12 @@ class ParticipantController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    registrationPaymentController;
+    ever(isLoading, (_) => _syncRegistrationSubmitBusy());
+    ever(
+      registrationPaymentController.isPaymentInProgress,
+      (_) => _syncRegistrationSubmitBusy(),
+    );
     // Participants are now loaded by event ID only
     // Initialize bulk registration with one empty row
     resetBulkRegistrationForm();
@@ -1885,6 +1899,7 @@ class ParticipantController extends GetxController {
 
     // Clear other state
     errorMessage.value = '';
+    registrationPaymentController.resetPaymentState();
     participantToEdit.value = null;
     isLoadingParticipant.value = false;
     isViewMode.value = false;
@@ -2735,6 +2750,58 @@ class ParticipantController extends GetxController {
     //   nextRegistrationNo = await _generateNextRegistrationNumber(...);
     // }
 
+    final paymentModel = _resolvePaymentModel(compController, eventId);
+    final payBeforeSave = _shouldCollectRegistrationPaymentBeforeSave(
+      compController,
+      eventId,
+      categoryId,
+    );
+    if (_isManualPaymentModel(paymentModel) &&
+        _requiresGpayProofUpload() &&
+        !payBeforeSave) {
+      errorMessage.value = 'Please upload payment proof';
+      return false;
+    }
+
+    Map<String, String>? prepaidCheckout;
+    if (payBeforeSave) {
+      var amountPaise = _resolveRegistrationFeePaise(
+        compController,
+        eventId,
+        categoryId,
+      );
+      if (amountPaise < 100) {
+        await compController.ensureCompetitionLoadedForRegistration(eventId);
+        amountPaise = _resolveRegistrationFeePaise(
+          compController,
+          eventId,
+          categoryId,
+        );
+      }
+      if (amountPaise < 100) {
+        errorMessage.value = 'Invalid fee for selected category';
+        return false;
+      }
+
+      isLoading.value = true;
+      errorMessage.value = '';
+      isLoading.value = false;
+
+      prepaidCheckout = await registrationPaymentController
+          .collectRegistrationPayment(
+            competitionId: competitionId,
+            categoryId: categoryId,
+            description: 'Competition registration fee',
+          );
+      if (prepaidCheckout == null) {
+        errorMessage.value =
+            registrationPaymentController.paymentError.value.isNotEmpty
+            ? registrationPaymentController.paymentError.value
+            : 'Payment failed. Registration was not saved.';
+        return false;
+      }
+    }
+
     // Prepare registration data
     final registrationData = <String, dynamic>{
       'competitionId': competitionId,
@@ -2748,16 +2815,22 @@ class ParticipantController extends GetxController {
       'sex': gender.value,
       'groupId': groupId,
       'yogaTeacherCell': yogaMasterContactController.text.trim(),
-      'paymentMode': _resolvePaymentModeForSubmit(compController, eventId),
+      'paymentMode': payBeforeSave || prepaidCheckout != null
+          ? 'ONLINE'
+          : _resolvePaymentModeForSubmit(compController, eventId),
       'isSpotRegistration': isSpotRegistration.value,
       'optForECertificate': optForECertificate.value,
       // Registration number will be auto-generated by backend based on competition, category, gender, and stage
     };
-
-    final paymentModel = _resolvePaymentModel(compController, eventId);
-    if (_isManualPaymentModel(paymentModel) && _requiresGpayProofUpload()) {
-      errorMessage.value = 'Please upload payment proof';
-      return false;
+    if (prepaidCheckout != null) {
+      final orderId = prepaidCheckout['razorpay_order_id'];
+      final paymentId = prepaidCheckout['razorpay_payment_id'];
+      if (orderId != null && orderId.isNotEmpty) {
+        registrationData['razorpayOrderId'] = orderId;
+      }
+      if (paymentId != null && paymentId.isNotEmpty) {
+        registrationData['razorpayPaymentId'] = paymentId;
+      }
     }
 
     try {
@@ -2831,43 +2904,53 @@ class ParticipantController extends GetxController {
           return false;
         }
 
-        isLoading.value = false;
-
-        if (response.success) {
-          if (paymentModel == 'PAY_PER_PARTICIPANT') {
-            final regId = _extractRegistrationId(response.data);
-            if (regId != null) {
-              final paid = await _completeOnlineRegistrationPayment(
-                competitionId: competitionId,
-                categoryId: categoryId,
-                registrationId: regId,
-              );
-              if (!paid) {
-                errorMessage.value =
-                    'Registration saved but payment failed. Please contact support.';
-                return false;
-              }
-            }
-          }
-
-          // Reload participants list if we have an event ID selected
-          if (selectedEventId.value.isNotEmpty) {
-            await loadParticipantsByEventId(
-              selectedEventId.value,
-              resetPage: true,
-            );
-          }
-
-          registrationSaved.value = true;
-
-          // Reset form immediately after successful save (clears validators)
-          resetForm();
-          return true;
-        } else {
+        if (!response.success) {
+          isLoading.value = false;
           errorMessage.value =
               response.message ?? 'Failed to register participant';
           return false;
         }
+
+        if (prepaidCheckout != null) {
+          final regId = _extractRegistrationId(response.data);
+          if (regId != null) {
+            try {
+              await registrationPaymentController
+                  .linkCollectedRegistrationPayment(
+                    registrationId: regId,
+                    checkout: prepaidCheckout,
+                  );
+            } catch (e) {
+              isLoading.value = false;
+              errorMessage.value =
+                  'Registration saved but payment link failed: ${e.toString()}';
+              return false;
+            }
+          }
+        }
+
+        isLoading.value = false;
+
+        _captureLastRegisteredFromCreateResponse(response.data);
+
+        // Reload participants list if we have an event ID selected
+        if (selectedEventId.value.isNotEmpty) {
+          await loadParticipantsByEventId(
+            selectedEventId.value,
+            resetPage: true,
+          );
+        }
+
+        if (lastRegisteredParticipant.value == null &&
+            participants.isNotEmpty) {
+          lastRegisteredParticipant.value = participants.first;
+        }
+
+        registrationSaved.value = true;
+
+        // Reset form immediately after successful save (clears validators)
+        resetForm();
+        return true;
       }
     } catch (e) {
       isLoading.value = false;
@@ -3079,14 +3162,79 @@ class ParticipantController extends GetxController {
     }
   }
 
-  String _resolvePaymentModel(CompetitionController compController, String eventId) {
+  String _resolvePaymentModel(
+    CompetitionController compController,
+    String eventId,
+  ) {
+    if (compController.isOnDemandOrg.value ||
+        compController.requiresPrepaidCompetitionPayment) {
+      return SubscriptionCatalogFilter.onDemandModeKey;
+    }
     final home = compController.homeCompetitions.firstWhereOrNull(
       (c) => c.id?.toString() == eventId,
     );
     if (home?.paymentModel != null && home!.paymentModel!.isNotEmpty) {
       return home.paymentModel!;
     }
+    final orgModel = compController.organizationPaymentModel.value
+        .toUpperCase();
+    if (orgModel == SubscriptionCatalogFilter.onDemandModeKey) {
+      return SubscriptionCatalogFilter.onDemandModeKey;
+    }
+    if (orgModel == 'USER_PACK_SUBSCRIPTION') {
+      return 'USER_PACK_SUBSCRIPTION';
+    }
     return 'ORG_SUBSCRIPTION';
+  }
+
+  bool requiresOnlineRegistrationPayment(
+    CompetitionController compController,
+    String eventId,
+  ) {
+    return _resolvePaymentModel(compController, eventId).toUpperCase() ==
+        SubscriptionCatalogFilter.onDemandModeKey;
+  }
+
+  String registrationSubmitButtonLabel(
+    CompetitionController compController,
+    String eventId,
+  ) {
+    if (isEditMode) {
+      return 'UPDATE';
+    }
+    return 'Pay & Register Now';
+  }
+
+  int _resolveRegistrationFeePaise(
+    CompetitionController compController,
+    String eventId,
+    int categoryId,
+  ) {
+    final fee = compController.resolveCategoryFeeRupees(eventId, categoryId);
+    return (fee * 100).round();
+  }
+
+  bool _shouldCollectRegistrationPaymentBeforeSave(
+    CompetitionController compController,
+    String eventId,
+    int categoryId,
+  ) {
+    if (isEditMode) {
+      return false;
+    }
+    if (!requiresOnlineRegistrationPayment(compController, eventId)) {
+      return false;
+    }
+    return _resolveRegistrationFeePaise(compController, eventId, categoryId) >=
+        100;
+  }
+
+  final RxBool registrationSubmitBusy = false.obs;
+
+  void _syncRegistrationSubmitBusy() {
+    registrationSubmitBusy.value =
+        isLoading.value ||
+        registrationPaymentController.isPaymentInProgress.value;
   }
 
   bool _isManualPaymentModel(String model) =>
@@ -3112,46 +3260,12 @@ class ParticipantController extends GetxController {
     return null;
   }
 
-  Future<bool> _completeOnlineRegistrationPayment({
-    required int competitionId,
-    required int categoryId,
-    required int registrationId,
-  }) async {
-    try {
-      final orderResp = await _paymentRepository.createRegistrationOrder(
-        competitionId: competitionId,
-        categoryId: categoryId,
-      );
-      if (!orderResp.success || orderResp.data == null) {
-        return false;
-      }
-      final order = orderResp.data!;
-      final orderId = order['orderId']?.toString() ?? '';
-      final key = order['key']?.toString() ?? '';
-      final amount = order['amount'] is int
-          ? order['amount'] as int
-          : int.tryParse(order['amount']?.toString() ?? '') ?? 0;
-      final mockMode = order['mockMode'] == true;
-
-      final paymentResult = await _razorpayCheckout.openCheckout(
-        keyId: key,
-        orderId: orderId,
-        amountPaise: amount,
-        description: 'Competition registration fee',
-        mockMode: mockMode,
-      );
-
-      final verifyResp = await _paymentRepository.verifyRegistrationPayment(
-        registrationId: registrationId,
-        orderId: paymentResult['razorpay_order_id'] ?? orderId,
-        paymentId: paymentResult['razorpay_payment_id'] ?? '',
-        signature: paymentResult['razorpay_signature'] ?? '',
-      );
-      return verifyResp.success;
-    } catch (e) {
-      return false;
-    } finally {
-      _razorpayCheckout.dispose();
+  void _captureLastRegisteredFromCreateResponse(Map<String, dynamic>? data) {
+    if (data == null) return;
+    final reg = data['registration'];
+    if (reg is Map<String, dynamic>) {
+      lastRegisteredParticipant.value =
+          ParticipantModel.fromRegistrationResponse(reg);
     }
   }
 }

@@ -78,6 +78,9 @@ void _copyBannerRegistrationLink(
   );
 }
 
+/// Toggle featured competition hero (Register Now / QR) on the home page.
+const bool _kShowFeaturedCompetitionBanner = false;
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -88,11 +91,6 @@ class HomeScreen extends StatelessWidget {
       final userController = Get.put(UserManagementController());
       final competitionController = Get.put(CompetitionController());
 
-      // Load competitions for home (public API)
-      if (competitionController.homeCompetitions.isEmpty &&
-          !competitionController.isLoadingHomeCompetitions.value) {
-        competitionController.loadCompetitionsForHome();
-      }
       return Scaffold(
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(70),
@@ -383,6 +381,12 @@ class HomeScreen extends StatelessWidget {
         ),
         body: SafeArea(
           child: Obx(() {
+            // Reload when login session / branch scope changes.
+            userController.currentUser.value;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              competitionController.ensureHomeCompetitionsLoaded();
+            });
+
             // Show loading indicator while competitions are loading
             if (competitionController.isLoadingHomeCompetitions.value &&
                 competitionController.homeCompetitions.isEmpty) {
@@ -394,7 +398,8 @@ class HomeScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildBannerSliderSection(context),
-                  _buildBannerSection(context, competitionController),
+                  if (_kShowFeaturedCompetitionBanner)
+                    _buildBannerSection(context, competitionController),
                   _buildCurrentEventsSection(
                     context,
                     competitionController,
@@ -1050,7 +1055,7 @@ class HomeScreen extends StatelessWidget {
     return _buildHomeCompetitionsListSection(
       context,
       competitions: pastCompetitions,
-      title: 'Past Events',
+      title: 'Past Competitions',
       subtitle: 'Previous competitions',
       backgroundColor: Colors.grey.shade50,
       itemKeyPrefix: 'past_comp',

@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
-/// Opens Razorpay checkout on mobile. Web falls back to mock signature for dev.
+import 'razorpay_checkout_web_stub.dart'
+    if (dart.library.html) 'razorpay_checkout_web.dart' as web_checkout;
+
+/// Opens Razorpay checkout on web (Checkout.js) and mobile (razorpay_flutter).
 class RazorpayCheckoutService {
   Razorpay? _razorpay;
   Completer<Map<String, String>>? _completer;
@@ -17,12 +20,22 @@ class RazorpayCheckoutService {
     String? email,
     bool mockMode = false,
   }) async {
-    if (mockMode || kIsWeb) {
+    if (mockMode) {
       return {
         'razorpay_order_id': orderId,
-        'razorpay_payment_id': 'pay_mock_${DateTime.now().millisecondsSinceEpoch}',
+        'razorpay_payment_id':
+            'pay_mock_${DateTime.now().millisecondsSinceEpoch}',
         'razorpay_signature': 'mock_signature',
       };
+    }
+
+    if (kIsWeb) {
+      return web_checkout.openRazorpayWebCheckout(
+        keyId: keyId,
+        orderId: orderId,
+        amountPaise: amountPaise,
+        description: description,
+      );
     }
 
     _completer = Completer<Map<String, String>>();

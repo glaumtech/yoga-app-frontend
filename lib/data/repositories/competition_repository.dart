@@ -18,11 +18,18 @@ class CompetitionsListResponse {
   CompetitionsListResponse({required this.competitions, this.pagination});
 }
 
+class CreateCompetitionResult {
+  final CompetitionModel competition;
+
+  const CreateCompetitionResult({required this.competition});
+}
+
 class CompetitionRepository {
   final APIService _apiService = APIService();
 
-  Future<ApiResponse<CompetitionModel>> createCompetition({
+  Future<ApiResponse<CreateCompetitionResult>> createCompetition({
     required CompetitionModel competition,
+    String? maintenancePaymentOrderId,
     XFile? brochureFile,
     File? brochureFileLocal,
     Uint8List? brochureBytes,
@@ -31,6 +38,11 @@ class CompetitionRepository {
     try {
       // Prepare competition data as JSON string
       final competitionJson = competition.toJson();
+      if (maintenancePaymentOrderId != null &&
+          maintenancePaymentOrderId.trim().isNotEmpty) {
+        competitionJson['maintenancePaymentOrderId'] =
+            maintenancePaymentOrderId.trim();
+      }
       final dataJsonString = jsonEncode(competitionJson);
 
       // Prepare brochure file (if provided)
@@ -89,11 +101,19 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        final createdCompetition = parseCompetitionFromDetailResponse(
-          response.data,
-        );
+        final raw = response.data;
+        if (raw == null) {
+          return ApiResponse(
+            success: false,
+            message: response.message ?? 'Failed to create competition',
+          );
+        }
+        final createdCompetition = parseCompetitionFromDetailResponse(raw);
         if (createdCompetition != null) {
-          return ApiResponse(success: true, data: createdCompetition);
+          return ApiResponse(
+            success: true,
+            data: CreateCompetitionResult(competition: createdCompetition),
+          );
         }
       }
 

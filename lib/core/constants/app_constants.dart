@@ -134,6 +134,10 @@ class EndPoints {
       '/payment/competition/$competitionId/maintenance-order';
   static String paymentCompetitionMaintenanceVerify(int competitionId) =>
       '/payment/competition/$competitionId/maintenance-verify';
+  static String apiCreateOrder = '/api/create-order';
+  static String apiVerifyPayment = '/api/verify-payment';
+  static String apiMarkPaymentFailed = '/api/mark-payment-failed';
+  static String paymentOnDemandContext = '/payment/on-demand/context';
   static String participantRegistrationPaymentVerify(String id) =>
       '/participant-registration/$id/payment/verify';
   static String participantRegistrationPaymentReject(String id) =>

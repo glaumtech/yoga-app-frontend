@@ -91,8 +91,7 @@ class UserManagementScreen extends StatelessWidget {
                       if (index == 1) {
                         userController.resetVolunteerEntrySession();
                         if (userController.isEditMode ||
-                            userController.selectedType.value ==
-                                'VOLUNTEERS') {
+                            userController.selectedType.value == 'VOLUNTEERS') {
                           userController.resetForm();
                         }
                         userController.toggleViewMode(true);
@@ -261,8 +260,9 @@ class UserManagementScreen extends StatelessWidget {
                             SizedBox(
                               width: double.infinity,
                               child: PrimaryButton(
-                                text:
-                                    controller.isEditMode ? 'UPDATE' : 'SUBMIT',
+                                text: controller.isEditMode
+                                    ? 'UPDATE'
+                                    : 'SUBMIT',
                                 icon: Icons.save,
                                 onPressed: () async {
                                   final isVolunteers =
@@ -307,8 +307,7 @@ class UserManagementScreen extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             PrimaryButton(
-                              text:
-                                  controller.isEditMode ? 'UPDATE' : 'SUBMIT',
+                              text: controller.isEditMode ? 'UPDATE' : 'SUBMIT',
                               icon: Icons.save,
                               onPressed: () async {
                                 final isVolunteers =
@@ -316,7 +315,8 @@ class UserManagementScreen extends StatelessWidget {
                                     'VOLUNTEERS';
                                 final success = isVolunteers
                                     ? (controller.isEditMode
-                                          ? await controller.updateVolunteerUser()
+                                          ? await controller
+                                                .updateVolunteerUser()
                                           : await controller.createVolunteers())
                                     : await controller.createUser();
 
@@ -1475,8 +1475,9 @@ class UserManagementScreen extends StatelessWidget {
   ) {
     return Obx(() {
       final message = controller.errorMessage.value;
-      final competitionSelected =
-          controller.selectedEventId.value.trim().isNotEmpty;
+      final competitionSelected = controller.selectedEventId.value
+          .trim()
+          .isNotEmpty;
       if (message.isEmpty) {
         return const SizedBox.shrink();
       }
@@ -1758,8 +1759,7 @@ class UserManagementScreen extends StatelessWidget {
   ) {
     if (isMobile) {
       return Obx(() {
-        final readOnly =
-            row.isRegistered.value && !controller.isEditMode;
+        final readOnly = row.isRegistered.value && !controller.isEditMode;
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           color: readOnly ? AppTheme.primaryColor.withOpacity(0.06) : null,
@@ -1836,8 +1836,7 @@ class UserManagementScreen extends StatelessWidget {
     }
 
     return Obx(() {
-      final readOnly =
-          row.isRegistered.value && !controller.isEditMode;
+      final readOnly = row.isRegistered.value && !controller.isEditMode;
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -2524,11 +2523,8 @@ Widget _buildVolunteerCard(
           Row(
             children: [
               PhotoSourceButtons(
-                onPick: (source, ctx) => controller.pickPhotoForVolunteer(
-                  row,
-                  source,
-                  context: ctx,
-                ),
+                onPick: (source, ctx) =>
+                    controller.pickPhotoForVolunteer(row, source, context: ctx),
               ),
               Obx(() {
                 if (row.photoUrl.value.isNotEmpty) {

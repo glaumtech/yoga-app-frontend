@@ -6,8 +6,9 @@ import '../../../core/utils/competition_brochure_banner_url.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/competition_controller.dart';
 import '../../../data/models/competition_model.dart';
-import '../../../data/models/participant_model.dart';
 import '../../controllers/participant_controller.dart';
+import '../../widgets/competition_venue_highlight_card.dart';
+import '../../widgets/registration_success_panel.dart';
 import 'participant_registration_form_screen.dart';
 
 /// Public registration screen for unknown/unauthenticated users.
@@ -45,6 +46,7 @@ class _UserCompetitionRegistrationScreenState
           !competitionController.isLoadingHomeCompetitions.value) {
         await competitionController.loadCompetitionsForHome();
       }
+      await competitionController.loadOnDemandContext();
       await competitionController.ensureCompetitionLoadedForRegistration(
         widget.competitionId,
       );
@@ -125,10 +127,14 @@ class _UserCompetitionRegistrationScreenState
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             child: Obx(() {
               if (participantController.registrationSaved.value) {
-                return _buildRegistrationSuccessPanel(
-                  context,
-                  participantController,
-                  participantController.lastRegisteredParticipant.value,
+                return RegistrationSuccessPanel(
+                  participantController: participantController,
+                  participant:
+                      participantController.lastRegisteredParticipant.value,
+                  onRegisterAnother: () {
+                    participantController.clearRegistrationConfirmation();
+                    participantController.resetForm();
+                  },
                 );
               }
               return ParticipantRegistrationFormScreen(
@@ -151,11 +157,11 @@ class _UserCompetitionRegistrationScreenState
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Left: competition details (full width of left side, white box)
-        Expanded(
-          flex: 2,
+        // Left: competition details (narrow column)
+        SizedBox(
+          width: 400,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 4, 16),
             child: Obx(
               () => _buildCompetitionDetailsContent(
                 context,
@@ -167,18 +173,18 @@ class _UserCompetitionRegistrationScreenState
         ),
         // Right: registration form
         Expanded(
-          flex: 3,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: double.infinity),
-                child: Obx(() {
+            padding: const EdgeInsets.fromLTRB(8, 16, 16, 16),
+            child: Obx(() {
                   if (participantController.registrationSaved.value) {
-                    return _buildRegistrationSuccessPanel(
-                      context,
-                      participantController,
-                      participantController.lastRegisteredParticipant.value,
+                    return RegistrationSuccessPanel(
+                      participantController: participantController,
+                      participant:
+                          participantController.lastRegisteredParticipant.value,
+                      onRegisterAnother: () {
+                        participantController.clearRegistrationConfirmation();
+                        participantController.resetForm();
+                      },
                     );
                   }
                   return ParticipantRegistrationFormScreen(
@@ -186,116 +192,9 @@ class _UserCompetitionRegistrationScreenState
                     showCompetitionDropdown: false,
                   );
                 }),
-              ),
-            ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildRegistrationSuccessPanel(
-    BuildContext context,
-    ParticipantController participantController,
-    ParticipantModel? participant,
-  ) {
-    final hasParticipant = participant != null;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  'Registration Successful',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-              if (participant != null &&
-                  participant.id != null &&
-                  participant.id!.isNotEmpty)
-                IconButton(
-                  icon: Icon(
-                    Icons.picture_as_pdf_outlined,
-                    color: Colors.blue.shade800,
-                  ),
-                  tooltip: 'Download registration details (PDF)',
-                  onPressed: () => participantController
-                      .downloadParticipantRegistrationDetails(participant.id!),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            hasParticipant
-                ? 'Your registration details are below.'
-                : 'Saved successfully.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
-          ),
-          if (participant != null) ...[
-            const SizedBox(height: 16),
-            _infoRow('Registration No', participant.registrationNo ?? 'N/A'),
-            _infoRow('Participant Name', participant.participantName),
-            _infoRow('Gender', participant.gender),
-            _infoRow('Category', participant.category),
-            _infoRow('Standard/Group', participant.standard),
-            _infoRow('School', participant.schoolName),
-            _infoRow('Yoga Master', participant.yogaMasterName),
-            _infoRow(
-              'Spot Registration',
-              participant.isSpotRegistration ? 'YES' : 'NO',
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 160,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.black87),
-              softWrap: true,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -314,13 +213,20 @@ class _UserCompetitionRegistrationScreenState
     } else {
       final competition = competitionController.homeCompetitions
           .firstWhereOrNull((c) => c.idStr == widget.competitionId);
+      final fullCompetition = competitionController.competitions
+          .firstWhereOrNull((c) => c.id == widget.competitionId);
       content = competition == null
           ? _buildDetailsPlaceholder(context, isMobile)
-          : _buildCompetitionDetailsPanel(context, competition, isMobile);
+          : _buildCompetitionDetailsPanel(
+              context,
+              competition,
+              isMobile,
+              fullCompetition: fullCompetition,
+            );
     }
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -340,20 +246,9 @@ class _UserCompetitionRegistrationScreenState
   Widget _buildCompetitionDetailsPanel(
     BuildContext context,
     HomeCompetitionModel competition,
-    bool isMobile,
-  ) {
-    final startDate = competition.eventStartDate != null
-        ? _tryParseDate(competition.eventStartDate!)
-        : null;
-    final endDate = competition.eventEndDate != null
-        ? _tryParseDate(competition.eventEndDate!)
-        : null;
-    final dateText = startDate != null
-        ? (endDate != null && endDate != startDate
-              ? '${_formatDate(startDate)} – ${_formatDate(endDate)}'
-              : _formatDate(startDate))
-        : (competition.eventStartDate ?? 'Date TBA');
-
+    bool isMobile, {
+    CompetitionModel? fullCompetition,
+  }) {
     final grey = Colors.grey.shade700;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,41 +306,10 @@ class _UserCompetitionRegistrationScreenState
           ),
         ],
         const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.calendar_today, size: 16, color: grey),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                dateText,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: grey),
-              ),
-            ),
-          ],
+        CompetitionVenueHighlightCard(
+          competition: competition,
+          fullCompetition: fullCompetition,
         ),
-        if (competition.address.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.location_on, size: 16, color: grey),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  competition.address,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: grey),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ],
         if (competition.categories.isNotEmpty) ...[
           const SizedBox(height: 12),
           Wrap(
@@ -483,7 +347,7 @@ class _UserCompetitionRegistrationScreenState
     bool isMobile,
   ) {
     final bannerUrl = competitionBrochureBannerUrl(competition);
-    final height = isMobile ? 210.0 : 400.0;
+    final height = isMobile ? 210.0 : 260.0;
 
     if (bannerUrl != null && bannerUrl.isNotEmpty) {
       return ClipRRect(
@@ -597,15 +461,4 @@ class _UserCompetitionRegistrationScreenState
     );
   }
 
-  static DateTime? _tryParseDate(String s) {
-    try {
-      return DateTime.parse(s);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static String _formatDate(DateTime d) {
-    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-  }
 }

@@ -364,6 +364,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                                       }
                                     },
                                     isLoading: controller.isLoading,
+                                    text: controller.createCompetitionButtonLabel,
                                     isFullWidth: true,
                                   ),
                                   const SizedBox(height: 12),
@@ -405,7 +406,11 @@ class CreateCompetitionScreen extends StatelessWidget {
                                       }
                                     },
                                     isLoading: controller.isLoading,
-                                    width: 200,
+                                    text: controller.createCompetitionButtonLabel,
+                                    width: controller
+                                            .requiresPrepaidCompetitionPayment
+                                        ? 300
+                                        : 200,
                                   ),
                                   const SizedBox(width: 16),
                                   cancelButton(
@@ -741,7 +746,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                               'PAY_PER_PARTICIPANT';
                           return Text(
                             isPerParticipant
-                                ? 'Select the per-participant maintenance plan, then pay to unlock saving this competition.'
+                                ? 'Select the On Demand plan, then pay to unlock saving this competition.'
                                 : 'Pick your subscription type and plan, then pay to unlock saving this competition.',
                             style: TextStyle(
                               fontSize: 13,

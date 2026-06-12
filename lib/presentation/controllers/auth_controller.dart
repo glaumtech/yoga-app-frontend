@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -303,6 +305,12 @@ class AuthController extends GetxController {
           // Small delay to ensure token is saved
           await Future.delayed(const Duration(milliseconds: 100));
 
+          if (Get.isRegistered<CompetitionController>()) {
+            await Get.find<CompetitionController>().loadCompetitionsForHome(
+              force: true,
+            );
+          }
+
           final token = StorageService.getString(AppConstants.tokenKey);
           print(
             'Token before navigation: ${token != null ? "exists" : "null"}',
@@ -416,6 +424,8 @@ class AuthController extends GetxController {
           final competitionController = Get.find<CompetitionController>();
           competitionController.clearForm();
           competitionController.toggleViewMode(true);
+          competitionController.invalidateHomeCompetitionsScope();
+          unawaited(competitionController.loadCompetitionsForHome(force: true));
         }
       } catch (_) {}
       try {

@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/participant_repository.dart';
 import '../../controllers/participant_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
+import '../../widgets/registration_event_venue_card.dart';
 
 /// Read-only participant registration details (matches PDF/HTML template).
 class ParticipantRegistrationDetailsScreen extends StatefulWidget {
@@ -94,6 +95,19 @@ class _ParticipantRegistrationDetailsScreenState
     return s.isEmpty ? '—' : s;
   }
 
+  String _combineValues(
+    dynamic first,
+    dynamic second, {
+    required String separator,
+  }) {
+    final a = _text(first);
+    final b = _text(second);
+    if (a == '—' && b == '—') return '—';
+    if (a == '—') return b;
+    if (b == '—') return a;
+    return '$a$separator$b';
+  }
+
   String _formatDob(dynamic value) {
     if (value == null) return '—';
     final raw = value.toString().trim();
@@ -112,6 +126,37 @@ class _ParticipantRegistrationDetailsScreenState
     if (raw == 'MALE' || raw == 'M') return 'Male';
     if (raw == 'FEMALE' || raw == 'F') return 'Female';
     return raw[0] + raw.substring(1).toLowerCase();
+  }
+
+  String _formatPaymentMode(dynamic value) {
+    final raw = _text(value);
+    if (raw == '—') return raw;
+    switch (raw.toUpperCase()) {
+      case 'ONLINE':
+        return 'Online (Razorpay)';
+      case 'GPAY':
+        return 'GPay';
+      case 'CASH':
+        return 'Cash';
+      default:
+        return raw;
+    }
+  }
+
+  String _formatAmount(dynamic value) {
+    if (value == null) return '—';
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString());
+    if (parsed == null) return '—';
+    return '₹${parsed.toStringAsFixed(0)}';
+  }
+
+  bool _hasPaymentDetails(Map<String, dynamic> reg) {
+    return _text(reg['paymentMode']) != '—' ||
+        _text(reg['paymentStatus']) != '—' ||
+        reg['amount'] != null ||
+        _text(reg['razorpayPaymentId']) != '—';
   }
 
   String _formatYesNo(dynamic value) {
@@ -295,48 +340,19 @@ class _ParticipantRegistrationDetailsScreenState
   }
 
   Widget _buildDetailsBody(Map<String, dynamic> reg) {
-    final competitionAddress = _text(reg['competitionAddress']);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_text(reg['competitionName']) != '—' ||
-            competitionAddress != '—') ...[
-          Container(
-            padding: const EdgeInsets.only(bottom: 16),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Column(
-              children: [
-                if (_text(reg['competitionName']) != '—')
-                  Text(
-                    _text(reg['competitionName']),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.sectionHeaderText(),
-                      height: 1.35,
-                    ),
-                  ),
-                if (competitionAddress != '—') ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    competitionAddress,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textSecondary,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
+        RegistrationEventVenueCard(
+          eventDateDisplay: reg['competitionEventDateDisplay']?.toString(),
+          eventTimeDisplay: reg['competitionEventTimeDisplay']?.toString(),
+          venueAddress: reg['competitionAddress']?.toString(),
+          venueMapsUrl: reg['venueMapsUrl']?.toString(),
+          venueMapPreviewUrl: reg['venueMapPreviewUrl']?.toString(),
+          combineDateAndTime: true,
+          compact: true,
+        ),
+        const SizedBox(height: 16),
         Text(
           'Participant registration details',
           style: TextStyle(
@@ -356,8 +372,10 @@ class _ParticipantRegistrationDetailsScreenState
             _DetailRow('Age', _text(reg['age'])),
             _DetailRow('Gender', _formatGender(reg['sex'] ?? reg['gender'])),
             _DetailRow('Category', _text(reg['categoryName'])),
-            _DetailRow('Standard / group', _text(reg['groupName'])),
-            _DetailRow('Stage', _text(reg['stageName'])),
+            _DetailRow(
+              'Standard / group & stage',
+              _combineValues(reg['groupName'], reg['stageName'], separator: ' / '),
+            ),
           ],
         ),
         const SizedBox(height: 14),
@@ -365,15 +383,42 @@ class _ParticipantRegistrationDetailsScreenState
           title: 'Institution & teacher',
           rows: [
             _DetailRow('Institution', _text(reg['institutionName'])),
-            _DetailRow('Yoga teacher', _text(reg['yogaTeacherName'])),
-            _DetailRow('Yoga teacher mobile', _text(reg['yogaTeacherCell'])),
+            _DetailRow(
+              'Yoga teacher',
+              _combineValues(
+                reg['yogaTeacherName'],
+                reg['yogaTeacherCell'],
+                separator: ' · ',
+              ),
+            ),
           ],
         ),
+        if (_hasPaymentDetails(reg)) ...[
+          const SizedBox(height: 14),
+          _DetailSection(
+            title: 'Payment',
+            rows: [
+              if (_text(reg['paymentMode']) != '—')
+                _DetailRow('Payment mode', _formatPaymentMode(reg['paymentMode'])),
+              if (_text(reg['paymentStatus']) != '—')
+                _DetailRow(
+                  'Payment status',
+                  _text(reg['paymentStatus']).toUpperCase(),
+                ),
+              if (reg['amount'] != null)
+                _DetailRow('Amount', _formatAmount(reg['amount'])),
+              if (_text(reg['razorpayPaymentId']) != '—')
+                _DetailRow(
+                  'Transaction ID',
+                  _text(reg['razorpayPaymentId']),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 14),
         _DetailSection(
           title: 'Other',
           rows: [
-            _DetailRow('Payment mode', _text(reg['paymentMode'])),
             _DetailRow(
               'Spot registration',
               _formatYesNo(reg['isSpotRegistration']),

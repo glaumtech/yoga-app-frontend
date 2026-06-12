@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -7,11 +8,14 @@ import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/constants/championship_style.dart';
+import '../../core/utils/storage_service.dart';
 import '../../core/utils/dialog_helper.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
+import '../../data/models/user_management_model.dart';
 import '../../data/models/competition_option_model.dart';
 import '../../core/utils/subscription_catalog_filter.dart';
 import '../../data/models/subscription_mode_model.dart';
@@ -104,6 +108,9 @@ class CompetitionController extends GetxController {
   final RxList<HomeCompetitionModel> homeCompetitions =
       <HomeCompetitionModel>[].obs;
   final RxBool isLoadingHomeCompetitions = false.obs;
+
+  /// Tracks which login/branch scope [homeCompetitions] was loaded for.
+  String? _homeCompetitionsScope;
   final RxString searchQuery = ''.obs;
   final RxString selectedFilter = ''.obs;
   final RxBool isListView = false.obs; // Toggle between create and list view
@@ -136,6 +143,20 @@ class CompetitionController extends GetxController {
   final RxnInt selectedSubscriptionModeId = RxnInt();
   final RxnInt selectedSubscriptionPackageId = RxnInt();
   final RxBool showSubscriptionAddonOptions = false.obs;
+
+  final RxBool isOnDemandOrg = false.obs;
+  final RxBool isLoadingOnDemandContext = false.obs;
+  final RxInt onDemandMaintenanceFeePaise = 0.obs;
+  final RxString organizationPaymentModel = 'ORG_SUBSCRIPTION'.obs;
+  final RxBool isProcessingCompetitionPayment = false.obs;
+
+  bool get requiresPrepaidCompetitionPayment =>
+      organizationPaymentModel.value.toUpperCase() ==
+      SubscriptionCatalogFilter.onDemandModeKey;
+
+  String get createCompetitionButtonLabel => requiresPrepaidCompetitionPayment
+      ? 'Pay and Create Competition'
+      : 'SAVE';
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -355,18 +376,62 @@ class CompetitionController extends GetxController {
     return mappings;
   }
 
-  /// Load competitions for home screen (public API, no auth required for display)
-  Future<void> loadCompetitionsForHome() async {
+  /// Scope key for home list: anonymous users see all; logged-in users see
+  /// branch/org-scoped competitions (backend filters when JWT is present).
+  String _homeCompetitionsScopeKey() {
+    try {
+      final userJson = StorageService.getString(AppConstants.userKey);
+      if (userJson == null || userJson.isEmpty) return 'anon';
+      final user = UserManagementModel.fromJson(
+        jsonDecode(userJson) as Map<String, dynamic>,
+      );
+      final type = (user.userTypeName ?? user.type).toUpperCase();
+      if (type == 'ORG_ADMIN') return 'org:${user.id}';
+      return 'branch:${user.branchId ?? 'none'}:${user.id}';
+    } catch (_) {
+      return 'anon';
+    }
+  }
+
+  void invalidateHomeCompetitionsScope() {
+    _homeCompetitionsScope = null;
+  }
+
+  /// Loads home competitions when empty or when login/branch scope changes.
+  Future<void> ensureHomeCompetitionsLoaded() async {
+    final scope = _homeCompetitionsScopeKey();
+    if (_homeCompetitionsScope == scope &&
+        homeCompetitions.isNotEmpty &&
+        !isLoadingHomeCompetitions.value) {
+      return;
+    }
+    if (_homeCompetitionsScope == scope && isLoadingHomeCompetitions.value) {
+      return;
+    }
+    await loadCompetitionsForHome();
+  }
+
+  /// Load competitions for home screen (public API; branch-scoped when logged in)
+  Future<void> loadCompetitionsForHome({bool force = false}) async {
+    final scope = _homeCompetitionsScopeKey();
+    if (!force &&
+        _homeCompetitionsScope == scope &&
+        homeCompetitions.isNotEmpty) {
+      return;
+    }
     try {
       isLoadingHomeCompetitions.value = true;
       final response = await _repository.getCompetitionsPublic();
       if (response.success && response.data != null) {
         homeCompetitions.value = response.data!;
+        _homeCompetitionsScope = scope;
       } else {
         homeCompetitions.clear();
+        _homeCompetitionsScope = null;
       }
     } catch (e) {
       homeCompetitions.clear();
+      _homeCompetitionsScope = null;
     } finally {
       isLoadingHomeCompetitions.value = false;
     }
@@ -480,6 +545,36 @@ class CompetitionController extends GetxController {
     searchController.addListener(_onSearchChanged);
     // Load options from API
     loadOptions();
+    loadOnDemandContext();
+  }
+
+  Future<void> loadOnDemandContext() async {
+    if (isLoadingOnDemandContext.value) return;
+    try {
+      isLoadingOnDemandContext.value = true;
+      final response = await _paymentRepository.getOnDemandContext();
+      if (response.success && response.data != null) {
+        final data = response.data!;
+        isOnDemandOrg.value = data['onDemand'] == true ||
+            data['requiresPrePayment'] == true;
+        organizationPaymentModel.value =
+            data['paymentModel']?.toString() ?? 'ORG_SUBSCRIPTION';
+        final feePaise = data['maintenanceFeeAmountPaise'];
+        onDemandMaintenanceFeePaise.value = feePaise is int
+            ? feePaise
+            : int.tryParse(feePaise?.toString() ?? '') ?? 0;
+      } else {
+        isOnDemandOrg.value = false;
+        organizationPaymentModel.value = 'ORG_SUBSCRIPTION';
+        onDemandMaintenanceFeePaise.value = 0;
+      }
+    } catch (_) {
+      isOnDemandOrg.value = false;
+      organizationPaymentModel.value = 'ORG_SUBSCRIPTION';
+      onDemandMaintenanceFeePaise.value = 0;
+    } finally {
+      isLoadingOnDemandContext.value = false;
+    }
   }
 
   // Load all options (categories, prizes, stages, groups) from API
@@ -626,9 +721,75 @@ class CompetitionController extends GetxController {
   String get subscriptionPlanStepTitle {
     final mode = selectedSubscriptionMode?.modeKey ?? '';
     if (mode == 'PAY_PER_PARTICIPANT') {
-      return 'Step 2 — Choose maintenance plan';
+      return 'Step 2 — Choose On Demand plan';
     }
     return 'Step 2 — Choose a plan';
+  }
+
+  Future<String?> _completeOnDemandPaymentBeforeCreate({
+    required String description,
+  }) async {
+    final orderResponse = await _paymentRepository.createApiOrder(
+      purpose: PaymentRepository.onDemandCompetitionPurpose,
+    );
+    if (!orderResponse.success || orderResponse.data == null) {
+      _notifyError(orderResponse.message ?? 'Failed to create payment order');
+      return null;
+    }
+
+    final order = orderResponse.data!;
+    final orderId =
+        order['orderId']?.toString() ?? order['order_id']?.toString() ?? '';
+    final key = order['key']?.toString() ?? '';
+    final amount = order['amount'] is int
+        ? order['amount'] as int
+        : int.tryParse(order['amount']?.toString() ?? '') ?? 0;
+    final mockMode = order['mockMode'] == true;
+
+    if (orderId.isEmpty || amount <= 0) {
+      _notifyError('Invalid payment order details');
+      return null;
+    }
+    if (!mockMode && key.isEmpty) {
+      _notifyError('Payment gateway is not configured. Contact support.');
+      return null;
+    }
+
+    Map<String, String> paymentResult;
+    try {
+      paymentResult = await _razorpayCheckout.openCheckout(
+        keyId: key,
+        orderId: orderId,
+        amountPaise: amount,
+        description: description,
+        mockMode: mockMode,
+      );
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      final cancelled = message.toLowerCase().contains('cancelled');
+      await _paymentRepository.markPaymentFailed(
+        orderId: orderId,
+        reason: cancelled ? 'cancelled' : message,
+      );
+      _notifyError(cancelled ? 'Payment cancelled' : message);
+      return null;
+    }
+
+    final verifyResponse = await _paymentRepository.verifyApiPayment(
+      purpose: PaymentRepository.onDemandCompetitionPurpose,
+      orderId: paymentResult['razorpay_order_id'] ?? orderId,
+      paymentId: paymentResult['razorpay_payment_id'] ?? '',
+      signature: paymentResult['razorpay_signature'] ?? '',
+    );
+    if (!verifyResponse.success) {
+      await _paymentRepository.markPaymentFailed(
+        orderId: paymentResult['razorpay_order_id'] ?? orderId,
+        reason: verifyResponse.message ?? 'verification_failed',
+      );
+      _notifyError(verifyResponse.message ?? 'Payment verification failed');
+      return null;
+    }
+    return paymentResult['razorpay_order_id']?.toString() ?? orderId;
   }
 
   void toggleSubscriptionAddonOptions() {
@@ -1005,6 +1166,40 @@ class CompetitionController extends GetxController {
     } catch (e) {
       return null;
     }
+  }
+
+  double _feeFromAmountMap(Map<String, double>? amounts, int categoryId) {
+    if (amounts == null || amounts.isEmpty) return 0;
+    final byId = amounts[categoryId.toString()] ?? 0;
+    if (byId > 0) return byId;
+    final name = getCategoryNameById(categoryId);
+    if (name != null) {
+      return amounts[name] ?? 0;
+    }
+    return 0;
+  }
+
+  /// Registration fee in INR for [categoryId] on [competitionId].
+  /// API category amounts use category name keys; home/public APIs may use IDs.
+  double resolveCategoryFeeRupees(String competitionId, int categoryId) {
+    var fee = _feeFromAmountMap(
+      categoryAmounts.isEmpty
+          ? null
+          : Map<String, double>.from(categoryAmounts),
+      categoryId,
+    );
+    if (fee > 0) return fee;
+
+    final home = homeCompetitions.firstWhereOrNull(
+      (c) => c.id?.toString() == competitionId,
+    );
+    fee = _feeFromAmountMap(home?.categoryAmounts, categoryId);
+    if (fee > 0) return fee;
+
+    final competition = competitions.firstWhereOrNull(
+      (c) => c.id == competitionId,
+    );
+    return _feeFromAmountMap(competition?.categoryAmounts, categoryId);
   }
 
   String? getStageNameById(int id) {
@@ -1560,6 +1755,9 @@ class CompetitionController extends GetxController {
 
   // Create competition
   Future<bool> createCompetition() async {
+    if (isProcessingCompetitionPayment.value) {
+      return false;
+    }
     try {
       hasAttemptedSubmit.value = true;
       notifyCompetitionDatesChanged();
@@ -1612,6 +1810,26 @@ class CompetitionController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
+      await loadOnDemandContext();
+
+      String? maintenancePaymentOrderId;
+      if (requiresPrepaidCompetitionPayment) {
+        isLoading.value = false;
+        isProcessingCompetitionPayment.value = true;
+        try {
+          maintenancePaymentOrderId = await _completeOnDemandPaymentBeforeCreate(
+            description: competitionNameController.text.trim(),
+          );
+          if (maintenancePaymentOrderId == null) {
+            return false;
+          }
+        } finally {
+          isProcessingCompetitionPayment.value = false;
+          _razorpayCheckout.dispose();
+        }
+        isLoading.value = true;
+      }
+
       final competition = CompetitionModel(
         competitionName: competitionNameController.text.trim(),
         description: descriptionController.text.trim(),
@@ -1639,6 +1857,7 @@ class CompetitionController extends GetxController {
 
       final response = await _repository.createCompetition(
         competition: competition,
+        maintenancePaymentOrderId: maintenancePaymentOrderId,
         brochureFile: brochureFile.value,
         brochureFileLocal: brochureFileLocal.value,
         brochureBytes: brochureBytes.value,
@@ -1648,10 +1867,15 @@ class CompetitionController extends GetxController {
       );
 
       if (response.success && response.data != null) {
-        lastSavedCompetitionForQr.value = response.data;
+        final created = response.data!.competition;
+        lastSavedCompetitionForQr.value = created;
         await loadCompetitions(resetPage: true);
         clearForm();
-        _notifySuccess('Competition created successfully');
+        _notifySuccess(
+          requiresPrepaidCompetitionPayment
+              ? 'Payment completed and competition created successfully'
+              : 'Competition created successfully',
+        );
         toggleViewMode(true);
         return true;
       } else {

@@ -54,6 +54,8 @@ class ParticipantRegistrationFormController extends GetxController {
       participantController.selectedEventId.value = id;
     }
 
+    await competitionController.loadOnDemandContext();
+
     if (competitionController.homeCompetitions.isEmpty &&
         !competitionController.isLoadingHomeCompetitions.value) {
       await competitionController.loadCompetitionsForHome();

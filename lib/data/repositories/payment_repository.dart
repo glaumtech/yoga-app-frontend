@@ -1,11 +1,23 @@
 import '../../core/constants/app_constants.dart';
 import '../../services/api_service.dart';
 import '../models/api_response.dart';
+import '../models/payment_order_model.dart';
+import '../models/payment_verify_result.dart';
 import '../models/subscription_mode_model.dart';
 import '../models/subscription_package_model.dart';
 
 class PaymentRepository {
   final APIService _apiService = APIService();
+  static const String onDemandCompetitionPurpose = 'on_demand_competition';
+  static const String registrationTicketPurpose = 'registration_ticket';
+
+  Future<ApiResponse<Map<String, dynamic>>> getOnDemandContext() async {
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.paymentOnDemandContext,
+      apiType: APIType.aGet,
+    );
+    return _mapDataResponse(response);
+  }
 
   Future<ApiResponse<List<SubscriptionModeModel>>> listSubscriptionModes({
     bool includeInactive = false,
@@ -47,7 +59,9 @@ class PaymentRepository {
     if (paymentModel != null && paymentModel.trim().isNotEmpty) {
       params['model'] = paymentModel.trim();
     }
-    final query = params.isEmpty ? '' : '?${Uri(queryParameters: params).query}';
+    final query = params.isEmpty
+        ? ''
+        : '?${Uri(queryParameters: params).query}';
     final response = await _apiService.getResponse<dynamic>(
       url: '${EndPoints.paymentPackages}$query',
       apiType: APIType.aGet,
@@ -175,6 +189,103 @@ class PaymentRepository {
     return const [];
   }
 
+  Future<PaymentOrderModel> createRegistrationCheckoutOrder({
+    required int competitionId,
+    required int categoryId,
+  }) async {
+    final response = await createApiOrder(
+      purpose: registrationTicketPurpose,
+      competitionId: competitionId,
+      categoryId: categoryId,
+    );
+    if (!response.success || response.data == null) {
+      throw Exception(response.message ?? 'Failed to create registration payment order');
+    }
+    return PaymentOrderModel.fromJson(response.data!);
+  }
+
+  Future<PaymentOrderModel> createStandardOrder({
+    required int amountPaise,
+    String currency = 'INR',
+    String? receipt,
+  }) async {
+    final response = await _apiService.getResponse<PaymentOrderModel>(
+      url: EndPoints.apiCreateOrder,
+      apiType: APIType.aPost,
+      body: {
+        'amount': amountPaise,
+        'currency': currency,
+        if (receipt != null && receipt.isNotEmpty) 'receipt': receipt,
+      },
+      fromJson: (json) =>
+          PaymentOrderModel.fromJson(json as Map<String, dynamic>),
+    );
+    if (!response.success || response.data == null) {
+      throw Exception(response.message ?? 'Failed to create payment order');
+    }
+    return response.data!;
+  }
+
+  /// Marks a pending Razorpay order as FAILED (checkout cancelled or error).
+  Future<void> markPaymentFailed({
+    required String orderId,
+    String? reason,
+  }) async {
+    try {
+      await _apiService.getResponse<dynamic>(
+        url: EndPoints.apiMarkPaymentFailed,
+        apiType: APIType.aPost,
+        body: {
+          'orderId': orderId,
+          if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+        },
+      );
+    } catch (_) {
+      // Best effort — UI already shows the failure to the user.
+    }
+  }
+
+  Future<PaymentVerifyResult> verifyStandardPayment({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    final response = await _apiService.getResponse<PaymentVerifyResult>(
+      url: EndPoints.apiVerifyPayment,
+      apiType: APIType.aPost,
+      body: {
+        'razorpay_order_id': orderId,
+        'razorpay_payment_id': paymentId,
+        'razorpay_signature': signature,
+      },
+      fromJson: (json) =>
+          PaymentVerifyResult.fromJson(json as Map<String, dynamic>),
+    );
+    if (!response.success || response.data == null) {
+      throw Exception(response.message ?? 'Payment verification failed');
+    }
+    return response.data!;
+  }
+
+  Future<void> linkRegistrationPayment({
+    required int registrationId,
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    final response = await verifyRegistrationPayment(
+      registrationId: registrationId,
+      orderId: orderId,
+      paymentId: paymentId,
+      signature: signature,
+    );
+    if (!response.success) {
+      throw Exception(
+        response.message ?? 'Failed to link registration payment',
+      );
+    }
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> createRegistrationOrder({
     required int competitionId,
     required int categoryId,
@@ -202,6 +313,63 @@ class PaymentRepository {
         'razorpay_payment_id': paymentId,
         'razorpay_signature': signature,
       },
+    );
+    return _mapDataResponse(response);
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> createApiOrder({
+    int? amountPaise,
+    int? competitionId,
+    int? categoryId,
+    String? purpose,
+    String? currency,
+    String? receipt,
+  }) async {
+    final body = <String, dynamic>{};
+    if (amountPaise != null) body['amount'] = amountPaise;
+    if (competitionId != null) body['competitionId'] = competitionId;
+    if (categoryId != null) body['categoryId'] = categoryId;
+    if (purpose != null && purpose.trim().isNotEmpty) {
+      body['purpose'] = purpose.trim();
+    }
+    if (currency != null && currency.trim().isNotEmpty) {
+      body['currency'] = currency.trim();
+    }
+    if (receipt != null && receipt.trim().isNotEmpty) {
+      body['receipt'] = receipt.trim();
+    }
+
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.apiCreateOrder,
+      apiType: APIType.aPost,
+      body: body,
+    );
+    return _mapDataResponse(response);
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> verifyApiPayment({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+    int? competitionId,
+    String? purpose,
+  }) async {
+    final body = <String, String>{
+      'razorpay_order_id': orderId,
+      'razorpay_payment_id': paymentId,
+      'razorpay_signature': signature,
+    };
+    if (competitionId != null) {
+      body['competitionId'] = '$competitionId';
+    }
+    if (purpose != null && purpose.trim().isNotEmpty) {
+      body['purpose'] = purpose.trim();
+    }
+
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.apiVerifyPayment,
+      apiType: APIType.aPost,
+      body: body,
     );
     return _mapDataResponse(response);
   }

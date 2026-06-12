@@ -112,7 +112,7 @@ class SubscriptionPlanPicker extends StatelessWidget {
         .map(
           (mode) => SelectableOptionItem(
             value: '${mode.id}',
-            label: mode.name,
+            label: SubscriptionCatalogFilter.displayModeName(mode),
             subtitle: _modeSubtitle(mode.modeKey),
             icon: _modeIcon(mode.modeKey),
           ),
@@ -179,7 +179,7 @@ class SubscriptionPlanPicker extends StatelessWidget {
                 (mode) => DropdownMenuItem<int>(
                   value: mode.id,
                   child: Text(
-                    mode.name,
+                    SubscriptionCatalogFilter.displayModeName(mode),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
