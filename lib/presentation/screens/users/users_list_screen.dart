@@ -15,6 +15,33 @@ import '../../../data/models/user_management_model.dart';
 class UsersListScreen extends StatelessWidget {
   const UsersListScreen({super.key});
 
+  int? _selectedCompetitionId(UserManagementController controller) {
+    if (controller.selectedEventId.value.isEmpty) return null;
+    return int.tryParse(controller.selectedEventId.value);
+  }
+
+  void _onCompetitionChanged(
+    UserManagementController controller,
+    int? value,
+  ) {
+    if (value == null) {
+      controller.selectedEventId.value = '';
+      controller.users.clear();
+      controller.errorMessage.value = '';
+      controller.usersTotal.value = 0;
+      controller.usersTotalPages.value = 0;
+      return;
+    }
+    controller.selectedEventId.value = value.toString();
+    controller.loadUsers(eventId: value);
+  }
+
+  Future<void> _reloadUsers(UserManagementController controller) async {
+    final eventId = _selectedCompetitionId(controller);
+    if (eventId == null) return;
+    await controller.loadUsers(eventId: eventId);
+  }
+
   @override
   Widget build(BuildContext context) {
     // Keep screen Stateless: initialization happens in UsersListController.onReady()
@@ -50,6 +77,29 @@ class UsersListScreen extends StatelessWidget {
             // Users List
             Expanded(
               child: Obx(() {
+                if (userController.selectedEventId.value.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.event_outlined,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Select a competition to view users',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 if (userController.isLoading.value) {
                   return const Center(child: CustomLoader());
                 }
@@ -73,13 +123,12 @@ class UsersListScreen extends StatelessWidget {
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () {
-                            final eventId =
-                                userController.selectedEventId.value.isNotEmpty
-                                ? int.tryParse(
-                                    userController.selectedEventId.value,
-                                  )
-                                : null;
-                            userController.loadUsers(eventId: eventId);
+                            final eventId = _selectedCompetitionId(
+                              userController,
+                            );
+                            if (eventId != null) {
+                              userController.loadUsers(eventId: eventId);
+                            }
                           },
                           child: const Text('Retry'),
                         ),
@@ -183,16 +232,11 @@ class UsersListScreen extends StatelessWidget {
                   final competitions = competitionController.competitions
                       .where((competition) => competition.id != null)
                       .toList();
-                  final currentValue =
-                      controller.selectedEventId.value.isNotEmpty
-                      ? int.tryParse(controller.selectedEventId.value)
-                      : (competitions.isNotEmpty
-                            ? int.tryParse(competitions.first.id!)
-                            : null);
+                  final currentValue = _selectedCompetitionId(controller);
 
                   return isMobile
                       ? Expanded(
-                          child: DropdownButtonFormField<int>(
+                          child: DropdownButtonFormField<int?>(
                             value: currentValue,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
@@ -207,27 +251,29 @@ class UsersListScreen extends StatelessWidget {
                               isDense: true,
                             ),
                             isExpanded: true,
-                            items: competitions.map((competition) {
-                              return DropdownMenuItem<int>(
-                                value: int.tryParse(competition.id!),
-                                child: Text(
-                                  competition.competitionName,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                controller.selectedEventId.value = value
-                                    .toString();
-                                controller.loadUsers(eventId: value);
-                              }
-                            },
+                            hint: const Text('Select competition'),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Select competition'),
+                              ),
+                              ...competitions.map((competition) {
+                                return DropdownMenuItem<int?>(
+                                  value: int.tryParse(competition.id!),
+                                  child: Text(
+                                    competition.competitionName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (value) =>
+                                _onCompetitionChanged(controller, value),
                           ),
                         )
                       : SizedBox(
                           width: isTablet ? 320 : 360,
-                          child: DropdownButtonFormField<int>(
+                          child: DropdownButtonFormField<int?>(
                             value: currentValue,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
@@ -242,22 +288,24 @@ class UsersListScreen extends StatelessWidget {
                               isDense: true,
                             ),
                             isExpanded: true,
-                            items: competitions.map((competition) {
-                              return DropdownMenuItem<int>(
-                                value: int.tryParse(competition.id!),
-                                child: Text(
-                                  competition.competitionName,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                controller.selectedEventId.value = value
-                                    .toString();
-                                controller.loadUsers(eventId: value);
-                              }
-                            },
+                            hint: const Text('Select competition'),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Select competition'),
+                              ),
+                              ...competitions.map((competition) {
+                                return DropdownMenuItem<int?>(
+                                  value: int.tryParse(competition.id!),
+                                  child: Text(
+                                    competition.competitionName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (value) =>
+                                _onCompetitionChanged(controller, value),
                           ),
                         );
                 }),
@@ -265,12 +313,7 @@ class UsersListScreen extends StatelessWidget {
                 // Refresh Button
                 IconButton(
                   icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    final eventId = controller.selectedEventId.value.isNotEmpty
-                        ? int.tryParse(controller.selectedEventId.value)
-                        : null;
-                    controller.loadUsers(eventId: eventId);
-                  },
+                  onPressed: () => _reloadUsers(controller),
                   tooltip: 'Refresh',
                   constraints: const BoxConstraints(),
                   padding: const EdgeInsets.all(8),
@@ -289,12 +332,7 @@ class UsersListScreen extends StatelessWidget {
     UserManagementController controller,
   ) {
     return RefreshIndicator(
-      onRefresh: () {
-        final eventId = controller.selectedEventId.value.isNotEmpty
-            ? int.tryParse(controller.selectedEventId.value)
-            : null;
-        return controller.loadUsers(eventId: eventId);
-      },
+      onRefresh: () => _reloadUsers(controller),
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(12),
@@ -506,12 +544,7 @@ class UsersListScreen extends StatelessWidget {
         : Get.put(PermissionStore());
 
     return RefreshIndicator(
-      onRefresh: () {
-        final eventId = controller.selectedEventId.value.isNotEmpty
-            ? int.tryParse(controller.selectedEventId.value)
-            : null;
-        return controller.loadUsers(eventId: eventId);
-      },
+      onRefresh: () => _reloadUsers(controller),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: LayoutBuilder(
