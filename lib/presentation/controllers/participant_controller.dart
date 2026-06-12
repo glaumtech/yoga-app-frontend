@@ -124,6 +124,8 @@ class ParticipantController extends GetxController {
   /// Server path from existing registration (edit mode — no re-upload required).
   final RxString existingPaymentProofPath = ''.obs;
   final RxBool optForECertificate = false.obs;
+  final RxBool termsAccepted = false.obs;
+  final RxBool showTermsError = false.obs;
   final RxList<String> selectedCategories = <String>[].obs;
   final RxString selectedStage = ''.obs; // Selected stage name
   final RxString standard = ''.obs;
@@ -1874,6 +1876,8 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     optForECertificate.value = false;
+    termsAccepted.value = false;
+    showTermsError.value = false;
     selectedCategories.clear();
     selectedStage.value = '';
     standard.value = '';
@@ -1975,6 +1979,8 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     optForECertificate.value = false;
+    termsAccepted.value = false;
+    showTermsError.value = false;
     isSpotRegistration.value = false;
     selectedCategories.clear();
     selectedStage.value = '';
@@ -2611,6 +2617,13 @@ class ParticipantController extends GetxController {
     if (!formKey.currentState!.validate()) {
       return false;
     }
+
+    if (!isEditMode && !termsAccepted.value) {
+      showTermsError.value = true;
+      errorMessage.value = 'Please accept the terms & conditions to continue';
+      return false;
+    }
+    showTermsError.value = false;
 
     final submitOwner = Object();
     _registrationSubmitOwner = submitOwner;

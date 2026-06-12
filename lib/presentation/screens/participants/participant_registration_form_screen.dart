@@ -23,6 +23,7 @@ import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../widgets/registration_payment_section.dart';
+import '../../widgets/registration_terms_section.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
@@ -525,6 +526,15 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     ],
                     SizedBox(height: isMobile ? 24 : 32),
 
+                    if (!participantController.isViewMode.value &&
+                        !participantController.isEditMode) ...[
+                      RegistrationTermsSection(
+                        controller: participantController,
+                        isMobile: isMobile,
+                      ),
+                      SizedBox(height: isMobile ? 20 : 24),
+                    ],
+
                     if (!participantController.isViewMode.value) ...[
                       Obx(
                         () => RegistrationPaymentSection(
@@ -900,67 +910,78 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       children: [
         FormLabelWithHint(label: 'COMPETITION :', bottomSpacing: 12),
         Obx(
-          () => DropdownButtonFormField<String>(
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            value: controller.selectedEventId.value.isNotEmpty
-                ? controller.selectedEventId.value
-                : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+          () {
+            final _ = competitionController.competitions.length;
+            final isLoadingChoices =
+                competitionController.isLoadingHomeCompetitions.value ||
+                (competitionController.competitions.isEmpty &&
+                    competitionController.isLoading.value);
+            if (isLoadingChoices) {
+              return const LinearProgressIndicator(minHeight: 2);
+            }
+
+            return DropdownButtonFormField<String>(
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              value: controller.selectedEventId.value.isNotEmpty
+                  ? controller.selectedEventId.value
+                  : null,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 12 : 16,
+                  vertical: 12,
+                ),
+                isDense: isMobile,
+                filled: true,
+                fillColor: controller.isViewMode.value
+                    ? Colors.grey[200]
+                    : Colors.white,
               ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 12,
+              hint: Text(
+                'Select Competition',
+                style: TextStyle(fontSize: isMobile ? 14 : 16),
               ),
-              isDense: isMobile,
-              filled: true,
-              fillColor: controller.isViewMode.value
-                  ? Colors.grey[200]
-                  : Colors.white,
-            ),
-            hint: Text(
-              'Select Competition',
               style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
-            items: competitionController.competitions
-                .where((c) => c.id != null)
-                .map((competition) {
-                  return DropdownMenuItem<String>(
-                    value: competition.id,
-                    child: Text(
-                      competition.competitionName,
-                      style: TextStyle(fontSize: isMobile ? 14 : 16),
-                    ),
-                  );
-                })
-                .toList(),
-            onChanged: !controller.isViewMode.value
-                ? (value) {
-                    if (value != null) {
-                      controller.selectedEventId.value = value;
-                      competitionController
-                          .ensureCompetitionLoadedForRegistration(value);
-                      // Clear category, stage and group when competition changes
-                      controller.selectedCategories.clear();
-                      controller.selectedStage.value = '';
-                      controller.standard.value = '';
-                      controller.applySpotRegistrationRulesForSelectedEvent();
-                      controller.validateRegistrationFormOnFieldChange();
+              items: competitionController.competitions
+                  .where((c) => c.id != null)
+                  .map((competition) {
+                    return DropdownMenuItem<String>(
+                      value: competition.id,
+                      child: Text(
+                        competition.competitionName,
+                        style: TextStyle(fontSize: isMobile ? 14 : 16),
+                      ),
+                    );
+                  })
+                  .toList(),
+              onChanged: !controller.isViewMode.value
+                  ? (value) {
+                      if (value != null) {
+                        controller.selectedEventId.value = value;
+                        competitionController
+                            .ensureCompetitionLoadedForRegistration(value);
+                        // Clear category, stage and group when competition changes
+                        controller.selectedCategories.clear();
+                        controller.selectedStage.value = '';
+                        controller.standard.value = '';
+                        controller.applySpotRegistrationRulesForSelectedEvent();
+                        controller.validateRegistrationFormOnFieldChange();
+                      }
                     }
-                  }
-                : null,
-            validator: !controller.isViewMode.value
-                ? (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please select a competition';
+                  : null,
+              validator: !controller.isViewMode.value
+                  ? (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please select a competition';
+                      }
+                      return null;
                     }
-                    return null;
-                  }
-                : null,
-            isExpanded: true,
-          ),
+                  : null,
+              isExpanded: true,
+            );
+          },
         ),
       ],
     );

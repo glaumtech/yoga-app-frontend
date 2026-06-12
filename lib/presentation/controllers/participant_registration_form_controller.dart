@@ -55,11 +55,7 @@ class ParticipantRegistrationFormController extends GetxController {
     }
 
     await competitionController.loadOnDemandContext();
-
-    if (competitionController.homeCompetitions.isEmpty &&
-        !competitionController.isLoadingHomeCompetitions.value) {
-      await competitionController.loadCompetitionsForHome();
-    }
+    await competitionController.ensureRegistrationCompetitionChoicesLoaded();
 
     // Preload subscription packages from backend so payment/package UI can use
     // fresh server data in this registration flow.

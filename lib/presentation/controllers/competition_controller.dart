@@ -437,6 +437,28 @@ class CompetitionController extends GetxController {
     }
   }
 
+  /// Populates [competitions] for the registration competition dropdown.
+  /// Uses the public home list first; falls back to the admin list when empty.
+  Future<void> ensureRegistrationCompetitionChoicesLoaded() async {
+    if (competitions.isNotEmpty) return;
+
+    await ensureHomeCompetitionsLoaded();
+
+    if (homeCompetitions.isNotEmpty) {
+      for (final home in homeCompetitions) {
+        final id = home.id?.toString();
+        if (id == null || id.isEmpty) continue;
+        final existing = competitions.firstWhereOrNull((c) => c.id == id);
+        _upsertCompetition(_competitionFromHome(home, existing));
+      }
+      if (competitions.isNotEmpty) return;
+    }
+
+    if (!isLoading.value) {
+      await loadCompetitions();
+    }
+  }
+
   final RxBool isLoadingRegistrationCompetition = false.obs;
 
   /// Loads full competition data for the public/admin registration form.
