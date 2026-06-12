@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -108,24 +107,16 @@ class RegistrationTermsSection extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.only(left: 16),
-          child: RichText(
-            text: TextSpan(
+          child: InkWell(
+            onTap: () => showFullTermsDialog(context),
+            child: Text(
+              'click here',
               style: TextStyle(
                 fontSize: isMobile ? 12 : 13,
-                color: Colors.grey.shade800,
+                color: AppTheme.primaryColor,
+                decoration: TextDecoration.underline,
+                fontWeight: FontWeight.w500,
               ),
-              children: [
-                TextSpan(
-                  text: 'click here',
-                  style: TextStyle(
-                    color: AppTheme.primaryColor,
-                    decoration: TextDecoration.underline,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = () => showFullTermsDialog(context),
-                ),
-              ],
             ),
           ),
         ),

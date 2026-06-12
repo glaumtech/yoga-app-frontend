@@ -3088,20 +3088,14 @@ class ParticipantController extends GetxController {
     String registrationId,
   ) async {
     if (registrationId.isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Missing registration id',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      SnackbarHelper.showErrorMessage('Missing registration id');
       return;
     }
     try {
-      Get.snackbar(
-        'Downloading',
-        'Preparing registration details…',
+      SnackbarHelper.show(
+        title: 'Downloading',
+        message: 'Preparing registration details…',
         backgroundColor: Colors.blue,
-        colorText: Colors.white,
         duration: const Duration(seconds: 1),
       );
 
@@ -3129,12 +3123,7 @@ class ParticipantController extends GetxController {
             ..click();
           html.Url.revokeObjectUrl(blobUrl);
 
-          Get.snackbar(
-            'Success',
-            'Download started',
-            backgroundColor: Colors.green,
-            colorText: Colors.white,
-          );
+          SnackbarHelper.showSuccessMessage('Download started');
         } else {
           final dataUri = Uri.dataFromBytes(
             response.bodyBytes,
@@ -3142,35 +3131,19 @@ class ParticipantController extends GetxController {
           );
           if (await canLaunchUrl(dataUri)) {
             await launchUrl(dataUri, mode: LaunchMode.externalApplication);
-            Get.snackbar(
-              'Success',
-              'Registration details opened',
-              backgroundColor: Colors.green,
-              colorText: Colors.white,
-            );
+            SnackbarHelper.showSuccessMessage('Registration details opened');
           } else {
-            Get.snackbar(
-              'Error',
-              'Could not open PDF',
-              backgroundColor: Colors.red,
-              colorText: Colors.white,
-            );
+            SnackbarHelper.showErrorMessage('Could not open PDF');
           }
         }
       } else {
-        Get.snackbar(
-          'Error',
+        SnackbarHelper.showErrorMessage(
           'Failed to download (status ${response.statusCode})',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
         );
       }
     } catch (e) {
-      Get.snackbar(
-        'Error',
+      SnackbarHelper.showErrorMessage(
         'Failed to download registration details: ${e.toString()}',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
     }
   }

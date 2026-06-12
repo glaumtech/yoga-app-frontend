@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/participant_registration_details_download.dart';
 import '../../data/models/participant_model.dart';
 import '../controllers/participant_controller.dart';
 import 'registration_event_venue_card.dart';
@@ -61,8 +62,10 @@ class RegistrationSuccessPanel extends StatelessWidget {
                     color: Colors.blue.shade800,
                   ),
                   tooltip: 'Download registration details (PDF)',
-                  onPressed: () => participantController
-                      .downloadParticipantRegistrationDetails(participant!.id!),
+                  onPressed: () => downloadParticipantRegistrationDetailsPdf(
+                    context,
+                    participant!.id!,
+                  ),
                 ),
             ],
           ),
