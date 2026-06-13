@@ -44,7 +44,7 @@ class _UserCompetitionRegistrationScreenState
 
       if (competitionController.homeCompetitions.isEmpty &&
           !competitionController.isLoadingHomeCompetitions.value) {
-        await competitionController.loadCompetitionsForHome();
+        await competitionController.ensureHomeCompetitionsLoaded();
       }
       await competitionController.loadOnDemandContext();
       await competitionController.ensureCompetitionLoadedForRegistration(
@@ -61,10 +61,7 @@ class _UserCompetitionRegistrationScreenState
         : Get.put(ParticipantController());
 
     // Load public competitions (no auth required)
-    if (competitionController.homeCompetitions.isEmpty &&
-        !competitionController.isLoadingHomeCompetitions.value) {
-      competitionController.loadCompetitionsForHome();
-    }
+    competitionController.ensureHomeCompetitionsLoaded();
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;

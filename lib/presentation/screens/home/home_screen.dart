@@ -90,6 +90,7 @@ class HomeScreen extends StatelessWidget {
       final authController = Get.find<AuthController>();
       final userController = Get.put(UserManagementController());
       final competitionController = Get.put(CompetitionController());
+      competitionController.ensureHomeCompetitionsLoaded();
 
       return Scaffold(
         appBar: PreferredSize(
@@ -381,12 +382,6 @@ class HomeScreen extends StatelessWidget {
         ),
         body: SafeArea(
           child: Obx(() {
-            // Reload when login session / branch scope changes.
-            userController.currentUser.value;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              competitionController.ensureHomeCompetitionsLoaded();
-            });
-
             // Show loading indicator while competitions are loading
             if (competitionController.isLoadingHomeCompetitions.value &&
                 competitionController.homeCompetitions.isEmpty) {
