@@ -71,6 +71,8 @@ class UserManagementController extends GetxController {
   // Form State
   final RxString selectedType = 'SUB ADMIN'.obs;
   final RxString selectedEventId = ''.obs;
+  /// Competition filter for the Users list tab; not cleared by [resetForm].
+  final RxString usersListEventId = ''.obs;
   final RxString selectedEventName = ''.obs;
   final RxList<String> selectedPermissions = <String>[].obs;
   final RxList<String> selectedStages = <String>[].obs;
@@ -178,6 +180,12 @@ class UserManagementController extends GetxController {
       _refreshFormKey();
     }
     isListView.value = showList;
+    if (showList) {
+      final eventId = int.tryParse(usersListEventId.value);
+      if (eventId != null && users.isEmpty && !isLoading.value) {
+        Future.microtask(() => loadUsers(eventId: eventId));
+      }
+    }
   }
 
   @override

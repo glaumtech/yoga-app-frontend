@@ -9,6 +9,8 @@ class AppConstants {
   static const String userKey = 'user_data';
   static const String roleKey = 'user_role';
   static const String permissionKeysKey = 'permission_keys';
+  static const String usersListRecentCompetitionsKey =
+      'users_list_recent_competitions';
 
   // User Roles
   static const String roleUser = 'user';

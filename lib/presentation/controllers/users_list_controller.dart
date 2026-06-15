@@ -1,11 +1,16 @@
 import 'package:get/get.dart';
 
+import '../../core/constants/app_constants.dart';
+import '../../core/utils/recent_competition_store.dart';
 import 'competition_controller.dart';
 import 'user_management_controller.dart';
 
 class UsersListController extends GetxController {
   late final UserManagementController userController;
   late final CompetitionController competitionController;
+
+  final RxList<RecentCompetitionEntry> recentCompetitions =
+      <RecentCompetitionEntry>[].obs;
 
   bool _didInit = false;
 
@@ -14,6 +19,25 @@ class UsersListController extends GetxController {
     super.onInit();
     userController = Get.find<UserManagementController>();
     competitionController = Get.put(CompetitionController());
+    _loadRecentCompetitions();
+  }
+
+  void _loadRecentCompetitions() {
+    recentCompetitions.assignAll(
+      RecentCompetitionStore.read(AppConstants.usersListRecentCompetitionsKey),
+    );
+  }
+
+  Future<void> recordCompetitionSelection({
+    required int competitionId,
+    required String competitionName,
+  }) async {
+    await RecentCompetitionStore.add(
+      storageKey: AppConstants.usersListRecentCompetitionsKey,
+      id: competitionId.toString(),
+      name: competitionName,
+    );
+    _loadRecentCompetitions();
   }
 
   @override
@@ -38,7 +62,7 @@ class UsersListController extends GetxController {
   }
 
   int? _selectedCompetitionId() {
-    if (userController.selectedEventId.value.isEmpty) return null;
-    return int.tryParse(userController.selectedEventId.value);
+    if (userController.usersListEventId.value.isEmpty) return null;
+    return int.tryParse(userController.usersListEventId.value);
   }
 }
