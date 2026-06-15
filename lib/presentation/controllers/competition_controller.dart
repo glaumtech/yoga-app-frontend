@@ -13,6 +13,7 @@ import '../../core/constants/championship_style.dart';
 import '../../core/utils/storage_service.dart';
 import '../../core/utils/dialog_helper.dart';
 import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/photo_upload_processor.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
 import '../../data/models/user_management_model.dart';
@@ -26,11 +27,10 @@ import '../../services/razorpay_checkout_service.dart';
 enum BrochureFileKind { image, pdf, unknown }
 
 class CompetitionController extends GetxController {
-  static const int brochureMaxImageBytes = 10 * 1024 * 1024;
   static const int brochureMaxPdfBytes = 25 * 1024 * 1024;
   static const String brochureUploadNotes =
       'Accepted: JPG, PNG, or PDF\n'
-      '• Images: max 10 MB\n'
+      '• Images over 2 MB are compressed to 2 MB\n'
       '• PDF: max 25 MB';
 
   final CompetitionRepository _repository = CompetitionRepository();
@@ -154,9 +154,8 @@ class CompetitionController extends GetxController {
       organizationPaymentModel.value.toUpperCase() ==
       SubscriptionCatalogFilter.onDemandModeKey;
 
-  String get createCompetitionButtonLabel => requiresPrepaidCompetitionPayment
-      ? 'Pay and Create Competition'
-      : 'SAVE';
+  String get createCompetitionButtonLabel =>
+      requiresPrepaidCompetitionPayment ? 'Pay and Create Competition' : 'SAVE';
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -571,8 +570,8 @@ class CompetitionController extends GetxController {
       final response = await _paymentRepository.getOnDemandContext();
       if (response.success && response.data != null) {
         final data = response.data!;
-        isOnDemandOrg.value = data['onDemand'] == true ||
-            data['requiresPrePayment'] == true;
+        isOnDemandOrg.value =
+            data['onDemand'] == true || data['requiresPrePayment'] == true;
         organizationPaymentModel.value =
             data['paymentModel']?.toString() ?? 'ORG_SUBSCRIPTION';
         final feePaise = data['maintenanceFeeAmountPaise'];
@@ -1055,49 +1054,82 @@ class CompetitionController extends GetxController {
         return;
       }
 
-      int fileSize = picked.size;
-      if (kIsWeb) {
-        if (picked.bytes == null || picked.bytes!.isEmpty) {
-          _notifyError('Unable to read brochure file');
-          return;
-        }
-        fileSize = picked.bytes!.length;
-      } else if (picked.path != null) {
-        fileSize = await File(picked.path!).length();
+      final fileBytes = await _readPickedFileBytes(picked);
+      if (fileBytes == null) {
+        _notifyError('Unable to read brochure file');
+        return;
       }
 
       final isPdf = lowerName.endsWith('.pdf');
-      final maxSize = isPdf ? brochureMaxPdfBytes : brochureMaxImageBytes;
-      if (fileSize > maxSize) {
-        _notifyError(
-          isPdf
-              ? 'PDF brochure must be 25 MB or smaller'
-              : 'Image brochure must be 10 MB or smaller',
+      if (isPdf) {
+        if (fileBytes.length > brochureMaxPdfBytes) {
+          _notifyError('PDF brochure must be 25 MB or smaller');
+          return;
+        }
+        await _applyBrochureSelection(
+          bytes: fileBytes,
+          fileName: fileName,
+          nativePath: picked.path,
         );
         return;
       }
 
-      brochureFileName.value = fileName;
-      if (kIsWeb) {
-        brochureBytes.value = picked.bytes;
-        brochureFile.value = null;
-        brochureFileLocal.value = null;
-        brochureUrl.value = 'web_file';
-      } else if (picked.path != null) {
-        final path = picked.path!;
-        brochureFile.value = XFile(path, name: fileName);
-        brochureFileLocal.value = File(path);
-        brochureBytes.value = null;
-        brochureUrl.value = path;
-      } else {
-        _notifyError('Unable to access brochure file');
-        return;
-      }
+      final processed = await PhotoUploadProcessor.processBytes(
+        fileBytes,
+        originalFileName: fileName,
+        compressThresholdBytes:
+            PhotoUploadProcessor.documentImageCompressThresholdBytes,
+        targetBytes: PhotoUploadProcessor.documentImageTargetBytes,
+      );
+      if (processed == null) return;
 
-      errorMessage.value = '';
+      await _applyBrochureSelection(
+        bytes: processed.bytes,
+        fileName: processed.fileName,
+        nativePath: processed.file?.path ?? picked.path,
+        localFile: processed.file,
+      );
+    } on PhotoUploadException catch (e) {
+      _notifyError(e.message);
     } catch (e) {
       _notifyError('Error picking brochure: ${e.toString()}');
     }
+  }
+
+  Future<Uint8List?> _readPickedFileBytes(PlatformFile picked) async {
+    if (kIsWeb) {
+      final bytes = picked.bytes;
+      if (bytes == null || bytes.isEmpty) return null;
+      return bytes;
+    }
+    if (picked.path == null) return null;
+    return File(picked.path!).readAsBytes();
+  }
+
+  Future<void> _applyBrochureSelection({
+    required Uint8List bytes,
+    required String fileName,
+    String? nativePath,
+    File? localFile,
+  }) async {
+    brochureFileName.value = fileName;
+    if (kIsWeb) {
+      brochureBytes.value = bytes;
+      brochureFile.value = null;
+      brochureFileLocal.value = null;
+      brochureUrl.value = 'web_file';
+    } else {
+      final file = localFile ?? (nativePath != null ? File(nativePath) : null);
+      if (file == null) {
+        _notifyError('Unable to access brochure file');
+        return;
+      }
+      brochureFileLocal.value = file;
+      brochureFile.value = XFile(file.path, name: fileName);
+      brochureBytes.value = null;
+      brochureUrl.value = file.path;
+    }
+    errorMessage.value = '';
   }
 
   // Validate brochure is uploaded
@@ -1833,9 +1865,10 @@ class CompetitionController extends GetxController {
         isLoading.value = false;
         isProcessingCompetitionPayment.value = true;
         try {
-          maintenancePaymentOrderId = await _completeOnDemandPaymentBeforeCreate(
-            description: competitionNameController.text.trim(),
-          );
+          maintenancePaymentOrderId =
+              await _completeOnDemandPaymentBeforeCreate(
+                description: competitionNameController.text.trim(),
+              );
           if (maintenancePaymentOrderId == null) {
             return false;
           }

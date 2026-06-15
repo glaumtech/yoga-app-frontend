@@ -17,6 +17,7 @@ import '../../../core/utils/permission_store.dart';
 import '../../../core/theme/role_theme_controller.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/photo_capture_service.dart';
+import '../../../core/utils/photo_upload_processor.dart';
 
 class UserManagementController extends GetxController {
   final UserManagementRepository _repository = UserManagementRepository();
@@ -71,6 +72,7 @@ class UserManagementController extends GetxController {
   // Form State
   final RxString selectedType = 'SUB ADMIN'.obs;
   final RxString selectedEventId = ''.obs;
+
   /// Competition filter for the Users list tab; not cleared by [resetForm].
   final RxString usersListEventId = ''.obs;
   final RxString selectedEventName = ''.obs;
@@ -326,8 +328,9 @@ class UserManagementController extends GetxController {
 
   /// When competition uses winner-based Champions, add CHAMPIONS for jury allotment.
   Future<void> _appendChampionsCategoryForWinnerStyle(int competitionId) async {
-    final compResponse =
-        await _competitionRepository.getCompetitionById(competitionId);
+    final compResponse = await _competitionRepository.getCompetitionById(
+      competitionId,
+    );
     if (!compResponse.success || compResponse.data == null) return;
 
     final style = ChampionshipStyle.fromApiValue(
@@ -450,36 +453,37 @@ class UserManagementController extends GetxController {
   }
 
   Future<void> _applyPickedUserPhoto(XFile image) async {
+    final processed = await PhotoUploadProcessor.processXFile(image);
+    if (processed == null) return;
+
     if (kIsWeb) {
-      final bytes = await image.readAsBytes();
-      photoBytes.value = bytes;
+      photoBytes.value = processed.bytes;
       photoUrl.value = 'web_image';
       photoFile.value = null;
     } else {
-      photoFile.value = File(image.path);
+      photoFile.value = processed.file;
       photoBytes.value = null;
-      photoUrl.value = image.path;
+      photoUrl.value = processed.file?.path ?? image.path;
     }
   }
 
   Future<void> _applyPickedVolunteerPhoto(VolunteerRow row, XFile image) async {
+    final processed = await PhotoUploadProcessor.processXFile(image);
+    if (processed == null) return;
+
     if (kIsWeb) {
-      final bytes = await image.readAsBytes();
-      row.photoBytes.value = bytes;
+      row.photoBytes.value = processed.bytes;
       row.photoUrl.value = 'web_image';
       row.photoFile.value = null;
     } else {
-      row.photoFile.value = File(image.path);
+      row.photoFile.value = processed.file;
       row.photoBytes.value = null;
-      row.photoUrl.value = image.path;
+      row.photoUrl.value = processed.file?.path ?? image.path;
     }
   }
 
   // Pick or capture user photo (gallery or camera).
-  Future<void> pickPhoto(
-    ImageSource source, {
-    BuildContext? context,
-  }) async {
+  Future<void> pickPhoto(ImageSource source, {BuildContext? context}) async {
     try {
       final XFile? image = await PhotoCaptureService.pickImage(
         source: source,
@@ -490,6 +494,8 @@ class UserManagementController extends GetxController {
       if (image != null) {
         await _applyPickedUserPhoto(image);
       }
+    } on PhotoUploadException catch (e) {
+      errorMessage.value = e.message;
     } catch (e) {
       errorMessage.value = source == ImageSource.camera
           ? 'Error taking photo: ${e.toString()}'
@@ -513,6 +519,8 @@ class UserManagementController extends GetxController {
       if (image != null) {
         await _applyPickedVolunteerPhoto(row, image);
       }
+    } on PhotoUploadException catch (e) {
+      errorMessage.value = e.message;
     } catch (e) {
       errorMessage.value = source == ImageSource.camera
           ? 'Error taking photo: ${e.toString()}'
@@ -543,7 +551,9 @@ class UserManagementController extends GetxController {
   }
 
   /// Loads volunteer names already registered for this competition.
-  Future<void> _loadExistingVolunteerNamesForCompetition(int competitionId) async {
+  Future<void> _loadExistingVolunteerNamesForCompetition(
+    int competitionId,
+  ) async {
     _existingVolunteerNamesLower.clear();
     final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
     final response = await _repository.getAllUsers(
@@ -560,9 +570,10 @@ class UserManagementController extends GetxController {
       if (name.isEmpty) continue;
       if (name.startsWith('Volunteers -')) {
         for (final volunteer in user.volunteers ?? const []) {
-          final volunteerName = (volunteer['volunteerName'] ?? volunteer['name'])
-              ?.toString()
-              .trim();
+          final volunteerName =
+              (volunteer['volunteerName'] ?? volunteer['name'])
+                  ?.toString()
+                  .trim();
           if (volunteerName != null && volunteerName.isNotEmpty) {
             _existingVolunteerNamesLower.add(volunteerName.toLowerCase());
           }
@@ -951,7 +962,9 @@ class UserManagementController extends GetxController {
       for (final volunteer in user.volunteers!) {
         final row = VolunteerRow();
         row.nameController.text =
-            (volunteer['volunteerName'] ?? volunteer['name'])?.toString().trim() ??
+            (volunteer['volunteerName'] ?? volunteer['name'])
+                ?.toString()
+                .trim() ??
             '';
         row.cellController.text = volunteer['cell']?.toString().trim() ?? '';
         volunteerRows.add(row);
@@ -1335,8 +1348,7 @@ class UserManagementController extends GetxController {
         return true;
       }
 
-      errorMessage.value =
-          response.message ?? 'Invalid or expired login link';
+      errorMessage.value = response.message ?? 'Invalid or expired login link';
       isLoading.value = false;
       return false;
     } catch (e) {
@@ -1356,8 +1368,7 @@ class UserManagementController extends GetxController {
         return response.data;
       }
 
-      errorMessage.value =
-          response.message ?? 'Failed to generate login link';
+      errorMessage.value = response.message ?? 'Failed to generate login link';
       return null;
     } catch (e) {
       errorMessage.value = 'Error generating login link: ${e.toString()}';

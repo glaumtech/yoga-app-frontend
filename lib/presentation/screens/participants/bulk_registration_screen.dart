@@ -14,6 +14,8 @@ import '../../widgets/location/district_search_field.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/permission_store.dart';
+import '../../../core/utils/photo_capture_service.dart';
+import '../../../core/utils/photo_upload_processor.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../data/models/district_model.dart';
 import '../../models/bulk_registration_row.dart';
@@ -1405,21 +1407,25 @@ class BulkRegistrationScreen extends StatelessWidget {
     BulkRegistrationRow row,
   ) async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
+      final XFile? image = await PhotoCaptureService.pickImage(
         source: ImageSource.gallery,
+        context: context,
         imageQuality: 85,
       );
 
       if (image != null) {
-        row.photoXFile.value = image;
+        final processed = await PhotoUploadProcessor.processXFile(image);
+        if (processed == null) return;
+
+        row.photoXFile.value = processed.xFile;
         if (kIsWeb) {
-          final bytes = await image.readAsBytes();
-          row.photoBytes.value = bytes;
+          row.photoBytes.value = processed.bytes;
         } else {
-          row.photoFile.value = File(image.path);
+          row.photoFile.value = processed.file;
         }
       }
+    } on PhotoUploadException catch (e) {
+      controller.errorMessage.value = e.message;
     } catch (e) {
       controller.errorMessage.value = 'Error picking image: ${e.toString()}';
     }

@@ -25,6 +25,8 @@ import '../../core/utils/storage_service.dart';
 import '../../core/utils/state_defaults.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/photo_capture_service.dart';
+import '../../core/utils/photo_upload_processor.dart';
+import '../../core/utils/upload_filename_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/subscription_catalog_filter.dart';
 import '../models/bulk_registration_row.dart';
@@ -135,17 +137,15 @@ class ParticipantController extends GetxController {
   final RxInt institutionFieldRevision = 0.obs;
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
-  static const int participantPhotoMaxBytes = 10 * 1024 * 1024;
   static const String participantPhotoUploadNotes =
       'Use BROWSE or CAMERA\n'
       'Accepted: JPG or PNG\n'
-      '• Max size: 10 MB';
+      '• Photos over 1 MB are compressed to 1 MB';
 
-  static const int bonafideMaxImageBytes = 10 * 1024 * 1024;
   static const int bonafideMaxPdfBytes = 25 * 1024 * 1024;
   static const String bonafideUploadNotes =
       'Accepted: JPG, PNG, or PDF\n'
-      '• Images: max 10 MB\n'
+      '• Images over 2 MB are compressed to 2 MB\n'
       '• PDF: max 25 MB';
 
   final Rx<File?> bonafideFile = Rx<File?>(null);
@@ -559,50 +559,93 @@ class ParticipantController extends GetxController {
         return false;
       }
 
-      int fileSize = picked.size;
-      if (kIsWeb) {
-        if (picked.bytes == null || picked.bytes!.isEmpty) {
-          errorMessage.value = 'Unable to read certificate file';
-          return false;
-        }
-        fileSize = picked.bytes!.length;
-      } else if (picked.path != null) {
-        fileSize = await File(picked.path!).length();
+      final fileBytes = await _readPickedCertificateBytes(picked);
+      if (fileBytes == null) {
+        errorMessage.value = 'Unable to read certificate file';
+        return false;
       }
 
       final isPdf = lowerName.endsWith('.pdf');
-      final maxSize = isPdf ? bonafideMaxPdfBytes : bonafideMaxImageBytes;
-      if (fileSize > maxSize) {
-        errorMessage.value = isPdf
-            ? 'PDF certificate must be 25 MB or smaller'
-            : 'Image certificate must be 10 MB or smaller';
-        return false;
-      }
-
-      bonafideFileName.value = fileName;
-      existingCertificateUrl.value = '';
-
-      if (kIsWeb) {
-        bonafideBytes.value = picked.bytes;
-        bonafideImage.value = XFile.fromData(
-          picked.bytes!,
-          name: fileName,
-          mimeType: isPdf ? 'application/pdf' : null,
+      if (isPdf) {
+        if (fileBytes.length > bonafideMaxPdfBytes) {
+          errorMessage.value = 'PDF certificate must be 25 MB or smaller';
+          return false;
+        }
+        _applyBonafideSelection(
+          bytes: fileBytes,
+          fileName: fileName,
+          isPdf: true,
+          nativePath: picked.path,
         );
-        bonafideFile.value = null;
-      } else if (picked.path != null) {
-        bonafideImage.value = XFile(picked.path!, name: fileName);
-        bonafideFile.value = File(picked.path!);
-        bonafideBytes.value = null;
-      } else {
-        errorMessage.value = 'Unable to access certificate file';
-        return false;
+        return true;
       }
+
+      final processed = await PhotoUploadProcessor.processBytes(
+        fileBytes,
+        originalFileName: fileName,
+        compressThresholdBytes:
+            PhotoUploadProcessor.documentImageCompressThresholdBytes,
+        targetBytes: PhotoUploadProcessor.documentImageTargetBytes,
+      );
+      if (processed == null) return false;
+
+      _applyBonafideSelection(
+        bytes: processed.bytes,
+        fileName: processed.fileName,
+        isPdf: false,
+        nativePath: processed.file?.path ?? picked.path,
+        localFile: processed.file,
+      );
       return true;
+    } on PhotoUploadException catch (e) {
+      errorMessage.value = e.message;
+      return false;
     } catch (e) {
       errorMessage.value = 'Failed to pick certificate: ${e.toString()}';
       return false;
     }
+  }
+
+  Future<Uint8List?> _readPickedCertificateBytes(PlatformFile picked) async {
+    if (kIsWeb) {
+      final bytes = picked.bytes;
+      if (bytes == null || bytes.isEmpty) return null;
+      return bytes;
+    }
+    if (picked.path == null) return null;
+    return File(picked.path!).readAsBytes();
+  }
+
+  void _applyBonafideSelection({
+    required Uint8List bytes,
+    required String fileName,
+    required bool isPdf,
+    String? nativePath,
+    File? localFile,
+  }) {
+    bonafideFileName.value = fileName;
+    existingCertificateUrl.value = '';
+
+    if (kIsWeb) {
+      bonafideBytes.value = bytes;
+      bonafideImage.value = XFile.fromData(
+        bytes,
+        name: fileName,
+        mimeType: isPdf ? 'application/pdf' : null,
+      );
+      bonafideFile.value = null;
+      return;
+    }
+
+    final file = localFile ?? (nativePath != null ? File(nativePath) : null);
+    if (file == null) {
+      errorMessage.value = 'Unable to access certificate file';
+      return;
+    }
+
+    bonafideImage.value = XFile(file.path, name: fileName);
+    bonafideFile.value = file;
+    bonafideBytes.value = null;
   }
 
   void _applyBonafideRulesForSelectedInstitution() {
@@ -677,6 +720,75 @@ class ParticipantController extends GetxController {
     }
 
     return true;
+  }
+
+  /// Validates and normalizes upload filenames before payment / save.
+  Future<bool> validateRegistrationUploadsBeforeSubmit() async {
+    try {
+      if (selectedImage.value != null || photoFile.value != null) {
+        final photo = await UploadFilenameHelper.readParticipantPhoto(
+          xFile: selectedImage.value,
+          file: photoFile.value,
+        );
+        selectedImage.value = XFile.fromData(
+          photo.bytes,
+          name: photo.filename,
+          mimeType: photo.filename.toLowerCase().endsWith('.png')
+              ? 'image/png'
+              : 'image/jpeg',
+        );
+        if (!kIsWeb && photoFile.value != null) {
+          await photoFile.value!.writeAsBytes(photo.bytes);
+        }
+      }
+
+      if (hasBonafideCertificateSelected) {
+        final certificate = await UploadFilenameHelper.readBonafideCertificate(
+          xFile: bonafideImage.value,
+          file: bonafideFile.value,
+        );
+        bonafideFileName.value = certificate.filename;
+        if (kIsWeb) {
+          bonafideBytes.value = certificate.bytes;
+          bonafideImage.value = XFile.fromData(
+            certificate.bytes,
+            name: certificate.filename,
+            mimeType: certificate.filename.toLowerCase().endsWith('.pdf')
+                ? 'application/pdf'
+                : (certificate.filename.toLowerCase().endsWith('.png')
+                    ? 'image/png'
+                    : 'image/jpeg'),
+          );
+        } else if (bonafideFile.value != null) {
+          await bonafideFile.value!.writeAsBytes(certificate.bytes);
+          bonafideImage.value = XFile(
+            bonafideFile.value!.path,
+            name: certificate.filename,
+          );
+        }
+      }
+
+      if (paymentProofImage.value != null) {
+        final proof = await UploadFilenameHelper.readPaymentProof(
+          xFile: paymentProofImage.value!,
+        );
+        paymentProofImage.value = XFile.fromData(
+          proof.bytes,
+          name: proof.filename,
+          mimeType: proof.filename.toLowerCase().endsWith('.png')
+              ? 'image/png'
+              : 'image/jpeg',
+        );
+      }
+
+      return true;
+    } on FormatException catch (e) {
+      errorMessage.value = e.message;
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Invalid upload file: ${e.toString()}';
+      return false;
+    }
   }
 
   // Select institution
@@ -1772,32 +1884,24 @@ class ParticipantController extends GetxController {
 
       if (file == null) return;
 
-      int fileSize;
-      if (kIsWeb) {
-        final bytes = await file.readAsBytes();
-        fileSize = bytes.length;
-      } else {
-        fileSize = await File(file.path).length();
-      }
+      final processed = await PhotoUploadProcessor.processXFile(file);
+      if (processed == null) return;
 
-      if (fileSize > participantPhotoMaxBytes) {
-        final message = 'Participant photo must be 10 MB or smaller';
-        if (context != null && context.mounted) {
-          SnackbarHelper.showError(context, message);
-        } else {
-          errorMessage.value = message;
-        }
-        return;
-      }
-
-      selectedImage.value = file;
+      selectedImage.value = processed.xFile;
       if (!kIsWeb) {
-        photoFile.value = File(file.path);
+        photoFile.value = processed.file;
       } else {
         photoFile.value = null;
       }
       existingPhotoUrl.value = '';
       errorMessage.value = '';
+    } on PhotoUploadException catch (e) {
+      final message = e.message;
+      if (context != null && context.mounted) {
+        SnackbarHelper.showError(context, message);
+      } else {
+        errorMessage.value = message;
+      }
     } catch (e) {
       final message = source == ImageSource.camera
           ? 'Failed to take photo: ${e.toString()}'
@@ -2698,6 +2802,13 @@ class ParticipantController extends GetxController {
     }
 
     if (!await validateBonafideBeforeSave()) {
+      if (!identical(_registrationSubmitOwner, submitOwner)) {
+        errorMessage.value = '';
+      }
+      return false;
+    }
+
+    if (!await validateRegistrationUploadsBeforeSubmit()) {
       if (!identical(_registrationSubmitOwner, submitOwner)) {
         errorMessage.value = '';
       }

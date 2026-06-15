@@ -84,6 +84,7 @@ dependencies:
 
   # PDF preview (brochure dialog)
   pdfx: ^2.9.2
+  image: ^4.8.0
 
 dev_dependencies:
   flutter_test:

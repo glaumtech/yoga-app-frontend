@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
@@ -7,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/storage_service.dart';
+import '../../core/utils/upload_filename_helper.dart';
 import '../models/participant_model.dart';
 import '../models/api_response.dart';
 import '../models/score_response_model.dart';
@@ -25,14 +27,17 @@ class ParticipantsForScoringResponse {
 class ParticipantRepository {
   final APIService _apiService = APIService();
 
-  Future<ApiResponse<Map<String, dynamic>>> importParticipantRegistrationsExcel({
+  Future<ApiResponse<Map<String, dynamic>>>
+  importParticipantRegistrationsExcel({
     required int competitionId,
     required String filename,
     Uint8List? bytes,
     String? filePath,
   }) async {
     try {
-      final fields = <String, String>{'competitionId': competitionId.toString()};
+      final fields = <String, String>{
+        'competitionId': competitionId.toString(),
+      };
       final lower = filename.toLowerCase();
       final contentType = lower.endsWith('.xls')
           ? MediaType('application', 'vnd.ms-excel')
@@ -543,80 +548,46 @@ class ParticipantRepository {
       print('Fields added: ${request.fields}');
 
       // Add photo file
-      if (photoXFile != null) {
-        try {
-          final fileBytes = await photoXFile.readAsBytes();
-          final fileName = photoXFile.name.split('/').last;
-          final multipartFile = http.MultipartFile.fromBytes(
+      if (photoXFile != null || photoFile != null) {
+        final photo = await UploadFilenameHelper.readParticipantPhoto(
+          xFile: photoXFile,
+          file: photoFile is File ? photoFile : null,
+        );
+        request.files.add(
+          http.MultipartFile.fromBytes(
             'photo',
-            fileBytes,
-            filename: fileName,
-          );
-          request.files.add(multipartFile);
-        } catch (e) {
-          print('Error reading photo XFile: $e');
-        }
-      } else if (photoFile != null) {
-        try {
-          final fileBytes = await (photoFile as dynamic).readAsBytes();
-          final fileName = (photoFile as dynamic).path.split('/').last;
-          final multipartFile = http.MultipartFile.fromBytes(
-            'photo',
-            fileBytes,
-            filename: fileName,
-          );
-          request.files.add(multipartFile);
-        } catch (e) {
-          print('Error reading photo File: $e');
-        }
+            photo.bytes,
+            filename: photo.filename,
+          ),
+        );
       }
 
       // Add bonafied certificate file
-      if (bonafiedCertificateXFile != null) {
-        try {
-          final fileBytes = await bonafiedCertificateXFile.readAsBytes();
-          final fileName = bonafiedCertificateXFile.name.split('/').last;
-          final multipartFile = http.MultipartFile.fromBytes(
+      if (bonafiedCertificateXFile != null || bonafiedCertificateFile != null) {
+        final certificate = await UploadFilenameHelper.readBonafideCertificate(
+          xFile: bonafiedCertificateXFile,
+          file: bonafiedCertificateFile is File ? bonafiedCertificateFile : null,
+        );
+        request.files.add(
+          http.MultipartFile.fromBytes(
             'bonafiedCertificate',
-            fileBytes,
-            filename: fileName,
-          );
-          request.files.add(multipartFile);
-        } catch (e) {
-          print('Error reading bonafied certificate XFile: $e');
-        }
-      } else if (bonafiedCertificateFile != null) {
-        try {
-          final fileBytes = await (bonafiedCertificateFile as dynamic)
-              .readAsBytes();
-          final fileName = (bonafiedCertificateFile as dynamic).path
-              .split('/')
-              .last;
-          final multipartFile = http.MultipartFile.fromBytes(
-            'bonafiedCertificate',
-            fileBytes,
-            filename: fileName,
-          );
-          request.files.add(multipartFile);
-        } catch (e) {
-          print('Error reading bonafied certificate File: $e');
-        }
+            certificate.bytes,
+            filename: certificate.filename,
+          ),
+        );
       }
 
       if (paymentProofXFile != null) {
-        try {
-          final fileBytes = await paymentProofXFile.readAsBytes();
-          final fileName = paymentProofXFile.name.split('/').last;
-          request.files.add(
-            http.MultipartFile.fromBytes(
-              'paymentProof',
-              fileBytes,
-              filename: fileName,
-            ),
-          );
-        } catch (e) {
-          print('Error reading payment proof: $e');
-        }
+        final proof = await UploadFilenameHelper.readPaymentProof(
+          xFile: paymentProofXFile,
+        );
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'paymentProof',
+            proof.bytes,
+            filename: proof.filename,
+          ),
+        );
       }
 
       // Send request
@@ -661,6 +632,11 @@ class ParticipantRepository {
           statusCode: response.statusCode,
         );
       }
+    } on FormatException catch (e) {
+      return ApiResponse<Map<String, dynamic>>(
+        success: false,
+        message: e.message,
+      );
     } catch (e) {
       print('Error in createParticipantRegistration: $e');
       return ApiResponse<Map<String, dynamic>>(
@@ -779,64 +755,33 @@ class ParticipantRepository {
       request.fields.addAll(fields);
 
       // Add photo file
-      if (photoXFile != null) {
-        try {
-          final fileBytes = await photoXFile.readAsBytes();
-          final fileName = photoXFile.name.split('/').last;
-          final multipartFile = http.MultipartFile.fromBytes(
+      if (photoXFile != null || photoFile != null) {
+        final photo = await UploadFilenameHelper.readParticipantPhoto(
+          xFile: photoXFile,
+          file: photoFile is File ? photoFile : null,
+        );
+        request.files.add(
+          http.MultipartFile.fromBytes(
             'photo',
-            fileBytes,
-            filename: fileName,
-          );
-          request.files.add(multipartFile);
-        } catch (e) {
-          print('Error reading photo XFile: $e');
-        }
-      } else if (photoFile != null) {
-        try {
-          final fileBytes = await (photoFile as dynamic).readAsBytes();
-          final fileName = (photoFile as dynamic).path.split('/').last;
-          final multipartFile = http.MultipartFile.fromBytes(
-            'photo',
-            fileBytes,
-            filename: fileName,
-          );
-          request.files.add(multipartFile);
-        } catch (e) {
-          print('Error reading photo File: $e');
-        }
+            photo.bytes,
+            filename: photo.filename,
+          ),
+        );
       }
 
       // Add bonafied certificate file
-      if (bonafiedCertificateXFile != null) {
-        try {
-          final fileBytes = await bonafiedCertificateXFile.readAsBytes();
-          final fileName = bonafiedCertificateXFile.name.split('/').last;
-          final multipartFile = http.MultipartFile.fromBytes(
+      if (bonafiedCertificateXFile != null || bonafiedCertificateFile != null) {
+        final certificate = await UploadFilenameHelper.readBonafideCertificate(
+          xFile: bonafiedCertificateXFile,
+          file: bonafiedCertificateFile is File ? bonafiedCertificateFile : null,
+        );
+        request.files.add(
+          http.MultipartFile.fromBytes(
             'bonafiedCertificate',
-            fileBytes,
-            filename: fileName,
-          );
-          request.files.add(multipartFile);
-        } catch (e) {
-          print('Error reading bonafied certificate XFile: $e');
-        }
-      } else if (bonafiedCertificateFile != null) {
-        try {
-          final fileBytes = await (bonafiedCertificateFile as dynamic)
-              .readAsBytes();
-          final fileName = (bonafiedCertificateFile as dynamic).path
-              .split('/')
-              .last;
-          final multipartFile = http.MultipartFile.fromBytes(
-            'bonafiedCertificate',
-            fileBytes,
-            filename: fileName,
-          );
-          request.files.add(multipartFile);
-        } catch (e) {
-          print('Error reading bonafied certificate File: $e');
-        }
+            certificate.bytes,
+            filename: certificate.filename,
+          ),
+        );
       }
 
       // Send request
@@ -861,6 +806,11 @@ class ParticipantRepository {
               'Failed to update registration',
         );
       }
+    } on FormatException catch (e) {
+      return ApiResponse<Map<String, dynamic>>(
+        success: false,
+        message: e.message,
+      );
     } catch (e) {
       print('Error in updateParticipantRegistration: $e');
       return ApiResponse<Map<String, dynamic>>(
@@ -922,7 +872,8 @@ class ParticipantRepository {
         requestBody['groupId'] = groupId;
       }
       if (institutionId != null && institutionId.trim().isNotEmpty) {
-        requestBody['institutionId'] = int.tryParse(institutionId) ?? institutionId;
+        requestBody['institutionId'] =
+            int.tryParse(institutionId) ?? institutionId;
       }
       if (male != null) {
         requestBody['male'] = male;
