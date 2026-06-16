@@ -24,7 +24,7 @@ class PublicCompetitionsScreen extends StatelessWidget {
       case 'upcoming':
         return 'Upcoming Competitions';
       case 'completed':
-        return 'Past Events';
+        return 'Past Competitions';
       default:
         return 'All Competitions';
     }
@@ -33,13 +33,13 @@ class PublicCompetitionsScreen extends StatelessWidget {
   String get _subtitle {
     switch (statusFilter?.toLowerCase()) {
       case 'ongoing':
-        return 'Live events you can join now';
+        return 'Live competitions you can join now';
       case 'upcoming':
-        return 'Scheduled events — register early';
+        return 'Scheduled competitions — register early';
       case 'completed':
         return 'Browse results and participants';
       default:
-        return 'Swipe to explore all events';
+        return 'Scroll to explore all competitions';
     }
   }
 
@@ -48,8 +48,9 @@ class PublicCompetitionsScreen extends StatelessWidget {
     if (status == null || status.isEmpty) {
       return List<HomeCompetitionModel>.from(all);
     }
-    final filtered =
-        all.where((c) => c.status.toLowerCase() == status).toList();
+    final filtered = all
+        .where((c) => c.status.toLowerCase() == status)
+        .toList();
     if (status == 'completed') {
       filtered.sort((a, b) {
         final endA = DateTime.tryParse(a.eventEndDate ?? '') ?? DateTime(1970);
@@ -67,8 +68,7 @@ class PublicCompetitionsScreen extends StatelessWidget {
   void _openParticipants(BuildContext context, HomeCompetitionModel c) {
     final id = c.idStr ?? '${c.id}';
     if (id.isEmpty) return;
-    final isPast =
-        _isPast || c.status.toLowerCase() == 'completed';
+    final isPast = _isPast || c.status.toLowerCase() == 'completed';
     context.push(
       AppRoutes.publicCompetitionParticipantsPath(
         id,
@@ -78,21 +78,38 @@ class PublicCompetitionsScreen extends StatelessWidget {
     );
   }
 
-  double _cardWidth(double screenWidth) {
-    if (screenWidth < HomeLayout.mobile) {
-      return (screenWidth * 0.82).clamp(280.0, 340.0);
-    }
-    return HomeLayout.competitionCarouselItemExtent(screenWidth);
+  double _gridCardWidth(double screenWidth, int crossAxisCount, double padH) {
+    const spacing = 16.0;
+    return (screenWidth - 2 * padH - spacing * (crossAxisCount - 1)) /
+        crossAxisCount;
+  }
+
+  double _gridRowHeight() => _isPast ? 420.0 : 508.0;
+
+  Widget _buildEventCard(
+    BuildContext context,
+    HomeCompetitionModel c,
+    double width,
+    int index,
+    String Function(HomeCompetitionModel) idOf,
+  ) {
+    return PublicCompetitionHorizontalCard(
+      key: ValueKey('public_h_${idOf(c)}_$index'),
+      competition: c,
+      width: width,
+      onViewParticipants: () => _openParticipants(context, c),
+      showShareLinkOption: _isUpcoming,
+      showRegistrationQr: _isOngoing || _isUpcoming,
+      showRegistrationButton: !_isPast,
+      showResultsButton: _isOngoing,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final competitionController = Get.put(CompetitionController());
 
-    if (competitionController.homeCompetitions.isEmpty &&
-        !competitionController.isLoadingHomeCompetitions.value) {
-      competitionController.loadCompetitionsForHome();
-    }
+    competitionController.ensureHomeCompetitionsLoaded();
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -105,8 +122,7 @@ class PublicCompetitionsScreen extends StatelessWidget {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final list =
-                _filteredList(competitionController.homeCompetitions);
+            final list = _filteredList(competitionController.homeCompetitions);
 
             if (list.isEmpty) {
               return SizedBox(
@@ -122,9 +138,14 @@ class PublicCompetitionsScreen extends StatelessWidget {
 
             final w = constraints.maxWidth;
             final padH = HomeLayout.sectionHorizontalPadding(w);
-            final cardW = _cardWidth(w);
-            final carouselH = (_isPast ? 408.0 : 496.0);
             final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
+            final isMobile = w < HomeLayout.mobile;
+            final crossCount = isMobile
+                ? 1
+                : HomeLayout.competitionGridCrossAxisCount(w);
+            final cardW = isMobile
+                ? w - 2 * padH
+                : _gridCardWidth(w, crossCount, padH);
 
             return SizedBox(
               height: constraints.maxHeight,
@@ -144,15 +165,12 @@ class PublicCompetitionsScreen extends StatelessWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color:
-                                    AppTheme.primaryColor.withOpacity(0.12),
+                                color: AppTheme.primaryColor.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                '${list.length} event${list.length == 1 ? '' : 's'}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
+                                '${list.length} competition${list.length == 1 ? '' : 's'}',
+                                style: Theme.of(context).textTheme.labelMedium
                                     ?.copyWith(
                                       color: AppTheme.primaryColor,
                                       fontWeight: FontWeight.bold,
@@ -161,16 +179,14 @@ class PublicCompetitionsScreen extends StatelessWidget {
                             ),
                             const Spacer(),
                             Icon(
-                              Icons.swipe,
+                              Icons.unfold_more,
                               size: 18,
                               color: Colors.grey[600],
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Swipe',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              'Scroll',
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: Colors.grey[600]),
                             ),
                           ],
@@ -178,39 +194,53 @@ class PublicCompetitionsScreen extends StatelessWidget {
                         const SizedBox(height: 8),
                         Text(
                           _subtitle,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey[700],
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: Colors.grey[700]),
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(
-                    height: carouselH,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.symmetric(horizontal: padH),
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 16),
-                      itemBuilder: (context, index) {
-                        final c = list[index];
-                        return PublicCompetitionHorizontalCard(
-                          key: ValueKey('public_h_${idOf(c)}_$index'),
-                          competition: c,
-                          width: cardW,
-                          onViewParticipants: () {
-                            _openParticipants(context, c);
-                          },
-                          showShareLinkOption: _isUpcoming,
-                          showRegistrationQr: _isOngoing || _isUpcoming,
-                          showRegistrationButton: !_isPast,
-                        );
-                      },
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(padH, 0, padH, 16),
+                      child: isMobile
+                          ? Column(
+                              children: [
+                                for (var i = 0; i < list.length; i++) ...[
+                                  if (i > 0) const SizedBox(height: 16),
+                                  _buildEventCard(
+                                    context,
+                                    list[i],
+                                    cardW,
+                                    i,
+                                    idOf,
+                                  ),
+                                ],
+                              ],
+                            )
+                          : GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossCount,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                    mainAxisExtent: _gridRowHeight(),
+                                  ),
+                              itemCount: list.length,
+                              itemBuilder: (context, index) {
+                                return _buildEventCard(
+                                  context,
+                                  list[index],
+                                  cardW,
+                                  index,
+                                  idOf,
+                                );
+                              },
+                            ),
                     ),
                   ),
-                  const Spacer(),
                   Padding(
                     padding: EdgeInsets.fromLTRB(padH, 0, padH, 12),
                     child: _buildHintCard(context),
@@ -237,7 +267,10 @@ class PublicCompetitionsScreen extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            Icon(Icons.touch_app, color: AppTheme.primaryColor.withOpacity(0.8)),
+            Icon(
+              Icons.touch_app,
+              color: AppTheme.primaryColor.withOpacity(0.8),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(

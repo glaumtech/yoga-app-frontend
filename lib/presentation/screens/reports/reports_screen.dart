@@ -6,12 +6,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../data/repositories/reports_repository.dart';
 import '../../controllers/reports_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
+import '../../controllers/reports_participants_list_preset.dart';
 import 'reports_users_tab.dart';
 import 'reports_participants_tab.dart';
+import 'reports_registered_participants_tab.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Reports Screen
@@ -23,14 +26,39 @@ class ReportsScreen extends StatefulWidget {
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
-class _ReportsScreenState extends State<ReportsScreen> {
+class _ReportTabItem {
+  const _ReportTabItem({
+    required this.id,
+    required this.label,
+    this.requiredKey,
+    required this.child,
+  });
+
+  final String id;
+  final String label;
+  final String? requiredKey;
+  final Widget child;
+}
+
+class _ReportsScreenState extends State<ReportsScreen>
+    with SingleTickerProviderStateMixin {
   late final ReportsController controller;
   final ReportsRepository _printRepository = ReportsRepository();
+  TabController? _tabController;
+  List<_ReportTabItem> _visibleTabs = const [];
+  String? _pendingReportTabId;
+  Worker? _tabNavWorker;
 
   @override
   void initState() {
     super.initState();
     controller = Get.put(ReportsController(), permanent: false);
+    _tabNavWorker = ever<String?>(controller.navigateToReportTabId, (tabId) {
+      if (tabId == null || !mounted) return;
+      _pendingReportTabId = tabId;
+      controller.navigateToReportTabId.value = null;
+      _applyPendingTabNavigation();
+    });
     // Refresh competition list (/competition/list) + report summary on every
     // navigation to Reports (GetX controller may be reused across visits).
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -40,10 +68,153 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   @override
+  void dispose() {
+    _tabNavWorker?.dispose();
+    _tabController?.dispose();
+    super.dispose();
+  }
+
+  void _ensureTabController(int length) {
+    if (length <= 0) return;
+    final previousIndex = _tabController?.index ?? 0;
+    if (_tabController != null && _tabController!.length == length) return;
+    _tabController?.dispose();
+    _tabController = TabController(
+      length: length,
+      vsync: this,
+      initialIndex: previousIndex.clamp(0, length - 1),
+    );
+  }
+
+  void _applyPendingTabNavigation() {
+    final tabId = _pendingReportTabId;
+    final tabController = _tabController;
+    if (tabId == null || tabController == null) return;
+    final index = _visibleTabs.indexWhere((t) => t.id == tabId);
+    if (index >= 0 && index < tabController.length) {
+      tabController.animateTo(index);
+      _pendingReportTabId = null;
+    }
+  }
+
+  List<_ReportTabItem> _buildAllReportTabs({
+    required bool isLoading,
+    required String error,
+    required Map<String, dynamic>? report,
+    required bool isMobile,
+    required bool isWideWeb,
+  }) {
+    return [
+      _ReportTabItem(
+        id: 'dashboard',
+        label: 'Dashboard',
+        child: RefreshIndicator(
+          onRefresh: () async => controller.loadCompetitionsAndMaybeReport(),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.all(isMobile ? 12 : 5),
+            children: [
+              if (isLoading) ...[
+                const SizedBox(height: 24),
+                const Center(child: CircularProgressIndicator()),
+              ] else if (error.isNotEmpty) ...[
+                _buildErrorCard(error),
+              ] else if (report == null) ...[
+                _buildInfoCard(
+                  'Select a competition to view reports.',
+                  icon: Icons.info_outline,
+                ),
+              ] else ...[
+                ..._buildDashboardTab(
+                  report,
+                  isMobile: isMobile,
+                  isWideWeb: isWideWeb,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      _ReportTabItem(
+        id: ReportsController.registeredParticipantsReportTabId,
+        label: 'Registered participants',
+        requiredKey: 'REPORTS_REGISTERED_PARTICIPANTS',
+        child: const ReportsRegisteredParticipantsTab(),
+      ),
+      _ReportTabItem(
+        id: 'prize_winners',
+        label: 'Prize Winners',
+        child: RefreshIndicator(
+          onRefresh: () async => controller.loadCompetitionsAndMaybeReport(),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.all(isMobile ? 12 : 16),
+            children: [
+              if (isLoading) ...[
+                const SizedBox(height: 24),
+                const Center(child: CircularProgressIndicator()),
+              ] else if (error.isNotEmpty) ...[
+                _buildErrorCard(error),
+              ] else if (report == null) ...[
+                _buildInfoCard(
+                  'Select a competition to view reports.',
+                  icon: Icons.info_outline,
+                ),
+              ] else ...[
+                _buildPrizeWinnersSection(report, isMobile),
+                const SizedBox(height: 20),
+              ],
+            ],
+          ),
+        ),
+      ),
+      _ReportTabItem(
+        id: 'users',
+        label: 'Users',
+        child: const ReportsUsersTab(),
+      ),
+      _ReportTabItem(
+        id: 'scores',
+        label: 'Score of participants',
+        child: const ReportsParticipantsTab(),
+      ),
+    ];
+  }
+
+  List<_ReportTabItem> _visibleReportTabs(
+    PermissionStore permissionStore, {
+    required bool isLoading,
+    required String error,
+    required Map<String, dynamic>? report,
+    required bool isMobile,
+    required bool isWideWeb,
+  }) {
+    return _buildAllReportTabs(
+      isLoading: isLoading,
+      error: error,
+      report: report,
+      isMobile: isMobile,
+      isWideWeb: isWideWeb,
+    ).where((tab) {
+      final key = tab.requiredKey;
+      if (key == null || key.isEmpty) return true;
+      return permissionStore.has(key);
+    }).toList();
+  }
+
+  void _openRegisteredParticipants(ReportsParticipantsListPreset preset) {
+    controller.openParticipantsReport(preset);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isWideWeb = screenWidth >= 1100;
+
+    final permissionStore = Get.isRegistered<PermissionStore>()
+        ? Get.find<PermissionStore>()
+        : Get.put(PermissionStore());
 
     return AdminSidebarLayout(
       title: 'Reports',
@@ -51,10 +222,33 @@ class _ReportsScreenState extends State<ReportsScreen> {
         final isLoading = controller.isLoading.value;
         final error = controller.errorMessage.value;
         final report = controller.report.value;
+        // Touch reactive permission keys so tab visibility updates after login.
+        permissionStore.keys.length;
 
-        return DefaultTabController(
-          length: 4,
-          child: Column(
+        final tabs = _visibleReportTabs(
+          permissionStore,
+          isLoading: isLoading,
+          error: error,
+          report: report,
+          isMobile: isMobile,
+          isWideWeb: isWideWeb,
+        );
+        _visibleTabs = tabs;
+
+        if (tabs.isEmpty) {
+          return Center(
+            child: Text(
+              'No reports access for your role.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          );
+        }
+
+        _ensureTabController(tabs.length);
+        _applyPendingTabNavigation();
+        final tabController = _tabController!;
+
+        return Column(
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -69,79 +263,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 5),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: _buildTabs(isMobile),
+                  child: _buildTabs(isMobile, tabs, tabController),
                 ),
               ),
               const SizedBox(height: 0),
               Expanded(
                 child: TabBarView(
-                  children: [
-                    RefreshIndicator(
-                      onRefresh: () async =>
-                          controller.loadCompetitionsAndMaybeReport(),
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: EdgeInsets.all(isMobile ? 12 : 5),
-                        children: [
-                          if (isLoading) ...[
-                            const SizedBox(height: 24),
-                            const Center(child: CircularProgressIndicator()),
-                          ] else if (error.isNotEmpty) ...[
-                            _buildErrorCard(error),
-                          ] else if (report == null) ...[
-                            _buildInfoCard(
-                              'Select a competition to view reports.',
-                              icon: Icons.info_outline,
-                            ),
-                          ] else ...[
-                            ..._buildDashboardTab(
-                              report,
-                              isMobile: isMobile,
-                              isWideWeb: isWideWeb,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    RefreshIndicator(
-                      onRefresh: () async =>
-                          controller.loadCompetitionsAndMaybeReport(),
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: EdgeInsets.all(isMobile ? 12 : 16),
-                        children: [
-                          if (isLoading) ...[
-                            const SizedBox(height: 24),
-                            const Center(child: CircularProgressIndicator()),
-                          ] else if (error.isNotEmpty) ...[
-                            _buildErrorCard(error),
-                          ] else if (report == null) ...[
-                            _buildInfoCard(
-                              'Select a competition to view reports.',
-                              icon: Icons.info_outline,
-                            ),
-                          ] else ...[
-                            _buildPrizeWinnersSection(report, isMobile),
-                            const SizedBox(height: 20),
-                          ],
-                        ],
-                      ),
-                    ),
-                    // Users tab (created users list)
-                    const ReportsUsersTab(),
-                    // Participants scores tab
-                    const ReportsParticipantsTab(),
-                  ],
+                  controller: tabController,
+                  children: tabs.map((t) => t.child).toList(),
                 ),
               ),
             ],
-          ),
         );
       }),
     );
   }
 
-  Widget _buildTabs(bool isMobile) {
+  Widget _buildTabs(
+    bool isMobile,
+    List<_ReportTabItem> tabs,
+    TabController tabController,
+  ) {
     final bg = Colors.grey[100]!;
     final radius = BorderRadius.circular(12);
 
@@ -154,6 +296,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         border: Border.all(color: Colors.grey[300]!),
       ),
       child: TabBar(
+        controller: tabController,
         isScrollable: true,
         dividerColor: Colors.transparent,
         labelPadding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 8),
@@ -171,36 +314,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
           color: AppTheme.primaryColor,
           borderRadius: radius,
         ),
-        tabs: [
-          Tab(
-            height: isMobile ? 30 : 34,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 15),
-              child: Text('Dashboard'),
-            ),
-          ),
-          Tab(
-            height: isMobile ? 30 : 34,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 15),
-              child: Text('Prize Winners'),
-            ),
-          ),
-          Tab(
-            height: isMobile ? 30 : 34,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 15),
-              child: Text('Users'),
-            ),
-          ),
-          Tab(
-            height: isMobile ? 30 : 34,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 15),
-              child: Text('Participants'),
-            ),
-          ),
-        ],
+        tabs: tabs
+            .map(
+              (tab) => Tab(
+                height: isMobile ? 30 : 34,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                  child: Text(tab.label),
+                ),
+              ),
+            )
+            .toList(),
       ),
     );
   }
@@ -226,6 +350,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
       const SizedBox(height: 12),
       if (isWideWeb) ...[
         sectionsRow,
+        const SizedBox(height: 12),
+        _buildBestSchoolAwardSection(report, isMobile),
         const SizedBox(height: 20),
       ] else ...[
         _buildCategoryCountsSection(report, isMobile),
@@ -233,6 +359,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
         _buildPrefixAgeSection(report, isMobile),
         const SizedBox(height: 12),
         _buildInstitutionsSection(report, isMobile),
+        const SizedBox(height: 12),
+        _buildBestSchoolAwardSection(report, isMobile),
         const SizedBox(height: 20),
       ],
     ];
@@ -280,7 +408,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           final refreshButton = IconButton(
             tooltip: 'Refresh',
             onPressed: () => controller.loadCompetitionsAndMaybeReport(),
-            icon: const Icon(Icons.refresh, color: AppTheme.primaryColor),
+            icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
             constraints: BoxConstraints(
@@ -340,14 +468,62 @@ class _ReportsScreenState extends State<ReportsScreen> {
               runSpacing: 10,
               spacing: 10,
               children: [
-                _statTile('Total Participants', '$totalParticipants'),
-                _statTile('No of Boys', '$boys'),
-                _statTile('No of Girls', '$girls'),
-                _statTile('Common Category', '$common'),
-                _statTile('Special Category', '$special'),
-                _statTile('Champions Category', '$champions'),
-                _statTile('Online Registration', '$onlineRegistrations'),
-                _statTile('Spot Registration', '$spotRegistrations'),
+                _statTile(
+                  'Total Participants',
+                  '$totalParticipants',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.all,
+                  ),
+                ),
+                _statTile(
+                  'No of Boys',
+                  '$boys',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.boys(),
+                  ),
+                ),
+                _statTile(
+                  'No of Girls',
+                  '$girls',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.girls(),
+                  ),
+                ),
+                _statTile(
+                  'Common Category',
+                  '$common',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.categoryType('COMMON'),
+                  ),
+                ),
+                _statTile(
+                  'Special Category',
+                  '$special',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.categoryType('SPECIAL'),
+                  ),
+                ),
+                _statTile(
+                  'Champions Category',
+                  '$champions',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.categoryType('CHAMPIONS'),
+                  ),
+                ),
+                _statTile(
+                  'Online Registration',
+                  '$onlineRegistrations',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.onlineRegistration(),
+                  ),
+                ),
+                _statTile(
+                  'Spot Registration',
+                  '$spotRegistrations',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.spotRegistration(),
+                  ),
+                ),
               ],
             ),
           ],
@@ -385,13 +561,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
               runSpacing: 8,
               children: entries
                   .map(
-                    (e) => Chip(
+                    (e) => ActionChip(
                       label: Text('${e.key}: ${e.value}'),
                       backgroundColor: AppTheme.primaryColor.withOpacity(0.08),
                       side: BorderSide(
                         color: AppTheme.primaryColor.withOpacity(0.25),
                       ),
                       labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+                      onPressed: () => _openRegisteredParticipants(
+                        ReportsParticipantsListPreset.categoryType(e.key),
+                      ),
                     ),
                   )
                   .toList(),
@@ -443,7 +622,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   children: [
                     Text(
                       prefix,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.primaryColor,
@@ -455,8 +634,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       runSpacing: 8,
                       children: ageKeys
                           .map(
-                            (age) =>
-                                _miniPill('Age $age', '${agesMap[age] ?? 0}'),
+                            (age) => _miniPill(
+                              'Age $age',
+                              '${agesMap[age] ?? 0}',
+                              onTap: () {
+                                final ageInt = int.tryParse(age);
+                                if (ageInt == null) return;
+                                _openRegisteredParticipants(
+                                  ReportsParticipantsListPreset.prefixAndAge(
+                                    prefix: prefix,
+                                    age: ageInt,
+                                  ),
+                                );
+                              },
+                            ),
                           )
                           .toList(),
                     ),
@@ -464,6 +655,97 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
               );
             }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBestSchoolAwardSection(
+    Map<String, dynamic> report,
+    bool isMobile,
+  ) {
+    final institutions =
+        (report['institutions'] as Map?)?.cast<String, dynamic>() ?? {};
+    final threshold = (institutions['bestSchoolAwardMinParticipants'] as num?)
+        ?.toInt();
+    final awards =
+        (institutions['bestSchoolAwards'] as List?)?.cast() ?? const [];
+
+    if (threshold == null || threshold <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle('Best School Award'),
+            const SizedBox(height: 6),
+            Text(
+              'Schools with above $threshold participants',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (awards.isEmpty)
+              _buildInfoCard(
+                'No schools have reached the Best School Award threshold yet.',
+                icon: Icons.emoji_events_outlined,
+              )
+            else
+              Column(
+                children: awards.map((row) {
+                  final m = (row as Map).cast<String, dynamic>();
+                  final name = (m['institutionName'] ?? '').toString();
+                  final count = (m['participantCount'] ?? 0).toString();
+                  final institutionId = (m['institutionId'] as num?)?.toInt();
+
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    onTap: institutionId != null
+                        ? () => _openRegisteredParticipants(
+                            ReportsParticipantsListPreset.institution(
+                              institutionId,
+                              institutionName:
+                                  name.isNotEmpty ? name : null,
+                            ),
+                          )
+                        : null,
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          AppTheme.primaryColor.withOpacity(0.12),
+                      child: Icon(
+                        Icons.emoji_events,
+                        color: AppTheme.primaryColor,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      name.isNotEmpty ? name : 'Unknown institution',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    trailing: Text(
+                      '$count participants',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primaryColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
           ],
         ),
       ),
@@ -495,9 +777,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
               runSpacing: 10,
               spacing: 10,
               children: [
-                _statTile('Total Institutions', '$totalInstitutions'),
-                _statTile('Total Schools', '$totalSchools'),
-                _statTile('Total Colleges', '$totalColleges'),
+                _statTile(
+                  'Total Institutions',
+                  '$totalInstitutions',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.allInstitutions(),
+                  ),
+                ),
+                _statTile(
+                  'Total Schools',
+                  '$totalSchools',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.schoolsOnly(),
+                  ),
+                ),
+                _statTile(
+                  'Total Colleges',
+                  '$totalColleges',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.collegesOnly(),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -514,14 +814,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   final count = (m['participantCount'] ?? 0).toString();
                   final type = (m['institutionType'] ?? '').toString();
 
+                  final institutionId = (m['institutionId'] as num?)?.toInt();
+
                   return ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
+                    onTap: institutionId != null
+                        ? () => _openRegisteredParticipants(
+                            ReportsParticipantsListPreset.institution(
+                              institutionId,
+                              institutionName:
+                                  name.isNotEmpty ? name : null,
+                            ),
+                          )
+                        : null,
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
                       child: Text(
                         count,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppTheme.primaryColor,
                           fontWeight: FontWeight.bold,
                         ),
@@ -602,7 +913,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Expanded(child: _sectionTitle('Prize Winners (Category Wise)')),
             IconButton(
               tooltip: 'Print Prize Winners',
-              icon: const Icon(Icons.print, color: AppTheme.primaryColor),
+              icon: Icon(Icons.print, color: AppTheme.primaryColor),
               onPressed: _printPrizeWinnersPdf,
             ),
           ],
@@ -738,6 +1049,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           final inst = (m['institutionName'] ?? '').toString();
           final winnerGroupName = (m['groupName'] ?? '').toString();
           final totalScore = (m['totalScore'] ?? m['avgScore'] ?? 0).toString();
+          final gradeName = (m['gradeName'] ?? '').toString().trim();
 
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
@@ -815,6 +1127,59 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(width: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'TOTAL',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        Text(
+                          totalScore,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (gradeName.isNotEmpty) ...[
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'GRADE',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          Text(
+                            gradeName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+                SizedBox(width: isMobile ? 20 : 28),
                 IconButton(
                   tooltip: 'Download certificate',
                   padding: EdgeInsets.zero,
@@ -853,28 +1218,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       regNoForFilename: regNo,
                     );
                   },
-                ),
-                const SizedBox(width: 4),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'TOTAL',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                    Text(
-                      totalScore,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -1055,7 +1398,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: AppTheme.primaryColor,
@@ -1064,8 +1407,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _statTile(String label, String value) {
-    return Container(
+  Widget _statTile(String label, String value, {VoidCallback? onTap}) {
+    final tile = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.grey[50],
@@ -1078,7 +1421,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         children: [
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: AppTheme.primaryColor,
@@ -1089,10 +1432,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ],
       ),
     );
+
+    if (onTap == null) return tile;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: tile,
+      ),
+    );
   }
 
-  Widget _miniPill(String label, String value) {
-    return Container(
+  Widget _miniPill(String label, String value, {VoidCallback? onTap}) {
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.grey[100],
@@ -1102,6 +1456,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Text(
         '$label: $value',
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+
+    if (onTap == null) return pill;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: pill,
       ),
     );
   }

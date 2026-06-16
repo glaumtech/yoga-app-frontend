@@ -7,17 +7,76 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/competition_controller.dart';
+import '../../../core/utils/recent_competition_store.dart';
 import '../../controllers/users_list_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/jury_login_qr_dialog.dart';
 import '../../../data/models/user_management_model.dart';
 
 class UsersListScreen extends StatelessWidget {
   const UsersListScreen({super.key});
 
+  int? _selectedCompetitionId(UserManagementController controller) {
+    if (controller.usersListEventId.value.isEmpty) return null;
+    return int.tryParse(controller.usersListEventId.value);
+  }
+
+  void _onCompetitionChanged(
+    UserManagementController controller,
+    CompetitionController competitionController,
+    UsersListController usersListController,
+    int? value,
+  ) {
+    if (value == null) {
+      controller.usersListEventId.value = '';
+      controller.users.clear();
+      controller.errorMessage.value = '';
+      controller.usersTotal.value = 0;
+      controller.usersTotalPages.value = 0;
+      return;
+    }
+
+    final competition = competitionController.competitions.firstWhereOrNull(
+      (item) => item.id == value.toString(),
+    );
+    if (competition != null) {
+      usersListController.recordCompetitionSelection(
+        competitionId: value,
+        competitionName: competition.competitionName,
+      );
+    }
+
+    controller.usersListEventId.value = value.toString();
+    controller.loadUsers(eventId: value);
+  }
+
+  void _selectRecentCompetition(
+    UserManagementController controller,
+    CompetitionController competitionController,
+    UsersListController usersListController,
+    RecentCompetitionEntry entry,
+  ) {
+    final competitionId = int.tryParse(entry.id);
+    if (competitionId == null) return;
+
+    usersListController.recordCompetitionSelection(
+      competitionId: competitionId,
+      competitionName: entry.name,
+    );
+    controller.usersListEventId.value = entry.id;
+    controller.loadUsers(eventId: competitionId);
+  }
+
+  Future<void> _reloadUsers(UserManagementController controller) async {
+    final eventId = _selectedCompetitionId(controller);
+    if (eventId == null) return;
+    await controller.loadUsers(eventId: eventId);
+  }
+
   @override
   Widget build(BuildContext context) {
     // Keep screen Stateless: initialization happens in UsersListController.onReady()
-    Get.put(UsersListController());
+    final usersListController = Get.put(UsersListController());
 
     final userController = Get.find<UserManagementController>();
     final competitionController = Get.put(CompetitionController());
@@ -42,6 +101,7 @@ class UsersListScreen extends StatelessWidget {
               context,
               userController,
               competitionController,
+              usersListController,
               isMobile,
               isTablet,
             ),
@@ -49,6 +109,15 @@ class UsersListScreen extends StatelessWidget {
             // Users List
             Expanded(
               child: Obx(() {
+                if (userController.usersListEventId.value.isEmpty) {
+                  return _buildSelectCompetitionPrompt(
+                    userController,
+                    competitionController,
+                    usersListController,
+                    isMobile,
+                  );
+                }
+
                 if (userController.isLoading.value) {
                   return const Center(child: CustomLoader());
                 }
@@ -72,13 +141,12 @@ class UsersListScreen extends StatelessWidget {
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () {
-                            final eventId =
-                                userController.selectedEventId.value.isNotEmpty
-                                ? int.tryParse(
-                                    userController.selectedEventId.value,
-                                  )
-                                : null;
-                            userController.loadUsers(eventId: eventId);
+                            final eventId = _selectedCompetitionId(
+                              userController,
+                            );
+                            if (eventId != null) {
+                              userController.loadUsers(eventId: eventId);
+                            }
                           },
                           child: const Text('Retry'),
                         ),
@@ -141,6 +209,7 @@ class UsersListScreen extends StatelessWidget {
     BuildContext context,
     UserManagementController controller,
     CompetitionController competitionController,
+    UsersListController usersListController,
     bool isMobile,
     bool isTablet,
   ) {
@@ -182,16 +251,11 @@ class UsersListScreen extends StatelessWidget {
                   final competitions = competitionController.competitions
                       .where((competition) => competition.id != null)
                       .toList();
-                  final currentValue =
-                      controller.selectedEventId.value.isNotEmpty
-                      ? int.tryParse(controller.selectedEventId.value)
-                      : (competitions.isNotEmpty
-                            ? int.tryParse(competitions.first.id!)
-                            : null);
+                  final currentValue = _selectedCompetitionId(controller);
 
                   return isMobile
                       ? Expanded(
-                          child: DropdownButtonFormField<int>(
+                          child: DropdownButtonFormField<int?>(
                             value: currentValue,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
@@ -206,27 +270,33 @@ class UsersListScreen extends StatelessWidget {
                               isDense: true,
                             ),
                             isExpanded: true,
-                            items: competitions.map((competition) {
-                              return DropdownMenuItem<int>(
-                                value: int.tryParse(competition.id!),
-                                child: Text(
-                                  competition.competitionName,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                controller.selectedEventId.value = value
-                                    .toString();
-                                controller.loadUsers(eventId: value);
-                              }
-                            },
+                            hint: const Text('Select competition'),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Select competition'),
+                              ),
+                              ...competitions.map((competition) {
+                                return DropdownMenuItem<int?>(
+                                  value: int.tryParse(competition.id!),
+                                  child: Text(
+                                    competition.competitionName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (value) => _onCompetitionChanged(
+                              controller,
+                              competitionController,
+                              usersListController,
+                              value,
+                            ),
                           ),
                         )
                       : SizedBox(
                           width: isTablet ? 320 : 360,
-                          child: DropdownButtonFormField<int>(
+                          child: DropdownButtonFormField<int?>(
                             value: currentValue,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
@@ -241,22 +311,28 @@ class UsersListScreen extends StatelessWidget {
                               isDense: true,
                             ),
                             isExpanded: true,
-                            items: competitions.map((competition) {
-                              return DropdownMenuItem<int>(
-                                value: int.tryParse(competition.id!),
-                                child: Text(
-                                  competition.competitionName,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                controller.selectedEventId.value = value
-                                    .toString();
-                                controller.loadUsers(eventId: value);
-                              }
-                            },
+                            hint: const Text('Select competition'),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Select competition'),
+                              ),
+                              ...competitions.map((competition) {
+                                return DropdownMenuItem<int?>(
+                                  value: int.tryParse(competition.id!),
+                                  child: Text(
+                                    competition.competitionName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (value) => _onCompetitionChanged(
+                              controller,
+                              competitionController,
+                              usersListController,
+                              value,
+                            ),
                           ),
                         );
                 }),
@@ -264,12 +340,7 @@ class UsersListScreen extends StatelessWidget {
                 // Refresh Button
                 IconButton(
                   icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    final eventId = controller.selectedEventId.value.isNotEmpty
-                        ? int.tryParse(controller.selectedEventId.value)
-                        : null;
-                    controller.loadUsers(eventId: eventId);
-                  },
+                  onPressed: () => _reloadUsers(controller),
                   tooltip: 'Refresh',
                   constraints: const BoxConstraints(),
                   padding: const EdgeInsets.all(8),
@@ -282,18 +353,92 @@ class UsersListScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildSelectCompetitionPrompt(
+    UserManagementController controller,
+    CompetitionController competitionController,
+    UsersListController usersListController,
+    bool isMobile,
+  ) {
+    return Obx(() {
+      final recentCompetitions = usersListController.recentCompetitions;
+
+      return Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 8 : 24,
+            vertical: 24,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.event_outlined,
+                size: 64,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Select a competition to view users',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (recentCompetitions.isNotEmpty) ...[
+                const SizedBox(height: 28),
+                Text(
+                  'Recently selected',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: recentCompetitions.map((entry) {
+                    return ActionChip(
+                      avatar: Icon(
+                        Icons.history,
+                        size: 18,
+                        color: AppTheme.primaryColor,
+                      ),
+                      label: Text(
+                        entry.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      backgroundColor: AppTheme.primaryColor.withOpacity(0.08),
+                      side: BorderSide(
+                        color: AppTheme.primaryColor.withOpacity(0.35),
+                      ),
+                      onPressed: () => _selectRecentCompetition(
+                        controller,
+                        competitionController,
+                        usersListController,
+                        entry,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
   Widget _buildMobileList(
     BuildContext context,
     List<UserManagementModel> users,
     UserManagementController controller,
   ) {
     return RefreshIndicator(
-      onRefresh: () {
-        final eventId = controller.selectedEventId.value.isNotEmpty
-            ? int.tryParse(controller.selectedEventId.value)
-            : null;
-        return controller.loadUsers(eventId: eventId);
-      },
+      onRefresh: () => _reloadUsers(controller),
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(12),
@@ -505,12 +650,7 @@ class UsersListScreen extends StatelessWidget {
         : Get.put(PermissionStore());
 
     return RefreshIndicator(
-      onRefresh: () {
-        final eventId = controller.selectedEventId.value.isNotEmpty
-            ? int.tryParse(controller.selectedEventId.value)
-            : null;
-        return controller.loadUsers(eventId: eventId);
-      },
+      onRefresh: () => _reloadUsers(controller),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: LayoutBuilder(
@@ -915,6 +1055,18 @@ class UsersListScreen extends StatelessWidget {
     return dateTime;
   }
 
+  bool _isJuryUser(UserManagementModel user) {
+    final type = (user.userTypeName ?? user.type).toUpperCase();
+    return type == 'JURY' || type.contains('JURY');
+  }
+
+  void _showJuryLoginQrDialog(BuildContext context, UserManagementModel user) {
+    showDialog(
+      context: context,
+      builder: (context) => JuryLoginQrDialog(user: user),
+    );
+  }
+
   Widget _buildActionCell(
     BuildContext context,
     UserManagementModel user,
@@ -926,6 +1078,15 @@ class UsersListScreen extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          if (_isJuryUser(user)) ...[
+            IconButton(
+              icon: Icon(Icons.qr_code, size: 18, color: AppTheme.primaryColor),
+              onPressed: () => _showJuryLoginQrDialog(context, user),
+              tooltip: 'Jury login QR',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          ],
           IconButton(
             icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
             onPressed: () {

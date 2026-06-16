@@ -1,11 +1,16 @@
 import 'package:get/get.dart';
 
+import '../../core/constants/app_constants.dart';
+import '../../core/utils/recent_competition_store.dart';
 import 'competition_controller.dart';
 import 'user_management_controller.dart';
 
 class UsersListController extends GetxController {
   late final UserManagementController userController;
   late final CompetitionController competitionController;
+
+  final RxList<RecentCompetitionEntry> recentCompetitions =
+      <RecentCompetitionEntry>[].obs;
 
   bool _didInit = false;
 
@@ -14,6 +19,25 @@ class UsersListController extends GetxController {
     super.onInit();
     userController = Get.find<UserManagementController>();
     competitionController = Get.put(CompetitionController());
+    _loadRecentCompetitions();
+  }
+
+  void _loadRecentCompetitions() {
+    recentCompetitions.assignAll(
+      RecentCompetitionStore.read(AppConstants.usersListRecentCompetitionsKey),
+    );
+  }
+
+  Future<void> recordCompetitionSelection({
+    required int competitionId,
+    required String competitionName,
+  }) async {
+    await RecentCompetitionStore.add(
+      storageKey: AppConstants.usersListRecentCompetitionsKey,
+      id: competitionId.toString(),
+      name: competitionName,
+    );
+    _loadRecentCompetitions();
   }
 
   @override
@@ -21,39 +45,24 @@ class UsersListController extends GetxController {
     super.onReady();
     if (_didInit) return;
     _didInit = true;
-    _ensureCompetitionsAndUsersLoaded();
+    _ensureCompetitionsLoaded();
   }
 
-  Future<void> _ensureCompetitionsAndUsersLoaded() async {
-    // Load competitions if empty
+  Future<void> _ensureCompetitionsLoaded() async {
     if (competitionController.competitions.isEmpty &&
         !competitionController.isLoading.value) {
       await competitionController.loadCompetitions();
     }
 
-    // Set first competition as default if none is selected
-    if (competitionController.competitions.isNotEmpty &&
-        userController.selectedEventId.value.isEmpty) {
-      final firstCompetition = competitionController.competitions.firstWhere(
-        (c) => c.id != null,
-        orElse: () => competitionController.competitions.first,
-      );
-      if (firstCompetition.id != null) {
-        final competitionId = int.tryParse(firstCompetition.id!);
-        if (competitionId != null) {
-          userController.selectedEventId.value = firstCompetition.id!;
-          await userController.loadUsers(eventId: competitionId);
-        }
-      }
-    }
-
-    // Load users if a competition is selected and list is empty
-    if (userController.users.isEmpty &&
-        !userController.isLoading.value &&
-        userController.selectedEventId.value.isNotEmpty) {
-      final eventId = int.tryParse(userController.selectedEventId.value);
+    // Load users only when a competition is already selected.
+    final eventId = _selectedCompetitionId();
+    if (eventId != null && !userController.isLoading.value) {
       await userController.loadUsers(eventId: eventId);
     }
   }
-}
 
+  int? _selectedCompetitionId() {
+    if (userController.usersListEventId.value.isEmpty) return null;
+    return int.tryParse(userController.usersListEventId.value);
+  }
+}

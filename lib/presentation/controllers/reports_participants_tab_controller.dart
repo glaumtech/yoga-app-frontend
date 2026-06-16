@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../core/utils/competition_grade_resolver.dart';
 import '../../data/models/api_response.dart';
+import '../../data/models/competition_grade_model.dart';
 import '../../data/models/district_model.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
@@ -15,8 +17,19 @@ import '../../data/repositories/reports_repository.dart';
 import '../../data/repositories/school_repository.dart';
 import 'reports_controller.dart';
 
+/// One removable filter chip shown under the search bar.
+class ReportsActiveFilterChip {
+  const ReportsActiveFilterChip({
+    required this.key,
+    required this.label,
+  });
+
+  final String key;
+  final String label;
+}
+
 class ReportsParticipantsTabController extends GetxController {
-  final ReportsRepository _reportsRepository = ReportsRepository();
+  final ReportsRepository reportsRepository = ReportsRepository();
   final CompetitionRepository _competitionRepository = CompetitionRepository();
   final LocationRepository _locationRepository = LocationRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
@@ -33,6 +46,9 @@ class ReportsParticipantsTabController extends GetxController {
   final RxInt tableTotalElements = 0.obs;
   final RxInt tableTotalPages = 0.obs;
   final RxString tableCompetitionName = ''.obs;
+  final RxBool hasGrades = false.obs;
+  final RxList<CompetitionGradeModel> competitionGrades =
+      <CompetitionGradeModel>[].obs;
 
   final RxBool isDetailsLoading = false.obs;
 
@@ -66,14 +82,14 @@ class ReportsParticipantsTabController extends GetxController {
   final RxList<DistrictModel> filterDistrictOptions = <DistrictModel>[].obs;
   final RxList<SchoolModel> filterInstitutionOptions = <SchoolModel>[].obs;
 
-  Worker? _competitionWatcher;
+  Worker? competitionWatcher;
 
   @override
   void onInit() {
     super.onInit();
     reportsController = Get.find<ReportsController>();
 
-    _competitionWatcher = ever<String?>(
+    competitionWatcher = ever<String?>(
       reportsController.selectedCompetitionId,
       (competitionId) {
         final id = int.tryParse(competitionId ?? '');
@@ -140,6 +156,27 @@ class ReportsParticipantsTabController extends GetxController {
     tablePage.value = 0;
   }
 
+  void resetSession() {
+    _searchDebounce?.cancel();
+    isLoading.value = false;
+    errorMessage.value = '';
+    isDetailsLoading.value = false;
+    tableItems.clear();
+    tablePage.value = 0;
+    tableTotalElements.value = 0;
+    tableTotalPages.value = 0;
+    tableCompetitionName.value = '';
+    hasGrades.value = false;
+    competitionGrades.clear();
+    stageOptions.clear();
+    categoryOptions.clear();
+    groupOptions.clear();
+    filterStateOptions.clear();
+    filterDistrictOptions.clear();
+    filterInstitutionOptions.clear();
+    clearFilters();
+  }
+
   int get activeFilterCount {
     int n = 0;
     if (selectedStageIds.isNotEmpty) n++;
@@ -155,7 +192,146 @@ class ReportsParticipantsTabController extends GetxController {
     return n;
   }
 
-  int? _districtQueryParam() {
+  bool get hasReportFiltersOrSearch =>
+      activeFilterCount > 0 || participantSearchQuery.value.trim().isNotEmpty;
+
+  Future<void> clearFiltersAndReload() async {
+    clearFilters();
+    await refresh();
+  }
+
+  String? _optionName(List<Map<String, dynamic>> options, int id) {
+    for (final o in options) {
+      final oid = (o['id'] as num?)?.toInt();
+      if (oid == id) {
+        final name = (o['name'] ?? '').toString().trim();
+        if (name.isNotEmpty) return name;
+      }
+    }
+    return null;
+  }
+
+  String _genderLabel(String code) {
+    final u = code.toUpperCase();
+    if (u == 'MALE' || u == 'M') return 'Boys';
+    if (u == 'FEMALE' || u == 'F') return 'Girls';
+    return code;
+  }
+
+  /// Removable filter chips shown under the filter bar.
+  List<ReportsActiveFilterChip> buildActiveFilterChips() {
+    final chips = <ReportsActiveFilterChip>[];
+
+    final search = participantSearchQuery.value.trim();
+    if (search.isNotEmpty) {
+      chips.add(ReportsActiveFilterChip(
+        key: 'search',
+        label: 'Search: $search',
+      ));
+    }
+
+    for (final id in selectedStageIds) {
+      chips.add(ReportsActiveFilterChip(
+        key: 'stage:$id',
+        label: 'Stage: ${_optionName(stageOptions, id) ?? id}',
+      ));
+    }
+    for (final id in selectedCategoryIds) {
+      chips.add(ReportsActiveFilterChip(
+        key: 'category:$id',
+        label: 'Category: ${_optionName(categoryOptions, id) ?? id}',
+      ));
+    }
+    for (final id in selectedGroupIds) {
+      chips.add(ReportsActiveFilterChip(
+        key: 'group:$id',
+        label: 'Group: ${_optionName(groupOptions, id) ?? id}',
+      ));
+    }
+    for (final g in selectedGenders) {
+      chips.add(ReportsActiveFilterChip(
+        key: 'gender:$g',
+        label: 'Gender: ${_genderLabel(g)}',
+      ));
+    }
+
+    final stateId = selectedStateId.value;
+    if (stateId != null && stateId > 0) {
+      var stateLabel = 'State: #$stateId';
+      for (final s in filterStateOptions) {
+        if (s.id == stateId) {
+          stateLabel = 'State: ${s.stateName}';
+          break;
+        }
+      }
+      chips.add(ReportsActiveFilterChip(key: 'state', label: stateLabel));
+    }
+
+    final districtId = districtQueryParam();
+    if (districtId != null) {
+      var districtLabel = 'District: #$districtId';
+      for (final d in filterDistrictOptions) {
+        if (d.id == districtId) {
+          districtLabel = 'District: ${d.districtName}';
+          break;
+        }
+      }
+      chips.add(ReportsActiveFilterChip(key: 'district', label: districtLabel));
+    }
+
+    final instId = selectedInstitutionId.value;
+    if (instId != null && instId > 0) {
+      var found = false;
+      for (final inst in filterInstitutionOptions) {
+        final parsed = int.tryParse(inst.id ?? '');
+        if (parsed == instId) {
+          chips.add(ReportsActiveFilterChip(
+            key: 'institution',
+            label: 'Institution: ${inst.institutionName}',
+          ));
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        chips.add(ReportsActiveFilterChip(
+          key: 'institution',
+          label: 'Institution: #$instId',
+        ));
+      }
+    }
+
+    return chips;
+  }
+
+  Future<void> removeActiveFilter(String key) async {
+    if (key == 'search') {
+      participantSearchQuery.value = '';
+      participantSearchFieldController.clear();
+    } else if (key.startsWith('stage:')) {
+      final id = int.tryParse(key.substring('stage:'.length));
+      if (id != null) selectedStageIds.remove(id);
+    } else if (key.startsWith('category:')) {
+      final id = int.tryParse(key.substring('category:'.length));
+      if (id != null) selectedCategoryIds.remove(id);
+    } else if (key.startsWith('group:')) {
+      final id = int.tryParse(key.substring('group:'.length));
+      if (id != null) selectedGroupIds.remove(id);
+    } else if (key.startsWith('gender:')) {
+      selectedGenders.remove(key.substring('gender:'.length));
+    } else if (key == 'state') {
+      selectedStateId.value = null;
+    } else if (key == 'district') {
+      selectedDistrictFilter.value = null;
+    } else if (key == 'institution') {
+      selectedInstitutionId.value = null;
+    }
+
+    tablePage.value = 0;
+    await refresh();
+  }
+
+  int? districtQueryParam() {
     final d = selectedDistrictFilter.value;
     if (d == null || d <= 0) return null;
     return d;
@@ -190,9 +366,11 @@ class ReportsParticipantsTabController extends GetxController {
     final d = await _locationRepository.getDistrictsByStateId(stateId);
     if (d.success && d.data != null) {
       final list = List<DistrictModel>.from(d.data!)
-        ..sort((a, b) => a.districtName.toLowerCase().compareTo(
-              b.districtName.toLowerCase(),
-            ));
+        ..sort(
+          (a, b) => a.districtName.toLowerCase().compareTo(
+            b.districtName.toLowerCase(),
+          ),
+        );
       filterDistrictOptions.assignAll(list);
     }
   }
@@ -228,8 +406,9 @@ class ReportsParticipantsTabController extends GetxController {
       final bn = b.institutionName.toLowerCase();
       final c = an.compareTo(bn);
       if (c != 0) return c;
-      return (int.tryParse(a.id ?? '0') ?? 0)
-          .compareTo(int.tryParse(b.id ?? '0') ?? 0);
+      return (int.tryParse(a.id ?? '0') ?? 0).compareTo(
+        int.tryParse(b.id ?? '0') ?? 0,
+      );
     });
     final seenNorm = <String>{};
     final out = <SchoolModel>[];
@@ -297,8 +476,9 @@ class ReportsParticipantsTabController extends GetxController {
       ..addAll(genders.toSet());
     selectedStateId.value = stateId;
     selectedInstitutionId.value = institutionId;
-    selectedDistrictFilter.value =
-        (districtId != null && districtId > 0) ? districtId : null;
+    selectedDistrictFilter.value = (districtId != null && districtId > 0)
+        ? districtId
+        : null;
     tablePage.value = 0;
     _reloadWithFilters();
   }
@@ -320,7 +500,7 @@ class ReportsParticipantsTabController extends GetxController {
   @override
   void onClose() {
     _searchDebounce?.cancel();
-    _competitionWatcher?.dispose();
+    competitionWatcher?.dispose();
     participantSearchFieldController.dispose();
     super.onClose();
   }
@@ -335,44 +515,46 @@ class ReportsParticipantsTabController extends GetxController {
 
   /// Loads stage & category dropdown options for the competition from API.
   Future<void> loadStageAndCategoryOptions(int competitionId) async {
-    final stagesResp =
-        await _competitionRepository.getStagesByCompetition(competitionId);
-    final catsResp =
-        await _competitionRepository.getCategoriesByCompetition(competitionId);
+    final stagesResp = await _competitionRepository.getStagesByCompetition(
+      competitionId,
+    );
+    final catsResp = await _competitionRepository.getCategoriesByCompetition(
+      competitionId,
+    );
 
     if (stagesResp.success && stagesResp.data != null) {
-      stageOptions.value = stagesResp.data!
-          .map((s) => <String, dynamic>{'id': s.id, 'name': s.name})
-          .toList()
-        ..sort(
-          (a, b) =>
-              (a['name'] as String).compareTo(b['name'] as String),
-        );
+      stageOptions.value =
+          stagesResp.data!
+              .map((s) => <String, dynamic>{'id': s.id, 'name': s.name})
+              .toList()
+            ..sort(
+              (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+            );
     } else {
       stageOptions.clear();
     }
 
     if (catsResp.success && catsResp.data != null) {
-      categoryOptions.value = catsResp.data!
-          .map((c) => <String, dynamic>{'id': c.id, 'name': c.name})
-          .toList()
-        ..sort(
-          (a, b) =>
-              (a['name'] as String).compareTo(b['name'] as String),
-        );
+      categoryOptions.value =
+          catsResp.data!
+              .map((c) => <String, dynamic>{'id': c.id, 'name': c.name})
+              .toList()
+            ..sort(
+              (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+            );
     } else {
       categoryOptions.clear();
     }
 
     final groupsResp = await _competitionRepository.getAllGroups();
     if (groupsResp.success && groupsResp.data != null) {
-      groupOptions.value = groupsResp.data!
-          .map((g) => <String, dynamic>{'id': g.id, 'name': g.name})
-          .toList()
-        ..sort(
-          (a, b) =>
-              (a['name'] as String).compareTo(b['name'] as String),
-        );
+      groupOptions.value =
+          groupsResp.data!
+              .map((g) => <String, dynamic>{'id': g.id, 'name': g.name})
+              .toList()
+            ..sort(
+              (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+            );
     } else {
       groupOptions.clear();
     }
@@ -387,24 +569,26 @@ class ReportsParticipantsTabController extends GetxController {
         await loadStageAndCategoryOptions(competitionId);
       }
 
-      final resp = await _reportsRepository.getCompetitionParticipantScoresTable(
+      final resp = await reportsRepository.getCompetitionParticipantScoresTable(
         competitionId,
         page: tablePage.value,
         size: tablePageSize,
         search: participantSearchQuery.value.trim().isEmpty
             ? null
             : participantSearchQuery.value.trim(),
-        stageIds:
-            selectedStageIds.isEmpty ? null : List<int>.from(selectedStageIds),
+        stageIds: selectedStageIds.isEmpty
+            ? null
+            : List<int>.from(selectedStageIds),
         categoryIds: selectedCategoryIds.isEmpty
             ? null
             : List<int>.from(selectedCategoryIds),
-        groupIds:
-            selectedGroupIds.isEmpty ? null : List<int>.from(selectedGroupIds),
+        groupIds: selectedGroupIds.isEmpty
+            ? null
+            : List<int>.from(selectedGroupIds),
         stateId: selectedStateId.value,
         cityId: null,
         institutionId: selectedInstitutionId.value,
-        districtId: _districtQueryParam(),
+        districtId: districtQueryParam(),
         genders: selectedGenders.isEmpty
             ? null
             : List<String>.from(selectedGenders),
@@ -416,24 +600,40 @@ class ReportsParticipantsTabController extends GetxController {
         tableItems.clear();
         tableTotalElements.value = 0;
         tableTotalPages.value = 0;
+        hasGrades.value = false;
+        competitionGrades.clear();
         return;
       }
 
       final d = Map<String, dynamic>.from(resp.data!);
       final rawItems = (d['items'] as List?) ?? const [];
+      var grades = CompetitionGradeResolver.parseGrades(d['grades']);
+      if (grades.isEmpty) {
+        grades = CompetitionGradeResolver.parseGrades(
+          reportsController.report.value?['grades'],
+        );
+      }
+      competitionGrades.assignAll(grades);
+      hasGrades.value = grades.isNotEmpty || d['hasGrades'] == true;
+
       tableItems.assignAll(
-        rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+        rawItems.map((e) {
+          final row = Map<String, dynamic>.from(e as Map);
+          CompetitionGradeResolver.applyGradeToRow(row, grades);
+          return row;
+        }).toList(),
       );
       tableTotalElements.value = (d['totalElements'] as num?)?.toInt() ?? 0;
       tableTotalPages.value = (d['totalPages'] as num?)?.toInt() ?? 0;
       tablePage.value = (d['page'] as num?)?.toInt() ?? 0;
-      tableCompetitionName.value =
-          (d['competitionName'] ?? '').toString();
+      tableCompetitionName.value = (d['competitionName'] ?? '').toString();
     } catch (e) {
       errorMessage.value = 'Error loading participant scores: ${e.toString()}';
       tableItems.clear();
       tableTotalElements.value = 0;
       tableTotalPages.value = 0;
+      hasGrades.value = false;
+      competitionGrades.clear();
     } finally {
       isLoading.value = false;
     }
@@ -482,23 +682,25 @@ class ReportsParticipantsTabController extends GetxController {
 
     isDetailsLoading.value = true;
     try {
-      return await _reportsRepository.getParticipantScoreDetails(
+      return await reportsRepository.getParticipantScoreDetails(
         competitionId,
         participantRegistrationId: pid,
         rowStageId: rowStageId,
         rowCategoryId: rowCategoryId,
         rowGroupId: rowGroupId,
-        stageIds:
-            selectedStageIds.isEmpty ? null : List<int>.from(selectedStageIds),
+        stageIds: selectedStageIds.isEmpty
+            ? null
+            : List<int>.from(selectedStageIds),
         categoryIds: selectedCategoryIds.isEmpty
             ? null
             : List<int>.from(selectedCategoryIds),
-        groupIds:
-            selectedGroupIds.isEmpty ? null : List<int>.from(selectedGroupIds),
+        groupIds: selectedGroupIds.isEmpty
+            ? null
+            : List<int>.from(selectedGroupIds),
         stateId: selectedStateId.value,
         cityId: null,
         institutionId: selectedInstitutionId.value,
-        districtId: _districtQueryParam(),
+        districtId: districtQueryParam(),
         genders: selectedGenders.isEmpty
             ? null
             : List<String>.from(selectedGenders),
@@ -529,7 +731,7 @@ class ReportsParticipantsTabController extends GetxController {
       );
     }
 
-    return _reportsRepository.getCompetitionParticipantsExcel(
+    return reportsRepository.getCompetitionParticipantsExcel(
       competitionId,
       stageIds: List<int>.from(selectedStageIds),
       categoryIds: selectedCategoryIds.isEmpty
@@ -541,9 +743,10 @@ class ReportsParticipantsTabController extends GetxController {
       stateId: selectedStateId.value,
       cityId: null,
       institutionId: selectedInstitutionId.value,
-      districtId: _districtQueryParam(),
-      genders:
-          selectedGenders.isEmpty ? null : List<String>.from(selectedGenders),
+      districtId: districtQueryParam(),
+      genders: selectedGenders.isEmpty
+          ? null
+          : List<String>.from(selectedGenders),
     );
   }
 }

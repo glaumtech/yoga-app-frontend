@@ -10,6 +10,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/keyboard/keyboard_scrollable.dart';
 import '../../../core/layout/home_layout.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/role_display_name.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../routes/app_routes.dart';
 import '../../widgets/footer_section.dart';
@@ -77,6 +78,9 @@ void _copyBannerRegistrationLink(
   );
 }
 
+/// Toggle featured competition hero (Register Now / QR) on the home page.
+const bool _kShowFeaturedCompetitionBanner = false;
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -86,12 +90,8 @@ class HomeScreen extends StatelessWidget {
       final authController = Get.find<AuthController>();
       final userController = Get.put(UserManagementController());
       final competitionController = Get.put(CompetitionController());
+      competitionController.ensureHomeCompetitionsLoaded();
 
-      // Load competitions for home (public API)
-      if (competitionController.homeCompetitions.isEmpty &&
-          !competitionController.isLoadingHomeCompetitions.value) {
-        competitionController.loadCompetitionsForHome();
-      }
       return Scaffold(
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(70),
@@ -132,7 +132,7 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.self_improvement,
                         color: AppTheme.primaryColor,
                         size: 32,
@@ -283,7 +283,7 @@ class HomeScreen extends StatelessWidget {
                                             6,
                                           ),
                                         ),
-                                        child: const Icon(
+                                        child: Icon(
                                           Icons.person,
                                           size: 18,
                                           color: AppTheme.primaryColor,
@@ -302,7 +302,7 @@ class HomeScreen extends StatelessWidget {
                                                       .value
                                                       ?.name ??
                                                   'Profile',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 color: AppTheme.primaryColor,
                                                 fontWeight: FontWeight.w500,
                                                 fontSize: 14,
@@ -314,10 +314,12 @@ class HomeScreen extends StatelessWidget {
                                                     ?.userTypeName !=
                                                 null)
                                               Text(
-                                                userController
-                                                    .currentUser
-                                                    .value!
-                                                    .userTypeName!,
+                                                displayRoleName(
+                                                  userController
+                                                      .currentUser
+                                                      .value!
+                                                      .userTypeName,
+                                                ),
                                                 style: TextStyle(
                                                   color: AppTheme.primaryColor
                                                       .withOpacity(0.7),
@@ -391,7 +393,8 @@ class HomeScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildBannerSliderSection(context),
-                  _buildBannerSection(context, competitionController),
+                  if (_kShowFeaturedCompetitionBanner)
+                    _buildBannerSection(context, competitionController),
                   _buildCurrentEventsSection(
                     context,
                     competitionController,
@@ -1025,6 +1028,7 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: Colors.grey.shade50,
       itemKeyPrefix: 'current_comp',
       showRegistrationQr: true,
+      showResultsButton: true,
       viewMoreStatus: 'ongoing',
     );
   }
@@ -1046,7 +1050,7 @@ class HomeScreen extends StatelessWidget {
     return _buildHomeCompetitionsListSection(
       context,
       competitions: pastCompetitions,
-      title: 'Past Events',
+      title: 'Past Competitions',
       subtitle: 'Previous competitions',
       backgroundColor: Colors.grey.shade50,
       itemKeyPrefix: 'past_comp',
@@ -1069,6 +1073,7 @@ class HomeScreen extends StatelessWidget {
     bool showStatusBadge = true,
     bool showRegistrationButton = true,
     bool showViewParticipantsButton = false,
+    bool showResultsButton = false,
     String? viewMoreStatus,
   }) {
     if (competitions.isEmpty) {
@@ -1128,6 +1133,7 @@ class HomeScreen extends StatelessWidget {
                       showStatusBadge: showStatusBadge,
                       showRegistrationButton: showRegistrationButton,
                       showViewParticipantsButton: showViewParticipantsButton,
+                      showResultsButton: showResultsButton,
                     );
                   }
 
@@ -1176,6 +1182,7 @@ class HomeScreen extends StatelessWidget {
                           showStatusBadge: showStatusBadge,
                           showRegistrationButton: showRegistrationButton,
                           showViewParticipantsButton: showViewParticipantsButton,
+                          showResultsButton: showResultsButton,
                         );
                       },
                     );
@@ -1197,7 +1204,10 @@ class HomeScreen extends StatelessWidget {
                               '${itemKeyPrefix}_${idOf(competition)}_$index',
                             ),
                             padding: const EdgeInsets.only(right: 16),
-                            child: buildCard(competition),
+                            child: SizedBox(
+                              height: HomeLayout.competitionCarouselHeight(cw),
+                              child: buildCard(competition),
+                            ),
                           );
                         },
                       ),

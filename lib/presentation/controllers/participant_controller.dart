@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import '../../data/repositories/participant_repository.dart';
 import '../../data/repositories/school_repository.dart';
+import 'payment_controller.dart';
 import '../../data/repositories/location_repository.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/api_response.dart';
@@ -24,7 +25,10 @@ import '../../core/utils/storage_service.dart';
 import '../../core/utils/state_defaults.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/photo_capture_service.dart';
+import '../../core/utils/photo_upload_processor.dart';
+import '../../core/utils/upload_filename_helper.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/subscription_catalog_filter.dart';
 import '../models/bulk_registration_row.dart';
 import 'competition_controller.dart';
 
@@ -35,7 +39,17 @@ class ParticipantController extends GetxController {
   final ParticipantRepository _participantRepository = ParticipantRepository();
   final SchoolRepository _schoolRepository = SchoolRepository();
   final LocationRepository _locationRepository = LocationRepository();
-  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  PaymentController get registrationPaymentController {
+    if (!Get.isRegistered<PaymentController>(
+      tag: 'participant_registration_payment',
+    )) {
+      Get.put(PaymentController(), tag: 'participant_registration_payment');
+    }
+    return Get.find<PaymentController>(tag: 'participant_registration_payment');
+  }
+
+  /// Replaced on [resetForm] so field validators do not linger after save/cancel.
+  GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
   /// Cleared text controllers during [resetForm] fire `onChanged`, which would otherwise
   /// call [validateRegistrationFormOnFieldChange] and show validation errors after Cancel.
@@ -106,25 +120,32 @@ class ParticipantController extends GetxController {
   final Rx<DateTime?> dateOfBirth = Rx<DateTime?>(null);
   final RxString gender = ''.obs;
   final RxBool isSpotRegistration = false.obs;
+  final RxString selectedPaymentMode = 'GPAY'.obs;
+  final Rx<XFile?> paymentProofImage = Rx<XFile?>(null);
+
+  /// Server path from existing registration (edit mode — no re-upload required).
+  final RxString existingPaymentProofPath = ''.obs;
   final RxBool optForECertificate = false.obs;
+  final RxBool termsAccepted = false.obs;
+  final RxBool showTermsError = false.obs;
   final RxList<String> selectedCategories = <String>[].obs;
   final RxString selectedStage = ''.obs; // Selected stage name
   final RxString standard = ''.obs;
   final RxInt formResetTrigger =
       0.obs; // Trigger to force widget rebuilds on form reset
+  /// Bumped when institution name is set programmatically (edit load) so UI rebuilds.
+  final RxInt institutionFieldRevision = 0.obs;
   final Rx<File?> photoFile = Rx<File?>(null);
   final Rx<XFile?> selectedImage = Rx<XFile?>(null);
-  static const int participantPhotoMaxBytes = 10 * 1024 * 1024;
   static const String participantPhotoUploadNotes =
       'Use BROWSE or CAMERA\n'
       'Accepted: JPG or PNG\n'
-      '• Max size: 10 MB';
+      '• Photos over 1 MB are compressed to 1 MB';
 
-  static const int bonafideMaxImageBytes = 10 * 1024 * 1024;
   static const int bonafideMaxPdfBytes = 25 * 1024 * 1024;
   static const String bonafideUploadNotes =
       'Accepted: JPG, PNG, or PDF\n'
-      '• Images: max 10 MB\n'
+      '• Images over 2 MB are compressed to 2 MB\n'
       '• PDF: max 25 MB';
 
   final Rx<File?> bonafideFile = Rx<File?>(null);
@@ -538,50 +559,93 @@ class ParticipantController extends GetxController {
         return false;
       }
 
-      int fileSize = picked.size;
-      if (kIsWeb) {
-        if (picked.bytes == null || picked.bytes!.isEmpty) {
-          errorMessage.value = 'Unable to read certificate file';
-          return false;
-        }
-        fileSize = picked.bytes!.length;
-      } else if (picked.path != null) {
-        fileSize = await File(picked.path!).length();
+      final fileBytes = await _readPickedCertificateBytes(picked);
+      if (fileBytes == null) {
+        errorMessage.value = 'Unable to read certificate file';
+        return false;
       }
 
       final isPdf = lowerName.endsWith('.pdf');
-      final maxSize = isPdf ? bonafideMaxPdfBytes : bonafideMaxImageBytes;
-      if (fileSize > maxSize) {
-        errorMessage.value = isPdf
-            ? 'PDF certificate must be 25 MB or smaller'
-            : 'Image certificate must be 10 MB or smaller';
-        return false;
-      }
-
-      bonafideFileName.value = fileName;
-      existingCertificateUrl.value = '';
-
-      if (kIsWeb) {
-        bonafideBytes.value = picked.bytes;
-        bonafideImage.value = XFile.fromData(
-          picked.bytes!,
-          name: fileName,
-          mimeType: isPdf ? 'application/pdf' : null,
+      if (isPdf) {
+        if (fileBytes.length > bonafideMaxPdfBytes) {
+          errorMessage.value = 'PDF certificate must be 25 MB or smaller';
+          return false;
+        }
+        _applyBonafideSelection(
+          bytes: fileBytes,
+          fileName: fileName,
+          isPdf: true,
+          nativePath: picked.path,
         );
-        bonafideFile.value = null;
-      } else if (picked.path != null) {
-        bonafideImage.value = XFile(picked.path!, name: fileName);
-        bonafideFile.value = File(picked.path!);
-        bonafideBytes.value = null;
-      } else {
-        errorMessage.value = 'Unable to access certificate file';
-        return false;
+        return true;
       }
+
+      final processed = await PhotoUploadProcessor.processBytes(
+        fileBytes,
+        originalFileName: fileName,
+        compressThresholdBytes:
+            PhotoUploadProcessor.documentImageCompressThresholdBytes,
+        targetBytes: PhotoUploadProcessor.documentImageTargetBytes,
+      );
+      if (processed == null) return false;
+
+      _applyBonafideSelection(
+        bytes: processed.bytes,
+        fileName: processed.fileName,
+        isPdf: false,
+        nativePath: processed.file?.path ?? picked.path,
+        localFile: processed.file,
+      );
       return true;
+    } on PhotoUploadException catch (e) {
+      errorMessage.value = e.message;
+      return false;
     } catch (e) {
       errorMessage.value = 'Failed to pick certificate: ${e.toString()}';
       return false;
     }
+  }
+
+  Future<Uint8List?> _readPickedCertificateBytes(PlatformFile picked) async {
+    if (kIsWeb) {
+      final bytes = picked.bytes;
+      if (bytes == null || bytes.isEmpty) return null;
+      return bytes;
+    }
+    if (picked.path == null) return null;
+    return File(picked.path!).readAsBytes();
+  }
+
+  void _applyBonafideSelection({
+    required Uint8List bytes,
+    required String fileName,
+    required bool isPdf,
+    String? nativePath,
+    File? localFile,
+  }) {
+    bonafideFileName.value = fileName;
+    existingCertificateUrl.value = '';
+
+    if (kIsWeb) {
+      bonafideBytes.value = bytes;
+      bonafideImage.value = XFile.fromData(
+        bytes,
+        name: fileName,
+        mimeType: isPdf ? 'application/pdf' : null,
+      );
+      bonafideFile.value = null;
+      return;
+    }
+
+    final file = localFile ?? (nativePath != null ? File(nativePath) : null);
+    if (file == null) {
+      errorMessage.value = 'Unable to access certificate file';
+      return;
+    }
+
+    bonafideImage.value = XFile(file.path, name: fileName);
+    bonafideFile.value = file;
+    bonafideBytes.value = null;
   }
 
   void _applyBonafideRulesForSelectedInstitution() {
@@ -600,6 +664,7 @@ class ParticipantController extends GetxController {
     );
     if (fromSuggestions != null) {
       selectedInstitution.value = fromSuggestions;
+      _applyInstitutionNameToForm(fromSuggestions);
       _applyBonafideRulesForSelectedInstitution();
       return;
     }
@@ -608,10 +673,24 @@ class ParticipantController extends GetxController {
       final response = await _schoolRepository.getInstitutionById(id);
       if (response.success && response.data != null) {
         selectedInstitution.value = response.data;
+        _applyInstitutionNameToForm(response.data!);
         _applyBonafideRulesForSelectedInstitution();
       }
     } catch (e) {
       print('Error loading institution details: $e');
+    }
+  }
+
+  void _applyInstitutionNameToForm(SchoolModel institution) {
+    final name = institution.institutionName.trim();
+    if (name.isEmpty) return;
+    if (isBulkMode.value) {
+      if (bulkInstitutionNameController.text != name) {
+        bulkInstitutionNameController.text = name;
+      }
+    } else if (schoolNameController.text != name) {
+      schoolNameController.text = name;
+      institutionFieldRevision.value++;
     }
   }
 
@@ -641,6 +720,75 @@ class ParticipantController extends GetxController {
     }
 
     return true;
+  }
+
+  /// Validates and normalizes upload filenames before payment / save.
+  Future<bool> validateRegistrationUploadsBeforeSubmit() async {
+    try {
+      if (selectedImage.value != null || photoFile.value != null) {
+        final photo = await UploadFilenameHelper.readParticipantPhoto(
+          xFile: selectedImage.value,
+          file: photoFile.value,
+        );
+        selectedImage.value = XFile.fromData(
+          photo.bytes,
+          name: photo.filename,
+          mimeType: photo.filename.toLowerCase().endsWith('.png')
+              ? 'image/png'
+              : 'image/jpeg',
+        );
+        if (!kIsWeb && photoFile.value != null) {
+          await photoFile.value!.writeAsBytes(photo.bytes);
+        }
+      }
+
+      if (hasBonafideCertificateSelected) {
+        final certificate = await UploadFilenameHelper.readBonafideCertificate(
+          xFile: bonafideImage.value,
+          file: bonafideFile.value,
+        );
+        bonafideFileName.value = certificate.filename;
+        if (kIsWeb) {
+          bonafideBytes.value = certificate.bytes;
+          bonafideImage.value = XFile.fromData(
+            certificate.bytes,
+            name: certificate.filename,
+            mimeType: certificate.filename.toLowerCase().endsWith('.pdf')
+                ? 'application/pdf'
+                : (certificate.filename.toLowerCase().endsWith('.png')
+                    ? 'image/png'
+                    : 'image/jpeg'),
+          );
+        } else if (bonafideFile.value != null) {
+          await bonafideFile.value!.writeAsBytes(certificate.bytes);
+          bonafideImage.value = XFile(
+            bonafideFile.value!.path,
+            name: certificate.filename,
+          );
+        }
+      }
+
+      if (paymentProofImage.value != null) {
+        final proof = await UploadFilenameHelper.readPaymentProof(
+          xFile: paymentProofImage.value!,
+        );
+        paymentProofImage.value = XFile.fromData(
+          proof.bytes,
+          name: proof.filename,
+          mimeType: proof.filename.toLowerCase().endsWith('.png')
+              ? 'image/png'
+              : 'image/jpeg',
+        );
+      }
+
+      return true;
+    } on FormatException catch (e) {
+      errorMessage.value = e.message;
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Invalid upload file: ${e.toString()}';
+      return false;
+    }
   }
 
   // Select institution
@@ -735,6 +883,12 @@ class ParticipantController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    registrationPaymentController;
+    ever(isLoading, (_) => _syncRegistrationSubmitBusy());
+    ever(
+      registrationPaymentController.isPaymentInProgress,
+      (_) => _syncRegistrationSubmitBusy(),
+    );
     // Participants are now loaded by event ID only
     // Initialize bulk registration with one empty row
     resetBulkRegistrationForm();
@@ -897,7 +1051,7 @@ class ParticipantController extends GetxController {
       'sex': row.gender.value,
       'groupId': groupId,
       'yogaTeacherCell': bulkYogaTeacherCellController.text.trim(),
-      'paymentMode': 'ONLINE',
+      'paymentMode': selectedPaymentMode.value,
       'isSpotRegistration': isSpotRegistration.value,
       'optForECertificate': optForECertificate.value,
     };
@@ -1064,21 +1218,7 @@ class ParticipantController extends GetxController {
 
   @override
   void onClose() {
-    nameController.dispose();
-    schoolNameController.dispose();
-    addressController.dispose();
-    yogaMasterNameController.dispose();
-    yogaMasterContactController.dispose();
-    bulkYogaTeacherNameController.dispose();
-    bulkYogaTeacherCellController.dispose();
-    bulkInstitutionNameController.dispose();
-    institutionFilterStateTextController.dispose();
-    institutionFilterStateFocusNode.dispose();
-    institutionFilterDistrictTextController.dispose();
-    institutionFilterDistrictFocusNode.dispose();
-    for (final row in bulkRegistrationRows) {
-      row.dispose();
-    }
+    // See CompetitionController.onClose — avoid dispose during logout teardown.
     bulkRegistrationRows.clear();
     super.onClose();
   }
@@ -1364,7 +1504,38 @@ class ParticipantController extends GetxController {
       groupId: reg['groupId'] is int
           ? reg['groupId'] as int
           : int.tryParse(reg['groupId']?.toString() ?? ''),
+      paymentMode: reg['paymentMode']?.toString(),
+      paymentProofPath: reg['paymentProofPath']?.toString(),
     );
+  }
+
+  String _normalizeRegistrationPaymentMode(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return 'GPAY';
+    final upper = raw.trim().toUpperCase();
+    if (upper == 'CASH') return 'CASH';
+    if (upper == 'GPAY') return 'GPAY';
+    if (upper == 'ONLINE') return 'ONLINE';
+    return upper;
+  }
+
+  void _applyPaymentFieldsForEdit(ParticipantModel participant) {
+    paymentProofImage.value = null;
+    existingPaymentProofPath.value = '';
+    selectedPaymentMode.value = 'GPAY';
+    final mode = participant.paymentMode;
+    if (mode != null && mode.trim().isNotEmpty) {
+      selectedPaymentMode.value = _normalizeRegistrationPaymentMode(mode);
+    }
+    final proof = participant.paymentProofPath?.trim();
+    if (proof != null && proof.isNotEmpty) {
+      existingPaymentProofPath.value = proof;
+    }
+  }
+
+  bool _requiresGpayProofUpload() {
+    if (selectedPaymentMode.value != 'GPAY') return false;
+    if (paymentProofImage.value != null) return false;
+    return existingPaymentProofPath.value.trim().isEmpty;
   }
 
   /// Normalize API/UI gender variants into values used by the form radio group.
@@ -1713,32 +1884,24 @@ class ParticipantController extends GetxController {
 
       if (file == null) return;
 
-      int fileSize;
-      if (kIsWeb) {
-        final bytes = await file.readAsBytes();
-        fileSize = bytes.length;
-      } else {
-        fileSize = await File(file.path).length();
-      }
+      final processed = await PhotoUploadProcessor.processXFile(file);
+      if (processed == null) return;
 
-      if (fileSize > participantPhotoMaxBytes) {
-        final message = 'Participant photo must be 10 MB or smaller';
-        if (context != null && context.mounted) {
-          SnackbarHelper.showError(context, message);
-        } else {
-          errorMessage.value = message;
-        }
-        return;
-      }
-
-      selectedImage.value = file;
+      selectedImage.value = processed.xFile;
       if (!kIsWeb) {
-        photoFile.value = File(file.path);
+        photoFile.value = processed.file;
       } else {
         photoFile.value = null;
       }
       existingPhotoUrl.value = '';
       errorMessage.value = '';
+    } on PhotoUploadException catch (e) {
+      final message = e.message;
+      if (context != null && context.mounted) {
+        SnackbarHelper.showError(context, message);
+      } else {
+        errorMessage.value = message;
+      }
     } catch (e) {
       final message = source == ImageSource.camera
           ? 'Failed to take photo: ${e.toString()}'
@@ -1803,6 +1966,11 @@ class ParticipantController extends GetxController {
     }
   }
 
+  void _renewRegistrationFormKey() {
+    formKey = GlobalKey<FormState>();
+    formResetTrigger.value = formResetTrigger.value + 1;
+  }
+
   void resetForm() {
     _suppressRegistrationValidate = true;
     _registrationSubmitOwner = Object();
@@ -1812,6 +1980,8 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     optForECertificate.value = false;
+    termsAccepted.value = false;
+    showTermsError.value = false;
     selectedCategories.clear();
     selectedStage.value = '';
     standard.value = '';
@@ -1819,6 +1989,9 @@ class ParticipantController extends GetxController {
     selectedImage.value = null;
     existingPhotoUrl.value = '';
     _clearBonafideCertificateFiles();
+    selectedPaymentMode.value = 'GPAY';
+    paymentProofImage.value = null;
+    existingPaymentProofPath.value = '';
     selectedInstitutionId.value = null;
     selectedInstitution.value = null;
     participantInstitutionId.value = null;
@@ -1834,43 +2007,22 @@ class ParticipantController extends GetxController {
 
     // Clear other state
     errorMessage.value = '';
+    registrationPaymentController.resetPaymentState();
     participantToEdit.value = null;
     isLoadingParticipant.value = false;
     isViewMode.value = false;
 
-    // Increment reset trigger to force widget rebuilds (especially for Autocomplete)
-    formResetTrigger.value = formResetTrigger.value + 1;
+    institutionFieldRevision.value = 0;
+
+    // Fresh Form + remount fields (see KeyedSubtree in form screen).
+    _renewRegistrationFormKey();
 
     // Don't clear selectedEventId - keep the competition selected for convenience
     // selectedEventId.value = '';
 
-    // Reset form state - this must happen after clearing values
-    // Use a safe callback that checks if the form key is still valid
-    if (formKey.currentContext != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          if (formKey.currentState != null && formKey.currentContext != null) {
-            formKey.currentState?.reset();
-            // Force clear text controllers again after form reset to ensure they're empty
-            nameController.text = '';
-            schoolNameController.text = '';
-            addressController.text = '';
-            yogaMasterNameController.text = '';
-            yogaMasterContactController.text = '';
-          }
-        } finally {
-          _suppressRegistrationValidate = false;
-        }
-      });
-    } else {
-      // If context is not available, still clear the controllers
-      nameController.text = '';
-      schoolNameController.text = '';
-      addressController.text = '';
-      yogaMasterNameController.text = '';
-      yogaMasterContactController.text = '';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _suppressRegistrationValidate = false;
-    }
+    });
   }
 
   /// Initialize form for registration screen
@@ -1904,14 +2056,14 @@ class ParticipantController extends GetxController {
     }
   }
 
-  /// Initialize form directly from ParticipantModel without API call
-  /// Used when participant data is already available (e.g., from list)
+  /// Initialize form for edit — loads full registration (incl. payment proof) from API.
   void initializeFormFromModel(ParticipantModel participant) {
     isBulkMode.value = false;
-    // Clear all form data first
+    if (participant.id != null && participant.id!.isNotEmpty) {
+      unawaited(fetchParticipantById(participant.id!));
+      return;
+    }
     _clearFormData();
-
-    // Initialize form with participant data directly
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (formKey.currentState != null && formKey.currentContext != null) {
         formKey.currentState?.reset();
@@ -1931,6 +2083,8 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     optForECertificate.value = false;
+    termsAccepted.value = false;
+    showTermsError.value = false;
     isSpotRegistration.value = false;
     selectedCategories.clear();
     selectedStage.value = '';
@@ -1940,12 +2094,47 @@ class ParticipantController extends GetxController {
     errorMessage.value = '';
     existingPhotoUrl.value = '';
     _clearBonafideCertificateFiles();
+    existingPaymentProofPath.value = '';
+    paymentProofImage.value = null;
     selectedInstitutionId.value = null;
     selectedInstitution.value = null;
     participantInstitutionId.value = null;
     isLoadingParticipant.value = false;
     participantToEdit.value = null;
     isViewMode.value = false;
+  }
+
+  /// Load registration from API and open the form in read-only view mode.
+  Future<bool> loadRegistrationForView(String registrationId) async {
+    try {
+      isLoadingParticipant.value = true;
+      errorMessage.value = '';
+      isListView.value = false;
+
+      final response = await _participantRepository
+          .getParticipantRegistrationById(registrationId);
+
+      if (response.success && response.data != null) {
+        final reg = response.data!['registration'];
+        if (reg is Map<String, dynamic>) {
+          initializeFormForView(_mapRegistrationToParticipant(reg));
+          isLoadingParticipant.value = false;
+          return true;
+        }
+        errorMessage.value = 'Invalid participant registration response';
+        isLoadingParticipant.value = false;
+        return false;
+      }
+
+      errorMessage.value =
+          response.message ?? 'Failed to fetch participant details';
+      isLoadingParticipant.value = false;
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Error loading participant: ${e.toString()}';
+      isLoadingParticipant.value = false;
+      return false;
+    }
   }
 
   /// Fetch participant details by ID from API
@@ -2031,10 +2220,11 @@ class ParticipantController extends GetxController {
 
       // Set form fields
       nameController.text = participant.participantName;
-      // Set institution name - use a small delay to ensure Autocomplete widget is ready
-      Future.microtask(() {
-        schoolNameController.text = participant.schoolName;
-      });
+      final viewInstitutionName = participant.schoolName.trim();
+      if (viewInstitutionName.isNotEmpty) {
+        schoolNameController.text = viewInstitutionName;
+        institutionFieldRevision.value++;
+      }
       // Set institution ID from participantInstitutionId (stored from API response)
       if (participantInstitutionId.value != null &&
           participantInstitutionId.value!.isNotEmpty) {
@@ -2135,6 +2325,7 @@ class ParticipantController extends GetxController {
 
     // Set participant to edit first (this sets isEditMode to true)
     participantToEdit.value = participant;
+    _applyPaymentFieldsForEdit(participant);
 
     // Set competition/event ID first (needed for category dropdown)
     if (participant.eventId != null && participant.eventId!.isNotEmpty) {
@@ -2167,12 +2358,11 @@ class ParticipantController extends GetxController {
 
     // Set form fields
     nameController.text = participant.participantName;
-    // Set institution name - use a small delay to ensure Autocomplete widget is ready
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (formKey.currentContext != null) {
-        schoolNameController.text = participant.schoolName;
-      }
-    });
+    final institutionName = participant.schoolName.trim();
+    if (institutionName.isNotEmpty) {
+      schoolNameController.text = institutionName;
+      institutionFieldRevision.value++;
+    }
     // Set institution ID from participantInstitutionId (stored from API response)
     // This is critical - must be set before validation
     if (participantInstitutionId.value != null &&
@@ -2181,7 +2371,7 @@ class ParticipantController extends GetxController {
       print(
         'Set selectedInstitutionId from participantInstitutionId: ${selectedInstitutionId.value}',
       );
-      _loadSelectedInstitutionForEdit();
+      unawaited(_loadSelectedInstitutionForEdit());
     } else {
       // If participantInstitutionId is not set, try to find it by name
       // Note: This is async and might complete after widget disposal, so we check if still needed
@@ -2207,6 +2397,7 @@ class ParticipantController extends GetxController {
                   selectedInstitutionId.value = matchingInstitution.id;
                   participantInstitutionId.value = matchingInstitution.id;
                   selectedInstitution.value = matchingInstitution;
+                  _applyInstitutionNameToForm(matchingInstitution);
                   _applyBonafideRulesForSelectedInstitution();
                   print(
                     'Found and set institution ID by name: ${selectedInstitutionId.value}',
@@ -2531,6 +2722,13 @@ class ParticipantController extends GetxController {
       return false;
     }
 
+    if (!isEditMode && !termsAccepted.value) {
+      showTermsError.value = true;
+      errorMessage.value = 'Please accept the terms & conditions to continue';
+      return false;
+    }
+    showTermsError.value = false;
+
     final submitOwner = Object();
     _registrationSubmitOwner = submitOwner;
 
@@ -2610,6 +2808,13 @@ class ParticipantController extends GetxController {
       return false;
     }
 
+    if (!await validateRegistrationUploadsBeforeSubmit()) {
+      if (!identical(_registrationSubmitOwner, submitOwner)) {
+        errorMessage.value = '';
+      }
+      return false;
+    }
+
     final age = app_date_utils.AppDateUtils.calculateAge(dateOfBirth.value!);
 
     // Get CompetitionController if not provided
@@ -2669,6 +2874,58 @@ class ParticipantController extends GetxController {
     //   nextRegistrationNo = await _generateNextRegistrationNumber(...);
     // }
 
+    final paymentModel = _resolvePaymentModel(compController, eventId);
+    final payBeforeSave = _shouldCollectRegistrationPaymentBeforeSave(
+      compController,
+      eventId,
+      categoryId,
+    );
+    if (_isManualPaymentModel(paymentModel) &&
+        _requiresGpayProofUpload() &&
+        !payBeforeSave) {
+      errorMessage.value = 'Please upload payment proof';
+      return false;
+    }
+
+    Map<String, String>? prepaidCheckout;
+    if (payBeforeSave) {
+      var amountPaise = _resolveRegistrationFeePaise(
+        compController,
+        eventId,
+        categoryId,
+      );
+      if (amountPaise < 100) {
+        await compController.ensureCompetitionLoadedForRegistration(eventId);
+        amountPaise = _resolveRegistrationFeePaise(
+          compController,
+          eventId,
+          categoryId,
+        );
+      }
+      if (amountPaise < 100) {
+        errorMessage.value = 'Invalid fee for selected category';
+        return false;
+      }
+
+      isLoading.value = true;
+      errorMessage.value = '';
+      isLoading.value = false;
+
+      prepaidCheckout = await registrationPaymentController
+          .collectRegistrationPayment(
+            competitionId: competitionId,
+            categoryId: categoryId,
+            description: 'Competition registration fee',
+          );
+      if (prepaidCheckout == null) {
+        errorMessage.value =
+            registrationPaymentController.paymentError.value.isNotEmpty
+            ? registrationPaymentController.paymentError.value
+            : 'Payment failed. Registration was not saved.';
+        return false;
+      }
+    }
+
     // Prepare registration data
     final registrationData = <String, dynamic>{
       'competitionId': competitionId,
@@ -2682,11 +2939,23 @@ class ParticipantController extends GetxController {
       'sex': gender.value,
       'groupId': groupId,
       'yogaTeacherCell': yogaMasterContactController.text.trim(),
-      'paymentMode': 'ONLINE', // Default payment mode
+      'paymentMode': payBeforeSave || prepaidCheckout != null
+          ? 'ONLINE'
+          : _resolvePaymentModeForSubmit(compController, eventId),
       'isSpotRegistration': isSpotRegistration.value,
       'optForECertificate': optForECertificate.value,
       // Registration number will be auto-generated by backend based on competition, category, gender, and stage
     };
+    if (prepaidCheckout != null) {
+      final orderId = prepaidCheckout['razorpay_order_id'];
+      final paymentId = prepaidCheckout['razorpay_payment_id'];
+      if (orderId != null && orderId.isNotEmpty) {
+        registrationData['razorpayOrderId'] = orderId;
+      }
+      if (paymentId != null && paymentId.isNotEmpty) {
+        registrationData['razorpayPaymentId'] = paymentId;
+      }
+    }
 
     try {
       isLoading.value = true;
@@ -2733,7 +3002,7 @@ class ParticipantController extends GetxController {
           }
           registrationSaved.value = true;
 
-          // Reset form immediately after successful update
+          // Reset form immediately after successful update (clears validators)
           resetForm();
           return true;
         } else {
@@ -2750,6 +3019,7 @@ class ParticipantController extends GetxController {
               photoXFile: selectedImage.value,
               bonafiedCertificateFile: bonafideFile.value,
               bonafiedCertificateXFile: bonafideImage.value,
+              paymentProofXFile: paymentProofImage.value,
             );
 
         if (!identical(_registrationSubmitOwner, submitOwner)) {
@@ -2758,31 +3028,53 @@ class ParticipantController extends GetxController {
           return false;
         }
 
-        isLoading.value = false;
-
-        if (response.success) {
-          // Reload participants list if we have an event ID selected
-          if (selectedEventId.value.isNotEmpty) {
-            await loadParticipantsByEventId(
-              selectedEventId.value,
-              resetPage: true,
-            );
-          }
-
-          // Store the latest registered participant for UI flows.
-          if (participants.isNotEmpty) {
-            lastRegisteredParticipant.value = participants.first;
-          }
-          registrationSaved.value = true;
-
-          // Reset form immediately after successful save
-          resetForm();
-          return true;
-        } else {
+        if (!response.success) {
+          isLoading.value = false;
           errorMessage.value =
               response.message ?? 'Failed to register participant';
           return false;
         }
+
+        if (prepaidCheckout != null) {
+          final regId = _extractRegistrationId(response.data);
+          if (regId != null) {
+            try {
+              await registrationPaymentController
+                  .linkCollectedRegistrationPayment(
+                    registrationId: regId,
+                    checkout: prepaidCheckout,
+                  );
+            } catch (e) {
+              isLoading.value = false;
+              errorMessage.value =
+                  'Registration saved but payment link failed: ${e.toString()}';
+              return false;
+            }
+          }
+        }
+
+        isLoading.value = false;
+
+        _captureLastRegisteredFromCreateResponse(response.data);
+
+        // Reload participants list if we have an event ID selected
+        if (selectedEventId.value.isNotEmpty) {
+          await loadParticipantsByEventId(
+            selectedEventId.value,
+            resetPage: true,
+          );
+        }
+
+        if (lastRegisteredParticipant.value == null &&
+            participants.isNotEmpty) {
+          lastRegisteredParticipant.value = participants.first;
+        }
+
+        registrationSaved.value = true;
+
+        // Reset form immediately after successful save (clears validators)
+        resetForm();
+        return true;
       }
     } catch (e) {
       isLoading.value = false;
@@ -2907,20 +3199,14 @@ class ParticipantController extends GetxController {
     String registrationId,
   ) async {
     if (registrationId.isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Missing registration id',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      SnackbarHelper.showErrorMessage('Missing registration id');
       return;
     }
     try {
-      Get.snackbar(
-        'Downloading',
-        'Preparing registration details…',
+      SnackbarHelper.show(
+        title: 'Downloading',
+        message: 'Preparing registration details…',
         backgroundColor: Colors.blue,
-        colorText: Colors.white,
         duration: const Duration(seconds: 1),
       );
 
@@ -2948,12 +3234,7 @@ class ParticipantController extends GetxController {
             ..click();
           html.Url.revokeObjectUrl(blobUrl);
 
-          Get.snackbar(
-            'Success',
-            'Download started',
-            backgroundColor: Colors.green,
-            colorText: Colors.white,
-          );
+          SnackbarHelper.showSuccessMessage('Download started');
         } else {
           final dataUri = Uri.dataFromBytes(
             response.bodyBytes,
@@ -2961,36 +3242,127 @@ class ParticipantController extends GetxController {
           );
           if (await canLaunchUrl(dataUri)) {
             await launchUrl(dataUri, mode: LaunchMode.externalApplication);
-            Get.snackbar(
-              'Success',
-              'Registration details opened',
-              backgroundColor: Colors.green,
-              colorText: Colors.white,
-            );
+            SnackbarHelper.showSuccessMessage('Registration details opened');
           } else {
-            Get.snackbar(
-              'Error',
-              'Could not open PDF',
-              backgroundColor: Colors.red,
-              colorText: Colors.white,
-            );
+            SnackbarHelper.showErrorMessage('Could not open PDF');
           }
         }
       } else {
-        Get.snackbar(
-          'Error',
+        SnackbarHelper.showErrorMessage(
           'Failed to download (status ${response.statusCode})',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
         );
       }
     } catch (e) {
-      Get.snackbar(
-        'Error',
+      SnackbarHelper.showErrorMessage(
         'Failed to download registration details: ${e.toString()}',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
+    }
+  }
+
+  String _resolvePaymentModel(
+    CompetitionController compController,
+    String eventId,
+  ) {
+    if (compController.isOnDemandOrg.value ||
+        compController.requiresPrepaidCompetitionPayment) {
+      return SubscriptionCatalogFilter.onDemandModeKey;
+    }
+    final home = compController.homeCompetitions.firstWhereOrNull(
+      (c) => c.id?.toString() == eventId,
+    );
+    if (home?.paymentModel != null && home!.paymentModel!.isNotEmpty) {
+      return home.paymentModel!;
+    }
+    final orgModel = compController.organizationPaymentModel.value
+        .toUpperCase();
+    if (orgModel == SubscriptionCatalogFilter.onDemandModeKey) {
+      return SubscriptionCatalogFilter.onDemandModeKey;
+    }
+    if (orgModel == 'USER_PACK_SUBSCRIPTION') {
+      return 'USER_PACK_SUBSCRIPTION';
+    }
+    return 'ORG_SUBSCRIPTION';
+  }
+
+  bool requiresOnlineRegistrationPayment(
+    CompetitionController compController,
+    String eventId,
+  ) {
+    return _resolvePaymentModel(compController, eventId).toUpperCase() ==
+        SubscriptionCatalogFilter.onDemandModeKey;
+  }
+
+  String registrationSubmitButtonLabel(
+    CompetitionController compController,
+    String eventId,
+  ) {
+    if (isEditMode) {
+      return 'UPDATE';
+    }
+    return 'Pay & Register Now';
+  }
+
+  int _resolveRegistrationFeePaise(
+    CompetitionController compController,
+    String eventId,
+    int categoryId,
+  ) {
+    final fee = compController.resolveCategoryFeeRupees(eventId, categoryId);
+    return (fee * 100).round();
+  }
+
+  bool _shouldCollectRegistrationPaymentBeforeSave(
+    CompetitionController compController,
+    String eventId,
+    int categoryId,
+  ) {
+    if (isEditMode) {
+      return false;
+    }
+    if (!requiresOnlineRegistrationPayment(compController, eventId)) {
+      return false;
+    }
+    return _resolveRegistrationFeePaise(compController, eventId, categoryId) >=
+        100;
+  }
+
+  final RxBool registrationSubmitBusy = false.obs;
+
+  void _syncRegistrationSubmitBusy() {
+    registrationSubmitBusy.value =
+        isLoading.value ||
+        registrationPaymentController.isPaymentInProgress.value;
+  }
+
+  bool _isManualPaymentModel(String model) =>
+      model == 'ORG_SUBSCRIPTION' || model == 'USER_PACK_SUBSCRIPTION';
+
+  String _resolvePaymentModeForSubmit(
+    CompetitionController compController,
+    String eventId,
+  ) {
+    final model = _resolvePaymentModel(compController, eventId);
+    if (model == 'PAY_PER_PARTICIPANT') {
+      return 'ONLINE';
+    }
+    return selectedPaymentMode.value;
+  }
+
+  int? _extractRegistrationId(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final reg = data['registration'];
+    if (reg is Map && reg['id'] != null) {
+      return int.tryParse(reg['id'].toString());
+    }
+    return null;
+  }
+
+  void _captureLastRegisteredFromCreateResponse(Map<String, dynamic>? data) {
+    if (data == null) return;
+    final reg = data['registration'];
+    if (reg is Map<String, dynamic>) {
+      lastRegisteredParticipant.value =
+          ParticipantModel.fromRegistrationResponse(reg);
     }
   }
 }

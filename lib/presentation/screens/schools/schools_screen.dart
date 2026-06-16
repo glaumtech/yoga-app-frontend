@@ -376,8 +376,8 @@ class _InstitutionPrecheckAndCreateState
                           icon: const Icon(Icons.add),
                           label: const Text('Create New Institution'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
+                            backgroundColor: AppTheme.buttonBackground,
+                            foregroundColor: AppTheme.buttonForeground,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 18,
                               vertical: 12,

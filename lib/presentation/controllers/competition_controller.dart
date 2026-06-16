@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -7,24 +8,36 @@ import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/constants/championship_style.dart';
+import '../../core/utils/storage_service.dart';
 import '../../core/utils/dialog_helper.dart';
 import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/photo_upload_processor.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
+import '../../data/models/competition_grade_model.dart';
+import '../../data/models/user_management_model.dart';
+import '../models/competition_grade_entry.dart';
 import '../../data/models/competition_option_model.dart';
+import '../../core/utils/subscription_catalog_filter.dart';
+import '../../data/models/subscription_mode_model.dart';
+import '../../data/models/subscription_package_model.dart';
+import '../../data/repositories/payment_repository.dart';
+import '../../services/razorpay_checkout_service.dart';
 
 enum BrochureFileKind { image, pdf, unknown }
 
 class CompetitionController extends GetxController {
-  static const int brochureMaxImageBytes = 10 * 1024 * 1024;
   static const int brochureMaxPdfBytes = 25 * 1024 * 1024;
   static const String brochureUploadNotes =
       'Accepted: JPG, PNG, or PDF\n'
-      '• Images: max 10 MB\n'
+      '• Images over 2 MB are compressed to 2 MB\n'
       '• PDF: max 25 MB';
 
   final CompetitionRepository _repository = CompetitionRepository();
+  final PaymentRepository _paymentRepository = PaymentRepository();
+  final RazorpayCheckoutService _razorpayCheckout = RazorpayCheckoutService();
 
   // Form controllers — keys are replaced when the form subtree is (re)shown so one
   // GlobalKey is never attached to two widgets during list/form transitions.
@@ -38,6 +51,8 @@ class CompetitionController extends GetxController {
 
   static const String dateFieldStart = 'start';
   static const String dateFieldEnd = 'end';
+  static const String dateFieldStartTime = 'startTime';
+  static const String dateFieldEndTime = 'endTime';
   static const String dateFieldDisplayAd = 'displayAd';
 
   final RxSet<String> touchedCompetitionDateFields = <String>{}.obs;
@@ -95,6 +110,9 @@ class CompetitionController extends GetxController {
   final RxList<HomeCompetitionModel> homeCompetitions =
       <HomeCompetitionModel>[].obs;
   final RxBool isLoadingHomeCompetitions = false.obs;
+
+  /// Tracks which login/branch scope [homeCompetitions] was loaded for.
+  String? _homeCompetitionsScope;
   final RxString searchQuery = ''.obs;
   final RxString selectedFilter = ''.obs;
   final RxBool isListView = false.obs; // Toggle between create and list view
@@ -107,8 +125,39 @@ class CompetitionController extends GetxController {
   ); // Competition being edited
 
   /// Set after successful create; used to show registration QR dialog.
-  final Rx<CompetitionModel?> lastSavedCompetitionForQr =
-      Rx<CompetitionModel?>(null);
+  final Rx<CompetitionModel?> lastSavedCompetitionForQr = Rx<CompetitionModel?>(
+    null,
+  );
+
+  final RxBool showSubscriptionTopUp = false.obs;
+  final RxBool isLoadingSubscriptionModes = false.obs;
+  final RxBool isLoadingSubscriptionPackages = false.obs;
+  final RxBool isProcessingSubscriptionPayment = false.obs;
+  final RxString subscriptionModesError = ''.obs;
+  final RxString subscriptionPackagesError = ''.obs;
+  final RxList<SubscriptionModeModel> subscriptionModes =
+      <SubscriptionModeModel>[].obs;
+  final RxList<SubscriptionPackageModel> subscriptionPackages =
+      <SubscriptionPackageModel>[].obs;
+  final RxList<SubscriptionPackageModel> _allSubscriptionPackages =
+      <SubscriptionPackageModel>[].obs;
+  int _subscriptionPackageLoadSeq = 0;
+  final RxnInt selectedSubscriptionModeId = RxnInt();
+  final RxnInt selectedSubscriptionPackageId = RxnInt();
+  final RxBool showSubscriptionAddonOptions = false.obs;
+
+  final RxBool isOnDemandOrg = false.obs;
+  final RxBool isLoadingOnDemandContext = false.obs;
+  final RxInt onDemandMaintenanceFeePaise = 0.obs;
+  final RxString organizationPaymentModel = 'ORG_SUBSCRIPTION'.obs;
+  final RxBool isProcessingCompetitionPayment = false.obs;
+
+  bool get requiresPrepaidCompetitionPayment =>
+      organizationPaymentModel.value.toUpperCase() ==
+      SubscriptionCatalogFilter.onDemandModeKey;
+
+  String get createCompetitionButtonLabel =>
+      requiresPrepaidCompetitionPayment ? 'Pay and Create Competition' : 'SAVE';
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -124,12 +173,17 @@ class CompetitionController extends GetxController {
   final RxString sortOrder = 'desc'.obs; // asc, desc
   final Rx<DateTime?> eventStartDate = Rx<DateTime?>(null);
   final Rx<DateTime?> eventEndDate = Rx<DateTime?>(null);
+  final Rx<TimeOfDay?> eventStartTime = Rx<TimeOfDay?>(null);
+  final Rx<TimeOfDay?> eventEndTime = Rx<TimeOfDay?>(null);
   final Rx<DateTime?> displayAdFrom = Rx<DateTime?>(null);
+  final RxBool publishResultNow = false.obs;
   final RxBool spotRegistration = false.obs;
   final Rx<ChampionshipStyle?> championshipStyle = Rx<ChampionshipStyle?>(null);
   final RxInt participantsPerStage = RxInt(0);
   final RxInt minimumMarks = RxInt(0);
   final RxInt maximumMarks = RxInt(0);
+  final TextEditingController bestSchoolAwardMinParticipantsController =
+      TextEditingController();
   // Track selected IDs (for API submission)
   final RxList<int> selectedPrizeIds = <int>[].obs;
   final RxList<int> selectedCategoryIds = <int>[].obs;
@@ -138,6 +192,8 @@ class CompetitionController extends GetxController {
   final RxList<int> selectedStageIds = <int>[].obs;
   final RxMap<String, List<int>> stageGroups = <String, List<int>>{}
       .obs; // Key: stage ID as string, Value: list of group IDs
+
+  final RxList<CompetitionGradeEntry> gradeEntries = <CompetitionGradeEntry>[].obs;
 
   // Helper getters for backward compatibility (for UI display)
   List<String> get selectedPrizes => selectedPrizeIds
@@ -323,21 +379,80 @@ class CompetitionController extends GetxController {
     return mappings;
   }
 
-  @override
-  /// Load competitions for home screen (public API, no auth required for display)
-  Future<void> loadCompetitionsForHome() async {
+  /// Scope key for home list: anonymous users see all; logged-in users see
+  /// branch/org-scoped competitions (backend filters when JWT is present).
+  String _homeCompetitionsScopeKey() {
+    try {
+      final userJson = StorageService.getString(AppConstants.userKey);
+      if (userJson == null || userJson.isEmpty) return 'anon';
+      final user = UserManagementModel.fromJson(
+        jsonDecode(userJson) as Map<String, dynamic>,
+      );
+      final type = (user.userTypeName ?? user.type).toUpperCase();
+      if (type == 'ORG_ADMIN') return 'org:${user.id}';
+      return 'branch:${user.branchId ?? 'none'}:${user.id}';
+    } catch (_) {
+      return 'anon';
+    }
+  }
+
+  void invalidateHomeCompetitionsScope() {
+    _homeCompetitionsScope = null;
+  }
+
+  /// Loads home competitions when scope changes or cache was invalidated.
+  Future<void> ensureHomeCompetitionsLoaded() async {
+    final scope = _homeCompetitionsScopeKey();
+    if (_homeCompetitionsScope == scope) {
+      if (isLoadingHomeCompetitions.value) return;
+      return;
+    }
+    await loadCompetitionsForHome();
+  }
+
+  /// Load competitions for home screen (public API; branch-scoped when logged in)
+  Future<void> loadCompetitionsForHome({bool force = false}) async {
+    final scope = _homeCompetitionsScopeKey();
+    if (!force && _homeCompetitionsScope == scope) {
+      return;
+    }
     try {
       isLoadingHomeCompetitions.value = true;
       final response = await _repository.getCompetitionsPublic();
       if (response.success && response.data != null) {
         homeCompetitions.value = response.data!;
+        _homeCompetitionsScope = scope;
       } else {
         homeCompetitions.clear();
+        _homeCompetitionsScope = null;
       }
     } catch (e) {
       homeCompetitions.clear();
+      _homeCompetitionsScope = null;
     } finally {
       isLoadingHomeCompetitions.value = false;
+    }
+  }
+
+  /// Populates [competitions] for the registration competition dropdown.
+  /// Uses the public home list first; falls back to the admin list when empty.
+  Future<void> ensureRegistrationCompetitionChoicesLoaded() async {
+    if (competitions.isNotEmpty) return;
+
+    await ensureHomeCompetitionsLoaded();
+
+    if (homeCompetitions.isNotEmpty) {
+      for (final home in homeCompetitions) {
+        final id = home.id?.toString();
+        if (id == null || id.isEmpty) continue;
+        final existing = competitions.firstWhereOrNull((c) => c.id == id);
+        _upsertCompetition(_competitionFromHome(home, existing));
+      }
+      if (competitions.isNotEmpty) return;
+    }
+
+    if (!isLoading.value) {
+      await loadCompetitions();
     }
   }
 
@@ -345,12 +460,15 @@ class CompetitionController extends GetxController {
 
   /// Loads full competition data for the public/admin registration form.
   /// Safe after logout: does not rely on a prior [loadCompetitions] admin list call.
-  Future<void> ensureCompetitionLoadedForRegistration(String competitionId) async {
+  Future<void> ensureCompetitionLoadedForRegistration(
+    String competitionId,
+  ) async {
     final id = competitionId.trim();
     if (id.isEmpty) return;
 
     final existing = competitions.firstWhereOrNull((c) => c.id == id);
-    final hasGroupData = existing != null &&
+    final hasGroupData =
+        existing != null &&
         ((existing.stageGroups != null && existing.stageGroups!.isNotEmpty) ||
             (existing.stageGroupLabels != null &&
                 existing.stageGroupLabels!.isNotEmpty));
@@ -417,6 +535,10 @@ class CompetitionController extends GetxController {
       address: home.address,
       eventStartDate: parseDate(home.eventStartDate),
       eventEndDate: parseDate(home.eventEndDate),
+      eventStartTime: existing?.eventStartTime,
+      eventEndTime: existing?.eventEndTime,
+      publishResultNow: existing?.resolvedPublishResultNow ?? false,
+      spotRegistration: existing?.resolvedSpotRegistration ?? false,
       displayAdFrom: home.displayAdFrom != null
           ? parseDate(home.displayAdFrom)
           : null,
@@ -442,6 +564,36 @@ class CompetitionController extends GetxController {
     searchController.addListener(_onSearchChanged);
     // Load options from API
     loadOptions();
+    loadOnDemandContext();
+  }
+
+  Future<void> loadOnDemandContext() async {
+    if (isLoadingOnDemandContext.value) return;
+    try {
+      isLoadingOnDemandContext.value = true;
+      final response = await _paymentRepository.getOnDemandContext();
+      if (response.success && response.data != null) {
+        final data = response.data!;
+        isOnDemandOrg.value =
+            data['onDemand'] == true || data['requiresPrePayment'] == true;
+        organizationPaymentModel.value =
+            data['paymentModel']?.toString() ?? 'ORG_SUBSCRIPTION';
+        final feePaise = data['maintenanceFeeAmountPaise'];
+        onDemandMaintenanceFeePaise.value = feePaise is int
+            ? feePaise
+            : int.tryParse(feePaise?.toString() ?? '') ?? 0;
+      } else {
+        isOnDemandOrg.value = false;
+        organizationPaymentModel.value = 'ORG_SUBSCRIPTION';
+        onDemandMaintenanceFeePaise.value = 0;
+      }
+    } catch (_) {
+      isOnDemandOrg.value = false;
+      organizationPaymentModel.value = 'ORG_SUBSCRIPTION';
+      onDemandMaintenanceFeePaise.value = 0;
+    } finally {
+      isLoadingOnDemandContext.value = false;
+    }
   }
 
   // Load all options (categories, prizes, stages, groups) from API
@@ -528,11 +680,349 @@ class CompetitionController extends GetxController {
   @override
   void onClose() {
     _debounceTimer?.cancel();
+    _razorpayCheckout.dispose();
+    clearGradeEntries();
     competitionNameController.dispose();
     descriptionController.dispose();
     addressController.dispose();
     searchController.dispose();
     super.onClose();
+  }
+
+  SubscriptionPackageModel? get selectedSubscriptionPackage {
+    final id = selectedSubscriptionPackageId.value;
+    if (id == null) return null;
+    return subscriptionPackages.firstWhereOrNull((p) => p.id == id);
+  }
+
+  bool _isSubscriptionCreditError(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('no subscription credits remaining') ||
+        lower.contains('purchase a package') ||
+        lower.contains('purchase subscription credits') ||
+        lower.contains('competition limit reached') ||
+        lower.contains('no pack credits remaining') ||
+        lower.contains('no subscription credits') ||
+        lower.contains('yearly subscription has expired') ||
+        lower.contains('subscription has expired') ||
+        lower.contains('add-on does not match');
+  }
+
+  bool get shouldShowSubscriptionBuyNow {
+    final message = errorMessage.value;
+    return message.isNotEmpty && _isSubscriptionCreditError(message);
+  }
+
+  List<SubscriptionPackageModel> get subscriptionBasePackages {
+    return SubscriptionCatalogFilter.sortPackages(
+      subscriptionPackages.where((p) => !p.isAddon),
+    );
+  }
+
+  List<SubscriptionPackageModel> get subscriptionAddonPackages {
+    return SubscriptionCatalogFilter.sortPackages(
+      subscriptionPackages.where((p) => p.isAddon),
+    );
+  }
+
+  SubscriptionModeModel? get selectedSubscriptionMode {
+    final id = selectedSubscriptionModeId.value;
+    if (id == null) return null;
+    return subscriptionModes.firstWhereOrNull((m) => m.id == id);
+  }
+
+  Future<void> prepareSubscriptionTopUpFlow() async {
+    showSubscriptionTopUp.value = true;
+    showSubscriptionAddonOptions.value = false;
+    await loadSubscriptionModes();
+    await loadAllSubscriptionPackages();
+  }
+
+  String get subscriptionPlanStepTitle {
+    final mode = selectedSubscriptionMode?.modeKey ?? '';
+    if (mode == 'PAY_PER_PARTICIPANT') {
+      return 'Step 2 — Choose On Demand plan';
+    }
+    return 'Step 2 — Choose a plan';
+  }
+
+  Future<String?> _completeOnDemandPaymentBeforeCreate({
+    required String description,
+  }) async {
+    final orderResponse = await _paymentRepository.createApiOrder(
+      purpose: PaymentRepository.onDemandCompetitionPurpose,
+    );
+    if (!orderResponse.success || orderResponse.data == null) {
+      _notifyError(orderResponse.message ?? 'Failed to create payment order');
+      return null;
+    }
+
+    final order = orderResponse.data!;
+    final orderId =
+        order['orderId']?.toString() ?? order['order_id']?.toString() ?? '';
+    final key = order['key']?.toString() ?? '';
+    final amount = order['amount'] is int
+        ? order['amount'] as int
+        : int.tryParse(order['amount']?.toString() ?? '') ?? 0;
+    final mockMode = order['mockMode'] == true;
+
+    if (orderId.isEmpty || amount <= 0) {
+      _notifyError('Invalid payment order details');
+      return null;
+    }
+    if (!mockMode && key.isEmpty) {
+      _notifyError('Payment gateway is not configured. Contact support.');
+      return null;
+    }
+
+    Map<String, String> paymentResult;
+    try {
+      paymentResult = await _razorpayCheckout.openCheckout(
+        keyId: key,
+        orderId: orderId,
+        amountPaise: amount,
+        description: description,
+        mockMode: mockMode,
+      );
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      final cancelled = message.toLowerCase().contains('cancelled');
+      await _paymentRepository.markPaymentFailed(
+        orderId: orderId,
+        reason: cancelled ? 'cancelled' : message,
+      );
+      _notifyError(cancelled ? 'Payment cancelled' : message);
+      return null;
+    }
+
+    final verifyResponse = await _paymentRepository.verifyApiPayment(
+      purpose: PaymentRepository.onDemandCompetitionPurpose,
+      orderId: paymentResult['razorpay_order_id'] ?? orderId,
+      paymentId: paymentResult['razorpay_payment_id'] ?? '',
+      signature: paymentResult['razorpay_signature'] ?? '',
+    );
+    if (!verifyResponse.success) {
+      await _paymentRepository.markPaymentFailed(
+        orderId: paymentResult['razorpay_order_id'] ?? orderId,
+        reason: verifyResponse.message ?? 'verification_failed',
+      );
+      _notifyError(verifyResponse.message ?? 'Payment verification failed');
+      return null;
+    }
+    return paymentResult['razorpay_order_id']?.toString() ?? orderId;
+  }
+
+  void toggleSubscriptionAddonOptions() {
+    showSubscriptionAddonOptions.value = !showSubscriptionAddonOptions.value;
+    if (!showSubscriptionAddonOptions.value) {
+      final selected = selectedSubscriptionPackage;
+      if (selected?.isAddon == true) {
+        final base = subscriptionBasePackages.isNotEmpty
+            ? subscriptionBasePackages.first
+            : null;
+        if (base != null) {
+          selectedSubscriptionPackageId.value = base.id;
+        }
+      }
+    }
+  }
+
+  Future<void> loadSubscriptionModes() async {
+    if (isLoadingSubscriptionModes.value) return;
+    try {
+      isLoadingSubscriptionModes.value = true;
+      subscriptionModesError.value = '';
+      final response = await _paymentRepository.listSubscriptionModes();
+      if (response.success && response.data != null) {
+        final modes = SubscriptionCatalogFilter.sortModes(response.data!);
+        subscriptionModes.assignAll(modes);
+        if (modes.isEmpty) {
+          selectedSubscriptionModeId.value = null;
+          subscriptionModesError.value = 'No subscription modes available';
+        } else {
+          final current = selectedSubscriptionModeId.value;
+          final exists = current != null && modes.any((m) => m.id == current);
+          if (!exists) {
+            selectedSubscriptionModeId.value = modes.first.id;
+          }
+        }
+      } else {
+        subscriptionModes.clear();
+        selectedSubscriptionModeId.value = null;
+        subscriptionModesError.value =
+            response.message ?? 'Failed to load subscription modes';
+      }
+    } catch (e) {
+      subscriptionModes.clear();
+      selectedSubscriptionModeId.value = null;
+      subscriptionModesError.value =
+          'Failed to load subscription modes: ${e.toString()}';
+    } finally {
+      isLoadingSubscriptionModes.value = false;
+    }
+  }
+
+  Future<void> onSubscriptionModeSelected(SubscriptionModeModel mode) async {
+    if (selectedSubscriptionModeId.value == mode.id) return;
+    selectedSubscriptionModeId.value = mode.id;
+    selectedSubscriptionPackageId.value = null;
+    showSubscriptionAddonOptions.value = false;
+    _applyPackagesForSelectedMode();
+  }
+
+  void onSubscriptionPackageSelected(SubscriptionPackageModel package) {
+    selectedSubscriptionPackageId.value = package.id;
+    if (!package.isAddon) {
+      showSubscriptionAddonOptions.value = false;
+    }
+  }
+
+  Future<void> loadAllSubscriptionPackages() async {
+    final seq = ++_subscriptionPackageLoadSeq;
+    try {
+      isLoadingSubscriptionPackages.value = true;
+      subscriptionPackagesError.value = '';
+      final response = await _paymentRepository.listAllPackages();
+      if (seq != _subscriptionPackageLoadSeq) return;
+
+      if (response.success && response.data != null) {
+        _allSubscriptionPackages.assignAll(
+          response.data!.where((p) => p.isEligibleForCompetitionTopUp),
+        );
+        _applyPackagesForSelectedMode();
+        if (subscriptionPackages.isEmpty &&
+            subscriptionPackagesError.value.isEmpty) {
+          subscriptionPackagesError.value =
+              'No packages available. Check that the server is running.';
+        }
+      } else {
+        _allSubscriptionPackages.clear();
+        subscriptionPackages.clear();
+        selectedSubscriptionPackageId.value = null;
+        subscriptionPackagesError.value =
+            response.message ?? 'Failed to load subscription packages';
+      }
+    } catch (e) {
+      if (seq != _subscriptionPackageLoadSeq) return;
+      _allSubscriptionPackages.clear();
+      subscriptionPackages.clear();
+      selectedSubscriptionPackageId.value = null;
+      subscriptionPackagesError.value =
+          'Failed to load subscription packages: ${e.toString()}';
+    } finally {
+      if (seq == _subscriptionPackageLoadSeq) {
+        isLoadingSubscriptionPackages.value = false;
+      }
+    }
+  }
+
+  void _applyPackagesForSelectedMode() {
+    final modeId = selectedSubscriptionModeId.value;
+    if (modeId == null) {
+      subscriptionPackages.clear();
+      selectedSubscriptionPackageId.value = null;
+      return;
+    }
+    final mode = selectedSubscriptionMode;
+    final packages = SubscriptionCatalogFilter.sortPackages(
+      _allSubscriptionPackages.where((p) {
+        if (p.subscriptionModeId != null && p.subscriptionModeId != modeId) {
+          return false;
+        }
+        if (mode != null &&
+            p.paymentModel.isNotEmpty &&
+            p.paymentModel != mode.modeKey) {
+          return false;
+        }
+        return true;
+      }),
+    );
+    subscriptionPackages.assignAll(packages);
+    if (packages.isEmpty) {
+      selectedSubscriptionPackageId.value = null;
+      final modeName = mode?.name ?? 'this type';
+      subscriptionPackagesError.value =
+          'No plans found for $modeName. Try another subscription type.';
+    } else {
+      subscriptionPackagesError.value = '';
+      final current = selectedSubscriptionPackageId.value;
+      final exists = current != null && packages.any((p) => p.id == current);
+      if (!exists) {
+        selectedSubscriptionPackageId.value = null;
+      }
+    }
+  }
+
+  /// Retry loading packages (used by plan picker).
+  Future<void> loadSubscriptionPackages() async {
+    await loadAllSubscriptionPackages();
+  }
+
+  Future<bool> purchaseSubscriptionPackageAndRetryCreate() async {
+    final packageId = selectedSubscriptionPackageId.value;
+    if (packageId == null) {
+      _notifyError('Please select a subscription package');
+      return false;
+    }
+
+    try {
+      isProcessingSubscriptionPayment.value = true;
+      final packageName = selectedSubscriptionPackage?.name ?? 'Subscription';
+
+      final orderResponse = await _paymentRepository
+          .createSubscriptionOrderForCurrentOrg(packageId: packageId);
+      if (!orderResponse.success || orderResponse.data == null) {
+        _notifyError(orderResponse.message ?? 'Failed to create payment order');
+        return false;
+      }
+
+      final order = orderResponse.data!;
+      final orderId = order['orderId']?.toString() ?? '';
+      final key = order['key']?.toString() ?? '';
+      final amount = order['amount'] is int
+          ? order['amount'] as int
+          : int.tryParse(order['amount']?.toString() ?? '') ?? 0;
+      final mockMode = order['mockMode'] == true;
+
+      if (orderId.isEmpty || amount <= 0) {
+        _notifyError('Invalid payment order details');
+        return false;
+      }
+      if (!mockMode && key.isEmpty) {
+        _notifyError('Payment gateway is not configured. Contact support.');
+        return false;
+      }
+
+      final paymentResult = await _razorpayCheckout.openCheckout(
+        keyId: key,
+        orderId: orderId,
+        amountPaise: amount,
+        description: packageName,
+        mockMode: mockMode,
+      );
+
+      final verifyResponse = await _paymentRepository
+          .verifySubscriptionPaymentForCurrentOrg(
+            orderId: paymentResult['razorpay_order_id'] ?? orderId,
+            paymentId: paymentResult['razorpay_payment_id'] ?? '',
+            signature: paymentResult['razorpay_signature'] ?? '',
+          );
+      if (!verifyResponse.success) {
+        _notifyError(verifyResponse.message ?? 'Payment verification failed');
+        return false;
+      }
+
+      _notifySuccess('Subscription activated. Retrying competition save...');
+      showSubscriptionTopUp.value = false;
+      errorMessage.value = '';
+      return await createCompetition();
+    } catch (e) {
+      _notifyError('Payment failed: ${e.toString()}');
+      return false;
+    } finally {
+      isProcessingSubscriptionPayment.value = false;
+      _razorpayCheckout.dispose();
+    }
   }
 
   void _onSearchChanged() {
@@ -569,49 +1059,82 @@ class CompetitionController extends GetxController {
         return;
       }
 
-      int fileSize = picked.size;
-      if (kIsWeb) {
-        if (picked.bytes == null || picked.bytes!.isEmpty) {
-          _notifyError('Unable to read brochure file');
-          return;
-        }
-        fileSize = picked.bytes!.length;
-      } else if (picked.path != null) {
-        fileSize = await File(picked.path!).length();
+      final fileBytes = await _readPickedFileBytes(picked);
+      if (fileBytes == null) {
+        _notifyError('Unable to read brochure file');
+        return;
       }
 
       final isPdf = lowerName.endsWith('.pdf');
-      final maxSize = isPdf ? brochureMaxPdfBytes : brochureMaxImageBytes;
-      if (fileSize > maxSize) {
-        _notifyError(
-          isPdf
-              ? 'PDF brochure must be 25 MB or smaller'
-              : 'Image brochure must be 10 MB or smaller',
+      if (isPdf) {
+        if (fileBytes.length > brochureMaxPdfBytes) {
+          _notifyError('PDF brochure must be 25 MB or smaller');
+          return;
+        }
+        await _applyBrochureSelection(
+          bytes: fileBytes,
+          fileName: fileName,
+          nativePath: picked.path,
         );
         return;
       }
 
-      brochureFileName.value = fileName;
-      if (kIsWeb) {
-        brochureBytes.value = picked.bytes;
-        brochureFile.value = null;
-        brochureFileLocal.value = null;
-        brochureUrl.value = 'web_file';
-      } else if (picked.path != null) {
-        final path = picked.path!;
-        brochureFile.value = XFile(path, name: fileName);
-        brochureFileLocal.value = File(path);
-        brochureBytes.value = null;
-        brochureUrl.value = path;
-      } else {
-        _notifyError('Unable to access brochure file');
-        return;
-      }
+      final processed = await PhotoUploadProcessor.processBytes(
+        fileBytes,
+        originalFileName: fileName,
+        compressThresholdBytes:
+            PhotoUploadProcessor.documentImageCompressThresholdBytes,
+        targetBytes: PhotoUploadProcessor.documentImageTargetBytes,
+      );
+      if (processed == null) return;
 
-      errorMessage.value = '';
+      await _applyBrochureSelection(
+        bytes: processed.bytes,
+        fileName: processed.fileName,
+        nativePath: processed.file?.path ?? picked.path,
+        localFile: processed.file,
+      );
+    } on PhotoUploadException catch (e) {
+      _notifyError(e.message);
     } catch (e) {
       _notifyError('Error picking brochure: ${e.toString()}');
     }
+  }
+
+  Future<Uint8List?> _readPickedFileBytes(PlatformFile picked) async {
+    if (kIsWeb) {
+      final bytes = picked.bytes;
+      if (bytes == null || bytes.isEmpty) return null;
+      return bytes;
+    }
+    if (picked.path == null) return null;
+    return File(picked.path!).readAsBytes();
+  }
+
+  Future<void> _applyBrochureSelection({
+    required Uint8List bytes,
+    required String fileName,
+    String? nativePath,
+    File? localFile,
+  }) async {
+    brochureFileName.value = fileName;
+    if (kIsWeb) {
+      brochureBytes.value = bytes;
+      brochureFile.value = null;
+      brochureFileLocal.value = null;
+      brochureUrl.value = 'web_file';
+    } else {
+      final file = localFile ?? (nativePath != null ? File(nativePath) : null);
+      if (file == null) {
+        _notifyError('Unable to access brochure file');
+        return;
+      }
+      brochureFileLocal.value = file;
+      brochureFile.value = XFile(file.path, name: fileName);
+      brochureBytes.value = null;
+      brochureUrl.value = file.path;
+    }
+    errorMessage.value = '';
   }
 
   // Validate brochure is uploaded
@@ -698,6 +1221,40 @@ class CompetitionController extends GetxController {
     }
   }
 
+  double _feeFromAmountMap(Map<String, double>? amounts, int categoryId) {
+    if (amounts == null || amounts.isEmpty) return 0;
+    final byId = amounts[categoryId.toString()] ?? 0;
+    if (byId > 0) return byId;
+    final name = getCategoryNameById(categoryId);
+    if (name != null) {
+      return amounts[name] ?? 0;
+    }
+    return 0;
+  }
+
+  /// Registration fee in INR for [categoryId] on [competitionId].
+  /// API category amounts use category name keys; home/public APIs may use IDs.
+  double resolveCategoryFeeRupees(String competitionId, int categoryId) {
+    var fee = _feeFromAmountMap(
+      categoryAmounts.isEmpty
+          ? null
+          : Map<String, double>.from(categoryAmounts),
+      categoryId,
+    );
+    if (fee > 0) return fee;
+
+    final home = homeCompetitions.firstWhereOrNull(
+      (c) => c.id?.toString() == competitionId,
+    );
+    fee = _feeFromAmountMap(home?.categoryAmounts, categoryId);
+    if (fee > 0) return fee;
+
+    final competition = competitions.firstWhereOrNull(
+      (c) => c.id == competitionId,
+    );
+    return _feeFromAmountMap(competition?.categoryAmounts, categoryId);
+  }
+
   String? getStageNameById(int id) {
     try {
       return stageOptions.firstWhere((opt) => opt.id == id).name;
@@ -759,6 +1316,63 @@ class CompetitionController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void addGradeEntry() {
+    gradeEntries.add(CompetitionGradeEntry());
+  }
+
+  void removeGradeEntry(int index) {
+    if (index < 0 || index >= gradeEntries.length) return;
+    gradeEntries[index].dispose();
+    gradeEntries.removeAt(index);
+  }
+
+  void clearGradeEntries() {
+    for (final entry in gradeEntries) {
+      entry.dispose();
+    }
+    gradeEntries.clear();
+  }
+
+  List<CompetitionGradeModel> buildGradesForSubmit() {
+    return gradeEntries
+        .map((entry) => entry.toModel())
+        .whereType<CompetitionGradeModel>()
+        .toList();
+  }
+
+  String? validateGradeEntries() {
+    final names = <String>{};
+    for (final entry in gradeEntries) {
+      if (!entry.hasAnyInput) continue;
+      if (!entry.isComplete) {
+        return 'Please enter grade name and mark range for each grade row';
+      }
+      final model = entry.toModel();
+      if (model == null) {
+        return 'Mark range must be whole numbers between 0 and 100';
+      }
+      if (model.markRangeMin < 0 || model.markRangeMax > 100) {
+        return 'Mark range must be between 0 and 100 for grade "${model.gradeName}"';
+      }
+      if (model.markRangeMax < model.markRangeMin) {
+        return 'Maximum mark must be greater than or equal to minimum for grade "${model.gradeName}"';
+      }
+      final normalized = model.gradeName.toLowerCase();
+      if (names.contains(normalized)) {
+        return 'Duplicate grade name: ${model.gradeName}';
+      }
+      names.add(normalized);
+    }
+    return null;
+  }
+
+  void _loadGradeEntries(List<CompetitionGradeModel>? grades) {
+    clearGradeEntries();
+    if (grades == null || grades.isEmpty) return;
+    gradeEntries.addAll(grades.map(CompetitionGradeEntry.fromModel));
+    gradeEntries.refresh();
   }
 
   static const String championsCategoryName = 'CHAMPIONS';
@@ -1115,8 +1729,7 @@ class CompetitionController extends GetxController {
     bool requireWhenEmpty = false,
   }) {
     if (value == null) {
-      if (requireWhenEmpty ||
-          shouldShowCompetitionDateError(dateFieldStart)) {
+      if (requireWhenEmpty || shouldShowCompetitionDateError(dateFieldStart)) {
         return 'Please select event start date';
       }
       return null;
@@ -1170,19 +1783,66 @@ class CompetitionController extends GetxController {
     return null;
   }
 
+  int _minutesFromMidnight(TimeOfDay time) => time.hour * 60 + time.minute;
+
+  String? validateEventStartTime(
+    TimeOfDay? value, {
+    bool requireWhenEmpty = false,
+  }) {
+    if (value == null) {
+      return null;
+    }
+
+    final startDate = eventStartDate.value;
+    final endDate = eventEndDate.value;
+    final endTime = eventEndTime.value;
+    if (startDate != null &&
+        endDate != null &&
+        _dateOnly(startDate) == _dateOnly(endDate) &&
+        endTime != null &&
+        _minutesFromMidnight(value) >= _minutesFromMidnight(endTime)) {
+      return 'Start time must be before end time on the same day';
+    }
+    return null;
+  }
+
+  String? validateEventEndTime(
+    TimeOfDay? value, {
+    bool requireWhenEmpty = false,
+  }) {
+    if (value == null) {
+      if (requireWhenEmpty ||
+          shouldShowCompetitionDateError(dateFieldEndTime)) {
+        return 'Please select event end time';
+      }
+      return null;
+    }
+
+    final startDate = eventStartDate.value;
+    final endDate = eventEndDate.value;
+    final startTime = eventStartTime.value;
+    if (startDate != null &&
+        endDate != null &&
+        _dateOnly(startDate) == _dateOnly(endDate) &&
+        startTime != null &&
+        _minutesFromMidnight(value) <= _minutesFromMidnight(startTime)) {
+      return 'End time must be after start time on the same day';
+    }
+    return null;
+  }
+
   String? validateCompetitionDates({bool forSubmit = false}) {
     return validateEventStartDate(
           eventStartDate.value,
           requireWhenEmpty: forSubmit,
         ) ??
-        validateEventEndDate(
-          eventEndDate.value,
+        validateEventEndDate(eventEndDate.value, requireWhenEmpty: forSubmit) ??
+        validateEventStartTime(
+          eventStartTime.value,
           requireWhenEmpty: forSubmit,
         ) ??
-        validateDisplayAdFrom(
-          displayAdFrom.value,
-          requireWhenEmpty: forSubmit,
-        );
+        validateEventEndTime(eventEndTime.value, requireWhenEmpty: forSubmit) ??
+        validateDisplayAdFrom(displayAdFrom.value, requireWhenEmpty: forSubmit);
   }
 
   void alertCompetitionDateValidationIssue() {
@@ -1191,6 +1851,8 @@ class CompetitionController extends GetxController {
     final hasAnyDate =
         eventStartDate.value != null ||
         eventEndDate.value != null ||
+        eventStartTime.value != null ||
+        eventEndTime.value != null ||
         displayAdFrom.value != null;
     if (!hasAnyDate) return;
     Get.snackbar(
@@ -1203,6 +1865,9 @@ class CompetitionController extends GetxController {
 
   // Create competition
   Future<bool> createCompetition() async {
+    if (isProcessingCompetitionPayment.value) {
+      return false;
+    }
     try {
       hasAttemptedSubmit.value = true;
       notifyCompetitionDatesChanged();
@@ -1246,6 +1911,12 @@ class CompetitionController extends GetxController {
         return false;
       }
 
+      final gradeError = validateGradeEntries();
+      if (gradeError != null) {
+        _notifyError(gradeError);
+        return false;
+      }
+
       // Validate brochure upload
       if (!validateBrochure()) {
         _notifyError(errorMessage.value);
@@ -1255,12 +1926,36 @@ class CompetitionController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
+      await loadOnDemandContext();
+
+      String? maintenancePaymentOrderId;
+      if (requiresPrepaidCompetitionPayment) {
+        isLoading.value = false;
+        isProcessingCompetitionPayment.value = true;
+        try {
+          maintenancePaymentOrderId =
+              await _completeOnDemandPaymentBeforeCreate(
+                description: competitionNameController.text.trim(),
+              );
+          if (maintenancePaymentOrderId == null) {
+            return false;
+          }
+        } finally {
+          isProcessingCompetitionPayment.value = false;
+          _razorpayCheckout.dispose();
+        }
+        isLoading.value = true;
+      }
+
       final competition = CompetitionModel(
         competitionName: competitionNameController.text.trim(),
         description: descriptionController.text.trim(),
         address: addressController.text.trim(),
         eventStartDate: eventStartDate.value!,
+        eventStartTime: CompetitionModel.formatTimeOfDay(eventStartTime.value),
         eventEndDate: eventEndDate.value!,
+        eventEndTime: CompetitionModel.formatTimeOfDay(eventEndTime.value),
+        publishResultNow: publishResultNow.value,
         displayAdFrom: displayAdFrom.value,
         spotRegistration: spotRegistration.value,
         participantsPerStage: participantsPerStage.value > 0
@@ -1274,10 +1969,13 @@ class CompetitionController extends GetxController {
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
         championshipStyle: championshipStyle.value?.apiValue,
+        bestSchoolAwardMinParticipants: _parsedBestSchoolAwardMinParticipants(),
+        grades: buildGradesForSubmit(),
       );
 
       final response = await _repository.createCompetition(
         competition: competition,
+        maintenancePaymentOrderId: maintenancePaymentOrderId,
         brochureFile: brochureFile.value,
         brochureFileLocal: brochureFileLocal.value,
         brochureBytes: brochureBytes.value,
@@ -1287,20 +1985,33 @@ class CompetitionController extends GetxController {
       );
 
       if (response.success && response.data != null) {
-        lastSavedCompetitionForQr.value = response.data;
+        final created = response.data!.competition;
+        lastSavedCompetitionForQr.value = created;
         await loadCompetitions(resetPage: true);
         clearForm();
-        _notifySuccess('Competition created successfully');
+        _notifySuccess(
+          requiresPrepaidCompetitionPayment
+              ? 'Payment completed and competition created successfully'
+              : 'Competition created successfully',
+        );
         toggleViewMode(true);
         return true;
       } else {
         lastSavedCompetitionForQr.value = null;
-        _notifyError(response.message ?? 'Failed to create competition');
+        final message = response.message ?? 'Failed to create competition';
+        _notifyError(message);
+        if (_isSubscriptionCreditError(message)) {
+          await prepareSubscriptionTopUpFlow();
+        }
         return false;
       }
     } catch (e) {
       lastSavedCompetitionForQr.value = null;
-      _notifyError('Error creating competition: ${e.toString()}');
+      final message = 'Error creating competition: ${e.toString()}';
+      _notifyError(message);
+      if (_isSubscriptionCreditError(message)) {
+        await prepareSubscriptionTopUpFlow();
+      }
       return false;
     } finally {
       isLoading.value = false;
@@ -1309,6 +2020,14 @@ class CompetitionController extends GetxController {
 
   void clearLastSavedCompetitionForQr() {
     lastSavedCompetitionForQr.value = null;
+  }
+
+  int? _parsedBestSchoolAwardMinParticipants() {
+    final raw = bestSchoolAwardMinParticipantsController.text.trim();
+    if (raw.isEmpty) return null;
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
   }
 
   // Update competition
@@ -1361,6 +2080,12 @@ class CompetitionController extends GetxController {
         return false;
       }
 
+      final gradeError = validateGradeEntries();
+      if (gradeError != null) {
+        _notifyError(gradeError);
+        return false;
+      }
+
       // Brochure validation - optional for update (only if new file is selected)
       final hasNewBrochure =
           brochureFile.value != null ||
@@ -1376,7 +2101,10 @@ class CompetitionController extends GetxController {
         description: descriptionController.text.trim(),
         address: addressController.text.trim(),
         eventStartDate: eventStartDate.value!,
+        eventStartTime: CompetitionModel.formatTimeOfDay(eventStartTime.value),
         eventEndDate: eventEndDate.value!,
+        eventEndTime: CompetitionModel.formatTimeOfDay(eventEndTime.value),
+        publishResultNow: publishResultNow.value,
         displayAdFrom: displayAdFrom.value,
         spotRegistration: spotRegistration.value,
         participantsPerStage: participantsPerStage.value > 0
@@ -1390,6 +2118,8 @@ class CompetitionController extends GetxController {
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
         championshipStyle: championshipStyle.value?.apiValue,
+        bestSchoolAwardMinParticipants: _parsedBestSchoolAwardMinParticipants(),
+        grades: buildGradesForSubmit(),
       );
 
       final response = await _repository.updateCompetition(
@@ -1580,7 +2310,17 @@ class CompetitionController extends GetxController {
       await loadOptions();
     }
 
-    _loadCompetitionData(competition, isView: isView);
+    var competitionToLoad = competition;
+    final numericId = int.tryParse(competition.id ?? '');
+    if (numericId != null) {
+      final response = await _repository.getCompetitionById(numericId);
+      if (response.success && response.data != null) {
+        competitionToLoad = response.data!;
+        _upsertCompetition(competitionToLoad);
+      }
+    }
+
+    _loadCompetitionData(competitionToLoad, isView: isView);
   }
 
   void _loadCompetitionData(
@@ -1597,15 +2337,24 @@ class CompetitionController extends GetxController {
     addressController.text = competition.address;
     eventStartDate.value = competition.eventStartDate;
     eventEndDate.value = competition.eventEndDate;
+    eventStartTime.value = CompetitionModel.parseTime(
+      competition.eventStartTime,
+    );
+    eventEndTime.value = CompetitionModel.parseTime(competition.eventEndTime);
     displayAdFrom.value = competition.displayAdFrom;
-    spotRegistration.value = competition.spotRegistration;
-    championshipStyle.value = ChampionshipStyle.fromApiValue(
-          competition.championshipStyle,
-        ) ??
+    publishResultNow.value = competition.resolvedPublishResultNow;
+    spotRegistration.value = competition.resolvedSpotRegistration;
+    championshipStyle.value =
+        ChampionshipStyle.fromApiValue(competition.championshipStyle) ??
         ChampionshipStyle.separateCategory;
     participantsPerStage.value = competition.participantsPerStage ?? 0;
     minimumMarks.value = competition.minimumMarks ?? 0;
     maximumMarks.value = competition.maximumMarks ?? 0;
+    bestSchoolAwardMinParticipantsController.text =
+        competition.bestSchoolAwardMinParticipants != null &&
+            competition.bestSchoolAwardMinParticipants! > 0
+        ? '${competition.bestSchoolAwardMinParticipants}'
+        : '';
     // Load IDs if available, otherwise convert names to IDs
     if (competition.prizeIds != null && competition.prizeIds!.isNotEmpty) {
       selectedPrizeIds.value = List<int>.from(competition.prizeIds!);
@@ -1736,6 +2485,8 @@ class CompetitionController extends GetxController {
       selectedStageIds.clear();
       stageGroups.clear();
     }
+
+    _loadGradeEntries(competition.grades);
 
     // Load brochure URL if available
     if (competition.brochureUrl != null &&
@@ -1876,17 +2627,22 @@ class CompetitionController extends GetxController {
     // Clear reactive values
     eventStartDate.value = null;
     eventEndDate.value = null;
+    eventStartTime.value = null;
+    eventEndTime.value = null;
     displayAdFrom.value = null;
+    publishResultNow.value = false;
     spotRegistration.value = false;
     championshipStyle.value = null;
     participantsPerStage.value = 0;
     minimumMarks.value = 0;
     maximumMarks.value = 0;
+    bestSchoolAwardMinParticipantsController.clear();
     selectedPrizeIds.clear();
     selectedCategoryIds.clear();
     categoryAmounts.clear();
     selectedStageIds.clear();
     stageGroups.clear();
+    clearGradeEntries();
     brochureFile.value = null;
     brochureFileLocal.value = null;
     brochureBytes.value = null;

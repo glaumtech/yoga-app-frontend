@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/custom_loader.dart';
@@ -1006,28 +1007,19 @@ class ParticipantsListScreen extends StatelessWidget {
                         resetPage: true,
                       );
                     }
-                    Get.snackbar(
-                      'Success',
+                    SnackbarHelper.showSuccessMessage(
                       'Participant deleted successfully',
-                      backgroundColor: Colors.green,
-                      colorText: Colors.white,
                     );
                   } else {
-                    Get.snackbar(
-                      'Error',
+                    SnackbarHelper.showErrorMessage(
                       controller.errorMessage.value.isNotEmpty
                           ? controller.errorMessage.value
                           : 'Failed to delete participant',
-                      backgroundColor: Colors.red,
-                      colorText: Colors.white,
                     );
                   }
                 } catch (e) {
-                  Get.snackbar(
-                    'Error',
+                  SnackbarHelper.showErrorMessage(
                     'Failed to delete participant: ${e.toString()}',
-                    backgroundColor: Colors.red,
-                    colorText: Colors.white,
                   );
                 }
               }

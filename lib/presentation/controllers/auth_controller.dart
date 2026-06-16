@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:yoga_champ/core/utils/storage_service.dart';
@@ -11,11 +12,16 @@ import 'participant_controller.dart';
 import 'participant_registration_form_controller.dart';
 import 'user_management_controller.dart';
 import 'competition_controller.dart';
+import 'competitions_list_controller.dart';
 import 'school_controller.dart';
 import 'reports_controller.dart';
 import 'organization_setup_controller.dart';
 import 'settings_controller.dart';
+import 'reports_participants_tab_controller.dart';
+import 'reports_registered_participants_tab_controller.dart';
+import 'reports_users_tab_controller.dart';
 import '../../core/utils/permission_store.dart';
+import '../../core/theme/role_theme_controller.dart';
 
 class AuthController extends GetxController {
   final AuthRepository _authRepository = AuthRepository();
@@ -302,6 +308,12 @@ class AuthController extends GetxController {
           // Small delay to ensure token is saved
           await Future.delayed(const Duration(milliseconds: 100));
 
+          if (Get.isRegistered<CompetitionController>()) {
+            await Get.find<CompetitionController>().loadCompetitionsForHome(
+              force: true,
+            );
+          }
+
           final token = StorageService.getString(AppConstants.tokenKey);
           print(
             'Token before navigation: ${token != null ? "exists" : "null"}',
@@ -369,6 +381,8 @@ class AuthController extends GetxController {
     isLoading.value = false;
     errorMessage.value = '';
 
+    _resetReportsSession();
+
     // Reset all controllers to clear app data
     // AdminController removed - no longer needed
 
@@ -390,6 +404,9 @@ class AuthController extends GetxController {
     if (Get.isRegistered<PermissionStore>()) {
       Get.find<PermissionStore>().setKeys(const []);
     }
+    if (Get.isRegistered<RoleThemeController>()) {
+      Get.find<RoleThemeController>().resetToDefault();
+    }
 
     // Dispose/reset other feature controllers so lists/forms don't leak
     // into the next login session.
@@ -397,15 +414,23 @@ class AuthController extends GetxController {
     // Important: do this AFTER the current frame. If we delete controllers
     // synchronously while widgets are still building/unmounting, Flutter can
     // throw `_dependents.isEmpty is not true` assertions (InheritedWidget/Obx).
-    SchedulerBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         if (Get.isRegistered<UserManagementController>()) {
           Get.delete<UserManagementController>(force: true);
         }
       } catch (_) {}
+      // Avoid force-deleting CompetitionController during route transition.
+      // It owns TextEditingControllers used by create_competition_screen and
+      // can trigger "used after being disposed" if the widget tree has not
+      // fully unmounted yet.
       try {
         if (Get.isRegistered<CompetitionController>()) {
-          Get.delete<CompetitionController>(force: true);
+          final competitionController = Get.find<CompetitionController>();
+          competitionController.clearForm();
+          competitionController.toggleViewMode(true);
+          competitionController.invalidateHomeCompetitionsScope();
+          unawaited(competitionController.loadCompetitionsForHome(force: true));
         }
       } catch (_) {}
       try {
@@ -429,9 +454,7 @@ class AuthController extends GetxController {
         }
       } catch (_) {}
       try {
-        if (Get.isRegistered<ReportsController>()) {
-          Get.delete<ReportsController>(force: true);
-        }
+        _disposeReportsControllers();
       } catch (_) {}
       try {
         if (Get.isRegistered<OrganizationSetupController>()) {
@@ -444,6 +467,9 @@ class AuthController extends GetxController {
         }
       } catch (_) {}
     });
+    // Delete session controllers after navigation finishes. Immediate deletion
+    // disposes TextEditingControllers while admin screens are still unmounting.
+    _scheduleSessionControllerCleanup();
 
     // Clear all login form data
     clearLoginData();
@@ -455,6 +481,75 @@ class AuthController extends GetxController {
     obscurePassword.value = true;
     signUpObscurePassword.value = true;
     signUpObscureConfirmPassword.value = true;
+  }
+
+  void _scheduleSessionControllerCleanup() {
+    Future<void>.delayed(const Duration(milliseconds: 600), () {
+      void safeDelete<T>() {
+        try {
+          if (Get.isRegistered<T>()) {
+            Get.delete<T>(force: true);
+          }
+        } catch (_) {}
+      }
+
+      safeDelete<UserManagementController>();
+      safeDelete<CompetitionsListController>();
+      safeDelete<CompetitionController>();
+      safeDelete<ParticipantController>();
+      try {
+        if (Get.isRegistered<ParticipantRegistrationFormController>(
+          tag: kParticipantRegistrationFormControllerTag,
+        )) {
+          Get.delete<ParticipantRegistrationFormController>(
+            tag: kParticipantRegistrationFormControllerTag,
+            force: true,
+          );
+        }
+      } catch (_) {}
+      safeDelete<SchoolController>();
+      _disposeReportsControllers();
+      safeDelete<OrganizationSetupController>();
+      safeDelete<SettingsController>();
+    });
+  }
+
+  void _resetReportsSession() {
+    try {
+      if (Get.isRegistered<ReportsRegisteredParticipantsTabController>()) {
+        Get.find<ReportsRegisteredParticipantsTabController>().resetSession();
+      }
+    } catch (_) {}
+    try {
+      if (Get.isRegistered<ReportsParticipantsTabController>()) {
+        Get.find<ReportsParticipantsTabController>().resetSession();
+      }
+    } catch (_) {}
+    try {
+      if (Get.isRegistered<ReportsUsersTabController>()) {
+        Get.find<ReportsUsersTabController>().resetSession();
+      }
+    } catch (_) {}
+    try {
+      if (Get.isRegistered<ReportsController>()) {
+        Get.find<ReportsController>().resetSession();
+      }
+    } catch (_) {}
+  }
+
+  void _disposeReportsControllers() {
+    void tryDelete<T>() {
+      try {
+        if (Get.isRegistered<T>()) {
+          Get.delete<T>(force: true);
+        }
+      } catch (_) {}
+    }
+
+    tryDelete<ReportsRegisteredParticipantsTabController>();
+    tryDelete<ReportsParticipantsTabController>();
+    tryDelete<ReportsUsersTabController>();
+    tryDelete<ReportsController>();
   }
 
   bool get isAuthenticated => currentUser.value != null;

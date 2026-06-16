@@ -4,6 +4,7 @@ import 'dart:developer';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
+import '../core/auth/session_expiry_handler.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/storage_service.dart';
 import '../data/models/api_response.dart';
@@ -23,8 +24,10 @@ class APIService {
           header ?? {'Content-Type': 'application/json'};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint =
-          url == EndPoints.logIn || url == EndPoints.register;
+      final isAuthEndpoint = url == EndPoints.logIn ||
+          url == EndPoints.register ||
+          url == EndPoints.userLogin ||
+          url == EndPoints.userLoginWithToken;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
@@ -93,7 +96,7 @@ class APIService {
       log('----RESPONSE BODY---${result.body}');
 
       // Parse and return standardized response
-      return _parseResponse<T>(result, fromJson);
+      return _parseResponse<T>(result, fromJson, url);
     } on SocketException {
       return ApiResponse<T>(
         success: false,
@@ -124,9 +127,24 @@ class APIService {
     }
   }
 
+  void _handleUnauthorizedIfNeeded({
+    required String requestUrl,
+    required int statusCode,
+    String? message,
+    Map<String, dynamic>? body,
+  }) {
+    SessionExpiryHandler.handleIfNeeded(
+      requestUrl: requestUrl,
+      statusCode: statusCode,
+      message: message,
+      body: body,
+    );
+  }
+
   ApiResponse<T> _parseResponse<T>(
     http.Response response,
     T Function(dynamic)? fromJson,
+    String requestUrl,
   ) {
     try {
       if (response.body.isEmpty || response.body.trim().isEmpty) {
@@ -138,6 +156,10 @@ class APIService {
             statusCode: response.statusCode,
           );
         } else {
+          _handleUnauthorizedIfNeeded(
+            requestUrl: requestUrl,
+            statusCode: response.statusCode,
+          );
           return ApiResponse<T>(
             success: false,
             message: _getErrorMessageForStatusCode(response.statusCode),
@@ -149,6 +171,10 @@ class APIService {
       // Check if response is HTML (error pages from CDN/gateway)
       if (response.body.trim().toLowerCase().startsWith('<!doctype html') ||
           response.body.trim().toLowerCase().startsWith('<html')) {
+        _handleUnauthorizedIfNeeded(
+          requestUrl: requestUrl,
+          statusCode: response.statusCode,
+        );
         return ApiResponse<T>(
           success: false,
           message: _getErrorMessageForStatusCode(response.statusCode),
@@ -162,9 +188,24 @@ class APIService {
         final String? status = parsed['status']?.toString().toLowerCase();
         final String? message = parsed['message']?.toString();
         final dynamic data = parsed['data'];
+        final bool? explicitSuccess = parsed['success'] as bool?;
 
-        // Handle success response: {"status":"success","message":"...","data":{...}}
-        if (status == 'success') {
+        if (explicitSuccess == false) {
+          _handleUnauthorizedIfNeeded(
+            requestUrl: requestUrl,
+            statusCode: response.statusCode,
+            message: message,
+            body: parsed,
+          );
+          return ApiResponse<T>(
+            success: false,
+            message: message ?? 'Request failed',
+            statusCode: response.statusCode,
+          );
+        }
+
+        // Handle success response: {"success":true,...} or {"status":"success",...}
+        if (explicitSuccess == true || status == 'success') {
           T? resultData;
           if (fromJson != null && data != null) {
             resultData = fromJson(data);
@@ -188,6 +229,12 @@ class APIService {
 
         // Handle error response: {"status":"error","message":"...","errorCode":"..."}
         if (status == 'error') {
+          _handleUnauthorizedIfNeeded(
+            requestUrl: requestUrl,
+            statusCode: response.statusCode,
+            message: message,
+            body: parsed,
+          );
           return ApiResponse<T>(
             success: false,
             message: message ?? 'An error occurred',
@@ -220,6 +267,12 @@ class APIService {
           );
         } else {
           // Error HTTP status code
+          _handleUnauthorizedIfNeeded(
+            requestUrl: requestUrl,
+            statusCode: response.statusCode,
+            message: message ?? parsed['error']?.toString(),
+            body: parsed,
+          );
           return ApiResponse<T>(
             success: false,
             message:
@@ -252,6 +305,10 @@ class APIService {
           statusCode: response.statusCode,
         );
       } else {
+        _handleUnauthorizedIfNeeded(
+          requestUrl: requestUrl,
+          statusCode: response.statusCode,
+        );
         return ApiResponse<T>(
           success: false,
           message: _getErrorMessageForStatusCode(response.statusCode),
@@ -268,6 +325,10 @@ class APIService {
           statusCode: response.statusCode,
         );
       } else {
+        _handleUnauthorizedIfNeeded(
+          requestUrl: requestUrl,
+          statusCode: response.statusCode,
+        );
         return ApiResponse<T>(
           success: false,
           message: _getErrorMessageForStatusCode(response.statusCode),
@@ -322,8 +383,10 @@ class APIService {
       Map<String, String> headers = header ?? {};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint =
-          url == EndPoints.logIn || url == EndPoints.register;
+      final isAuthEndpoint = url == EndPoints.logIn ||
+          url == EndPoints.register ||
+          url == EndPoints.userLogin ||
+          url == EndPoints.userLoginWithToken;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
@@ -366,7 +429,7 @@ class APIService {
       log('----RESPONSE BODY---${response.body}');
 
       // Parse and return standardized response
-      return _parseResponse<T>(response, fromJson);
+      return _parseResponse<T>(response, fromJson, url);
     } on SocketException {
       return ApiResponse<T>(
         success: false,
@@ -401,8 +464,10 @@ class APIService {
       Map<String, String> headers = header ?? {};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint =
-          url == EndPoints.logIn || url == EndPoints.register;
+      final isAuthEndpoint = url == EndPoints.logIn ||
+          url == EndPoints.register ||
+          url == EndPoints.userLogin ||
+          url == EndPoints.userLoginWithToken;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
@@ -448,7 +513,7 @@ class APIService {
       log('----RESPONSE BODY---${response.body}');
 
       // Parse and return standardized response
-      return _parseResponse<T>(response, fromJson);
+      return _parseResponse<T>(response, fromJson, url);
     } on SocketException {
       return ApiResponse<T>(
         success: false,

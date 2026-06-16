@@ -477,16 +477,34 @@ class SchoolListScreen extends StatelessWidget {
               final permissionStore = Get.isRegistered<PermissionStore>()
                   ? Get.find<PermissionStore>()
                   : Get.put(PermissionStore());
-              if (!permissionStore.has('SHOW_INSTITUTION_DOWNLOAD_ICON')) {
-                return const SizedBox.shrink();
-              }
+              final busy = controller.isLoading.value;
+              final showPostalPdf = permissionStore.has(
+                'SHOW_INSTITUTION_POSTAL_PDF_ICON',
+              );
+
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (showPostalPdf) ...[
+                    SizedBox(width: isMobile ? 8 : 12),
+                    IconButton(
+                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                      onPressed: busy
+                          ? null
+                          : () => _showPostalDownloadDialog(context, controller),
+                      tooltip: 'Download institution list PDF (postal format)',
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.grey[100],
+                        padding: const EdgeInsets.all(12),
+                      ),
+                    ),
+                  ],
                   SizedBox(width: isMobile ? 8 : 12),
                   IconButton(
                     icon: const Icon(Icons.print),
-                    onPressed: () => controller.generateReport('all'),
+                    onPressed: busy
+                        ? null
+                        : () => controller.generateReport('all'),
                     tooltip: 'Download / print institutions report',
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.grey[100],
@@ -1263,6 +1281,57 @@ class SchoolListScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showPostalDownloadDialog(
+    BuildContext context,
+    SchoolController controller,
+  ) {
+    final nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Download Postal List'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Optional: enter a recipient name to print on every address.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameController,
+              maxLength: 35,
+              decoration: const InputDecoration(
+                labelText: 'Name of the person',
+                hintText: 'Optional',
+                border: OutlineInputBorder(),
+                counterText: '',
+              ),
+              textCapitalization: TextCapitalization.words,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              Navigator.pop(dialogContext);
+              controller.downloadPostalList(
+                recipientName: name.isEmpty ? null : name,
+              );
+            },
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    ).whenComplete(nameController.dispose);
   }
 
   void _showDeleteDialog(

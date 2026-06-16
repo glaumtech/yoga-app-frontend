@@ -192,7 +192,7 @@ class ReportsUsersTab extends StatelessWidget {
                   backgroundColor: AppTheme.primaryColor.withOpacity(0.12),
                   child: Text(
                     (user.name.isNotEmpty ? user.name[0] : 'U').toUpperCase(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppTheme.primaryColor,
                     ),

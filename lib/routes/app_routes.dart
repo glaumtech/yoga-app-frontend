@@ -51,6 +51,33 @@ class AppRoutes {
   static const String adminLogin = '/admin/login';
   static const String adminDashboard = '/admin/dashboard';
   static const String reports = '/admin/reports';
+  static const String participantRegistrationDetails =
+      '/admin/reports/registration/:registrationId';
+
+  static String participantRegistrationDetailsPath(
+    String registrationId, {
+    String? participantName,
+    String? competitionName,
+    String? registrationNo,
+  }) {
+    final params = <String, String>{};
+    final name = participantName?.trim();
+    if (name != null && name.isNotEmpty) {
+      params['name'] = name;
+    }
+    final competition = competitionName?.trim();
+    if (competition != null && competition.isNotEmpty) {
+      params['competition'] = competition;
+    }
+    final regNo = registrationNo?.trim();
+    if (regNo != null && regNo.isNotEmpty) {
+      params['regNo'] = regNo;
+    }
+    return Uri(
+      path: '/admin/reports/registration/$registrationId',
+      queryParameters: params.isEmpty ? null : params,
+    ).toString();
+  }
   static const String settings = '/admin/settings';
   static const String sponsors = '/admin/sponsors';
   static const String userManagement = '/admin/users';
@@ -59,7 +86,8 @@ class AppRoutes {
   static const String participantManagement = '/admin/participants';
   static const String schoolsList = '/admin/schools';
 
-  // Jury Scoring
+  // Jury
+  static const String juryLogin = '/jury/login';
   static const String juryScoring = '/jury/scoring';
 
   // Organization Setup

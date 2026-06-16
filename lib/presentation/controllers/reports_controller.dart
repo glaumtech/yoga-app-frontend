@@ -1,8 +1,11 @@
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 
 import '../../data/models/competition_model.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/repositories/reports_repository.dart';
+import 'reports_participants_list_preset.dart';
+import 'reports_registered_participants_tab_controller.dart';
 
 class ReportsController extends GetxController {
   final CompetitionRepository _competitionRepository = CompetitionRepository();
@@ -23,6 +26,41 @@ class ReportsController extends GetxController {
   ///   prizeWinners: [...]
   /// }
   final Rxn<Map<String, dynamic>> report = Rxn<Map<String, dynamic>>();
+
+  /// Reports tab id to open (e.g. [registeredParticipantsReportTabId]).
+  final RxnString navigateToReportTabId = RxnString();
+
+  /// Applied when opening the registered participants tab from dashboard counts.
+  final Rxn<ReportsParticipantsListPreset> pendingParticipantsPreset =
+      Rxn<ReportsParticipantsListPreset>();
+
+  static const String registeredParticipantsReportTabId =
+      'registered_participants';
+
+  void openParticipantsReport(ReportsParticipantsListPreset preset) {
+    pendingParticipantsPreset.value = preset;
+    navigateToReportTabId.value = registeredParticipantsReportTabId;
+    _scheduleApplyPendingPreset();
+  }
+
+  /// Applies dashboard preset after the registered tab controller is created.
+  void _scheduleApplyPendingPreset([int attempt = 0]) {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      final pending = pendingParticipantsPreset.value;
+      if (pending == null) return;
+
+      if (Get.isRegistered<ReportsRegisteredParticipantsTabController>()) {
+        Get.find<ReportsRegisteredParticipantsTabController>()
+            .applyDashboardPreset(pending);
+        pendingParticipantsPreset.value = null;
+        return;
+      }
+
+      if (attempt < 10) {
+        _scheduleApplyPendingPreset(attempt + 1);
+      }
+    });
+  }
 
   @override
   void onInit() {
@@ -107,6 +145,16 @@ class ReportsController extends GetxController {
 
     selectedCompetitionId.value = competitionId;
     await loadReport(competitionId);
+  }
+
+  void resetSession() {
+    isLoading.value = false;
+    errorMessage.value = '';
+    competitions.clear();
+    selectedCompetitionId.value = null;
+    report.value = null;
+    navigateToReportTabId.value = null;
+    pendingParticipantsPreset.value = null;
   }
 }
 

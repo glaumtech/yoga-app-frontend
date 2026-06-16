@@ -9,7 +9,7 @@ import '../../presentation/widgets/webcam_capture_dialog.dart';
 
 /// Picks images from gallery or captures from camera / webcam.
 ///
-/// On mobile, [ImageSource.camera] uses the system camera.
+/// On mobile, [ImageSource.camera] uses the system camera (rear by default).
 /// On web and desktop (Windows/macOS/Linux), camera opens an in-app webcam UI.
 class PhotoCaptureService {
   PhotoCaptureService._();
@@ -57,6 +57,7 @@ class PhotoCaptureService {
     return _picker.pickImage(
       source: ImageSource.camera,
       imageQuality: imageQuality,
+      preferredCameraDevice: CameraDevice.rear,
     );
   }
 }

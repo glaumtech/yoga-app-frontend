@@ -114,8 +114,12 @@ class CompetitionsListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Keep screen Stateless: initial load happens in CompetitionsListController.onReady()
-    Get.put(CompetitionsListController());
-    final controller = Get.put(CompetitionController());
+    if (!Get.isRegistered<CompetitionsListController>()) {
+      Get.put(CompetitionsListController());
+    }
+    if (!Get.isRegistered<CompetitionController>()) {
+      Get.put(CompetitionController());
+    }
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
@@ -134,9 +138,13 @@ class CompetitionsListScreen extends StatelessWidget {
           stops: const [0.0, 0.5, 1.0],
         ),
       ),
-      child: Obx(
-        () => _buildCompetitionsList(context, controller, isMobile, isTablet),
-      ),
+      child: Obx(() {
+        if (!Get.isRegistered<CompetitionController>()) {
+          return const SizedBox.shrink();
+        }
+        final controller = Get.find<CompetitionController>();
+        return _buildCompetitionsList(context, controller, isMobile, isTablet);
+      }),
     );
   }
 

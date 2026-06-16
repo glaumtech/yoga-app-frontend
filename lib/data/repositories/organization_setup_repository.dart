@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/storage_service.dart';
 import '../../data/models/api_response.dart';
 import '../../data/models/organization_setup_model.dart';
 import '../../services/api_service.dart';
@@ -11,66 +14,248 @@ import '../../services/api_service.dart';
 class OrganizationSetupRepository {
   final APIService _apiService = APIService();
 
-  Future<ApiResponse<OrganizationSetupResponseModel>> setupOrganization({
-    required OrganizationSetupRequestModel setupRequest,
+  Future<ApiResponse<OrganizationSetupFoundationResponseModel>> setupFoundation({
+    required OrganizationSetupFoundationRequestModel request,
     File? logoFile,
     Uint8List? logoBytes,
     String? logoFileName,
+    XFile? paymentProofXFile,
+  }) async {
+    return _postFoundationMultipart(
+      url: EndPoints.organizationSetupFoundation,
+      request: request,
+      logoFile: logoFile,
+      logoBytes: logoBytes,
+      logoFileName: logoFileName,
+      paymentProofXFile: paymentProofXFile,
+    );
+  }
+
+  Future<ApiResponse<OrganizationSetupFoundationWithPaymentResponseModel>>
+  setupFoundationWithPaymentOrder({
+    required OrganizationSetupFoundationRequestModel request,
+    File? logoFile,
+    Uint8List? logoBytes,
+    String? logoFileName,
+    XFile? paymentProofXFile,
+  }) async {
+    final response = await _postFoundationMultipartRaw(
+      url: EndPoints.organizationSetupFoundationWithPayment,
+      request: request,
+      logoBytes: logoBytes,
+      logoFileName: logoFileName,
+      paymentProofXFile: paymentProofXFile,
+    );
+
+    if (response.success && response.data != null) {
+      return ApiResponse(
+        success: true,
+        data: OrganizationSetupFoundationWithPaymentResponseModel.fromJson(
+          response.data!,
+        ),
+        message: response.message,
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Foundation+payment setup failed',
+    );
+  }
+
+  Future<ApiResponse<OrganizationSetupFoundationResponseModel>>
+  _postFoundationMultipart({
+    required String url,
+    required OrganizationSetupFoundationRequestModel request,
+    File? logoFile,
+    Uint8List? logoBytes,
+    String? logoFileName,
+    XFile? paymentProofXFile,
+  }) async {
+    final raw = await _postFoundationMultipartRaw(
+      url: url,
+      request: request,
+      logoBytes: logoBytes,
+      logoFileName: logoFileName,
+      paymentProofXFile: paymentProofXFile,
+    );
+    if (raw.success && raw.data != null) {
+      return ApiResponse(
+        success: true,
+        data: OrganizationSetupFoundationResponseModel.fromJson(raw.data!),
+        message: raw.message,
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: raw.message ?? 'Foundation setup failed',
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> _postFoundationMultipartRaw({
+    required String url,
+    required OrganizationSetupFoundationRequestModel request,
+    Uint8List? logoBytes,
+    String? logoFileName,
+    XFile? paymentProofXFile,
+    String? dataJsonOverride,
   }) async {
     try {
-      final fields = <String, String>{'data': setupRequest.toDataField()};
+      final fullUrl = BaseUrl.baseUrl + url;
+      final httpRequest = http.MultipartRequest('POST', Uri.parse(fullUrl));
 
-      http.MultipartFile? multipartFile;
-      if (logoFile != null || logoBytes != null) {
-        Uint8List fileBytes;
-        String fileName;
-
-        if (logoBytes != null) {
-          fileBytes = logoBytes;
-          fileName = logoFileName ?? 'logo.png';
-        } else if (logoFile != null) {
-          fileBytes = await logoFile.readAsBytes();
-          fileName = logoFile.path.split('/').last;
-        } else {
-          throw Exception('No logo provided');
+      try {
+        final token = StorageService.getString(AppConstants.tokenKey);
+        if (token != null && token.isNotEmpty) {
+          httpRequest.headers['Authorization'] = 'Bearer $token';
         }
+      } catch (_) {}
 
-        multipartFile = http.MultipartFile.fromBytes(
-          'logo',
-          fileBytes,
-          filename: fileName,
+      httpRequest.fields['data'] = dataJsonOverride ?? request.toDataField();
+
+      if (logoBytes != null) {
+        final bytes = logoBytes;
+        final name = logoFileName ?? 'logo.png';
+        httpRequest.files.add(
+          http.MultipartFile.fromBytes('logo', bytes, filename: name),
         );
       }
 
-      final fileToUpload =
-          multipartFile ??
-          http.MultipartFile.fromString('logo', '', filename: '');
+      if (paymentProofXFile != null) {
+        final bytes = await paymentProofXFile.readAsBytes();
+        final name = paymentProofXFile.name.split('/').last;
+        httpRequest.files.add(
+          http.MultipartFile.fromBytes(
+            'paymentProof',
+            bytes,
+            filename: name,
+          ),
+        );
+      }
 
-      final response = await _apiService.postMultipart<Map<String, dynamic>>(
-        url: EndPoints.organizationSetup,
-        fields: fields,
-        file: fileToUpload,
-        fromJson: (json) => json as Map<String, dynamic>,
-      );
+      final streamed = await httpRequest.send().timeout(BaseUrl.apiTimeout);
+      final body = await http.Response.fromStream(streamed);
+      final Map<String, dynamic> jsonBody =
+          jsonDecode(body.body) as Map<String, dynamic>;
 
-      if (response.success && response.data != null) {
-        final data = response.data!;
-        final model = OrganizationSetupResponseModel.fromJson(data);
+      if (body.statusCode == 200 || body.statusCode == 201) {
+        final data = jsonBody['data'];
         return ApiResponse(
-          success: true,
-          data: model,
-          message: response.message,
+          success: jsonBody['success'] == true,
+          data: data is Map<String, dynamic> ? data : null,
+          message: jsonBody['message']?.toString(),
+          statusCode: body.statusCode,
         );
       }
-
       return ApiResponse(
         success: false,
-        message: response.message ?? 'Setup failed',
+        message: jsonBody['message']?.toString() ?? 'Request failed',
+        statusCode: body.statusCode,
       );
     } catch (e) {
       return ApiResponse(
         success: false,
         message: 'Error during setup: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<ApiResponse<OrganizationSetupFoundationResponseModel>> setupComplete({
+    required OrganizationSetupCompleteRequestModel request,
+    Uint8List? logoBytes,
+    String? logoFileName,
+    XFile? paymentProofXFile,
+  }) async {
+    final raw = await _postFoundationMultipartRaw(
+      url: EndPoints.organizationSetupComplete,
+      request: OrganizationSetupFoundationRequestModel(
+        organization: request.organization,
+        branch: request.branch,
+        selectedPackageId: request.selectedPackageId,
+        checkoutMethod: request.checkoutMethod,
+      ),
+      logoBytes: logoBytes,
+      logoFileName: logoFileName,
+      paymentProofXFile: paymentProofXFile,
+      dataJsonOverride: request.toDataField(),
+    );
+    if (raw.success && raw.data != null) {
+      return ApiResponse(
+        success: true,
+        data: OrganizationSetupFoundationResponseModel.fromJson(raw.data!),
+        message: raw.message,
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: raw.message ?? 'Complete setup failed',
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> setupAdmins({
+    required OrganizationSetupAdminsRequestModel request,
+    XFile? orgAdminPhoto,
+    XFile? branchAdminPhoto,
+  }) async {
+    try {
+      final fullUrl = BaseUrl.baseUrl + EndPoints.organizationSetupAdmins;
+      final httpRequest = http.MultipartRequest('POST', Uri.parse(fullUrl));
+
+      try {
+        final token = StorageService.getString(AppConstants.tokenKey);
+        if (token != null && token.isNotEmpty) {
+          httpRequest.headers['Authorization'] = 'Bearer $token';
+        }
+      } catch (_) {}
+
+      httpRequest.fields['data'] = jsonEncode(request.toJson());
+
+      if (orgAdminPhoto != null) {
+        final bytes = await orgAdminPhoto.readAsBytes();
+        final name = orgAdminPhoto.name.split('/').last;
+        httpRequest.files.add(
+          http.MultipartFile.fromBytes(
+            'orgAdminPhoto',
+            bytes,
+            filename: name,
+          ),
+        );
+      }
+
+      if (branchAdminPhoto != null) {
+        final bytes = await branchAdminPhoto.readAsBytes();
+        final name = branchAdminPhoto.name.split('/').last;
+        httpRequest.files.add(
+          http.MultipartFile.fromBytes(
+            'branchAdminPhoto',
+            bytes,
+            filename: name,
+          ),
+        );
+      }
+
+      final streamed = await httpRequest.send().timeout(BaseUrl.apiTimeout);
+      final body = await http.Response.fromStream(streamed);
+      final Map<String, dynamic> jsonBody =
+          jsonDecode(body.body) as Map<String, dynamic>;
+
+      if (body.statusCode == 200 || body.statusCode == 201) {
+        final data = jsonBody['data'];
+        return ApiResponse(
+          success: jsonBody['success'] == true,
+          data: data is Map<String, dynamic> ? data : null,
+          message: jsonBody['message']?.toString(),
+          statusCode: body.statusCode,
+        );
+      }
+      return ApiResponse(
+        success: false,
+        message: jsonBody['message']?.toString() ?? 'Request failed',
+        statusCode: body.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error creating admin users: ${e.toString()}',
       );
     }
   }

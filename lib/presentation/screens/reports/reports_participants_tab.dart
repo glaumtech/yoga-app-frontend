@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/competition_grade_resolver.dart';
+import '../../../data/models/competition_grade_model.dart';
 import '../../controllers/reports_participants_tab_controller.dart';
 import '../../controllers/reports_participants_tab_logic.dart';
 import '../../widgets/location/district_search_field.dart';
@@ -16,13 +18,6 @@ import '../../../data/models/school_model.dart';
 import '../../../data/models/state_model.dart';
 import '../../../data/repositories/reports_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-/// Mint header and grid styling for the participant scores table (reports).
-const Color _kParticipantTableHeaderBg = Color(0xFFE8F5E9);
-const Color _kParticipantTableBorder = Color(0xFFE0E0E0);
-
-/// Header label when not the active (green) sort column — dark blue-grey.
-const Color _kParticipantTableHeaderMuted = Color(0xFF37474F);
 
 enum _ParticipantHeaderSort {
   /// No sort affordance (e.g. ICON, TYPE).
@@ -184,16 +179,23 @@ class ReportsParticipantsTab extends StatelessWidget {
         onRefresh: tabController.refresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.all(isMobile ? 12 : 16),
+          padding: EdgeInsets.fromLTRB(
+            isMobile ? 12 : 16,
+            4,
+            isMobile ? 12 : 16,
+            8,
+          ),
           children: [
-            _buildFilters(
-              context,
-              tabController,
-              isMobile,
+            ReportsParticipantFiltersBar(
+              controller: tabController,
+              isMobile: isMobile,
               onPrint: _printParticipants,
               onDownloadExcel: _downloadParticipantsExcel,
+              searchHint: 'Search participant name',
+              emptyFiltersHint:
+                  'Use Report filters for stage, category, group, state, district, institution, and gender.',
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
             if (!hasCompetition)
               _infoCard('Select a competition to view participant scores.')
             else
@@ -203,16 +205,13 @@ class ReportsParticipantsTab extends StatelessWidget {
                   clipBehavior: Clip.hardEdge,
                   alignment: Alignment.center,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _buildParticipantTableBody(
-                        context,
-                        tabController,
-                        items,
-                        q,
-                        isMobile,
-                        loading,
-                      ),
+                    _buildParticipantTableBody(
+                      context,
+                      tabController,
+                      items,
+                      q,
+                      isMobile,
+                      loading,
                     ),
                     if (loading && items.isNotEmpty)
                       Positioned.fill(
@@ -256,7 +255,7 @@ class ReportsParticipantsTab extends StatelessWidget {
         elevation: 1,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: _kParticipantTableBorder),
+          side: const BorderSide(color: AppColors.border),
         ),
         child: const SizedBox(
           height: 220,
@@ -281,7 +280,7 @@ class ReportsParticipantsTab extends StatelessWidget {
           items,
           isMobile,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
       ],
     );
   }
@@ -300,162 +299,6 @@ class ReportsParticipantsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildFilters(
-    BuildContext context,
-    ReportsParticipantsTabController controller,
-    bool isMobile, {
-    required VoidCallback onPrint,
-    required VoidCallback onDownloadExcel,
-  }) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: EdgeInsets.all(isMobile ? 10 : 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.filter_list,
-                  color: AppTheme.primaryColor,
-                  size: isMobile ? 18 : 20,
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Filters',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    controller.clearFilters();
-                    await controller.refresh();
-                  },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: const Size(0, 0),
-                  ),
-                  child: Text(
-                    'Clear',
-                    style: TextStyle(
-                      fontSize: isMobile ? 12 : 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller.participantSearchFieldController,
-                    onChanged: controller.setParticipantSearchQuery,
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: AppTheme.primaryColor,
-                      ),
-                      hintText: 'Search participant name',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Obx(() {
-                  final n = controller.activeFilterCount;
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        showDialog<void>(
-                          context: context,
-                          builder: (ctx) =>
-                              _ParticipantFiltersDialog(controller: controller),
-                        );
-                      },
-                      icon: Badge(
-                        isLabelVisible: n > 0,
-                        label: Text('$n'),
-                        child: const Icon(
-                          Icons.tune,
-                          color: AppTheme.primaryColor,
-                        ),
-                      ),
-                      label: Text(
-                        isMobile ? 'Filters' : 'Report filters',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.primaryColor,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(width: 6),
-                IconButton(
-                  tooltip: 'Print Participants',
-                  icon: const Icon(Icons.print, color: AppTheme.primaryColor),
-                  onPressed: onPrint,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 40,
-                    minHeight: 40,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Obx(() {
-                  final stageSelected = controller.selectedStageIds.length == 1;
-                  return IconButton(
-                    tooltip: stageSelected
-                        ? 'Download Participants Excel'
-                        : 'Select exactly one stage in Report filters (Excel)',
-                    icon: Icon(
-                      Icons.download,
-                      color: stageSelected
-                          ? AppTheme.primaryColor
-                          : Colors.grey,
-                    ),
-                    onPressed: stageSelected ? onDownloadExcel : null,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 40,
-                      minHeight: 40,
-                    ),
-                  );
-                }),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Use Report filters for stage, category, group, state, district, institution, and gender.',
-              style: TextStyle(
-                fontSize: isMobile ? 11 : 12,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _infoCard(String message) {
     return Card(
       elevation: 2,
@@ -465,7 +308,7 @@ class ReportsParticipantsTab extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            const Icon(Icons.info_outline, color: AppTheme.primaryColor),
+            Icon(Icons.info_outline, color: AppTheme.primaryColor),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -483,7 +326,7 @@ class ReportsParticipantsTab extends StatelessWidget {
   }
 }
 
-/// Dashboard-style grid table with mint header and numbered pagination.
+/// Dashboard-style grid table with themed header and numbered pagination.
 class _ReportsParticipantScoresTable extends StatelessWidget {
   const _ReportsParticipantScoresTable({
     required this.hostContext,
@@ -501,7 +344,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
   static const double _kMinParticipantTableWidth = 968.0;
 
   static const BorderSide _cellBorderSide = BorderSide(
-    color: _kParticipantTableBorder,
+    color: AppColors.border,
     width: 1,
   );
 
@@ -514,7 +357,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
     final showSortIcon = sort == _ParticipantHeaderSort.inactive || isActive;
     final labelColor = isActive
         ? AppTheme.primaryColor
-        : _kParticipantTableHeaderMuted;
+        : AppTheme.sectionHeaderText();
 
     return Row(
       mainAxisAlignment: align == TextAlign.right
@@ -555,15 +398,15 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
         style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF424242),
+          color: AppColors.textSecondary,
         ),
       ),
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       padding: EdgeInsets.zero,
       labelPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-      backgroundColor: const Color(0xFFEEEEEE),
-      side: BorderSide(color: Colors.grey[400]!),
+      backgroundColor: AppTheme.chipNeutralBackground,
+      side: BorderSide(color: AppTheme.chipNeutralBorder),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
     );
   }
@@ -579,7 +422,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: _kParticipantTableHeaderBg,
+          color: AppTheme.sectionHeaderBackground(),
           border: Border(
             right: last ? BorderSide.none : _cellBorderSide,
             bottom: _cellBorderSide,
@@ -601,7 +444,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: _kParticipantTableHeaderBg,
+          color: AppTheme.sectionHeaderBackground(),
           border: Border(
             right: last ? BorderSide.none : _cellBorderSide,
             bottom: _cellBorderSide,
@@ -668,82 +511,94 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: _kParticipantTableBorder),
+        side: const BorderSide(color: AppColors.border),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final minTableWidth = math.max(
-            _kMinParticipantTableWidth,
-            w.isFinite && w > 0 ? w : _kMinParticipantTableWidth,
-          );
+          return Obx(() {
+            final showGrades =
+                controller.hasGrades.value ||
+                controller.competitionGrades.isNotEmpty;
+            final w = constraints.maxWidth;
+            final minTableWidth = math.max(
+              _kMinParticipantTableWidth + (showGrades ? 76.0 : 0.0),
+              w.isFinite && w > 0 ? w : _kMinParticipantTableWidth,
+            );
 
-          return Material(
-            color: Colors.white,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: minTableWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _headerCell(
-                                width: 48,
-                                child: _headerLabel('ICON'),
-                              ),
-                              _headerCell(
-                                width: 48,
-                                child: Tooltip(
-                                  message: 'E-certificate (opt-in)',
-                                  child: Icon(
-                                    Icons.workspace_premium,
-                                    size: 18,
-                                    color: _kParticipantTableHeaderMuted,
+            return Material(
+              color: Colors.white,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: minTableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _headerCell(
+                                  width: 48,
+                                  child: _headerLabel('ICON'),
+                                ),
+                                _headerCell(
+                                  width: 48,
+                                  child: Tooltip(
+                                    message: 'E-certificate (opt-in)',
+                                    child: Icon(
+                                      Icons.workspace_premium,
+                                      size: 18,
+                                      color: AppTheme.sectionHeaderText(),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              _headerExpanded(
-                                flex: 22,
-                                child: _headerLabel(
-                                  'NAME & REG. NO.',
-                                  sort: _ParticipantHeaderSort.inactive,
+                                _headerExpanded(
+                                  flex: 22,
+                                  child: _headerLabel(
+                                    'NAME & REG. NO.',
+                                    sort: _ParticipantHeaderSort.inactive,
+                                  ),
                                 ),
-                              ),
-                              _headerExpanded(
-                                flex: 22,
-                                child: _headerLabel('TYPE & CATEGORY'),
-                              ),
-                              _headerExpanded(
-                                flex: 30,
-                                child: _headerLabel('INSTITUTION'),
-                              ),
-                              _headerCell(
-                                width: 92,
-                                child: _headerLabel(
-                                  'TOTAL SCORE',
-                                  align: TextAlign.right,
-                                  sort: _ParticipantHeaderSort.active,
+                                _headerExpanded(
+                                  flex: 22,
+                                  child: _headerLabel('TYPE & CATEGORY'),
                                 ),
-                              ),
-                              _headerCell(
-                                width: 72,
-                                last: true,
-                                child: _headerLabel(
-                                  'JURIES',
-                                  align: TextAlign.right,
-                                  sort: _ParticipantHeaderSort.inactive,
+                                _headerExpanded(
+                                  flex: 30,
+                                  child: _headerLabel('INSTITUTION'),
                                 ),
-                              ),
-                            ],
+                                _headerCell(
+                                  width: 92,
+                                  child: _headerLabel(
+                                    'TOTAL SCORE',
+                                    align: TextAlign.right,
+                                    sort: _ParticipantHeaderSort.active,
+                                  ),
+                                ),
+                                if (showGrades)
+                                  _headerCell(
+                                    width: 76,
+                                    child: _headerLabel(
+                                      'GRADE',
+                                      align: TextAlign.center,
+                                    ),
+                                  ),
+                                _headerCell(
+                                  width: 72,
+                                  last: true,
+                                  child: _headerLabel(
+                                    'JURIES',
+                                    align: TextAlign.right,
+                                    sort: _ParticipantHeaderSort.inactive,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
                         for (final row in items)
                           Material(
                             color: Colors.transparent,
@@ -943,7 +798,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                                 ) ??
                                                 0.0)
                                             .toStringAsFixed(2),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w900,
                                           fontSize: 13,
                                           color: AppTheme.primaryColor,
@@ -951,6 +806,23 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                       ),
                                     ),
                                   ),
+                                  if (showGrades)
+                                    _bodyCell(
+                                      width: 76,
+                                      child: Align(
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          _gradeLabelForRow(
+                                            row,
+                                            controller.competitionGrades.toList(),
+                                          ),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   _bodyCell(
                                     width: 72,
                                     last: true,
@@ -975,9 +847,9 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                 ),
                 Container(
                   decoration: const BoxDecoration(
-                    color: Color(0xFFFAFAFA),
+                    color: AppColors.rowAlt,
                     border: Border(
-                      top: BorderSide(color: _kParticipantTableBorder),
+                      top: BorderSide(color: AppColors.border),
                     ),
                   ),
                   padding: const EdgeInsets.symmetric(
@@ -1085,23 +957,255 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
               ],
             ),
           );
+          });
         },
       ),
     );
   }
+
+  static String _gradeLabelForRow(
+    Map<String, dynamic> row,
+    List<CompetitionGradeModel> grades,
+  ) {
+    final resolvedRow = Map<String, dynamic>.from(row);
+    CompetitionGradeResolver.applyGradeToRow(
+      resolvedRow,
+      grades,
+    );
+    final label = (resolvedRow['gradeName'] ?? '').toString().trim();
+    return label.isEmpty ? '—' : label;
+  }
 }
 
-class _ParticipantFiltersDialog extends StatefulWidget {
-  const _ParticipantFiltersDialog({required this.controller});
+/// Search + filter toolbar shared by registered participants and scores tabs.
+class ReportsParticipantFiltersBar extends StatelessWidget {
+  const ReportsParticipantFiltersBar({
+    super.key,
+    required this.controller,
+    required this.isMobile,
+    required this.onPrint,
+    required this.onDownloadExcel,
+    required this.searchHint,
+    required this.emptyFiltersHint,
+  });
+
+  final ReportsParticipantsTabController controller;
+  final bool isMobile;
+  final VoidCallback onPrint;
+  final VoidCallback onDownloadExcel;
+  final String searchHint;
+  final String emptyFiltersHint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 10 : 12,
+          vertical: isMobile ? 10 : 10,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildToolbar(context),
+            const SizedBox(height: 8),
+            Obx(() {
+              final chips = controller.buildActiveFilterChips();
+              if (chips.isEmpty) {
+                return Text(
+                  emptyFiltersHint,
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1.3,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Filtered by',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: chips
+                        .map(
+                          (chip) => Chip(
+                            label: Text(
+                              chip.label,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onDeleted: () =>
+                                controller.removeActiveFilter(chip.key),
+                            deleteIcon: const Icon(Icons.close, size: 16),
+                            deleteIconColor: AppTheme.primaryColor,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            backgroundColor:
+                                AppTheme.primaryColor.withValues(alpha: 0.08),
+                            side: BorderSide(
+                              color: AppTheme.primaryColor
+                                  .withValues(alpha: 0.25),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolbar(BuildContext context) {
+    final searchField = TextField(
+      controller: controller.participantSearchFieldController,
+      onChanged: controller.setParticipantSearchQuery,
+      decoration: InputDecoration(
+        prefixIcon: Icon(Icons.search, color: AppTheme.primaryColor),
+        hintText: searchHint,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: isMobile ? 12 : 10,
+        ),
+      ),
+    );
+
+    final clearButton = Obx(
+      () => IconButton(
+        tooltip: 'Clear filters and search',
+        onPressed: controller.hasReportFiltersOrSearch
+            ? () async {
+                await controller.clearFiltersAndReload();
+              }
+            : null,
+        icon: Icon(
+          Icons.clear,
+          color: controller.hasReportFiltersOrSearch
+              ? Colors.grey[700]
+              : Colors.grey[400],
+        ),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      ),
+    );
+
+    final filtersButton = Obx(() {
+      final n = controller.activeFilterCount;
+      return OutlinedButton.icon(
+        onPressed: () {
+          showDialog<void>(
+            context: context,
+            builder: (ctx) =>
+                ReportsParticipantFiltersDialog(controller: controller),
+          );
+        },
+        icon: Badge(
+          isLabelVisible: n > 0,
+          label: Text('$n'),
+          child: Icon(Icons.tune, color: AppTheme.primaryColor),
+        ),
+        label: Text(isMobile ? 'Filters' : 'Report filters'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.primaryColor,
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 12 : 14,
+            vertical: isMobile ? 10 : 8,
+          ),
+        ),
+      );
+    });
+
+    final printButton = IconButton(
+      tooltip: 'Print',
+      onPressed: onPrint,
+      icon: Icon(Icons.print, color: AppTheme.primaryColor),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+    );
+
+    final downloadButton = Obx(() {
+      final stageSelected = controller.selectedStageIds.length == 1;
+      return IconButton(
+        tooltip: stageSelected
+            ? 'Download Excel'
+            : 'Select exactly one stage for Excel',
+        onPressed: stageSelected ? onDownloadExcel : null,
+        icon: Icon(
+          Icons.download,
+          color: stageSelected ? AppTheme.primaryColor : Colors.grey,
+        ),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      );
+    });
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          searchField,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              clearButton,
+              const SizedBox(width: 4),
+              Expanded(child: filtersButton),
+              printButton,
+              downloadButton,
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: searchField),
+        clearButton,
+        const SizedBox(width: 6),
+        filtersButton,
+        printButton,
+        downloadButton,
+      ],
+    );
+  }
+}
+
+class ReportsParticipantFiltersDialog extends StatefulWidget {
+  const ReportsParticipantFiltersDialog({required this.controller});
 
   final ReportsParticipantsTabController controller;
 
   @override
-  State<_ParticipantFiltersDialog> createState() =>
-      _ParticipantFiltersDialogState();
+  State<ReportsParticipantFiltersDialog> createState() =>
+      ReportsParticipantFiltersDialogState();
 }
 
-class _ParticipantFiltersDialogState extends State<_ParticipantFiltersDialog> {
+class ReportsParticipantFiltersDialogState
+    extends State<ReportsParticipantFiltersDialog> {
   late Set<int> _stages;
   late Set<int> _categories;
   late Set<int> _groups;

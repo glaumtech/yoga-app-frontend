@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/participant_e_certificate_download.dart';
+import '../../../core/utils/participant_registration_details_download.dart';
 import '../../../data/models/participant_model.dart';
+import '../../../data/repositories/competition_repository.dart';
 import '../../../data/repositories/participant_repository.dart';
 import '../../widgets/app_navbar.dart';
 import '../../widgets/footer_section.dart';
@@ -30,6 +32,7 @@ class PublicCompetitionParticipantsScreen extends StatefulWidget {
 class _PublicCompetitionParticipantsScreenState
     extends State<PublicCompetitionParticipantsScreen> {
   final ParticipantRepository _repository = ParticipantRepository();
+  final CompetitionRepository _competitionRepository = CompetitionRepository();
   final TextEditingController _searchController = TextEditingController();
 
   static const int _pageSize = 10;
@@ -38,7 +41,9 @@ class _PublicCompetitionParticipantsScreenState
   bool _loading = true;
   String? _error;
   String _searchQuery = '';
-  int? _downloadingId;
+  int? _downloadingCertId;
+  int? _downloadingDetailsId;
+  bool _certificatesReleased = false;
 
   int _currentPage = 1;
   int _totalPages = 1;
@@ -49,7 +54,25 @@ class _PublicCompetitionParticipantsScreenState
   @override
   void initState() {
     super.initState();
+    _certificatesReleased = widget.isPastCompetition;
+    _loadCompetitionMeta();
     _loadParticipants();
+  }
+
+  Future<void> _loadCompetitionMeta() async {
+    final competitionId = int.tryParse(widget.competitionId);
+    if (competitionId == null) return;
+
+    final response = await _competitionRepository.getCompetitionById(
+      competitionId,
+    );
+    if (!mounted) return;
+
+    if (response.success && response.data != null) {
+      setState(() {
+        _certificatesReleased = response.data!.areCertificatesAvailable;
+      });
+    }
   }
 
   @override
@@ -141,8 +164,7 @@ class _PublicCompetitionParticipantsScreenState
       } catch (_) {}
     }
 
-    int? parseId(dynamic v) =>
-        v is int ? v : int.tryParse(v?.toString() ?? '');
+    int? parseId(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '');
 
     bool parseBool(dynamic v) {
       if (v == null) return false;
@@ -165,7 +187,8 @@ class _PublicCompetitionParticipantsScreenState
       yogaMasterName: reg['yogaTeacherName']?.toString() ?? '',
       yogaMasterContact: reg['yogaTeacherCell']?.toString() ?? '',
       registrationNo: reg['registrationNo']?.toString(),
-      optForECertificate: parseBool(reg['optForECertificate']) ||
+      optForECertificate:
+          parseBool(reg['optForECertificate']) ||
           parseBool(reg['opt_for_e_certificate']),
       stageId: parseId(reg['stageId']),
       categoryId: parseId(reg['categoryId']),
@@ -179,7 +202,7 @@ class _PublicCompetitionParticipantsScreenState
     if (competitionId == null) return;
 
     final regId = int.tryParse(p.id ?? '');
-    if (regId != null) setState(() => _downloadingId = regId);
+    if (regId != null) setState(() => _downloadingCertId = regId);
 
     await downloadParticipantECertificate(
       context,
@@ -187,11 +210,23 @@ class _PublicCompetitionParticipantsScreenState
       competitionId: competitionId,
     );
 
-    if (mounted) setState(() => _downloadingId = null);
+    if (mounted) setState(() => _downloadingCertId = null);
+  }
+
+  Future<void> _onDownloadDetails(ParticipantModel p) async {
+    final regId = p.id?.trim();
+    if (regId == null || regId.isEmpty) return;
+
+    final idNum = int.tryParse(regId);
+    if (idNum != null) setState(() => _downloadingDetailsId = idNum);
+
+    await downloadParticipantRegistrationDetailsPdf(context, regId);
+
+    if (mounted) setState(() => _downloadingDetailsId = null);
   }
 
   bool _canDownloadCert(ParticipantModel p) {
-    return widget.isPastCompetition &&
+    return _certificatesReleased &&
         p.optForECertificate &&
         p.stageId != null &&
         p.categoryId != null;
@@ -242,7 +277,7 @@ class _PublicCompetitionParticipantsScreenState
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
-        hintText: 'Search by name, registration no., school…',
+        hintText: 'Search by registration no. or name',
         prefixIcon: const Icon(Icons.search),
         suffixIcon: _searchController.text.isNotEmpty
             ? IconButton(
@@ -255,9 +290,7 @@ class _PublicCompetitionParticipantsScreenState
                 },
               )
             : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         isDense: true,
       ),
       onChanged: (v) {
@@ -357,7 +390,10 @@ class _PublicCompetitionParticipantsScreenState
     }
 
     return RefreshIndicator(
-      onRefresh: () => _loadParticipants(page: _currentPage),
+      onRefresh: () async {
+        await _loadCompetitionMeta();
+        await _loadParticipants(page: _currentPage);
+      },
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
         itemCount: _participants.length + 1,
@@ -368,17 +404,24 @@ class _PublicCompetitionParticipantsScreenState
           if (index == 0) {
             return Text(
               '$_totalItems participant${_totalItems == 1 ? '' : 's'}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[700],
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
             );
           }
           final p = _participants[index - 1];
           return _ParticipantTile(
             participant: p,
-            showCertificateDownload: widget.isPastCompetition,
-            downloading: _downloadingId == int.tryParse(p.id ?? ''),
-            onDownload: _canDownloadCert(p) ? () => _onDownloadCert(p) : null,
+            showCertificateDownload: _certificatesReleased,
+            downloadingCert: _downloadingCertId == int.tryParse(p.id ?? ''),
+            downloadingDetails:
+                _downloadingDetailsId == int.tryParse(p.id ?? ''),
+            onDownloadCert: _canDownloadCert(p)
+                ? () => _onDownloadCert(p)
+                : null,
+            onDownloadDetails: p.id != null && p.id!.trim().isNotEmpty
+                ? () => _onDownloadDetails(p)
+                : null,
           );
         },
       ),
@@ -389,14 +432,18 @@ class _PublicCompetitionParticipantsScreenState
 class _ParticipantTile extends StatelessWidget {
   final ParticipantModel participant;
   final bool showCertificateDownload;
-  final bool downloading;
-  final VoidCallback? onDownload;
+  final bool downloadingCert;
+  final bool downloadingDetails;
+  final VoidCallback? onDownloadCert;
+  final VoidCallback? onDownloadDetails;
 
   const _ParticipantTile({
     required this.participant,
     required this.showCertificateDownload,
-    required this.downloading,
-    this.onDownload,
+    required this.downloadingCert,
+    required this.downloadingDetails,
+    this.onDownloadCert,
+    this.onDownloadDetails,
   });
 
   @override
@@ -444,56 +491,85 @@ class _ParticipantTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     [
-                      if (participant.category.isNotEmpty)
-                        participant.category,
-                      if (participant.standard.isNotEmpty)
-                        participant.standard,
+                      if (participant.category.isNotEmpty) participant.category,
+                      if (participant.standard.isNotEmpty) participant.standard,
                       if (participant.schoolName.isNotEmpty)
                         participant.schoolName,
                     ].join(' · '),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[700],
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
                   ),
                 ],
               ),
             ),
-            if (showCertificateDownload && onDownload != null)
-              downloading
-                  ? const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    )
-                  : TextButton.icon(
-                      onPressed: onDownload,
-                      icon: Icon(
-                        Icons.download_outlined,
-                        size: 16,
-                        color: AppTheme.primaryColor,
-                      ),
-                      label: Text(
-                        'Certificate',
-                        style: TextStyle(
-                          fontSize: 12,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (onDownloadDetails != null)
+                  downloadingDetails
+                      ? const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : _buildDownloadAction(
+                          label: 'Download receipt',
+                          color: Colors.blue.shade800,
+                          onPressed: onDownloadDetails!,
+                        ),
+                if (onDownloadDetails != null &&
+                    showCertificateDownload &&
+                    onDownloadCert != null)
+                  const SizedBox(height: 8),
+                if (showCertificateDownload && onDownloadCert != null)
+                  downloadingCert
+                      ? const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : _buildDownloadAction(
+                          label: 'Certificate',
                           color: AppTheme.primaryColor,
-                          fontWeight: FontWeight.w600,
+                          onPressed: onDownloadCert!,
                         ),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
+              ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDownloadAction({
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: Icon(Icons.download_outlined, size: 16, color: color),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        alignment: Alignment.centerRight,
       ),
     );
   }

@@ -1,3 +1,5 @@
+import '../../core/utils/role_display_name.dart';
+
 class UserManagementModel {
   final String? id;
   final String name;
@@ -13,6 +15,7 @@ class UserManagementModel {
   final int?
   userTypeId; // New API format: 1=SUB ADMIN, 2=SPOT REG ADMIN, 3=JURY, 4=VOLUNTEERS
   final String? userTypeName; // New API format
+  final String? themeColor; // Role accent from user_types.theme_color
   final int? eventId; // For backward compatibility
   final int? competitionId; // New API format
   final String? eventName; // For backward compatibility
@@ -52,6 +55,7 @@ class UserManagementModel {
     this.type = '',
     this.userTypeId,
     this.userTypeName,
+    this.themeColor,
     this.eventId,
     this.competitionId,
     this.eventName,
@@ -187,6 +191,7 @@ class UserManagementModel {
       type: type,
       userTypeId: userTypeId,
       userTypeName: userTypeName,
+      themeColor: json['themeColor']?.toString(),
       eventId: eventId ?? competitionId,
       competitionId: competitionId ?? eventId,
       eventName:
@@ -309,6 +314,7 @@ class UserManagementModel {
     String? type,
     int? userTypeId,
     String? userTypeName,
+    String? themeColor,
     int? eventId,
     int? competitionId,
     String? eventName,
@@ -341,6 +347,7 @@ class UserManagementModel {
       type: type ?? this.type,
       userTypeId: userTypeId ?? this.userTypeId,
       userTypeName: userTypeName ?? this.userTypeName,
+      themeColor: themeColor ?? this.themeColor,
       eventId: eventId ?? this.eventId,
       competitionId: competitionId ?? this.competitionId,
       eventName: eventName ?? this.eventName,
@@ -370,7 +377,7 @@ class UserManagementModel {
       : name;
 
   // Helper getters for backward compatibility
-  String get displayType => userTypeName ?? type;
+  String get displayType => displayRoleName(userTypeName ?? type);
   int? get displayEventId => competitionId ?? eventId;
   String? get displayEventName => competitionName ?? eventName;
   String? get displayPhotoUrl => photo ?? photoUrl;

@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
@@ -18,11 +20,37 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/utils/state_defaults.dart';
 import '../../../core/navigation/root_scaffold_messenger_key.dart';
+import '../../../core/utils/snackbar_helper.dart';
 
 // Conditional import for web
 import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class SchoolController extends GetxController {
+  void _snackSuccess(String message) {
+    SnackbarHelper.show(
+      title: 'Success',
+      message: message,
+      backgroundColor: Colors.green,
+    );
+  }
+
+  void _snackError(String message) {
+    SnackbarHelper.show(
+      title: 'Error',
+      message: message,
+      backgroundColor: Colors.red,
+    );
+  }
+
+  void _snackInfo(String title, String message, {Duration? duration}) {
+    SnackbarHelper.show(
+      title: title,
+      message: message,
+      backgroundColor: Colors.blue,
+      duration: duration ?? const Duration(seconds: 1),
+    );
+  }
+
   static const String districtRequiredMessage = 'Please select district';
   static const String invalidStateMessage =
       'Please select a valid state from the list';
@@ -1023,28 +1051,10 @@ class SchoolController extends GetxController {
 
   @override
   void onClose() {
-    institutionNameController.dispose();
-    institutionShortNameController.dispose();
-    addressController.dispose();
-    pincodeController.dispose();
-    emailController.dispose();
-    websiteController.dispose();
-    landLineController.dispose();
-    mobileController.dispose();
-    contributorNameController.dispose();
-    contributorMobileController.dispose();
-    searchController.dispose();
-    createFormStateTextController.removeListener(_onCreateFormStateTextEdited);
-    createFormStateTextController.dispose();
-    createFormStateFocusNode.dispose();
-    createFormDistrictTextController.dispose();
-    createFormDistrictFocusNode.dispose();
-    createFormCityTextController.dispose();
-    createFormCityFocusNode.dispose();
-    listFilterStateTextController.dispose();
-    listFilterStateFocusNode.dispose();
-    listFilterCityTextController.dispose();
-    listFilterCityFocusNode.dispose();
+    try {
+      createFormStateTextController.removeListener(_onCreateFormStateTextEdited);
+    } catch (_) {}
+    // See CompetitionController.onClose — avoid dispose during logout teardown.
     super.onClose();
   }
 
@@ -1414,13 +1424,7 @@ class SchoolController extends GetxController {
       if (duplicate != null) {
         errorMessage.value =
             duplicateInstitutionMessage(address: duplicate.address);
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError(errorMessage.value);
         return;
       }
 
@@ -1484,14 +1488,10 @@ class SchoolController extends GetxController {
         isEditMode.value = false;
         editingSchoolId.value = null;
 
-        Get.snackbar(
-          'Success',
+        _snackSuccess(
           wasEditMode
               ? 'School/College updated successfully'
               : 'School/College added successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
         );
 
         // Reload schools list
@@ -1508,24 +1508,12 @@ class SchoolController extends GetxController {
                 : 'Failed to create institution');
         final friendly = _friendlyInstitutionError(rawMessage);
         errorMessage.value = friendly.isNotEmpty ? friendly : rawMessage;
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError(errorMessage.value);
       }
     } catch (e) {
       errorMessage.value = 'Error submitting school: ${e.toString()}';
       print('Error in submitSchool: $e');
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError(errorMessage.value);
     } finally {
       isLoading.value = false;
     }
@@ -1830,24 +1818,12 @@ class SchoolController extends GetxController {
         );
       } else {
         errorMessage.value = response.message ?? 'Failed to load institution';
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError(errorMessage.value);
       }
     } catch (e) {
       errorMessage.value = 'Error loading institution: ${e.toString()}';
       print('Error in loadSchoolForEdit: $e');
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError(errorMessage.value);
     } finally {
       isLoading.value = false;
     }
@@ -2080,38 +2056,75 @@ class SchoolController extends GetxController {
         selectedInstitutionCategoryId.value = response.data!.id;
         selectedInstitutionCategory.value = response.data!.displayName;
 
-        Get.snackbar(
-          'Success',
-          'Category "$displayName" created successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-        );
+        _snackSuccess('Category "$displayName" created successfully');
         return true;
       } else {
         errorMessage.value = response.message ?? 'Failed to create category';
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError(errorMessage.value);
         return false;
       }
     } catch (e) {
       errorMessage.value = 'Error creating category: ${e.toString()}';
       print('Error in createInstitutionCategory: $e');
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError(errorMessage.value);
       return false;
     } finally {
       isLoadingInstitutionCategories.value = false;
+    }
+  }
+
+  Map<String, dynamic> _buildInstitutionExportFilters() {
+    int? stateIdForExport;
+    if (reportState.value.isNotEmpty) {
+      final state = states.firstWhereOrNull(
+        (s) => s.stateName == reportState.value,
+      );
+      stateIdForExport = state?.id;
+    }
+
+    final filters = <String, dynamic>{
+      'sortBy': sortBy.value,
+      'order': sortOrder.value,
+    };
+    if (searchQuery.value.isNotEmpty) {
+      filters['search'] = searchQuery.value;
+    }
+    if (stateIdForExport != null) {
+      filters['stateId'] = stateIdForExport;
+    }
+    if (reportDistrictId.value > 0) {
+      filters['districtId'] = reportDistrictId.value;
+    }
+    if (reportInstitutionTypeId.value > 0) {
+      filters['institutionTypeId'] = reportInstitutionTypeId.value;
+    }
+    return filters;
+  }
+
+  Future<void> downloadPostalList({String? recipientName}) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      _snackInfo('Preparing download', 'Generating postal list PDF...');
+
+      final filters = _buildInstitutionExportFilters();
+      final trimmedName = recipientName?.trim();
+      if (trimmedName != null && trimmedName.isNotEmpty) {
+        filters['recipientName'] = trimmedName.length > 35
+            ? trimmedName.substring(0, 35)
+            : trimmedName;
+      }
+
+      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      await _downloadInstitutionsPostalPdf(
+        filters,
+        'institutions_postal_list_$timestamp.pdf',
+      );
+    } catch (e) {
+      _snackError('Error downloading list: ${e.toString()}');
+    } finally {
+      isLoading.value = false;
     }
   }
 
@@ -2121,51 +2134,11 @@ class SchoolController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      Get.snackbar(
-        'Generating',
-        'Preparing report...',
-        backgroundColor: Colors.blue,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 1),
-      );
+      _snackInfo('Generating', 'Preparing report...');
 
-      // Get filter values
-      int? stateIdForPrint;
-
-      if (reportState.value.isNotEmpty) {
-        final state = states.firstWhereOrNull(
-          (s) => s.stateName == reportState.value,
-        );
-        stateIdForPrint = state?.id;
-      }
-
-      // Prepare request body
-      final requestBody = <String, dynamic>{};
-      if (searchQuery.value.isNotEmpty) {
-        requestBody['search'] = searchQuery.value;
-      }
-      if (stateIdForPrint != null) {
-        requestBody['stateId'] = stateIdForPrint;
-      }
-      if (reportDistrictId.value > 0) {
-        requestBody['districtId'] = reportDistrictId.value;
-      }
-      if (reportInstitutionTypeId.value > 0) {
-        requestBody['institutionTypeId'] = reportInstitutionTypeId.value;
-      }
-      requestBody['sortBy'] = sortBy.value;
-      requestBody['order'] = sortOrder.value;
-
-      // Download PDF from backend
-      await _downloadInstitutionsPdf(requestBody);
+      await _downloadInstitutionsPdf(_buildInstitutionExportFilters());
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Error generating report: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError('Error generating report: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -2175,11 +2148,36 @@ class SchoolController extends GetxController {
   Future<void> _downloadInstitutionsPdf(
     Map<String, dynamic> requestBody,
   ) async {
+    await _downloadInstitutionsPdfFromEndpoint(
+      EndPoints.institutionPrint,
+      requestBody,
+      'institutions_report.pdf',
+      successMessage: 'Report download started',
+    );
+  }
+
+  Future<void> _downloadInstitutionsPostalPdf(
+    Map<String, dynamic> requestBody,
+    String filename,
+  ) async {
+    await _downloadInstitutionsPdfFromEndpoint(
+      EndPoints.institutionPostalPrint,
+      requestBody,
+      filename,
+      successMessage: 'Postal list PDF download started',
+    );
+  }
+
+  Future<void> _downloadInstitutionsPdfFromEndpoint(
+    String endpoint,
+    Map<String, dynamic> requestBody,
+    String filename, {
+    required String successMessage,
+  }) async {
     try {
-      final url = '${BaseUrl.baseUrl}${EndPoints.institutionPrint}';
+      final url = '${BaseUrl.baseUrl}$endpoint';
       final uri = Uri.parse(url);
 
-      // Include auth token if available
       final token = StorageService.getString(AppConstants.tokenKey);
       final headers = <String, String>{
         'Accept': 'application/pdf',
@@ -2189,66 +2187,39 @@ class SchoolController extends GetxController {
         headers['Authorization'] = 'Bearer $token';
       }
 
-      // Use proper JSON encoding
       final jsonBody = jsonEncode(requestBody);
       final response = await http.post(uri, headers: headers, body: jsonBody);
 
       if (response.statusCode == 200) {
-        if (kIsWeb) {
-          // Web: Create blob and trigger download/print
-          final blob = html.Blob([response.bodyBytes]);
-          final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-          html.AnchorElement(href: blobUrl)
-            ..setAttribute('download', 'institutions_report.pdf')
-            ..click();
-          html.Url.revokeObjectUrl(blobUrl);
-
-          Get.snackbar(
-            'Success',
-            'Report download started',
-            backgroundColor: Colors.green,
-            colorText: Colors.white,
-          );
-        } else {
-          // Mobile: Open PDF
-          final dataUri = Uri.dataFromBytes(
-            response.bodyBytes,
-            mimeType: 'application/pdf',
-          );
-          if (await canLaunchUrl(dataUri)) {
-            await launchUrl(dataUri, mode: LaunchMode.externalApplication);
-            Get.snackbar(
-              'Success',
-              'Report opened',
-              backgroundColor: Colors.green,
-              colorText: Colors.white,
-            );
-          } else {
-            Get.snackbar(
-              'Error',
-              'Could not open report',
-              backgroundColor: Colors.red,
-              colorText: Colors.white,
-            );
-          }
-        }
+        await _saveInstitutionPdfBytes(response.bodyBytes, filename);
+        _snackSuccess(successMessage);
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to generate report (status ${response.statusCode})',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _snackError('Failed to generate report (status ${response.statusCode})');
       }
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to download report: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _snackError('Failed to download report: ${e.toString()}');
+    }
+  }
+
+  Future<void> _saveInstitutionPdfBytes(
+    Uint8List bytes,
+    String filename,
+  ) async {
+    if (kIsWeb) {
+      final blob = html.Blob([bytes], 'application/pdf');
+      final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: blobUrl)
+        ..setAttribute('download', filename)
+        ..click();
+      html.Url.revokeObjectUrl(blobUrl);
+      return;
+    }
+
+    final dataUri = Uri.dataFromBytes(bytes, mimeType: 'application/pdf');
+    if (await canLaunchUrl(dataUri)) {
+      await launchUrl(dataUri, mode: LaunchMode.externalApplication);
+    } else {
+      throw Exception('Could not open downloaded file');
     }
   }
 }

@@ -9,6 +9,8 @@ class AppConstants {
   static const String userKey = 'user_data';
   static const String roleKey = 'user_role';
   static const String permissionKeysKey = 'permission_keys';
+  static const String usersListRecentCompetitionsKey =
+      'users_list_recent_competitions';
 
   // User Roles
   static const String roleUser = 'user';
@@ -101,7 +103,12 @@ class EndPoints {
   static String userById(String id) => '/user/$id';
   static String userPhoto(String id) => '/user/$id/photo';
   static String userLogin = '/user/login';
+  static const String userLoginWithToken = '/user/login/token';
   static String userLogout = '/user/logout';
+  static String juryLoginTokenGenerate(String userId) =>
+      '/juries/user/$userId/login-token';
+  static String juryLoginTokenRevoke(String userId) =>
+      '/juries/user/$userId/login-token';
   static String userTypes = '/user-type';
   static String juryAssignments(String userId) =>
       '/juries/user/$userId/assignments';
@@ -117,6 +124,26 @@ class EndPoints {
 
   /// Public competitions list (home / unauthenticated)
   static String competitionPublic = '/competition/public';
+
+  /// Payment gateway
+  static String paymentPackages = '/payment/packages';
+  static String subscriptionModes = '/subscription-mode';
+  static String paymentSubscriptionOrder = '/payment/subscription/order';
+  static String paymentSubscriptionVerify = '/payment/subscription/verify';
+  static String paymentRegistrationOrder = '/payment/registration/order';
+  static String paymentRegistrationVerify = '/payment/registration/verify';
+  static String paymentCompetitionMaintenanceOrder(int competitionId) =>
+      '/payment/competition/$competitionId/maintenance-order';
+  static String paymentCompetitionMaintenanceVerify(int competitionId) =>
+      '/payment/competition/$competitionId/maintenance-verify';
+  static String apiCreateOrder = '/api/create-order';
+  static String apiVerifyPayment = '/api/verify-payment';
+  static String apiMarkPaymentFailed = '/api/mark-payment-failed';
+  static String paymentOnDemandContext = '/payment/on-demand/context';
+  static String participantRegistrationPaymentVerify(String id) =>
+      '/participant-registration/$id/payment/verify';
+  static String participantRegistrationPaymentReject(String id) =>
+      '/participant-registration/$id/payment/reject';
 
   /// COMPETITION OPTIONS
   static String categoryList = '/category';
@@ -144,6 +171,7 @@ class EndPoints {
   static String institutionCreate = '/institution';
   static String institutionList = '/institution/list';
   static String institutionPrint = '/institution/print';
+  static String institutionPostalPrint = '/institution/print/postal';
   static String institutionById(String id) => '/institution/$id';
   static String institutionUpdate(String id) => '/institution/$id';
   static String institutionDelete(String id) => '/institution/$id';
@@ -170,6 +198,9 @@ class EndPoints {
   static String competitionParticipantScoresTable(int competitionId) =>
       '/reports/competition/$competitionId/participant-scores/table';
 
+  static String competitionParticipantsTable(int competitionId) =>
+      '/reports/competition/$competitionId/participants/table';
+
   static String competitionParticipantScoreDetails(int competitionId) =>
       '/reports/competition/$competitionId/participant-scores/details';
 
@@ -192,7 +223,11 @@ class EndPoints {
       '/reports/competition/$competitionId/print/participant-e-certificate';
 
   /// ORGANIZATION / BRANCH SETUP
-  static String organizationSetup = '/organization/setup';
+  static String organizationSetupFoundation = '/organization/setup/foundation';
+  static String organizationSetupFoundationWithPayment =
+      '/organization/setup/foundation-with-payment';
+  static String organizationSetupComplete = '/organization/setup/complete';
+  static String organizationSetupAdmins = '/organization/setup/admins';
 
   /// Branch-level certificate template CRUD.
   static String certificateTemplates = '/settings/certificate-templates';

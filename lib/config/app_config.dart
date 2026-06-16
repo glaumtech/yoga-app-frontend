@@ -18,5 +18,17 @@ class AppConfig {
     }
   }
 
+  /// Public Flutter web app URL embedded in jury QR login links.
+  static String get webAppUrl {
+    switch (_environment) {
+      case Environment.qa:
+        return 'https://d1fl9gr1w0091l.cloudfront.net';
+      case Environment.prod:
+        return 'https://yogacompetition.in';
+      case Environment.dev:
+        return 'http://localhost:60450';
+    }
+  }
+
   static Environment get environment => _environment;
 }

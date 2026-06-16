@@ -85,6 +85,14 @@ class ReportsUsersTabController extends GetxController {
     await loadUsers();
   }
 
+  void resetSession() {
+    typeFilter.value = 'ALL';
+    page.value = 0;
+    if (Get.isRegistered<UserManagementController>()) {
+      Get.find<UserManagementController>().users.clear();
+    }
+  }
+
   List<UserManagementModel> get users => userController.users.toList();
 
   String normalizeRoleLabel(String raw) {

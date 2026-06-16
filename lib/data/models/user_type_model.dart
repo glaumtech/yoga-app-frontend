@@ -2,6 +2,7 @@ class UserTypeModel {
   final int id;
   final String typeName;
   final String description;
+  final String? themeColor;
   final List<PermissionModel> permissions;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -10,6 +11,7 @@ class UserTypeModel {
     required this.id,
     required this.typeName,
     required this.description,
+    this.themeColor,
     required this.permissions,
     this.createdAt,
     this.updatedAt,
@@ -40,6 +42,7 @@ class UserTypeModel {
           : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       typeName: json['typeName']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
+      themeColor: json['themeColor']?.toString(),
       permissions: permissions,
       createdAt: parseDateTime(json['createdAt']),
       updatedAt: parseDateTime(json['updatedAt']),
@@ -51,6 +54,7 @@ class UserTypeModel {
       'id': id,
       'typeName': typeName,
       'description': description,
+      if (themeColor != null) 'themeColor': themeColor,
       'permissions': permissions.map((p) => p.toJson()).toList(),
       if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
       if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),

@@ -56,6 +56,17 @@ class KeyboardScrollRegistry {
       if (fromFocus != null) {
         return fromFocus;
       }
+
+      // When focus is in an overlay/popup (e.g. opened dropdown menu), do not
+      // fall back to the page scroll view behind it.
+      final ScrollPosition? directFocusedScrollable =
+          _positionFromFocusedScrollable(focusContext);
+      if (directFocusedScrollable != null) {
+        return directFocusedScrollable;
+      }
+      if (_isInPopupRoute(focusContext)) {
+        return null;
+      }
     }
 
     for (final _PositionRegistration entry in _autoPositions.reversed) {
@@ -69,16 +80,6 @@ class KeyboardScrollRegistry {
       if (entry.controller.hasClients &&
           _canScrollVertically(entry.controller.position)) {
         return entry.controller.position;
-      }
-    }
-
-    if (focusContext != null) {
-      final ScrollableState? scrollable = Scrollable.maybeOf(focusContext);
-      if (scrollable != null &&
-          scrollable.position.hasPixels &&
-          _isVertical(scrollable.axisDirection) &&
-          _canScrollVertically(scrollable.position)) {
-        return scrollable.position;
       }
     }
 
@@ -134,6 +135,22 @@ class KeyboardScrollRegistry {
       return true;
     });
     return found;
+  }
+
+  static ScrollPosition? _positionFromFocusedScrollable(
+    BuildContext focusContext,
+  ) {
+    final ScrollableState? scrollable = Scrollable.maybeOf(focusContext);
+    if (scrollable == null) return null;
+    if (!scrollable.position.hasPixels) return null;
+    if (!_isVertical(scrollable.axisDirection)) return null;
+    if (!_canScrollVertically(scrollable.position)) return null;
+    return scrollable.position;
+  }
+
+  static bool _isInPopupRoute(BuildContext context) {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    return route is PopupRoute<dynamic>;
   }
 }
 

@@ -14,8 +14,10 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/championship_style.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/utils/permission_store.dart';
+import '../../../core/theme/role_theme_controller.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/photo_capture_service.dart';
+import '../../../core/utils/photo_upload_processor.dart';
 
 class UserManagementController extends GetxController {
   final UserManagementRepository _repository = UserManagementRepository();
@@ -70,6 +72,9 @@ class UserManagementController extends GetxController {
   // Form State
   final RxString selectedType = 'SUB ADMIN'.obs;
   final RxString selectedEventId = ''.obs;
+
+  /// Competition filter for the Users list tab; not cleared by [resetForm].
+  final RxString usersListEventId = ''.obs;
   final RxString selectedEventName = ''.obs;
   final RxList<String> selectedPermissions = <String>[].obs;
   final RxList<String> selectedStages = <String>[].obs;
@@ -140,7 +145,11 @@ class UserManagementController extends GetxController {
       final userJson = StorageService.getString(AppConstants.userKey);
       if (userJson != null && userJson.isNotEmpty) {
         final userData = jsonDecode(userJson) as Map<String, dynamic>;
-        currentUser.value = UserManagementModel.fromJson(userData);
+        final user = UserManagementModel.fromJson(userData);
+        currentUser.value = user;
+        if (Get.isRegistered<RoleThemeController>()) {
+          Get.find<RoleThemeController>().applyThemeColor(user.themeColor);
+        }
       }
     } catch (e) {
       print('Error loading current user: $e');
@@ -173,14 +182,17 @@ class UserManagementController extends GetxController {
       _refreshFormKey();
     }
     isListView.value = showList;
+    if (showList) {
+      final eventId = int.tryParse(usersListEventId.value);
+      if (eventId != null && users.isEmpty && !isLoading.value) {
+        Future.microtask(() => loadUsers(eventId: eventId));
+      }
+    }
   }
 
   @override
   void onClose() {
-    nameController.dispose();
-    userNameController.dispose();
-    passwordController.dispose();
-    cellController.dispose();
+    // See CompetitionController.onClose — avoid dispose during logout teardown.
     super.onClose();
   }
 
@@ -316,8 +328,9 @@ class UserManagementController extends GetxController {
 
   /// When competition uses winner-based Champions, add CHAMPIONS for jury allotment.
   Future<void> _appendChampionsCategoryForWinnerStyle(int competitionId) async {
-    final compResponse =
-        await _competitionRepository.getCompetitionById(competitionId);
+    final compResponse = await _competitionRepository.getCompetitionById(
+      competitionId,
+    );
     if (!compResponse.success || compResponse.data == null) return;
 
     final style = ChampionshipStyle.fromApiValue(
@@ -440,36 +453,37 @@ class UserManagementController extends GetxController {
   }
 
   Future<void> _applyPickedUserPhoto(XFile image) async {
+    final processed = await PhotoUploadProcessor.processXFile(image);
+    if (processed == null) return;
+
     if (kIsWeb) {
-      final bytes = await image.readAsBytes();
-      photoBytes.value = bytes;
+      photoBytes.value = processed.bytes;
       photoUrl.value = 'web_image';
       photoFile.value = null;
     } else {
-      photoFile.value = File(image.path);
+      photoFile.value = processed.file;
       photoBytes.value = null;
-      photoUrl.value = image.path;
+      photoUrl.value = processed.file?.path ?? image.path;
     }
   }
 
   Future<void> _applyPickedVolunteerPhoto(VolunteerRow row, XFile image) async {
+    final processed = await PhotoUploadProcessor.processXFile(image);
+    if (processed == null) return;
+
     if (kIsWeb) {
-      final bytes = await image.readAsBytes();
-      row.photoBytes.value = bytes;
+      row.photoBytes.value = processed.bytes;
       row.photoUrl.value = 'web_image';
       row.photoFile.value = null;
     } else {
-      row.photoFile.value = File(image.path);
+      row.photoFile.value = processed.file;
       row.photoBytes.value = null;
-      row.photoUrl.value = image.path;
+      row.photoUrl.value = processed.file?.path ?? image.path;
     }
   }
 
   // Pick or capture user photo (gallery or camera).
-  Future<void> pickPhoto(
-    ImageSource source, {
-    BuildContext? context,
-  }) async {
+  Future<void> pickPhoto(ImageSource source, {BuildContext? context}) async {
     try {
       final XFile? image = await PhotoCaptureService.pickImage(
         source: source,
@@ -480,6 +494,8 @@ class UserManagementController extends GetxController {
       if (image != null) {
         await _applyPickedUserPhoto(image);
       }
+    } on PhotoUploadException catch (e) {
+      errorMessage.value = e.message;
     } catch (e) {
       errorMessage.value = source == ImageSource.camera
           ? 'Error taking photo: ${e.toString()}'
@@ -503,6 +519,8 @@ class UserManagementController extends GetxController {
       if (image != null) {
         await _applyPickedVolunteerPhoto(row, image);
       }
+    } on PhotoUploadException catch (e) {
+      errorMessage.value = e.message;
     } catch (e) {
       errorMessage.value = source == ImageSource.camera
           ? 'Error taking photo: ${e.toString()}'
@@ -533,7 +551,9 @@ class UserManagementController extends GetxController {
   }
 
   /// Loads volunteer names already registered for this competition.
-  Future<void> _loadExistingVolunteerNamesForCompetition(int competitionId) async {
+  Future<void> _loadExistingVolunteerNamesForCompetition(
+    int competitionId,
+  ) async {
     _existingVolunteerNamesLower.clear();
     final userTypeId = getUserTypeId('VOLUNTEERS') ?? 4;
     final response = await _repository.getAllUsers(
@@ -550,9 +570,10 @@ class UserManagementController extends GetxController {
       if (name.isEmpty) continue;
       if (name.startsWith('Volunteers -')) {
         for (final volunteer in user.volunteers ?? const []) {
-          final volunteerName = (volunteer['volunteerName'] ?? volunteer['name'])
-              ?.toString()
-              .trim();
+          final volunteerName =
+              (volunteer['volunteerName'] ?? volunteer['name'])
+                  ?.toString()
+                  .trim();
           if (volunteerName != null && volunteerName.isNotEmpty) {
             _existingVolunteerNamesLower.add(volunteerName.toLowerCase());
           }
@@ -941,7 +962,9 @@ class UserManagementController extends GetxController {
       for (final volunteer in user.volunteers!) {
         final row = VolunteerRow();
         row.nameController.text =
-            (volunteer['volunteerName'] ?? volunteer['name'])?.toString().trim() ??
+            (volunteer['volunteerName'] ?? volunteer['name'])
+                ?.toString()
+                .trim() ??
             '';
         row.cellController.text = volunteer['cell']?.toString().trim() ?? '';
         volunteerRows.add(row);
@@ -1267,6 +1290,19 @@ class UserManagementController extends GetxController {
     _refreshFormKey();
   }
 
+  Future<void> _applyLoginSession(Map<String, dynamic> data) async {
+    final user = data['user'] as UserManagementModel?;
+    if (user != null) {
+      currentUser.value = user;
+      if (Get.isRegistered<PermissionStore>()) {
+        Get.find<PermissionStore>().setKeys(user.permissions);
+      }
+      if (Get.isRegistered<RoleThemeController>()) {
+        Get.find<RoleThemeController>().applyThemeColor(user.themeColor);
+      }
+    }
+  }
+
   // Login user
   Future<bool> login({
     required String name,
@@ -1284,15 +1320,7 @@ class UserManagementController extends GetxController {
       );
 
       if (response.success && response.data != null) {
-        // Extract and store user data
-        final data = response.data as Map<String, dynamic>;
-        final user = data['user'] as UserManagementModel?;
-        if (user != null) {
-          currentUser.value = user;
-          if (Get.isRegistered<PermissionStore>()) {
-            Get.find<PermissionStore>().setKeys(user.permissions);
-          }
-        }
+        await _applyLoginSession(response.data as Map<String, dynamic>);
         isLoading.value = false;
         return true;
       } else {
@@ -1304,6 +1332,47 @@ class UserManagementController extends GetxController {
       errorMessage.value = 'Error during login: ${e.toString()}';
       isLoading.value = false;
       return false;
+    }
+  }
+
+  Future<bool> loginWithToken({required String token}) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      final response = await _repository.loginWithToken(token: token);
+
+      if (response.success && response.data != null) {
+        await _applyLoginSession(response.data as Map<String, dynamic>);
+        isLoading.value = false;
+        return true;
+      }
+
+      errorMessage.value = response.message ?? 'Invalid or expired login link';
+      isLoading.value = false;
+      return false;
+    } catch (e) {
+      errorMessage.value = 'Error during login: ${e.toString()}';
+      isLoading.value = false;
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> generateJuryLoginToken(String userId) async {
+    try {
+      errorMessage.value = '';
+
+      final response = await _repository.generateJuryLoginToken(userId);
+
+      if (response.success && response.data != null) {
+        return response.data;
+      }
+
+      errorMessage.value = response.message ?? 'Failed to generate login link';
+      return null;
+    } catch (e) {
+      errorMessage.value = 'Error generating login link: ${e.toString()}';
+      return null;
     }
   }
 
@@ -1321,6 +1390,9 @@ class UserManagementController extends GetxController {
         if (Get.isRegistered<PermissionStore>()) {
           Get.find<PermissionStore>().setKeys(const []);
         }
+        if (Get.isRegistered<RoleThemeController>()) {
+          Get.find<RoleThemeController>().resetToDefault();
+        }
         isLoading.value = false;
         return true;
       } else {
@@ -1328,6 +1400,9 @@ class UserManagementController extends GetxController {
         currentUser.value = null;
         if (Get.isRegistered<PermissionStore>()) {
           Get.find<PermissionStore>().setKeys(const []);
+        }
+        if (Get.isRegistered<RoleThemeController>()) {
+          Get.find<RoleThemeController>().resetToDefault();
         }
         errorMessage.value = response.message ?? 'Logout failed';
         isLoading.value = false;
@@ -1338,6 +1413,9 @@ class UserManagementController extends GetxController {
       currentUser.value = null;
       if (Get.isRegistered<PermissionStore>()) {
         Get.find<PermissionStore>().setKeys(const []);
+      }
+      if (Get.isRegistered<RoleThemeController>()) {
+        Get.find<RoleThemeController>().resetToDefault();
       }
       errorMessage.value = 'Error during logout: ${e.toString()}';
       isLoading.value = false;
