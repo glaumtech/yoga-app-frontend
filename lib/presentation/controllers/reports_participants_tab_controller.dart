@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../core/utils/competition_grade_resolver.dart';
 import '../../data/models/api_response.dart';
+import '../../data/models/competition_grade_model.dart';
 import '../../data/models/district_model.dart';
 import '../../data/models/school_model.dart';
 import '../../data/models/state_model.dart';
@@ -44,6 +46,9 @@ class ReportsParticipantsTabController extends GetxController {
   final RxInt tableTotalElements = 0.obs;
   final RxInt tableTotalPages = 0.obs;
   final RxString tableCompetitionName = ''.obs;
+  final RxBool hasGrades = false.obs;
+  final RxList<CompetitionGradeModel> competitionGrades =
+      <CompetitionGradeModel>[].obs;
 
   final RxBool isDetailsLoading = false.obs;
 
@@ -149,6 +154,27 @@ class ReportsParticipantsTabController extends GetxController {
       participantSearchFieldController.clear();
     }
     tablePage.value = 0;
+  }
+
+  void resetSession() {
+    _searchDebounce?.cancel();
+    isLoading.value = false;
+    errorMessage.value = '';
+    isDetailsLoading.value = false;
+    tableItems.clear();
+    tablePage.value = 0;
+    tableTotalElements.value = 0;
+    tableTotalPages.value = 0;
+    tableCompetitionName.value = '';
+    hasGrades.value = false;
+    competitionGrades.clear();
+    stageOptions.clear();
+    categoryOptions.clear();
+    groupOptions.clear();
+    filterStateOptions.clear();
+    filterDistrictOptions.clear();
+    filterInstitutionOptions.clear();
+    clearFilters();
   }
 
   int get activeFilterCount {
@@ -574,13 +600,28 @@ class ReportsParticipantsTabController extends GetxController {
         tableItems.clear();
         tableTotalElements.value = 0;
         tableTotalPages.value = 0;
+        hasGrades.value = false;
+        competitionGrades.clear();
         return;
       }
 
       final d = Map<String, dynamic>.from(resp.data!);
       final rawItems = (d['items'] as List?) ?? const [];
+      var grades = CompetitionGradeResolver.parseGrades(d['grades']);
+      if (grades.isEmpty) {
+        grades = CompetitionGradeResolver.parseGrades(
+          reportsController.report.value?['grades'],
+        );
+      }
+      competitionGrades.assignAll(grades);
+      hasGrades.value = grades.isNotEmpty || d['hasGrades'] == true;
+
       tableItems.assignAll(
-        rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+        rawItems.map((e) {
+          final row = Map<String, dynamic>.from(e as Map);
+          CompetitionGradeResolver.applyGradeToRow(row, grades);
+          return row;
+        }).toList(),
       );
       tableTotalElements.value = (d['totalElements'] as num?)?.toInt() ?? 0;
       tableTotalPages.value = (d['totalPages'] as num?)?.toInt() ?? 0;
@@ -591,6 +632,8 @@ class ReportsParticipantsTabController extends GetxController {
       tableItems.clear();
       tableTotalElements.value = 0;
       tableTotalPages.value = 0;
+      hasGrades.value = false;
+      competitionGrades.clear();
     } finally {
       isLoading.value = false;
     }

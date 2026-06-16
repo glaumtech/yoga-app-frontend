@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/competition_grade_resolver.dart';
+import '../../../data/models/competition_grade_model.dart';
 import '../../controllers/reports_participants_tab_controller.dart';
 import '../../controllers/reports_participants_tab_logic.dart';
 import '../../widgets/location/district_search_field.dart';
@@ -513,78 +515,90 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final minTableWidth = math.max(
-            _kMinParticipantTableWidth,
-            w.isFinite && w > 0 ? w : _kMinParticipantTableWidth,
-          );
+          return Obx(() {
+            final showGrades =
+                controller.hasGrades.value ||
+                controller.competitionGrades.isNotEmpty;
+            final w = constraints.maxWidth;
+            final minTableWidth = math.max(
+              _kMinParticipantTableWidth + (showGrades ? 76.0 : 0.0),
+              w.isFinite && w > 0 ? w : _kMinParticipantTableWidth,
+            );
 
-          return Material(
-            color: Colors.white,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: minTableWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _headerCell(
-                                width: 48,
-                                child: _headerLabel('ICON'),
-                              ),
-                              _headerCell(
-                                width: 48,
-                                child: Tooltip(
-                                  message: 'E-certificate (opt-in)',
-                                  child: Icon(
-                                    Icons.workspace_premium,
-                                    size: 18,
-                                    color: AppTheme.sectionHeaderText(),
+            return Material(
+              color: Colors.white,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: minTableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _headerCell(
+                                  width: 48,
+                                  child: _headerLabel('ICON'),
+                                ),
+                                _headerCell(
+                                  width: 48,
+                                  child: Tooltip(
+                                    message: 'E-certificate (opt-in)',
+                                    child: Icon(
+                                      Icons.workspace_premium,
+                                      size: 18,
+                                      color: AppTheme.sectionHeaderText(),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              _headerExpanded(
-                                flex: 22,
-                                child: _headerLabel(
-                                  'NAME & REG. NO.',
-                                  sort: _ParticipantHeaderSort.inactive,
+                                _headerExpanded(
+                                  flex: 22,
+                                  child: _headerLabel(
+                                    'NAME & REG. NO.',
+                                    sort: _ParticipantHeaderSort.inactive,
+                                  ),
                                 ),
-                              ),
-                              _headerExpanded(
-                                flex: 22,
-                                child: _headerLabel('TYPE & CATEGORY'),
-                              ),
-                              _headerExpanded(
-                                flex: 30,
-                                child: _headerLabel('INSTITUTION'),
-                              ),
-                              _headerCell(
-                                width: 92,
-                                child: _headerLabel(
-                                  'TOTAL SCORE',
-                                  align: TextAlign.right,
-                                  sort: _ParticipantHeaderSort.active,
+                                _headerExpanded(
+                                  flex: 22,
+                                  child: _headerLabel('TYPE & CATEGORY'),
                                 ),
-                              ),
-                              _headerCell(
-                                width: 72,
-                                last: true,
-                                child: _headerLabel(
-                                  'JURIES',
-                                  align: TextAlign.right,
-                                  sort: _ParticipantHeaderSort.inactive,
+                                _headerExpanded(
+                                  flex: 30,
+                                  child: _headerLabel('INSTITUTION'),
                                 ),
-                              ),
-                            ],
+                                _headerCell(
+                                  width: 92,
+                                  child: _headerLabel(
+                                    'TOTAL SCORE',
+                                    align: TextAlign.right,
+                                    sort: _ParticipantHeaderSort.active,
+                                  ),
+                                ),
+                                if (showGrades)
+                                  _headerCell(
+                                    width: 76,
+                                    child: _headerLabel(
+                                      'GRADE',
+                                      align: TextAlign.center,
+                                    ),
+                                  ),
+                                _headerCell(
+                                  width: 72,
+                                  last: true,
+                                  child: _headerLabel(
+                                    'JURIES',
+                                    align: TextAlign.right,
+                                    sort: _ParticipantHeaderSort.inactive,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
                         for (final row in items)
                           Material(
                             color: Colors.transparent,
@@ -792,6 +806,23 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                       ),
                                     ),
                                   ),
+                                  if (showGrades)
+                                    _bodyCell(
+                                      width: 76,
+                                      child: Align(
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          _gradeLabelForRow(
+                                            row,
+                                            controller.competitionGrades.toList(),
+                                          ),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   _bodyCell(
                                     width: 72,
                                     last: true,
@@ -926,9 +957,23 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
               ],
             ),
           );
+          });
         },
       ),
     );
+  }
+
+  static String _gradeLabelForRow(
+    Map<String, dynamic> row,
+    List<CompetitionGradeModel> grades,
+  ) {
+    final resolvedRow = Map<String, dynamic>.from(row);
+    CompetitionGradeResolver.applyGradeToRow(
+      resolvedRow,
+      grades,
+    );
+    final label = (resolvedRow['gradeName'] ?? '').toString().trim();
+    return label.isEmpty ? '—' : label;
   }
 }
 

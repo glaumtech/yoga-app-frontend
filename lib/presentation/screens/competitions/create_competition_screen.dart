@@ -14,6 +14,7 @@ import '../../../config/app_config.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../data/models/competition_model.dart';
 import '../../controllers/competition_controller.dart';
+import '../../models/competition_grade_entry.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/toggle_button_group.dart';
@@ -673,6 +674,8 @@ class CreateCompetitionScreen extends StatelessWidget {
         _buildCategoriesField(context, controller, isMobile, isTablet),
         gap,
         _buildStagesField(context, controller, isMobile, isTablet),
+        gap,
+        _buildGradesField(context, controller, isMobile, isTablet),
         gap,
         Obx(
           () => controller.selectedStages.isNotEmpty
@@ -3043,6 +3046,237 @@ class CreateCompetitionScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGradesField(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    final gradeNameWidth = isMobile ? null : (isTablet ? 152.0 : 168.0);
+    final markFieldWidth = isMobile ? 96.0 : 112.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(
+          label: 'GRADES :',
+          hintText:
+              'Optional. Add grade names with mark ranges (e.g. A+ for 90–100).',
+          hintSpacing: isMobile ? 6 : 4,
+          bottomSpacing: isMobile ? 10 : 8,
+        ),
+        _optionSectionCard(
+          child: Obx(() {
+            final readOnly = controller.isViewMode.value;
+            final entries = controller.gradeEntries;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (entries.isEmpty && readOnly)
+                  Text(
+                    'No grades configured',
+                    style: TextStyle(
+                      fontSize: isMobile ? 14 : 15,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ...List.generate(entries.length, (index) {
+                  final entry = entries[index];
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: index < entries.length - 1 ? 12 : 0),
+                    child: isMobile
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildGradeNameField(
+                                entry: entry,
+                                readOnly: readOnly,
+                                isMobile: isMobile,
+                                width: gradeNameWidth,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildGradeMarkField(
+                                      controller: entry.minMarkController,
+                                      label: 'Min',
+                                      readOnly: readOnly,
+                                      isMobile: isMobile,
+                                      width: markFieldWidth,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    child: Text(
+                                      'to',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[700],
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _buildGradeMarkField(
+                                      controller: entry.maxMarkController,
+                                      label: 'Max',
+                                      readOnly: readOnly,
+                                      isMobile: isMobile,
+                                      width: markFieldWidth,
+                                    ),
+                                  ),
+                                  if (!readOnly) ...[
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      onPressed: () =>
+                                          controller.removeGradeEntry(index),
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.red[700],
+                                      ),
+                                      tooltip: 'Remove grade',
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              _buildGradeNameField(
+                                entry: entry,
+                                readOnly: readOnly,
+                                isMobile: isMobile,
+                                width: gradeNameWidth,
+                              ),
+                              const SizedBox(width: 12),
+                              _buildGradeMarkField(
+                                controller: entry.minMarkController,
+                                label: 'Min',
+                                readOnly: readOnly,
+                                isMobile: isMobile,
+                                width: markFieldWidth,
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(
+                                  'to',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[700],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              _buildGradeMarkField(
+                                controller: entry.maxMarkController,
+                                label: 'Max',
+                                readOnly: readOnly,
+                                isMobile: isMobile,
+                                width: markFieldWidth,
+                              ),
+                              if (!readOnly)
+                                IconButton(
+                                  onPressed: () =>
+                                      controller.removeGradeEntry(index),
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red[700],
+                                  ),
+                                  tooltip: 'Remove grade',
+                                ),
+                            ],
+                          ),
+                  );
+                }),
+                if (!readOnly) ...[
+                  if (entries.isNotEmpty) const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: controller.addGradeEntry,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add More'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryColor,
+                      side: BorderSide(color: AppTheme.primaryColor),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 12 : 16,
+                        vertical: isMobile ? 8 : 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGradeNameField({
+    required CompetitionGradeEntry entry,
+    required bool readOnly,
+    required bool isMobile,
+    double? width,
+  }) {
+    final field = TextFormField(
+      controller: entry.nameController,
+      readOnly: readOnly,
+      decoration: InputDecoration(
+        labelText: 'Grade name',
+        hintText: 'e.g. A+',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        filled: true,
+        fillColor: readOnly ? Colors.grey[200] : Colors.white,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: isMobile ? 12 : 14,
+        ),
+        isDense: isMobile,
+      ),
+    );
+
+    if (width == null) return field;
+    return SizedBox(width: width, child: field);
+  }
+
+  Widget _buildGradeMarkField({
+    required TextEditingController controller,
+    required String label,
+    required bool readOnly,
+    required bool isMobile,
+    required double width,
+  }) {
+    return SizedBox(
+      width: width,
+      child: TextFormField(
+        controller: controller,
+        readOnly: readOnly,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: '0-100',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          filled: true,
+          fillColor: readOnly ? Colors.grey[200] : Colors.white,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: isMobile ? 12 : 14,
+          ),
+          isDense: isMobile,
+        ),
+      ),
     );
   }
 

@@ -146,5 +146,15 @@ class ReportsController extends GetxController {
     selectedCompetitionId.value = competitionId;
     await loadReport(competitionId);
   }
+
+  void resetSession() {
+    isLoading.value = false;
+    errorMessage.value = '';
+    competitions.clear();
+    selectedCompetitionId.value = null;
+    report.value = null;
+    navigateToReportTabId.value = null;
+    pendingParticipantsPreset.value = null;
+  }
 }
 

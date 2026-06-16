@@ -160,6 +160,20 @@ class ReportsRegisteredParticipantsTabController
   }
 
   @override
+  void resetSession() {
+    super.resetSession();
+    selectedCategoryTypes.clear();
+    spotRegistrationFilter.value = null;
+    filterAge.value = null;
+    registrationPrefix.value = '';
+    selectedInstitutionKind.value = null;
+    selectedInstitutionDisplayName.value = null;
+    requireInstitutionFilter.value = false;
+    _lastCompetitionId = null;
+    _competitionLoadGeneration = 0;
+  }
+
+  @override
   int get activeFilterCount {
     var n = super.activeFilterCount;
     if (selectedCategoryTypes.isNotEmpty) n++;

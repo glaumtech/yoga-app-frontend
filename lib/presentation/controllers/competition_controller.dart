@@ -16,7 +16,9 @@ import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/photo_upload_processor.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
+import '../../data/models/competition_grade_model.dart';
 import '../../data/models/user_management_model.dart';
+import '../models/competition_grade_entry.dart';
 import '../../data/models/competition_option_model.dart';
 import '../../core/utils/subscription_catalog_filter.dart';
 import '../../data/models/subscription_mode_model.dart';
@@ -190,6 +192,8 @@ class CompetitionController extends GetxController {
   final RxList<int> selectedStageIds = <int>[].obs;
   final RxMap<String, List<int>> stageGroups = <String, List<int>>{}
       .obs; // Key: stage ID as string, Value: list of group IDs
+
+  final RxList<CompetitionGradeEntry> gradeEntries = <CompetitionGradeEntry>[].obs;
 
   // Helper getters for backward compatibility (for UI display)
   List<String> get selectedPrizes => selectedPrizeIds
@@ -677,6 +681,7 @@ class CompetitionController extends GetxController {
   void onClose() {
     _debounceTimer?.cancel();
     _razorpayCheckout.dispose();
+    clearGradeEntries();
     competitionNameController.dispose();
     descriptionController.dispose();
     addressController.dispose();
@@ -1313,6 +1318,63 @@ class CompetitionController extends GetxController {
     }
   }
 
+  void addGradeEntry() {
+    gradeEntries.add(CompetitionGradeEntry());
+  }
+
+  void removeGradeEntry(int index) {
+    if (index < 0 || index >= gradeEntries.length) return;
+    gradeEntries[index].dispose();
+    gradeEntries.removeAt(index);
+  }
+
+  void clearGradeEntries() {
+    for (final entry in gradeEntries) {
+      entry.dispose();
+    }
+    gradeEntries.clear();
+  }
+
+  List<CompetitionGradeModel> buildGradesForSubmit() {
+    return gradeEntries
+        .map((entry) => entry.toModel())
+        .whereType<CompetitionGradeModel>()
+        .toList();
+  }
+
+  String? validateGradeEntries() {
+    final names = <String>{};
+    for (final entry in gradeEntries) {
+      if (!entry.hasAnyInput) continue;
+      if (!entry.isComplete) {
+        return 'Please enter grade name and mark range for each grade row';
+      }
+      final model = entry.toModel();
+      if (model == null) {
+        return 'Mark range must be whole numbers between 0 and 100';
+      }
+      if (model.markRangeMin < 0 || model.markRangeMax > 100) {
+        return 'Mark range must be between 0 and 100 for grade "${model.gradeName}"';
+      }
+      if (model.markRangeMax < model.markRangeMin) {
+        return 'Maximum mark must be greater than or equal to minimum for grade "${model.gradeName}"';
+      }
+      final normalized = model.gradeName.toLowerCase();
+      if (names.contains(normalized)) {
+        return 'Duplicate grade name: ${model.gradeName}';
+      }
+      names.add(normalized);
+    }
+    return null;
+  }
+
+  void _loadGradeEntries(List<CompetitionGradeModel>? grades) {
+    clearGradeEntries();
+    if (grades == null || grades.isEmpty) return;
+    gradeEntries.addAll(grades.map(CompetitionGradeEntry.fromModel));
+    gradeEntries.refresh();
+  }
+
   static const String championsCategoryName = 'CHAMPIONS';
 
   bool isChampionsCategoryName(String categoryName) =>
@@ -1849,6 +1911,12 @@ class CompetitionController extends GetxController {
         return false;
       }
 
+      final gradeError = validateGradeEntries();
+      if (gradeError != null) {
+        _notifyError(gradeError);
+        return false;
+      }
+
       // Validate brochure upload
       if (!validateBrochure()) {
         _notifyError(errorMessage.value);
@@ -1902,6 +1970,7 @@ class CompetitionController extends GetxController {
         stageGroups: Map<String, List<int>>.from(stageGroups),
         championshipStyle: championshipStyle.value?.apiValue,
         bestSchoolAwardMinParticipants: _parsedBestSchoolAwardMinParticipants(),
+        grades: buildGradesForSubmit(),
       );
 
       final response = await _repository.createCompetition(
@@ -2011,6 +2080,12 @@ class CompetitionController extends GetxController {
         return false;
       }
 
+      final gradeError = validateGradeEntries();
+      if (gradeError != null) {
+        _notifyError(gradeError);
+        return false;
+      }
+
       // Brochure validation - optional for update (only if new file is selected)
       final hasNewBrochure =
           brochureFile.value != null ||
@@ -2044,6 +2119,7 @@ class CompetitionController extends GetxController {
         stageGroups: Map<String, List<int>>.from(stageGroups),
         championshipStyle: championshipStyle.value?.apiValue,
         bestSchoolAwardMinParticipants: _parsedBestSchoolAwardMinParticipants(),
+        grades: buildGradesForSubmit(),
       );
 
       final response = await _repository.updateCompetition(
@@ -2234,7 +2310,17 @@ class CompetitionController extends GetxController {
       await loadOptions();
     }
 
-    _loadCompetitionData(competition, isView: isView);
+    var competitionToLoad = competition;
+    final numericId = int.tryParse(competition.id ?? '');
+    if (numericId != null) {
+      final response = await _repository.getCompetitionById(numericId);
+      if (response.success && response.data != null) {
+        competitionToLoad = response.data!;
+        _upsertCompetition(competitionToLoad);
+      }
+    }
+
+    _loadCompetitionData(competitionToLoad, isView: isView);
   }
 
   void _loadCompetitionData(
@@ -2400,6 +2486,8 @@ class CompetitionController extends GetxController {
       stageGroups.clear();
     }
 
+    _loadGradeEntries(competition.grades);
+
     // Load brochure URL if available
     if (competition.brochureUrl != null &&
         competition.brochureUrl!.isNotEmpty) {
@@ -2554,6 +2642,7 @@ class CompetitionController extends GetxController {
     categoryAmounts.clear();
     selectedStageIds.clear();
     stageGroups.clear();
+    clearGradeEntries();
     brochureFile.value = null;
     brochureFileLocal.value = null;
     brochureBytes.value = null;

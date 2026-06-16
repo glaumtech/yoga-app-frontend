@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'competition_grade_model.dart';
+
 class CompetitionModel {
   final String? id;
   final String competitionName;
@@ -35,6 +37,7 @@ class CompetitionModel {
   final String? registrationUrl;
   /// SEPARATE_CATEGORY or FROM_FIRST_PLACE_WINNERS
   final String? championshipStyle;
+  final List<CompetitionGradeModel>? grades;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -68,6 +71,7 @@ class CompetitionModel {
     this.brochureUrl,
     this.registrationUrl,
     this.championshipStyle,
+    this.grades,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -338,6 +342,16 @@ class CompetitionModel {
       championshipStyle:
           json['championshipStyle']?.toString() ??
           json['championship_style']?.toString(),
+      grades: json['grades'] != null
+          ? (json['grades'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) => CompetitionGradeModel.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : null,
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])
@@ -392,6 +406,9 @@ class CompetitionModel {
         'stageGroups': stageGroups,
       if (championshipStyle != null && championshipStyle!.trim().isNotEmpty)
         'championshipStyle': championshipStyle!.trim(),
+      'grades': (grades ?? const <CompetitionGradeModel>[])
+          .map((grade) => grade.toJson())
+          .toList(),
       // Also include names for backward compatibility/display
       if (prizes != null && prizes!.isNotEmpty && includeMetadata)
         'prizes': prizes,
@@ -435,6 +452,7 @@ class CompetitionModel {
     String? brochureUrl,
     String? registrationUrl,
     String? championshipStyle,
+    List<CompetitionGradeModel>? grades,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -469,6 +487,7 @@ class CompetitionModel {
       brochureUrl: brochureUrl ?? this.brochureUrl,
       registrationUrl: registrationUrl ?? this.registrationUrl,
       championshipStyle: championshipStyle ?? this.championshipStyle,
+      grades: grades ?? this.grades,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,

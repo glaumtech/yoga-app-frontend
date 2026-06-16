@@ -17,6 +17,9 @@ import 'school_controller.dart';
 import 'reports_controller.dart';
 import 'organization_setup_controller.dart';
 import 'settings_controller.dart';
+import 'reports_participants_tab_controller.dart';
+import 'reports_registered_participants_tab_controller.dart';
+import 'reports_users_tab_controller.dart';
 import '../../core/utils/permission_store.dart';
 import '../../core/theme/role_theme_controller.dart';
 
@@ -378,6 +381,8 @@ class AuthController extends GetxController {
     isLoading.value = false;
     errorMessage.value = '';
 
+    _resetReportsSession();
+
     // Reset all controllers to clear app data
     // AdminController removed - no longer needed
 
@@ -449,9 +454,7 @@ class AuthController extends GetxController {
         }
       } catch (_) {}
       try {
-        if (Get.isRegistered<ReportsController>()) {
-          Get.delete<ReportsController>(force: true);
-        }
+        _disposeReportsControllers();
       } catch (_) {}
       try {
         if (Get.isRegistered<OrganizationSetupController>()) {
@@ -505,10 +508,48 @@ class AuthController extends GetxController {
         }
       } catch (_) {}
       safeDelete<SchoolController>();
-      safeDelete<ReportsController>();
+      _disposeReportsControllers();
       safeDelete<OrganizationSetupController>();
       safeDelete<SettingsController>();
     });
+  }
+
+  void _resetReportsSession() {
+    try {
+      if (Get.isRegistered<ReportsRegisteredParticipantsTabController>()) {
+        Get.find<ReportsRegisteredParticipantsTabController>().resetSession();
+      }
+    } catch (_) {}
+    try {
+      if (Get.isRegistered<ReportsParticipantsTabController>()) {
+        Get.find<ReportsParticipantsTabController>().resetSession();
+      }
+    } catch (_) {}
+    try {
+      if (Get.isRegistered<ReportsUsersTabController>()) {
+        Get.find<ReportsUsersTabController>().resetSession();
+      }
+    } catch (_) {}
+    try {
+      if (Get.isRegistered<ReportsController>()) {
+        Get.find<ReportsController>().resetSession();
+      }
+    } catch (_) {}
+  }
+
+  void _disposeReportsControllers() {
+    void tryDelete<T>() {
+      try {
+        if (Get.isRegistered<T>()) {
+          Get.delete<T>(force: true);
+        }
+      } catch (_) {}
+    }
+
+    tryDelete<ReportsRegisteredParticipantsTabController>();
+    tryDelete<ReportsParticipantsTabController>();
+    tryDelete<ReportsUsersTabController>();
+    tryDelete<ReportsController>();
   }
 
   bool get isAuthenticated => currentUser.value != null;

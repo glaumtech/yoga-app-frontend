@@ -1049,6 +1049,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           final inst = (m['institutionName'] ?? '').toString();
           final winnerGroupName = (m['groupName'] ?? '').toString();
           final totalScore = (m['totalScore'] ?? m['avgScore'] ?? 0).toString();
+          final gradeName = (m['gradeName'] ?? '').toString().trim();
 
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
@@ -1126,6 +1127,59 @@ class _ReportsScreenState extends State<ReportsScreen>
                     ],
                   ),
                 ),
+                const SizedBox(width: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'TOTAL',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        Text(
+                          totalScore,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (gradeName.isNotEmpty) ...[
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'GRADE',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          Text(
+                            gradeName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+                SizedBox(width: isMobile ? 20 : 28),
                 IconButton(
                   tooltip: 'Download certificate',
                   padding: EdgeInsets.zero,
@@ -1164,28 +1218,6 @@ class _ReportsScreenState extends State<ReportsScreen>
                       regNoForFilename: regNo,
                     );
                   },
-                ),
-                const SizedBox(width: 4),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'TOTAL',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                    Text(
-                      totalScore,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
