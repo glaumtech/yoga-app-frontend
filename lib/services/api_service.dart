@@ -24,7 +24,8 @@ class APIService {
           header ?? {'Content-Type': 'application/json'};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint = url == EndPoints.logIn ||
+      final isAuthEndpoint =
+          url == EndPoints.logIn ||
           url == EndPoints.register ||
           url == EndPoints.userLogin ||
           url == EndPoints.userLoginWithToken;
@@ -87,7 +88,11 @@ class APIService {
         case APIType.aDelete:
           log('--- DELETE URL---$fullUrl');
           result = await http
-              .delete(Uri.parse(fullUrl), headers: headers)
+              .delete(
+                Uri.parse(fullUrl),
+                headers: headers,
+                body: body != null ? jsonEncode(body) : null,
+              )
               .timeout(BaseUrl.apiTimeout);
           break;
       }
@@ -383,7 +388,8 @@ class APIService {
       Map<String, String> headers = header ?? {};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint = url == EndPoints.logIn ||
+      final isAuthEndpoint =
+          url == EndPoints.logIn ||
           url == EndPoints.register ||
           url == EndPoints.userLogin ||
           url == EndPoints.userLoginWithToken;
@@ -464,7 +470,8 @@ class APIService {
       Map<String, String> headers = header ?? {};
 
       // Automatically get bearer token from storage (skip for login/signup)
-      final isAuthEndpoint = url == EndPoints.logIn ||
+      final isAuthEndpoint =
+          url == EndPoints.logIn ||
           url == EndPoints.register ||
           url == EndPoints.userLogin ||
           url == EndPoints.userLoginWithToken;

@@ -700,13 +700,15 @@ class CompetitionsListScreen extends StatelessWidget {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
-          // IconButton(
-          //   icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-          //   onPressed: () => controller.deleteCompetition(context, competition),
-          //   tooltip: 'Delete',
-          //   padding: EdgeInsets.zero,
-          //   constraints: const BoxConstraints(),
-          // ),
+          IconButton(
+            icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+            onPressed: () async {
+              await controller.deleteCompetition(context, competition);
+            },
+            tooltip: 'Delete',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
         ],
       ),
     );

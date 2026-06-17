@@ -118,6 +118,8 @@ class EndPoints {
   static String competitionList = '/competition/list';
   static String competitionUpdate(String id) => '/competition/$id';
   static String competitionById(String id) => '/competition/$id';
+  static String competitionDeletionInfo(String id) =>
+      '/competition/$id/deletion-info';
   static String competitionBrochure(String id) => '/competition/$id/brochure';
   static String competitionRegistrationQr(String id) =>
       '/competition/$id/registration-qr';

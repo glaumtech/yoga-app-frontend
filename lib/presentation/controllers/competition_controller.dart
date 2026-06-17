@@ -156,9 +156,8 @@ class CompetitionController extends GetxController {
   /// On Demand only: new competitions require maintenance payment before save.
   bool get requiresPrepaidCompetitionPayment => !isEditMode.value;
 
-  String get createCompetitionButtonLabel => requiresPrepaidCompetitionPayment
-      ? 'Pay and Create Competition'
-      : 'SAVE';
+  String get createCompetitionButtonLabel =>
+      requiresPrepaidCompetitionPayment ? 'Pay and Create Competition' : 'SAVE';
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -194,7 +193,8 @@ class CompetitionController extends GetxController {
   final RxMap<String, List<int>> stageGroups = <String, List<int>>{}
       .obs; // Key: stage ID as string, Value: list of group IDs
 
-  final RxList<CompetitionGradeEntry> gradeEntries = <CompetitionGradeEntry>[].obs;
+  final RxList<CompetitionGradeEntry> gradeEntries =
+      <CompetitionGradeEntry>[].obs;
 
   // Helper getters for backward compatibility (for UI display)
   List<String> get selectedPrizes => selectedPrizeIds
@@ -2524,72 +2524,231 @@ class CompetitionController extends GetxController {
   }
 
   // Delete competition — DELETE /competition/{id}
-  void deleteCompetition(BuildContext context, CompetitionModel competition) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Competition'),
-        content: Text(
-          'Are you sure you want to delete "${competition.competitionName}"? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+  Future<void> deleteCompetition(
+    BuildContext context,
+    CompetitionModel competition,
+  ) async {
+    final competitionId = competition.id?.trim();
+    if (competitionId == null || competitionId.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid competition ID'),
+            backgroundColor: Colors.red,
           ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              final id = competition.id?.trim();
-              if (id == null || id.isEmpty) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Invalid competition ID'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-                return;
-              }
+        );
+      }
+      return;
+    }
 
-              isLoading.value = true;
-              try {
-                final result = await _repository.deleteCompetition(id);
-                if (result.success) {
-                  await loadCompetitions();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          result.message ?? 'Competition deleted successfully',
-                        ),
-                        backgroundColor: Colors.green,
+    String selectedReason = 'REFUND';
+    final reasonController = TextEditingController();
+    List<Map<String, dynamic>> paidRegistrations = [];
+    bool loadingPaid = true;
+    String? loadError;
+
+    final info = await _repository.getCompetitionDeletionInfo(competitionId);
+    if (info.success && info.data != null) {
+      final raw = info.data!['paidRegistrations'];
+      if (raw is List) {
+        paidRegistrations = raw
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+      }
+      loadingPaid = false;
+    } else {
+      loadError = info.message ?? 'Could not load paid participant list';
+      loadingPaid = false;
+    }
+
+    if (!context.mounted) {
+      reasonController.dispose();
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          final showReasonField = selectedReason == 'OTHERS';
+          return AlertDialog(
+            title: const Text('Delete Competition'),
+            content: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Delete "${competition.competitionName}"? '
+                      'All competition-related data will be removed. '
+                      'This cannot be undone.',
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Refunds are handled by the organizer. '
+                      'The app does not process refunds.',
+                      style: TextStyle(fontSize: 13, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: selectedReason,
+                      decoration: const InputDecoration(
+                        labelText: 'Reason for deletion',
+                        border: OutlineInputBorder(),
                       ),
-                    );
-                  }
-                } else {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          result.message ?? 'Failed to delete competition',
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'REFUND',
+                          child: Text('Refund'),
                         ),
-                        backgroundColor: Colors.red,
+                        DropdownMenuItem(
+                          value: 'OTHERS',
+                          child: Text('Others'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => selectedReason = value);
+                      },
+                    ),
+                    if (showReasonField) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: reasonController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Reason (optional)',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
+                    ],
+                    if (selectedReason == 'REFUND') ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Participants with paid registration '
+                        '(${paidRegistrations.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      if (loadingPaid)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (loadError != null)
+                        Text(
+                          loadError,
+                          style: const TextStyle(color: Colors.orange),
+                        )
+                      else if (paidRegistrations.isEmpty)
+                        const Text(
+                          'No paid registrations found for this competition.',
+                          style: TextStyle(fontSize: 13),
+                        )
+                      else
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 180),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: paidRegistrations.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (_, index) {
+                              final row = paidRegistrations[index];
+                              final name =
+                                  row['participantName']?.toString() ?? '—';
+                              final regNo =
+                                  row['registrationNo']?.toString() ?? '';
+                              final amount = row['amount'];
+                              final teacherCell =
+                                  row['yogaTeacherCell']?.toString() ?? '';
+                              final amountLabel = amount == null
+                                  ? ''
+                                  : ' • ₹${amount.toString()}';
+                              return ListTile(
+                                dense: true,
+                                title: Text(name),
+                                subtitle: Text(
+                                  [
+                                    if (regNo.isNotEmpty) 'Reg: $regNo',
+                                    if (teacherCell.isNotEmpty)
+                                      'Teacher cell: $teacherCell',
+                                  ].join(' • '),
+                                ),
+                                trailing: Text(
+                                  amountLabel,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(dialogContext);
+                  isLoading.value = true;
+                  try {
+                    final result = await _repository.deleteCompetition(
+                      competitionId,
+                      deletionReasonType: selectedReason,
+                      deletionReasonNote: showReasonField
+                          ? reasonController.text
+                          : null,
                     );
+                    if (result.success) {
+                      await loadCompetitions();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              result.message ??
+                                  'Competition deleted successfully',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } else if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            result.message ?? 'Failed to delete competition',
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  } finally {
+                    isLoading.value = false;
                   }
-                }
-              } finally {
-                isLoading.value = false;
-              }
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
+          );
+        },
       ),
     );
+
+    reasonController.dispose();
   }
 
   // Get filtered competitions (now handled by API, but kept for backward compatibility)
