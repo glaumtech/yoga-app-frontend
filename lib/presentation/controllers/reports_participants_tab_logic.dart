@@ -52,10 +52,22 @@ class ReportsParticipantsTabLogic {
     Uint8List bytes,
     String filename,
   ) async {
+    await downloadFileBytes(
+      bytes,
+      filename,
+      mimeType: 'application/pdf',
+    );
+  }
+
+  static Future<void> downloadFileBytes(
+    Uint8List bytes,
+    String filename, {
+    required String mimeType,
+  }) async {
     if (bytes.isEmpty) return;
 
     if (kIsWeb) {
-      final blob = html.Blob([bytes]);
+      final blob = html.Blob([bytes], mimeType);
       final blobUrl = html.Url.createObjectUrlFromBlob(blob);
       html.AnchorElement(href: blobUrl)
         ..setAttribute('download', filename)
@@ -64,7 +76,7 @@ class ReportsParticipantsTabLogic {
       return;
     }
 
-    final dataUri = Uri.dataFromBytes(bytes, mimeType: 'application/pdf');
+    final dataUri = Uri.dataFromBytes(bytes, mimeType: mimeType);
     if (await canLaunchUrl(dataUri)) {
       await launchUrl(dataUri, mode: LaunchMode.externalApplication);
     }
