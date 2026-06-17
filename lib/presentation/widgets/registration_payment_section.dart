@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../core/utils/subscription_catalog_filter.dart';
 import '../../data/models/competition_model.dart';
 import '../controllers/competition_controller.dart';
 import '../controllers/participant_controller.dart';
@@ -27,15 +26,14 @@ class RegistrationPaymentSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      if (!_isOnlineRegistrationModel() && !_hasCategoryFee()) {
-        return const SizedBox.shrink();
-      }
+    if (!_hasCategoryFee()) {
+      return const SizedBox.shrink();
+    }
 
-      final fee = _resolveCategoryFee();
-      final open = homeCompetition?.registrationOpen ?? true;
+    final fee = _resolveCategoryFee();
+    final open = homeCompetition?.registrationOpen ?? true;
 
-      return Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
@@ -69,42 +67,9 @@ class RegistrationPaymentSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Obx(() => _buildStatusChip(paymentController.paymentStatus.value)),
-          Obx(() {
-            final err = paymentController.paymentError.value;
-            if (err.isEmpty) return const SizedBox.shrink();
-            return Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.only(top: 8),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
-              ),
-              child: Text(
-                err,
-                style: TextStyle(color: Colors.red.shade800, fontSize: 13),
-              ),
-            );
-          }),
         ],
       ],
     );
-    });
-  }
-
-  bool _isOnlineRegistrationModel() {
-    if (competitionController?.isOnDemandOrg.value == true ||
-        competitionController?.requiresPrepaidCompetitionPayment == true) {
-      return true;
-    }
-    final homeModel = homeCompetition?.paymentModel;
-    if (homeModel != null && homeModel.isNotEmpty) {
-      return homeModel.toUpperCase() ==
-          SubscriptionCatalogFilter.onDemandModeKey;
-    }
-    final orgModel = competitionController?.organizationPaymentModel.value ?? '';
-    return orgModel.toUpperCase() == SubscriptionCatalogFilter.onDemandModeKey;
   }
 
   Widget _buildStatusChip(RegistrationPaymentUiStatus status) {

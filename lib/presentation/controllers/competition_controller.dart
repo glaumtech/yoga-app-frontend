@@ -146,18 +146,19 @@ class CompetitionController extends GetxController {
   final RxnInt selectedSubscriptionPackageId = RxnInt();
   final RxBool showSubscriptionAddonOptions = false.obs;
 
-  final RxBool isOnDemandOrg = false.obs;
+  final RxBool isOnDemandOrg = true.obs;
   final RxBool isLoadingOnDemandContext = false.obs;
   final RxInt onDemandMaintenanceFeePaise = 0.obs;
-  final RxString organizationPaymentModel = 'ORG_SUBSCRIPTION'.obs;
+  final RxString organizationPaymentModel =
+      SubscriptionCatalogFilter.onDemandModeKey.obs;
   final RxBool isProcessingCompetitionPayment = false.obs;
 
-  bool get requiresPrepaidCompetitionPayment =>
-      organizationPaymentModel.value.toUpperCase() ==
-      SubscriptionCatalogFilter.onDemandModeKey;
+  /// On Demand only: new competitions require maintenance payment before save.
+  bool get requiresPrepaidCompetitionPayment => !isEditMode.value;
 
-  String get createCompetitionButtonLabel =>
-      requiresPrepaidCompetitionPayment ? 'Pay and Create Competition' : 'SAVE';
+  String get createCompetitionButtonLabel => requiresPrepaidCompetitionPayment
+      ? 'Pay and Create Competition'
+      : 'SAVE';
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -583,17 +584,18 @@ class CompetitionController extends GetxController {
             ? feePaise
             : int.tryParse(feePaise?.toString() ?? '') ?? 0;
       } else {
-        isOnDemandOrg.value = false;
-        organizationPaymentModel.value = 'ORG_SUBSCRIPTION';
-        onDemandMaintenanceFeePaise.value = 0;
+        _applyOnDemandDefaults();
       }
     } catch (_) {
-      isOnDemandOrg.value = false;
-      organizationPaymentModel.value = 'ORG_SUBSCRIPTION';
-      onDemandMaintenanceFeePaise.value = 0;
+      _applyOnDemandDefaults();
     } finally {
       isLoadingOnDemandContext.value = false;
     }
+  }
+
+  void _applyOnDemandDefaults() {
+    isOnDemandOrg.value = true;
+    organizationPaymentModel.value = SubscriptionCatalogFilter.onDemandModeKey;
   }
 
   // Load all options (categories, prizes, stages, groups) from API
