@@ -539,8 +539,6 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       Obx(
                         () => RegistrationPaymentSection(
                           participantController: participantController,
-                          paymentController: participantController
-                              .registrationPaymentController,
                           homeCompetition: _homeCompetitionForRegistration(
                             participantController,
                             competitionController,

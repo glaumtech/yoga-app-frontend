@@ -109,10 +109,10 @@ class BulkRegistrationScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    // Load competitions if empty
-    if (competitionController.competitions.isEmpty &&
+    // Load branch/org-scoped competitions for the dropdown.
+    if (!competitionController.isLoadingHomeCompetitions.value &&
         !competitionController.isLoading.value) {
-      competitionController.loadCompetitions();
+      competitionController.ensureRegistrationCompetitionChoicesLoaded();
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {

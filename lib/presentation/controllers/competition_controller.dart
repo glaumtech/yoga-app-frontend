@@ -113,6 +113,9 @@ class CompetitionController extends GetxController {
 
   /// Tracks which login/branch scope [homeCompetitions] was loaded for.
   String? _homeCompetitionsScope;
+
+  /// Tracks which scope [competitions] dropdown choices were synced for.
+  String? _competitionChoicesScope;
   final RxString searchQuery = ''.obs;
   final RxString selectedFilter = ''.obs;
   final RxBool isListView = false.obs; // Toggle between create and list view
@@ -149,6 +152,10 @@ class CompetitionController extends GetxController {
   final RxBool isOnDemandOrg = true.obs;
   final RxBool isLoadingOnDemandContext = false.obs;
   final RxInt onDemandMaintenanceFeePaise = 0.obs;
+  final RxDouble onDemandPaymentGatewayFeePercent = 3.0.obs;
+  final RxDouble onDemandPlatformFeePercent = 3.0.obs;
+  final RxBool onDemandExtraFeeForCompetition = true.obs;
+  final RxBool onDemandExtraFeeForParticipantReg = false.obs;
   final RxString organizationPaymentModel =
       SubscriptionCatalogFilter.onDemandModeKey.obs;
   final RxBool isProcessingCompetitionPayment = false.obs;
@@ -399,6 +406,13 @@ class CompetitionController extends GetxController {
 
   void invalidateHomeCompetitionsScope() {
     _homeCompetitionsScope = null;
+    homeCompetitions.clear();
+    invalidateCompetitionChoicesScope();
+  }
+
+  void invalidateCompetitionChoicesScope() {
+    _competitionChoicesScope = null;
+    competitions.clear();
   }
 
   /// Loads home competitions when scope changes or cache was invalidated.
@@ -435,25 +449,33 @@ class CompetitionController extends GetxController {
     }
   }
 
-  /// Populates [competitions] for the registration competition dropdown.
-  /// Uses the public home list first; falls back to the admin list when empty.
-  Future<void> ensureRegistrationCompetitionChoicesLoaded() async {
-    if (competitions.isNotEmpty) return;
-
-    await ensureHomeCompetitionsLoaded();
-
-    if (homeCompetitions.isNotEmpty) {
-      for (final home in homeCompetitions) {
-        final id = home.id?.toString();
-        if (id == null || id.isEmpty) continue;
-        final existing = competitions.firstWhereOrNull((c) => c.id == id);
-        _upsertCompetition(_competitionFromHome(home, existing));
-      }
-      if (competitions.isNotEmpty) return;
+  /// Populates [competitions] for registration/admin form dropdowns.
+  /// Uses the branch/org-scoped public list; falls back to the admin list when empty.
+  Future<void> ensureRegistrationCompetitionChoicesLoaded({
+    bool force = false,
+  }) async {
+    final scope = _homeCompetitionsScopeKey();
+    if (!force &&
+        _competitionChoicesScope == scope &&
+        competitions.isNotEmpty) {
+      return;
     }
 
-    if (!isLoading.value) {
-      await loadCompetitions();
+    await loadCompetitionsForHome(
+      force: force || _homeCompetitionsScope != scope,
+    );
+
+    competitions.clear();
+    for (final home in homeCompetitions) {
+      final id = home.id?.toString();
+      if (id == null || id.isEmpty) continue;
+      _upsertCompetition(_competitionFromHome(home, null));
+    }
+    _competitionChoicesScope = scope;
+
+    if (competitions.isEmpty && !isLoading.value) {
+      await loadCompetitions(resetPage: true);
+      _competitionChoicesScope = scope;
     }
   }
 
@@ -583,6 +605,14 @@ class CompetitionController extends GetxController {
         onDemandMaintenanceFeePaise.value = feePaise is int
             ? feePaise
             : int.tryParse(feePaise?.toString() ?? '') ?? 0;
+        onDemandPaymentGatewayFeePercent.value =
+            _parsePercent(data['paymentGatewayFeePercent'], 3.0);
+        onDemandPlatformFeePercent.value =
+            _parsePercent(data['platformFeePercent'], 3.0);
+        onDemandExtraFeeForCompetition.value =
+            data['extraFeeIncludedForCompetition'] == true;
+        onDemandExtraFeeForParticipantReg.value =
+            data['extraFeeIncludedForParticipantReg'] == true;
       } else {
         _applyOnDemandDefaults();
       }
@@ -596,7 +626,38 @@ class CompetitionController extends GetxController {
   void _applyOnDemandDefaults() {
     isOnDemandOrg.value = true;
     organizationPaymentModel.value = SubscriptionCatalogFilter.onDemandModeKey;
+    onDemandPaymentGatewayFeePercent.value = 3.0;
+    onDemandPlatformFeePercent.value = 3.0;
+    onDemandExtraFeeForCompetition.value = true;
+    onDemandExtraFeeForParticipantReg.value = false;
   }
+
+  double _parsePercent(dynamic raw, double fallback) {
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw?.toString() ?? '') ?? fallback;
+  }
+
+  double calculateOnDemandTotalWithFees(
+    double baseAmount, {
+    bool forParticipantRegistration = false,
+  }) {
+    final feesIncluded = forParticipantRegistration
+        ? onDemandExtraFeeForParticipantReg.value
+        : onDemandExtraFeeForCompetition.value;
+    if (feesIncluded) {
+      return baseAmount;
+    }
+    final gateway =
+        baseAmount * onDemandPaymentGatewayFeePercent.value / 100;
+    final platform = baseAmount * onDemandPlatformFeePercent.value / 100;
+    return baseAmount + gateway + platform;
+  }
+
+  double maintenanceFeeRupees() =>
+      onDemandMaintenanceFeePaise.value / 100.0;
+
+  double calculateCompetitionMaintenanceTotal() =>
+      calculateOnDemandTotalWithFees(maintenanceFeeRupees());
 
   // Load all options (categories, prizes, stages, groups) from API
   Future<void> loadOptions() async {

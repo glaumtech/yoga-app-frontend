@@ -38,9 +38,8 @@ class UserManagementScreen extends StatelessWidget {
 
     // Load competitions if empty - defer to avoid build phase error
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (competitionController.competitions.isEmpty &&
-          !competitionController.isLoading.value) {
-        competitionController.loadCompetitions();
+      if (!competitionController.isLoadingHomeCompetitions.value) {
+        competitionController.ensureRegistrationCompetitionChoicesLoaded();
       }
       // Load user types if empty when screen first builds
       if (userController.userTypesList.isEmpty &&

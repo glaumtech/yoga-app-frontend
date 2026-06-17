@@ -1257,7 +1257,7 @@ class ParticipantController extends GetxController {
     _ensureParticipantsListRunning = true;
     try {
       if (competitionController.competitions.isEmpty) {
-        await competitionController.loadCompetitions();
+        await competitionController.ensureRegistrationCompetitionChoicesLoaded();
       }
 
       var eventId = selectedEventId.value;

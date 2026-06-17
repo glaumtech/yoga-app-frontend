@@ -3,12 +3,10 @@ import 'package:get/get.dart';
 import '../../data/models/competition_model.dart';
 import '../controllers/competition_controller.dart';
 import '../controllers/participant_controller.dart';
-import '../controllers/payment_controller.dart';
 
 /// Online registration fee summary for On Demand (pay-per-participant) competitions.
 class RegistrationPaymentSection extends StatelessWidget {
   final ParticipantController participantController;
-  final PaymentController paymentController;
   final HomeCompetitionModel? homeCompetition;
   final CompetitionController? competitionController;
   final int? categoryId;
@@ -17,7 +15,6 @@ class RegistrationPaymentSection extends StatelessWidget {
   const RegistrationPaymentSection({
     super.key,
     required this.participantController,
-    required this.paymentController,
     this.homeCompetition,
     this.competitionController,
     this.categoryId,
@@ -30,7 +27,6 @@ class RegistrationPaymentSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final fee = _resolveCategoryFee();
     final open = homeCompetition?.registrationOpen ?? true;
 
     return Column(
@@ -38,9 +34,9 @@ class RegistrationPaymentSection extends StatelessWidget {
       children: [
         Text(
           'Registration fee',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         if (!open)
@@ -55,48 +51,41 @@ class RegistrationPaymentSection extends StatelessWidget {
             ),
           )
         else ...[
-          if (fee != null && fee > 0)
-            Text(
-              'Amount: ₹${fee.toStringAsFixed(0)}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+          Obx(() {
+            final fee = _resolveCategoryFee();
+            if (fee == null || fee <= 0) return const SizedBox.shrink();
+            final total = _resolveTotalPayable(fee);
+            return Text(
+              'Total payable: ₹${total.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            );
+          }),
           const SizedBox(height: 8),
           const Text(
             'Payment is collected online when you click Pay & Register Now.',
             style: TextStyle(fontSize: 13, color: Colors.black87),
           ),
-          const SizedBox(height: 8),
-          Obx(() => _buildStatusChip(paymentController.paymentStatus.value)),
         ],
       ],
     );
   }
 
-  Widget _buildStatusChip(RegistrationPaymentUiStatus status) {
-    late final Color color;
-    late final String label;
-    switch (status) {
-      case RegistrationPaymentUiStatus.processing:
-        color = Colors.blue;
-        label = 'Processing payment…';
-      case RegistrationPaymentUiStatus.paid:
-        color = Colors.green;
-        label = 'Paid';
-      case RegistrationPaymentUiStatus.failed:
-        color = Colors.red;
-        label = 'Payment failed';
-      case RegistrationPaymentUiStatus.cancelled:
-        color = Colors.orange;
-        label = 'Payment cancelled';
-      case RegistrationPaymentUiStatus.notStarted:
-        color = Colors.grey;
-        label = 'Payment pending';
+  double _resolveTotalPayable(double baseFee) {
+    final comp = competitionController;
+    if (comp != null) {
+      // Touch observables so Obx rebuilds when on-demand fee settings load.
+      comp.onDemandExtraFeeForParticipantReg.value;
+      comp.onDemandPaymentGatewayFeePercent.value;
+      comp.onDemandPlatformFeePercent.value;
+      return comp.calculateOnDemandTotalWithFees(
+        baseFee,
+        forParticipantRegistration: true,
+      );
     }
-    return Chip(
-      avatar: Icon(Icons.circle, size: 10, color: color),
-      label: Text(label),
-      side: BorderSide(color: color.withValues(alpha: 0.4)),
-    );
+    return baseFee;
   }
 
   bool _hasCategoryFee() {
@@ -109,8 +98,7 @@ class RegistrationPaymentSection extends StatelessWidget {
     final compController = competitionController;
     final eventId = participantController.selectedEventId.value;
     if (compController != null && eventId.isNotEmpty) {
-      final fee =
-          compController.resolveCategoryFeeRupees(eventId, categoryId!);
+      final fee = compController.resolveCategoryFeeRupees(eventId, categoryId!);
       return fee > 0 ? fee : null;
     }
     if (homeCompetition != null) {
