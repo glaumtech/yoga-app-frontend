@@ -84,7 +84,7 @@ class PublicCompetitionsScreen extends StatelessWidget {
         crossAxisCount;
   }
 
-  double _gridRowHeight() => _isPast ? 420.0 : 508.0;
+  double _gridRowHeight() => _isPast ? 380.0 : 430.0;
 
   Widget _buildEventCard(
     BuildContext context,
@@ -93,15 +93,18 @@ class PublicCompetitionsScreen extends StatelessWidget {
     int index,
     String Function(HomeCompetitionModel) idOf,
   ) {
-    return PublicCompetitionHorizontalCard(
-      key: ValueKey('public_h_${idOf(c)}_$index'),
-      competition: c,
-      width: width,
-      onViewParticipants: () => _openParticipants(context, c),
-      showShareLinkOption: _isUpcoming,
-      showRegistrationQr: _isOngoing || _isUpcoming,
-      showRegistrationButton: !_isPast,
-      showResultsButton: _isOngoing,
+    return Align(
+      alignment: Alignment.topCenter,
+      child: PublicCompetitionHorizontalCard(
+        key: ValueKey('public_h_${idOf(c)}_$index'),
+        competition: c,
+        width: width,
+        onViewParticipants: () => _openParticipants(context, c),
+        showShareLinkOption: _isUpcoming,
+        showRegistrationQr: _isOngoing || _isUpcoming,
+        showRegistrationButton: !_isPast,
+        showResultsButton: _isOngoing,
+      ),
     );
   }
 

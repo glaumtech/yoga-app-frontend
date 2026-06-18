@@ -159,12 +159,16 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
   /// Hide the view-mode Cancel button when navigation is handled externally.
   final bool showViewCancelButton;
 
+  /// Flat layout for public registration landing (no card chrome / title).
+  final bool embeddedInLandingPage;
+
   const ParticipantRegistrationFormScreen({
     super.key,
     this.initialCompetitionId,
     this.showCompetitionDropdown = true,
     this.onViewBack,
     this.showViewCancelButton = true,
+    this.embeddedInLandingPage = false,
   });
 
   @override
@@ -196,34 +200,36 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
+    final formPadding = embeddedInLandingPage
+        ? EdgeInsets.zero
+        : EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24));
 
-    return Card(
-      elevation: 4,
-      margin: EdgeInsets.symmetric(horizontal: isMobile ? 0 : 0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
-        child: Obx(
-          () => KeyedSubtree(
-            // Remount form after save/cancel so per-field validators do not linger
-            // on cleared fields (AutovalidateMode.onUserInteraction).
-            key: ValueKey(
-              'participant-reg-form-${participantController.formResetTrigger.value}',
-            ),
-            child: Form(
-              key: participantController.formKey,
-              // Per-field `autovalidateMode: onUserInteraction` — Form-level
-              // `onUserInteraction` validates *all* fields after any field is touched
-              // (Flutter behavior; see flutter/flutter#107350).
-              autovalidateMode: AutovalidateMode.disabled,
-              child: SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title
+    final formBody = Padding(
+      padding: formPadding,
+      child: Obx(
+        () => KeyedSubtree(
+          // Remount form after save/cancel so per-field validators do not linger
+          // on cleared fields (AutovalidateMode.onUserInteraction).
+          key: ValueKey(
+            'participant-reg-form-${participantController.formResetTrigger.value}',
+          ),
+          child: Form(
+            key: participantController.formKey,
+            // Per-field `autovalidateMode: onUserInteraction` — Form-level
+            // `onUserInteraction` validates *all* fields after any field is touched
+            // (Flutter behavior; see flutter/flutter#107350).
+            autovalidateMode: AutovalidateMode.disabled,
+            child: SingleChildScrollView(
+              physics: embeddedInLandingPage
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!embeddedInLandingPage)
                     FormTitle(
                       text: 'REGISTRATION',
                       isMobile: isMobile,
@@ -324,7 +330,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                             children: [
                               // Left side: Fields in two columns
                               Expanded(
-                                flex: 3,
+                                flex: embeddedInLandingPage ? 4 : 3,
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -892,7 +898,17 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             ),
           ),
         ),
-      ),
+      );
+
+    if (embeddedInLandingPage) {
+      return formBody;
+    }
+
+    return Card(
+      elevation: 4,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: formBody,
     );
   }
 
