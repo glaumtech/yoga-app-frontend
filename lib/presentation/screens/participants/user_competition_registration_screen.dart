@@ -9,6 +9,7 @@ import '../../../data/models/competition_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/competition_controller.dart';
 import '../../controllers/participant_controller.dart';
+import '../../controllers/auth_controller.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/registration_success_panel.dart';
@@ -77,6 +78,9 @@ class _UserCompetitionRegistrationScreenState
         ? Get.find<ParticipantController>()
         : Get.put(ParticipantController());
     final userController = Get.put(UserManagementController());
+    final authController = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>()
+        : Get.put(AuthController());
 
     competitionController.ensureHomeCompetitionsLoaded();
 
@@ -92,6 +96,14 @@ class _UserCompetitionRegistrationScreenState
           return HomeLandingNavBar(
             isAuthenticated: userController.isAuthenticated,
             onLogin: () => context.go(AppRoutes.login),
+            onLogout: userController.isAuthenticated
+                ? () async {
+                    await authController.signOut();
+                    if (context.mounted) {
+                      context.go(AppRoutes.login);
+                    }
+                  }
+                : null,
           );
         }),
       ),

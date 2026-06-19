@@ -9,6 +9,9 @@ class AppRoutes {
   static const String competitions = '/competitions';
   static const String about = '/about';
   static const String contact = '/contact';
+  static const String legal = '/legal/:docType';
+
+  static String legalPath(String docType) => '/legal/$docType';
 
   /// Public competitions list; [status] is `ongoing`, `upcoming`, or `completed`.
   static String competitionsList({String? status}) {

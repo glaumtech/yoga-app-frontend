@@ -1,6 +1,7 @@
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,12 +13,15 @@ import '../../../core/utils/competition_brochure_banner_url.dart';
 import '../../../core/utils/competition_registration_url.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../routes/app_routes.dart';
+import '../../controllers/auth_controller.dart';
+import '../../controllers/user_management_controller.dart';
 import '../../widgets/competition_registration_qr_image.dart';
 import '../../widgets/footer_section.dart';
 
 class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isAuthenticated;
   final VoidCallback onLogin;
+  final VoidCallback? onLogout;
   final VoidCallback? onAdmin;
   final VoidCallback? onUserMenu;
 
@@ -25,6 +29,7 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.isAuthenticated,
     required this.onLogin,
+    this.onLogout,
     this.onAdmin,
     this.onUserMenu,
   });
@@ -36,7 +41,6 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= HomeLayout.tablet;
-    final isCompact = width < HomeLayout.mobile;
 
     return Container(
       decoration: BoxDecoration(
@@ -59,10 +63,13 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
-              Expanded(child: _Logo(compact: isCompact)),
+              _Logo(onTap: () => context.go(AppRoutes.home)),
               if (isWide) ...[
-                const SizedBox(width: 20),
-                _NavLink(label: 'Home', onTap: () {}),
+                const SizedBox(width: 16),
+                _NavLink(
+                  label: 'Home',
+                  onTap: () => context.go(AppRoutes.home),
+                ),
                 _NavLink(
                   label: 'Competitions',
                   onTap: () => context.push(AppRoutes.competitions),
@@ -73,104 +80,176 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
                     AppRoutes.competitionsList(status: 'completed'),
                   ),
                 ),
-              ],
-              if (!isAuthenticated)
-                isCompact
-                    ? IconButton(
-                        onPressed: onLogin,
-                        tooltip: 'Login',
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppTheme.primaryColor,
-                          padding: const EdgeInsets.all(10),
-                        ),
-                        icon: const Icon(Icons.login, size: 20),
-                      )
-                    : ElevatedButton.icon(
-                        onPressed: onLogin,
-                        icon: const Icon(Icons.login, size: 18),
-                        label: const Text('Login'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppTheme.primaryColor,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          elevation: 2,
-                        ),
-                      )
-              else ...[
-                if (onAdmin != null)
-                  IconButton(
-                    onPressed: onAdmin,
-                    icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
-                    tooltip: 'Dashboard',
-                  ),
-                IconButton(
-                  onPressed: onUserMenu,
-                  icon: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.account_circle, color: Colors.white, size: 24),
-                  ),
-                  tooltip: 'Account',
+                _NavLink(
+                  label: 'About Us',
+                  onTap: () => context.push(AppRoutes.about),
+                ),
+                _NavLink(
+                  label: 'Contact Us',
+                  onTap: () => context.push(AppRoutes.contact),
                 ),
               ],
+              const Spacer(),
+              _buildAuthActions(isWide),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _buildAuthActions(bool isWide) {
+    if (!isAuthenticated) {
+      if (isWide) {
+        return ElevatedButton.icon(
+          onPressed: onLogin,
+          icon: const Icon(Icons.login, size: 18),
+          label: const Text('Login'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: AppTheme.primaryColor,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            elevation: 2,
+          ),
+        );
+      }
+      return IconButton(
+        onPressed: onLogin,
+        tooltip: 'Login',
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: AppTheme.primaryColor,
+          padding: const EdgeInsets.all(10),
+        ),
+        icon: const Icon(Icons.login, size: 20),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (onAdmin != null)
+          IconButton(
+            onPressed: onAdmin,
+            icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
+            tooltip: 'Dashboard',
+          ),
+        if (onUserMenu != null)
+          IconButton(
+            onPressed: onUserMenu,
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.account_circle,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            tooltip: 'Account',
+          ),
+        if (onLogout != null)
+          isWide
+              ? OutlinedButton.icon(
+                  onPressed: onLogout,
+                  icon: const Icon(Icons.logout, size: 18),
+                  label: const Text('Logout'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  onPressed: onLogout,
+                  tooltip: 'Logout',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.primaryColor,
+                    padding: const EdgeInsets.all(10),
+                  ),
+                  icon: const Icon(Icons.logout, size: 20),
+                ),
+      ],
+    );
+  }
 }
 
-class _Logo extends StatelessWidget {
-  final bool compact;
+/// Shared landing nav bar with login/logout wired to auth controllers.
+class HomeLandingAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const HomeLandingAppBar({super.key});
 
-  const _Logo({this.compact = false});
+  @override
+  Size get preferredSize => const Size.fromHeight(72);
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Icon(Icons.self_improvement, color: AppTheme.primaryColor, size: 28),
-        ),
-        if (!compact) ...[
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              AppConstants.appName,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+    final userController = Get.put(UserManagementController());
+    final authController = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>()
+        : Get.put(AuthController());
+
+    return Obx(
+      () => HomeLandingNavBar(
+        isAuthenticated: userController.isAuthenticated,
+        onLogin: () => context.go(AppRoutes.login),
+        onLogout: userController.isAuthenticated
+            ? () async {
+                await authController.signOut();
+                if (context.mounted) {
+                  context.go(AppRoutes.login);
+                }
+              }
+            : null,
+      ),
+    );
+  }
+}
+
+class _Logo extends StatelessWidget {
+  final VoidCallback? onTap;
+
+  const _Logo({this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
-      ],
+      ),
+      child: Icon(
+        Icons.self_improvement,
+        color: AppTheme.primaryColor,
+        size: 28,
+      ),
+    );
+
+    if (onTap == null) return icon;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: icon,
     );
   }
 }
@@ -223,7 +302,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
 
   static final List<_HeroBannerSlide> _slides = [
     (
-      imageAsset: 'assets/images/banners/banner-1.jpeg',
+      imageAsset: 'assets/images/banners/banner-1.jpg',
       headline: 'Register, Compete & Celebrate Excellence',
       subtitle:
           'Your platform for Yogasana championships — registration, scoring, and results in one place.',
@@ -231,7 +310,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
       action: _HeroSlideAction.explore,
     ),
     (
-      imageAsset: 'assets/images/banners/banner-2.jpeg',
+      imageAsset: 'assets/images/banners/banner-2.jpg',
       headline: 'Digital Scoring & Transparent Results',
       subtitle:
           'Jury panels, live marks entry, and published results — all managed online.',
@@ -371,9 +450,7 @@ class _HeroSlideView extends StatelessWidget {
           fit: BoxFit.cover,
           width: double.infinity,
           height: double.infinity,
-          errorBuilder: (_, __, ___) => Container(
-            color: AppTheme.primaryColor,
-          ),
+          errorBuilder: (_, __, ___) => Container(color: AppTheme.primaryColor),
         ),
         Positioned.fill(
           child: DecoratedBox(
@@ -466,10 +543,7 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
 
-  const _SectionHeader({
-    required this.title,
-    this.subtitle,
-  });
+  const _SectionHeader({required this.title, this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -491,18 +565,10 @@ class _SectionHeader extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: titleStyle,
-        ),
+        Text(title, textAlign: TextAlign.center, style: titleStyle),
         if (subtitle != null) ...[
           const SizedBox(height: 2),
-          Text(
-            subtitle!,
-            textAlign: TextAlign.center,
-            style: subtitleStyle,
-          ),
+          Text(subtitle!, textAlign: TextAlign.center, style: subtitleStyle),
         ],
       ],
     );
@@ -591,7 +657,10 @@ class HomeEventsGridSection extends StatelessWidget {
                 side: BorderSide(
                   color: AppTheme.primaryColor.withValues(alpha: 0.45),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 10,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
@@ -668,8 +737,7 @@ class HomeEventCard extends StatelessWidget {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final showQr =
-                      showRegistrationQr && id.isNotEmpty;
+                  final showQr = showRegistrationQr && id.isNotEmpty;
                   return Stack(
                     fit: StackFit.expand,
                     children: [
@@ -747,7 +815,11 @@ class HomeEventCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Row(
                     children: [
-                      Icon(Icons.location_on_outlined, size: 13, color: Colors.grey.shade500),
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 13,
+                        color: Colors.grey.shade500,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -756,7 +828,10 @@ class HomeEventCard extends StatelessWidget {
                               : 'Venue TBA',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ),
                     ],
@@ -764,7 +839,11 @@ class HomeEventCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Icon(Icons.calendar_today_outlined, size: 12, color: AppTheme.primaryColor),
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 12,
+                        color: AppTheme.primaryColor,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         dateLabel,
@@ -873,9 +952,7 @@ class _RegistrationQrBadge extends StatelessWidget {
       shadowColor: Colors.black.withValues(alpha: 0.2),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(
-          color: AppTheme.primaryColor.withValues(alpha: 0.4),
-        ),
+        side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.4)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(5),
@@ -997,7 +1074,10 @@ class _HomeServicesSectionState extends State<HomeServicesSection> {
                           ),
                         ),
                         const SizedBox(width: 24),
-                        Expanded(flex: 4, child: _ServiceIllustration(tab: _tab)),
+                        Expanded(
+                          flex: 4,
+                          child: _ServiceIllustration(tab: _tab),
+                        ),
                       ],
                     ),
             ),
@@ -1085,9 +1165,9 @@ class _ServiceText extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
         Text(
@@ -1152,25 +1232,27 @@ class _HomeEnquireSectionState extends State<HomeEnquireSection> {
   Future<void> _submit() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter your email')));
       return;
     }
     final uri = Uri(
       scheme: 'mailto',
       path: 'praveen.sekar@glaum.in',
-      query: Uri(queryParameters: {
-        'subject': '${AppConstants.appName} enquiry',
-        'body': 'Email: $email',
-      }).query,
+      query: Uri(
+        queryParameters: {
+          'subject': '${AppConstants.appName} enquiry',
+          'body': 'Email: $email',
+        },
+      ).query,
     );
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open email app')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open email app')));
     }
   }
 
@@ -1195,7 +1277,11 @@ class _HomeEnquireSectionState extends State<HomeEnquireSection> {
       ),
       child: Column(
         children: [
-          Icon(Icons.support_agent, color: Colors.white.withValues(alpha: 0.95), size: 36),
+          Icon(
+            Icons.support_agent,
+            color: Colors.white.withValues(alpha: 0.95),
+            size: 36,
+          ),
           const SizedBox(height: 10),
           Text(
             'Enquire Now',
@@ -1249,7 +1335,10 @@ class _HomeEnquireSectionState extends State<HomeEnquireSection> {
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -1263,7 +1352,10 @@ class _HomeEnquireSectionState extends State<HomeEnquireSection> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      child: const Text('Enquire Now', style: TextStyle(fontWeight: FontWeight.w600)),
+      child: const Text(
+        'Enquire Now',
+        style: TextStyle(fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -1278,9 +1370,21 @@ class HomeWhyChooseUsSection extends StatelessWidget {
     final padH = HomeLayout.sectionHorizontalPadding(width);
 
     const items = [
-      (Icons.auto_awesome, 'Innovative Platform', 'Modern tools for registration, scoring, and results.'),
-      (Icons.groups_outlined, 'Expert Support', 'Dedicated onboarding for schools and organizers.'),
-      (Icons.verified_user_outlined, 'Reliable Service', 'Secure payments and dependable event-day operations.'),
+      (
+        Icons.auto_awesome,
+        'Innovative Platform',
+        'Modern tools for registration, scoring, and results.',
+      ),
+      (
+        Icons.groups_outlined,
+        'Expert Support',
+        'Dedicated onboarding for schools and organizers.',
+      ),
+      (
+        Icons.verified_user_outlined,
+        'Reliable Service',
+        'Secure payments and dependable event-day operations.',
+      ),
     ];
 
     return Container(
@@ -1331,11 +1435,7 @@ class _WhyCard extends StatelessWidget {
   final String title;
   final String body;
 
-  const _WhyCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
+  const _WhyCard({required this.icon, required this.title, required this.body});
 
   @override
   Widget build(BuildContext context) {
@@ -1364,7 +1464,11 @@ class _WhyCard extends StatelessWidget {
             Text(
               body,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600, height: 1.4, fontSize: 13),
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                height: 1.4,
+                fontSize: 13,
+              ),
             ),
           ],
         ),
@@ -1392,9 +1496,9 @@ class _HomeNewsletterSectionState extends State<HomeNewsletterSection> {
   void _subscribe() {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter your email')));
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1544,9 +1648,18 @@ class _ContactColumn extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                Text(
+                  label,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ),
           ),

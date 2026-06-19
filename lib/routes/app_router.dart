@@ -11,6 +11,7 @@ import '../presentation/screens/home/public_competitions_screen.dart';
 import '../presentation/screens/home/public_competition_participants_screen.dart';
 import '../presentation/screens/about/about_screen.dart';
 import '../presentation/screens/contact/contact_screen.dart';
+import '../presentation/screens/legal/static_legal_screen.dart';
 import '../presentation/screens/admin/admin_dashboard_screen.dart';
 
 import '../presentation/screens/schools/schools_screen.dart';
@@ -78,6 +79,9 @@ class AppRouter {
       // Public competition registration route is allowed without auth.
       final isRegister = location.startsWith('/register/');
 
+      // Legal / policy pages are public.
+      final isLegal = location.startsWith('/legal/');
+
       // School screens should be accessible without login (public).
       // Covers list/create/edit/delete under the same prefix.
       final isPublicSchools = location.startsWith('/admin/schools');
@@ -100,6 +104,7 @@ class AppRouter {
           !isHomeRoute &&
           !isPublicCompetitions &&
           !isRegister &&
+          !isLegal &&
           !isPublicSchools) {
         return AppRoutes.login;
       }
@@ -128,6 +133,7 @@ class AppRouter {
               !isHomeRoute &&
               !isPublicCompetitions &&
               !isRegister &&
+              !isLegal &&
               !isPublicSchools) {
             return AppRoutes.juryScoring;
           }
@@ -244,6 +250,18 @@ class AppRouter {
         path: AppRoutes.contact,
         name: 'contact',
         builder: (context, state) => const ContactScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.legal,
+        name: 'legal',
+        builder: (context, state) {
+          final docType = state.pathParameters['docType'] ?? '';
+          final screen = StaticLegalScreen.forDocType(docType);
+          if (screen == null) {
+            return const ContactScreen();
+          }
+          return screen;
+        },
       ),
 
       // User-facing participant registration by competition (anyone can access)

@@ -52,6 +52,14 @@ class _HomeScreenState extends State<HomeScreen> {
             return HomeLandingNavBar(
               isAuthenticated: isAuthenticated,
               onLogin: () => context.go(AppRoutes.login),
+              onLogout: isAuthenticated
+                  ? () async {
+                      await authController.signOut();
+                      if (context.mounted) {
+                        context.go(AppRoutes.login);
+                      }
+                    }
+                  : null,
               onAdmin: isAdminLoggedIn
                   ? () => context.push(AppRoutes.adminDashboard)
                   : null,
