@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/role_display_name.dart';
 import '../controllers/user_management_controller.dart';
 import 'admin_sidebar.dart';
+import 'change_password_dialog.dart';
 
 /// Layout wrapper for admin screens with persistent sidebar
 class AdminSidebarLayout extends StatelessWidget {
@@ -156,20 +157,66 @@ class AdminSidebarLayout extends StatelessWidget {
                                   ),
 
                                   const SizedBox(width: 10),
-                                  Container(
-                                    width: 34,
-                                    height: 34,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.16),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.25),
-                                      ),
+                                  PopupMenuButton<String>(
+                                    tooltip: 'Account menu',
+                                    offset: const Offset(0, 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: const Icon(
-                                      Icons.person_outline,
-                                      color: Colors.white,
-                                      size: 18,
+                                    color: Colors.white,
+                                    onSelected: (value) {
+                                      if (value == 'reset_password') {
+                                        ChangePasswordDialog.show(
+                                          scaffoldContext,
+                                        );
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem<String>(
+                                        value: 'reset_password',
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(6),
+                                              decoration: BoxDecoration(
+                                                color: AppTheme.primaryColor
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              child: Icon(
+                                                Icons.lock_reset,
+                                                size: 18,
+                                                color: AppTheme.primaryColor,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Text(
+                                              'Reset Password',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    child: Container(
+                                      width: 34,
+                                      height: 34,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.16),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.25),
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.person_outline,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
                                     ),
                                   ),
                                 ],

@@ -28,7 +28,10 @@ class APIService {
           url == EndPoints.logIn ||
           url == EndPoints.register ||
           url == EndPoints.userLogin ||
-          url == EndPoints.userLoginWithToken;
+          url == EndPoints.userLoginWithToken ||
+          url == EndPoints.forgotPassword ||
+          url == EndPoints.verifyOtp ||
+          url == EndPoints.resetPassword;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
@@ -392,7 +395,10 @@ class APIService {
           url == EndPoints.logIn ||
           url == EndPoints.register ||
           url == EndPoints.userLogin ||
-          url == EndPoints.userLoginWithToken;
+          url == EndPoints.userLoginWithToken ||
+          url == EndPoints.forgotPassword ||
+          url == EndPoints.verifyOtp ||
+          url == EndPoints.resetPassword;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
@@ -474,7 +480,10 @@ class APIService {
           url == EndPoints.logIn ||
           url == EndPoints.register ||
           url == EndPoints.userLogin ||
-          url == EndPoints.userLoginWithToken;
+          url == EndPoints.userLoginWithToken ||
+          url == EndPoints.forgotPassword ||
+          url == EndPoints.verifyOtp ||
+          url == EndPoints.resetPassword;
       if (!isAuthEndpoint) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);

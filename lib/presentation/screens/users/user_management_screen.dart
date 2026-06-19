@@ -27,6 +27,44 @@ String _userNameOrDash(UserManagementModel user) {
   return '—';
 }
 
+Widget _buildEmailField(
+  UserManagementController controller, {
+  required double labelFontSize,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'EMAIL :',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: labelFontSize),
+      ),
+      const SizedBox(height: 8),
+      TextFormField(
+        controller: controller.emailController,
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        decoration: InputDecoration(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          hintText: 'user@example.com',
+        ),
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return null;
+          }
+          if (!GetUtils.isEmail(value.trim())) {
+            return 'Enter a valid email address';
+          }
+          return null;
+        },
+      ),
+    ],
+  );
+}
+
 class UserManagementScreen extends StatelessWidget {
   const UserManagementScreen({super.key});
 
@@ -658,6 +696,11 @@ class UserManagementScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  _buildEmailField(
+                    controller,
+                    labelFontSize: isMobile ? 14 : 16,
+                  ),
+                  const SizedBox(height: 24),
                   // Password Field
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -815,6 +858,11 @@ class UserManagementScreen extends StatelessWidget {
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildEmailField(
+                          controller,
+                          labelFontSize: isTablet ? 14 : 16,
                         ),
                         const SizedBox(height: 16),
                         Column(

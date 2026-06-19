@@ -43,7 +43,12 @@ class EndPoints {
   static String register = '/auth/register';
   static String logIn = '/auth/login';
   static String logOut = '/auth/logout';
-  static String changePassword = '/auth/changePassword';
+  static String changePasswordSendOtp = '/api/auth/change-password/send-otp';
+  static String changePasswordVerifyOtp = '/api/auth/change-password/verify-otp';
+  static String changePasswordConfirm = '/api/auth/change-password/confirm';
+  static String forgotPassword = '/api/auth/forgot-password';
+  static String verifyOtp = '/api/auth/verify-otp';
+  static String resetPassword = '/api/auth/reset-password';
   static String updateProfile = '/users/profile';
 
   /// PARTICIPANTS

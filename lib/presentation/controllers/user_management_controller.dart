@@ -52,6 +52,7 @@ class UserManagementController extends GetxController {
   // Form Controllers
   final nameController = TextEditingController();
   final userNameController = TextEditingController();
+  final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final cellController = TextEditingController();
 
@@ -205,6 +206,7 @@ class UserManagementController extends GetxController {
       final query = searchQuery.value.toLowerCase();
       return user.name.toLowerCase().contains(query) ||
           (user.userName?.toLowerCase().contains(query) ?? false) ||
+          (user.email?.toLowerCase().contains(query) ?? false) ||
           user.type.toLowerCase().contains(query) ||
           (user.eventName?.toLowerCase().contains(query) ?? false);
     }).toList();
@@ -819,6 +821,9 @@ class UserManagementController extends GetxController {
       final user = UserManagementModel(
         name: nameController.text.trim(),
         userName: userNameController.text.trim(),
+        email: emailController.text.trim().isNotEmpty
+            ? emailController.text.trim()
+            : null,
         password: generateRandomPassword(),
         type: selectedType.value, // For backward compatibility
         userTypeId: userTypeId,
@@ -997,6 +1002,7 @@ class UserManagementController extends GetxController {
     userToEdit.value = user;
     nameController.text = user.name;
     userNameController.text = user.userName ?? '';
+    emailController.text = user.email ?? '';
     selectedType.value = user.type;
     selectedEventId.value = user.displayEventId?.toString() ?? '';
     selectedEventName.value = user.displayEventName ?? '';
@@ -1180,6 +1186,7 @@ class UserManagementController extends GetxController {
         id: userId,
         name: nameController.text.trim(),
         userName: userNameController.text.trim(),
+        email: emailController.text.trim(),
         password: shouldUpdatePassword
             ? passwordValue
             : null, // Only update password if valid new password provided
@@ -1284,6 +1291,7 @@ class UserManagementController extends GetxController {
     // Clear all text controllers
     nameController.clear();
     userNameController.clear();
+    emailController.clear();
     passwordController.clear();
     cellController.clear();
 

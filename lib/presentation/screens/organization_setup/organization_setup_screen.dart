@@ -884,6 +884,18 @@ class OrganizationSetupScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              TextFormField(
+                controller: c.branchAdminEmailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                validator: (v) => c.emailValidator(v, fieldName: 'Email'),
+                decoration: deco(
+                  label: 'Email',
+                  icon: Icons.email_outlined,
+                  hint: 'For login recovery and notifications',
+                ),
+              ),
+              const SizedBox(height: 12),
               Obx(
                 () => TextFormField(
                   controller: c.branchAdminPasswordController,

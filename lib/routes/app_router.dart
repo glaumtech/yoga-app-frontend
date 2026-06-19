@@ -6,6 +6,9 @@ import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
 import '../presentation/screens/auth/jury_token_login_screen.dart';
 import '../presentation/screens/auth/signup_screen.dart';
+import '../presentation/screens/auth/forgot_password_screen.dart';
+import '../presentation/screens/auth/verify_otp_screen.dart';
+import '../presentation/screens/auth/reset_password_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/home/public_competitions_screen.dart';
 import '../presentation/screens/home/public_competition_participants_screen.dart';
@@ -65,6 +68,9 @@ class AppRouter {
         AppRoutes.splash,
         AppRoutes.login,
         AppRoutes.signUp,
+        AppRoutes.forgotPassword,
+        AppRoutes.verifyOtp,
+        AppRoutes.resetPassword,
         AppRoutes.juryLogin,
         AppRoutes.about,
         AppRoutes.contact,
@@ -85,6 +91,9 @@ class AppRouter {
       // Always allow navigation to auth routes (login/signup)
       if (location == AppRoutes.login ||
           location == AppRoutes.signUp ||
+          location == AppRoutes.forgotPassword ||
+          location == AppRoutes.verifyOtp ||
+          location == AppRoutes.resetPassword ||
           location == AppRoutes.juryLogin) {
         return null;
       }
@@ -203,6 +212,21 @@ class AppRouter {
         path: AppRoutes.signUp,
         name: 'signup',
         builder: (context, state) => const SignUpScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.forgotPassword,
+        name: 'forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyOtp,
+        name: 'verify-otp',
+        builder: (context, state) => const VerifyOtpScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.resetPassword,
+        name: 'reset-password',
+        builder: (context, state) => const ResetPasswordScreen(),
       ),
 
       // Public

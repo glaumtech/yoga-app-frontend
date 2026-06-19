@@ -3,6 +3,9 @@ class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String signUp = '/signup';
+  static const String forgotPassword = '/forgot-password';
+  static const String verifyOtp = '/verify-otp';
+  static const String resetPassword = '/reset-password';
 
   // Public
   static const String home = '/home';
