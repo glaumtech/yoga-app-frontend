@@ -319,92 +319,89 @@ class JuryScoringScreen extends StatelessWidget {
                           floating: true,
                           snap: true,
                           pinned: false,
+                          toolbarHeight: isMobile ? 64 : 56,
                           titleSpacing: 12,
-                          title: SizedBox(
-                            width: double.infinity,
-                            child: Stack(
-                              alignment: Alignment.center,
+                          centerTitle: false,
+                          title: Obx(() {
+                            final name =
+                                (controller
+                                            .juryAssignment
+                                            .value
+                                            ?.competitionName ??
+                                        '')
+                                    .trim();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    'SCORING SCREEN',
-                                    style: TextStyle(
-                                      fontSize: isMobile ? 15 : 20,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.2,
-                                      color: Colors.white,
-                                    ),
+                                Text(
+                                  'SCORING SCREEN',
+                                  style: TextStyle(
+                                    fontSize: isMobile ? 11 : 12,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.8,
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    height: 1.1,
                                   ),
                                 ),
-                                Center(
-                                  child: Obx(() {
-                                    final name =
-                                        (controller
-                                                    .juryAssignment
-                                                    .value
-                                                    ?.competitionName ??
-                                                '')
-                                            .trim();
-                                    if (name.isEmpty) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    return Text(
-                                      name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: isMobile ? 13 : 16,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    );
-                                  }),
-                                ),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Obx(() {
-                                    final u = userController.currentUser.value;
-                                    final userName = (u?.name ?? '').trim();
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (userName.isNotEmpty)
-                                          ConstrainedBox(
-                                            constraints: BoxConstraints(
-                                              maxWidth: isMobile ? 140 : 220,
-                                            ),
-                                            child: Text(
-                                              userName,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: isMobile ? 12 : 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.white.withOpacity(
-                                                  0.95,
-                                                ),
-                                              ),
-                                              textAlign: TextAlign.right,
-                                            ),
-                                          ),
-                                        const SizedBox(width: 8),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.logout,
-                                            color: Colors.white,
-                                          ),
-                                          tooltip: 'Logout',
-                                          onPressed: () =>
-                                              controller.handleLogout(context),
-                                        ),
-                                      ],
-                                    );
-                                  }),
-                                ),
+                                if (name.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: isMobile ? 14 : 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ),
-                          ),
+                            );
+                          }),
+                          actions: [
+                            Obx(() {
+                              final u = userController.currentUser.value;
+                              final userName = (u?.name ?? '').trim();
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!isMobile && userName.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 4),
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: isTablet ? 160 : 220,
+                                        ),
+                                        child: Text(
+                                          userName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.95,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.logout,
+                                      color: Colors.white,
+                                    ),
+                                    tooltip: 'Logout',
+                                    onPressed: () =>
+                                        controller.handleLogout(context),
+                                  ),
+                                ],
+                              );
+                            }),
+                          ],
                         ),
                         SliverPadding(
                           padding: EdgeInsets.fromLTRB(

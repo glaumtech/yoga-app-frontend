@@ -497,7 +497,7 @@ class AuthController extends GetxController {
 
       safeDelete<UserManagementController>();
       safeDelete<CompetitionsListController>();
-      safeDelete<CompetitionController>();
+      // Keep CompetitionController alive — public home/competitions screens need it.
       safeDelete<ParticipantController>();
       try {
         if (Get.isRegistered<ParticipantRegistrationFormController>(

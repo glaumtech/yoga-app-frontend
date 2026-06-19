@@ -561,6 +561,7 @@ class HomeCompetitionModel {
   final String? brochureFilePath;
   final String status;
   final String? registrationUrl;
+  final String? participantsUrl;
   final String? paymentModel;
   final List<String> allowedPaymentModes;
   final String? manualPaymentUpiId;
@@ -584,6 +585,7 @@ class HomeCompetitionModel {
     this.brochureFilePath,
     this.status = 'upcoming',
     this.registrationUrl,
+    this.participantsUrl,
     this.paymentModel,
     this.allowedPaymentModes = const [],
     this.manualPaymentUpiId,
@@ -630,6 +632,7 @@ class HomeCompetitionModel {
       brochureFilePath: json['brochureFilePath']?.toString(),
       status: json['status']?.toString() ?? 'upcoming',
       registrationUrl: json['registrationUrl']?.toString(),
+      participantsUrl: json['participantsUrl']?.toString(),
       paymentModel: json['paymentModel']?.toString(),
       allowedPaymentModes: json['allowedPaymentModes'] != null
           ? List<String>.from(json['allowedPaymentModes'])

@@ -8,6 +8,7 @@ import '../../core/utils/competition_brochure_banner_url.dart';
 import '../../core/utils/competition_registration_url.dart';
 import '../../data/models/competition_model.dart';
 import '../../routes/app_routes.dart';
+import 'competition_participants_qr_image.dart';
 import 'competition_registration_qr_image.dart';
 import 'primary_button.dart';
 
@@ -17,6 +18,7 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   final double width;
   final VoidCallback onViewParticipants;
   final bool showRegistrationQr;
+  final bool showParticipantsQr;
   final bool showShareLinkOption;
   final bool showRegistrationButton;
   final bool showResultsButton;
@@ -27,6 +29,7 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
     required this.width,
     required this.onViewParticipants,
     this.showRegistrationQr = false,
+    this.showParticipantsQr = false,
     this.showShareLinkOption = false,
     this.showRegistrationButton = true,
     this.showResultsButton = false,
@@ -254,7 +257,9 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   Widget _buildDateAddressQrSection(BuildContext context, String id) {
     final hasDate = _startDate != null;
     final hasAddress = competition.address.isNotEmpty;
-    final hasQr = showRegistrationQr && id.isNotEmpty;
+    final hasRegQr = showRegistrationQr && id.isNotEmpty;
+    final hasParticipantsQr = showParticipantsQr && id.isNotEmpty;
+    final hasQr = hasRegQr || hasParticipantsQr;
 
     if (!hasDate && !hasAddress && !hasQr) {
       return const SizedBox.shrink();
@@ -287,13 +292,17 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
         ),
         if (hasQr) ...[
           const SizedBox(width: 8),
-          _buildQrAside(context, id),
+          _buildQrAside(context, id, participantsQr: hasParticipantsQr),
         ],
       ],
     );
   }
 
-  Widget _buildQrAside(BuildContext context, String competitionId) {
+  Widget _buildQrAside(
+    BuildContext context,
+    String competitionId, {
+    bool participantsQr = false,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -304,15 +313,21 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
             border: Border.all(color: AppTheme.primaryColor.withOpacity(0.25)),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: CompetitionRegistrationQrImage(
-            competitionId: competitionId,
-            size: 72,
-            borderRadius: BorderRadius.circular(4),
-          ),
+          child: participantsQr
+              ? CompetitionParticipantsQrImage(
+                  competitionId: competitionId,
+                  size: 72,
+                  borderRadius: BorderRadius.circular(4),
+                )
+              : CompetitionRegistrationQrImage(
+                  competitionId: competitionId,
+                  size: 72,
+                  borderRadius: BorderRadius.circular(4),
+                ),
         ),
         const SizedBox(height: 4),
         Text(
-          'Scan to\nregister',
+          participantsQr ? 'Scan for\nresults' : 'Scan to\nregister',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: AppTheme.primaryColor,

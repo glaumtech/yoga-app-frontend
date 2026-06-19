@@ -8,7 +8,6 @@ import '../../controllers/user_management_controller.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/permission_store.dart';
-import '../../../core/utils/role_display_name.dart';
 import '../../../routes/app_routes.dart';
 import 'home_landing_sections.dart';
 
@@ -25,7 +24,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Get.find<CompetitionController>().ensureHomeCompetitionsLoaded();
+      final competitionController = Get.isRegistered<CompetitionController>()
+          ? Get.find<CompetitionController>()
+          : Get.put(CompetitionController());
+      competitionController.ensureHomeCompetitionsLoaded();
     });
   }
 
@@ -34,7 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final authController = Get.find<AuthController>();
       final userController = Get.put(UserManagementController());
-      final competitionController = Get.find<CompetitionController>();
+      final competitionController = Get.isRegistered<CompetitionController>()
+          ? Get.find<CompetitionController>()
+          : Get.put(CompetitionController());
 
       return Scaffold(
         backgroundColor: AppTheme.background,
@@ -42,12 +46,14 @@ class _HomeScreenState extends State<HomeScreen> {
           preferredSize: const Size.fromHeight(72),
           child: Obx(() {
             final isAuthenticated = userController.isAuthenticated;
+            final user = userController.currentUser.value;
             final permissionStore = Get.isRegistered<PermissionStore>()
                 ? Get.find<PermissionStore>()
                 : Get.put(PermissionStore());
             final isAdminLoggedIn = permissionStore.has(
               'SHOW_DASHBOARD_ICON_ON_HOME_SCREEN',
             );
+            final isJuryLoggedIn = permissionStore.has('SHOW_JURY_SCREEN');
 
             return HomeLandingNavBar(
               isAuthenticated: isAuthenticated,
@@ -63,14 +69,18 @@ class _HomeScreenState extends State<HomeScreen> {
               onAdmin: isAdminLoggedIn
                   ? () => context.push(AppRoutes.adminDashboard)
                   : null,
-              onUserMenu: isAuthenticated
-                  ? () => _showUserMenu(
-                      context,
-                      authController: authController,
-                      userController: userController,
-                      isAdminLoggedIn: isAdminLoggedIn,
-                      isJuryLoggedIn: permissionStore.has('SHOW_JURY_SCREEN'),
-                    )
+              showUserProfile: isAuthenticated,
+              userName: user?.name,
+              userRole: user?.userTypeName?.trim().toUpperCase(),
+              onUserAccount:
+                  isAuthenticated && (isAdminLoggedIn || isJuryLoggedIn)
+                  ? () {
+                      if (isAdminLoggedIn) {
+                        context.push(AppRoutes.userManagement);
+                      } else {
+                        context.go(AppRoutes.juryScoring);
+                      }
+                    }
                   : null,
             );
           }),
@@ -125,70 +135,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
-  }
-
-  void _showUserMenu(
-    BuildContext context, {
-    required AuthController authController,
-    required UserManagementController userController,
-    required bool isAdminLoggedIn,
-    required bool isJuryLoggedIn,
-  }) {
-    final user = userController.currentUser.value;
-    showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppTheme.primaryColor.withValues(
-                    alpha: 0.12,
-                  ),
-                  child: Icon(Icons.person, color: AppTheme.primaryColor),
-                ),
-                title: Text(user?.name ?? 'Profile'),
-                subtitle: user?.userTypeName != null
-                    ? Text(displayRoleName(user!.userTypeName))
-                    : null,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('My account'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (isAdminLoggedIn) {
-                    context.push(AppRoutes.userManagement);
-                  } else if (isJuryLoggedIn) {
-                    context.go(AppRoutes.juryScoring);
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(color: Colors.red),
-                ),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await authController.signOut();
-                  if (context.mounted) {
-                    context.go(AppRoutes.login);
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

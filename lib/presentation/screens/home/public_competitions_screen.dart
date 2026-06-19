@@ -377,7 +377,10 @@ class PublicCompetitionsScreen extends StatelessWidget {
         width: width,
         onViewParticipants: () => _openParticipants(context, c),
         showShareLinkOption: _isUpcoming,
-        showRegistrationQr: _isOngoing || _isUpcoming,
+        showRegistrationQr: (_isOngoing || _isUpcoming) &&
+            c.status.toLowerCase() != 'completed',
+        showParticipantsQr:
+            _isPast || c.status.toLowerCase() == 'completed',
         showRegistrationButton: !_isPast,
         showResultsButton: _isOngoing,
       ),

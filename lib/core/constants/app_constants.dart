@@ -123,6 +123,8 @@ class EndPoints {
   static String competitionBrochure(String id) => '/competition/$id/brochure';
   static String competitionRegistrationQr(String id) =>
       '/competition/$id/registration-qr';
+  static String competitionParticipantsQr(String id) =>
+      '/competition/$id/participants-qr';
 
   /// Public competitions list (home / unauthenticated)
   static String competitionPublic = '/competition/public';

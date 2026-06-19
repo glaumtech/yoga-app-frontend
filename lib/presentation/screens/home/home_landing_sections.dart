@@ -15,6 +15,7 @@ import '../../../data/models/competition_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/user_management_controller.dart';
+import '../../widgets/competition_participants_qr_image.dart';
 import '../../widgets/competition_registration_qr_image.dart';
 import '../../widgets/footer_section.dart';
 
@@ -23,7 +24,10 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onLogin;
   final VoidCallback? onLogout;
   final VoidCallback? onAdmin;
-  final VoidCallback? onUserMenu;
+  final String? userName;
+  final String? userRole;
+  final VoidCallback? onUserAccount;
+  final bool showUserProfile;
 
   const HomeLandingNavBar({
     super.key,
@@ -31,7 +35,10 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onLogin,
     this.onLogout,
     this.onAdmin,
-    this.onUserMenu,
+    this.userName,
+    this.userRole,
+    this.onUserAccount,
+    this.showUserProfile = false,
   });
 
   @override
@@ -137,24 +144,14 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
             icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
             tooltip: 'Dashboard',
           ),
-        if (onUserMenu != null)
-          IconButton(
-            onPressed: onUserMenu,
-            icon: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.account_circle,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-            tooltip: 'Account',
-          ),
-        if (onLogout != null)
+        if (showUserProfile)
+          _LandingUserMenuButton(
+            userName: userName,
+            userRole: userRole,
+            onLogout: onLogout,
+            onUserAccount: onUserAccount,
+          )
+        else if (onLogout != null)
           isWide
               ? OutlinedButton.icon(
                   onPressed: onLogout,
@@ -187,6 +184,237 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
+class _LandingUserMenuButton extends StatelessWidget {
+  final String? userName;
+  final String? userRole;
+  final VoidCallback? onLogout;
+  final VoidCallback? onUserAccount;
+
+  const _LandingUserMenuButton({
+    this.userName,
+    this.userRole,
+    this.onLogout,
+    this.onUserAccount,
+  });
+
+  void _openMenu(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+
+    final offset = box.localToGlobal(Offset.zero);
+    final size = box.size;
+    const menuWidth = 228.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final left = (offset.dx + size.width - menuWidth).clamp(
+      8.0,
+      screenWidth - menuWidth - 8,
+    );
+    final top = offset.dy + size.height + 10;
+
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss account menu',
+      barrierColor: Colors.transparent,
+      transitionDuration: Duration.zero,
+      pageBuilder: (dialogContext, _, __) {
+        return Stack(
+          children: [
+            Positioned(
+              left: left,
+              top: top,
+              child: _LandingUserMenuCard(
+                userName: userName,
+                userRole: userRole,
+                onLogout: onLogout == null
+                    ? null
+                    : () {
+                        Navigator.of(dialogContext).pop();
+                        onLogout!();
+                      },
+                onUserAccount: onUserAccount == null
+                    ? null
+                    : () {
+                        Navigator.of(dialogContext).pop();
+                        onUserAccount!();
+                      },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openMenu(context),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.account_circle, color: Colors.white, size: 24),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingUserMenuCard extends StatelessWidget {
+  final String? userName;
+  final String? userRole;
+  final VoidCallback? onLogout;
+  final VoidCallback? onUserAccount;
+
+  const _LandingUserMenuCard({
+    this.userName,
+    this.userRole,
+    this.onLogout,
+    this.onUserAccount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = userName?.trim().isNotEmpty == true ? userName!.trim() : 'User';
+    final role = userRole?.trim() ?? '';
+
+    return Material(
+      color: Colors.white,
+      elevation: 12,
+      shadowColor: Colors.black.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 228,
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _MenuActionRow(
+              onTap: onUserAccount,
+              icon: Icons.person_outline,
+              iconBackground: AppTheme.primaryColor.withValues(alpha: 0.1),
+              iconColor: AppTheme.primaryColor,
+              title: name,
+              subtitle: role.isEmpty ? null : role,
+              titleColor: AppTheme.primaryColor,
+              subtitleColor: AppTheme.primaryColor.withValues(alpha: 0.65),
+            ),
+            if (onLogout != null) ...[
+              const SizedBox(height: 10),
+              _MenuActionRow(
+                onTap: onLogout,
+                icon: Icons.logout_rounded,
+                iconBackground: const Color(0xFFFFECEF),
+                iconColor: const Color(0xFFE53935),
+                title: 'Logout',
+                titleColor: const Color(0xFFE53935),
+                titleFontWeight: FontWeight.w600,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuActionRow extends StatelessWidget {
+  final VoidCallback? onTap;
+  final IconData icon;
+  final Color iconBackground;
+  final Color iconColor;
+  final String title;
+  final String? subtitle;
+  final Color titleColor;
+  final Color? subtitleColor;
+  final FontWeight titleFontWeight;
+
+  const _MenuActionRow({
+    required this.onTap,
+    required this.icon,
+    required this.iconBackground,
+    required this.iconColor,
+    required this.title,
+    this.subtitle,
+    required this.titleColor,
+    this.subtitleColor,
+    this.titleFontWeight = FontWeight.w700,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconBackground,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: subtitle == null
+                    ? Text(
+                        title,
+                        style: TextStyle(
+                          color: titleColor,
+                          fontWeight: titleFontWeight,
+                          fontSize: 15,
+                          height: 1.2,
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              color: titleColor,
+                              fontWeight: titleFontWeight,
+                              fontSize: 15,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle!,
+                            style: TextStyle(
+                              color: subtitleColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Shared landing nav bar with login/logout wired to auth controllers.
 class HomeLandingAppBar extends StatelessWidget implements PreferredSizeWidget {
   const HomeLandingAppBar({super.key});
@@ -202,18 +430,26 @@ class HomeLandingAppBar extends StatelessWidget implements PreferredSizeWidget {
         : Get.put(AuthController());
 
     return Obx(
-      () => HomeLandingNavBar(
-        isAuthenticated: userController.isAuthenticated,
-        onLogin: () => context.go(AppRoutes.login),
-        onLogout: userController.isAuthenticated
-            ? () async {
-                await authController.signOut();
-                if (context.mounted) {
-                  context.go(AppRoutes.login);
+      () {
+        final user = userController.currentUser.value;
+        final isAuthenticated = userController.isAuthenticated;
+
+        return HomeLandingNavBar(
+          isAuthenticated: isAuthenticated,
+          onLogin: () => context.go(AppRoutes.login),
+          onLogout: isAuthenticated
+              ? () async {
+                  await authController.signOut();
+                  if (context.mounted) {
+                    context.go(AppRoutes.login);
+                  }
                 }
-              }
-            : null,
-      ),
+              : null,
+          showUserProfile: isAuthenticated,
+          userName: user?.name,
+          userRole: user?.userTypeName?.trim().toUpperCase(),
+        );
+      },
     );
   }
 }
@@ -582,6 +818,7 @@ class HomeEventsGridSection extends StatelessWidget {
   final String? viewMoreStatus;
   final bool showOpenBadge;
   final bool showRegistrationQr;
+  final bool showParticipantsQr;
   final bool showShareLinkOption;
   final Color backgroundColor;
   final bool compactTop;
@@ -594,6 +831,7 @@ class HomeEventsGridSection extends StatelessWidget {
     this.viewMoreStatus,
     this.showOpenBadge = false,
     this.showRegistrationQr = false,
+    this.showParticipantsQr = false,
     this.showShareLinkOption = false,
     this.backgroundColor = Colors.white,
     this.compactTop = false,
@@ -638,6 +876,7 @@ class HomeEventsGridSection extends StatelessWidget {
                 competition: competitions[index],
                 showOpenBadge: showOpenBadge,
                 showRegistrationQr: showRegistrationQr,
+                showParticipantsQr: showParticipantsQr,
                 showShareLinkOption: showShareLinkOption,
                 openParticipantsOnTap: viewMoreStatus == 'completed',
               );
@@ -683,6 +922,7 @@ class HomeEventCard extends StatelessWidget {
   final HomeCompetitionModel competition;
   final bool showOpenBadge;
   final bool showRegistrationQr;
+  final bool showParticipantsQr;
   final bool showShareLinkOption;
   final bool openParticipantsOnTap;
 
@@ -691,6 +931,7 @@ class HomeEventCard extends StatelessWidget {
     required this.competition,
     this.showOpenBadge = false,
     this.showRegistrationQr = false,
+    this.showParticipantsQr = false,
     this.showShareLinkOption = false,
     this.openParticipantsOnTap = false,
   });
@@ -737,7 +978,8 @@ class HomeEventCard extends StatelessWidget {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final showQr = showRegistrationQr && id.isNotEmpty;
+                  final showRegQr = showRegistrationQr && id.isNotEmpty;
+                  final showResultsQr = showParticipantsQr && id.isNotEmpty;
                   return Stack(
                     fit: StackFit.expand,
                     children: [
@@ -781,7 +1023,16 @@ class HomeEventCard extends StatelessWidget {
                             competitionId: id,
                           ),
                         ),
-                      if (showQr)
+                      if (showResultsQr)
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
+                          child: _ParticipantsQrBadge(
+                            competitionId: id,
+                            maxWidth: constraints.maxWidth,
+                          ),
+                        )
+                      else if (showRegQr)
                         Positioned(
                           right: 8,
                           bottom: 8,
@@ -967,6 +1218,60 @@ class _RegistrationQrBadge extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               'SCAN TO REGISTER',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.w700,
+                fontSize: maxWidth < 200 ? 7 : 8,
+                height: 1.1,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ParticipantsQrBadge extends StatelessWidget {
+  final String competitionId;
+  final double maxWidth;
+
+  const _ParticipantsQrBadge({
+    required this.competitionId,
+    required this.maxWidth,
+  });
+
+  double get _qrSize {
+    if (maxWidth < 180) return 52;
+    if (maxWidth < 260) return 60;
+    return 68;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 3,
+      shadowColor: Colors.black.withValues(alpha: 0.2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CompetitionParticipantsQrImage(
+              competitionId: competitionId,
+              size: _qrSize,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'SCAN FOR RESULTS',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppTheme.primaryColor,
@@ -1721,6 +2026,7 @@ class HomeCompetitionSections extends StatelessWidget {
           subtitle: 'Previous championship outcomes',
           competitions: past,
           viewMoreStatus: 'completed',
+          showParticipantsQr: true,
         ),
       ],
     );
