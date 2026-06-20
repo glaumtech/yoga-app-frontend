@@ -20,14 +20,14 @@ class RegistrationSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: AppTheme.textColor,
-              fontSize: 22,
-            ),
+          fontWeight: FontWeight.w800,
+          color: AppTheme.textColor,
+          fontSize: 20,
+        ),
       ),
     );
   }
@@ -47,17 +47,21 @@ class RegistrationEventHeader extends StatelessWidget {
         Text(
           competition.competitionName,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: AppTheme.textColor,
-                height: 1.15,
-              ),
+            fontWeight: FontWeight.w800,
+            color: AppTheme.textColor,
+            height: 1.15,
+          ),
         ),
         if (address.isNotEmpty) ...[
           const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.location_on_outlined, size: 20, color: Colors.grey.shade700),
+              Icon(
+                Icons.location_on_outlined,
+                size: 20,
+                color: Colors.grey.shade700,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -104,33 +108,39 @@ class RegistrationEventHighlights extends StatelessWidget {
               itemCount: _items.length,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: crossAxisCount,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 2.8,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 6.0,
               ),
               itemBuilder: (context, index) {
                 final item = _items[index];
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryColor.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: AppTheme.primaryColor.withValues(alpha: 0.12),
                     ),
                   ),
                   child: Row(
                     children: [
-                      Icon(item.$1, size: 22, color: AppTheme.primaryColor),
-                      const SizedBox(width: 10),
+                      Icon(item.$1, size: 16, color: AppTheme.primaryColor),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           item.$2,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: AppTheme.textColor,
+                            height: 1.2,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -168,7 +178,10 @@ class RegistrationCategoryCards extends StatelessWidget {
       if (fromHome != null && fromHome > 0) return fromHome;
       final id = competition.id?.toString() ?? '';
       if (id.isNotEmpty) {
-        final fee = competitionController.resolveCategoryFeeRupees(id, categoryId);
+        final fee = competitionController.resolveCategoryFeeRupees(
+          id,
+          categoryId,
+        );
         if (fee > 0) return fee;
       }
     }
@@ -188,11 +201,14 @@ class RegistrationCategoryCards extends StatelessWidget {
           builder: (context, constraints) {
             final cardWidth = constraints.maxWidth < 600
                 ? constraints.maxWidth
-                : (constraints.maxWidth / categories.length.clamp(1, 4))
-                    .clamp(220.0, 280.0);
+                : (constraints.maxWidth / categories.length.clamp(1, 4)).clamp(
+                    220.0,
+                    280.0,
+                  );
 
             return Obx(() {
-              final selected = participantController.selectedCategories.isNotEmpty
+              final selected =
+                  participantController.selectedCategories.isNotEmpty
                   ? participantController.selectedCategories.first
                   : null;
 
@@ -204,14 +220,19 @@ class RegistrationCategoryCards extends StatelessWidget {
                   final isSelected = selected == category;
 
                   return SizedBox(
-                    width: constraints.maxWidth < 600 ? double.infinity : cardWidth,
+                    width: constraints.maxWidth < 600
+                        ? double.infinity
+                        : cardWidth,
                     child: _CategoryCard(
                       categoryName: category,
                       fee: fee,
                       isSelected: isSelected,
                       onRegister: () {
-                        participantController.selectedCategories.value = [category];
-                        participantController.validateRegistrationFormOnFieldChange();
+                        participantController.selectedCategories.value = [
+                          category,
+                        ];
+                        participantController
+                            .validateRegistrationFormOnFieldChange();
                         onRegisterTap();
                       },
                     ),
@@ -323,20 +344,25 @@ class RegistrationEventSidebar extends StatelessWidget {
   });
 
   String? _eventDateDisplay() {
-    final start = fullCompetition?.eventStartDate ??
+    final start =
+        fullCompetition?.eventStartDate ??
         DateTime.tryParse(competition.eventStartDate ?? '');
     if (start == null) {
       final raw = competition.eventStartDate?.trim();
       return raw != null && raw.isNotEmpty ? raw : null;
     }
 
-    final end = fullCompetition?.eventEndDate ??
+    final end =
+        fullCompetition?.eventEndDate ??
         DateTime.tryParse(competition.eventEndDate ?? '');
     final formatter = DateFormat('MMMM d, yyyy');
     final dayFormatter = DateFormat('EEEE');
-    final startText = '${formatter.format(start)} - ${dayFormatter.format(start)}';
+    final startText =
+        '${formatter.format(start)} - ${dayFormatter.format(start)}';
     if (end == null ||
-        (start.year == end.year && start.month == end.month && start.day == end.day)) {
+        (start.year == end.year &&
+            start.month == end.month &&
+            start.day == end.day)) {
       return startText;
     }
     return '$startText – ${formatter.format(end)}';
@@ -363,9 +389,9 @@ class RegistrationEventSidebar extends StatelessWidget {
     );
     await Clipboard.setData(ClipboardData(text: url));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Registration link copied')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Registration link copied')));
   }
 
   @override
@@ -413,10 +439,7 @@ class RegistrationEventSidebar extends StatelessWidget {
           ),
           if (address.isNotEmpty) ...[
             const SizedBox(height: 20),
-            VenueMapPreview(
-              address: address,
-              height: 200,
-            ),
+            VenueMapPreview(address: address, height: 200),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
@@ -481,7 +504,8 @@ class RegistrationEventSidebar extends StatelessWidget {
               _ShareChip(
                 icon: Icons.email_outlined,
                 color: Colors.red.shade600,
-                onTap: () => launchUrl(Uri.parse('mailto:praveen.sekar@glaum.in')),
+                onTap: () =>
+                    launchUrl(Uri.parse('mailto:praveen.sekar@glaum.in')),
               ),
             ],
           ),
@@ -543,7 +567,11 @@ class _SidebarRow extends StatelessWidget {
     );
 
     if (onTap == null) return child;
-    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(8), child: child);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: child,
+    );
   }
 }
 

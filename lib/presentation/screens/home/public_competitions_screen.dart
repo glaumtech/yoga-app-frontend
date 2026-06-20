@@ -254,9 +254,8 @@ class PublicCompetitionsScreen extends StatelessWidget {
 
   Widget _buildLoadingBody(
     BuildContext context,
-    BoxConstraints constraints,
+    double w,
   ) {
-    final w = constraints.maxWidth;
     final padH = HomeLayout.sectionHorizontalPadding(w);
     final isMobile = w < HomeLayout.mobile;
     final crossCount = isMobile
@@ -266,50 +265,46 @@ class PublicCompetitionsScreen extends StatelessWidget {
         ? w - 2 * padH
         : _gridCardWidth(w, crossCount, padH);
 
-    return SizedBox(
-      height: constraints.maxHeight,
+    return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildPageHeader(context, padH, loading: true),
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(padH, 0, padH, 16),
-              child: Column(
-                children: [
-                  _buildLoadingGrid(
-                    context,
-                    w,
-                    padH,
-                    crossCount,
-                    cardW,
-                    isMobile,
-                  ),
-                  const SizedBox(height: 24),
-                  Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: AppTheme.primaryColor,
-                          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(padH, 0, padH, 16),
+            child: Column(
+              children: [
+                _buildLoadingGrid(
+                  context,
+                  w,
+                  padH,
+                  crossCount,
+                  cardW,
+                  isMobile,
+                ),
+                const SizedBox(height: 24),
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: AppTheme.primaryColor,
                         ),
-                        const SizedBox(width: 12),
-                        Text(
-                          _loadingMessage,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: Colors.grey[700]),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _loadingMessage,
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: Colors.grey[700]),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           const FooterSection(),
@@ -398,30 +393,31 @@ class PublicCompetitionsScreen extends StatelessWidget {
       appBar: const HomeLandingAppBar(),
       body: LayoutBuilder(
         builder: (context, constraints) {
+          final w = constraints.maxWidth;
+
           return Obx(() {
             final isLoading =
                 competitionController.isLoadingHomeCompetitions.value;
             final allCompetitions = competitionController.homeCompetitions;
 
             if (isLoading && allCompetitions.isEmpty) {
-              return _buildLoadingBody(context, constraints);
+              return _buildLoadingBody(context, w);
             }
 
             final list = _filteredList(allCompetitions);
 
             if (!isLoading && list.isEmpty) {
-              return SizedBox(
-                height: constraints.maxHeight,
+              return SingleChildScrollView(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(child: _buildEmpty(context)),
+                    SizedBox(height: 320, child: _buildEmpty(context)),
                     const FooterSection(),
                   ],
                 ),
               );
             }
 
-            final w = constraints.maxWidth;
             final padH = HomeLayout.sectionHorizontalPadding(w);
             final idOf = (HomeCompetitionModel c) => c.idStr ?? '${c.id}';
             final isMobile = w < HomeLayout.mobile;
@@ -432,45 +428,42 @@ class PublicCompetitionsScreen extends StatelessWidget {
                 ? w - 2 * padH
                 : _gridCardWidth(w, crossCount, padH);
 
-            return SizedBox(
-              height: constraints.maxHeight,
+            return SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildPageHeader(context, padH, count: list.length),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(padH, 0, padH, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (isMobile)
-                            Column(
-                              children: [
-                                for (var i = 0; i < list.length; i++) ...[
-                                  if (i > 0) const SizedBox(height: 16),
-                                  _buildEventCard(
-                                    context,
-                                    list[i],
-                                    cardW,
-                                    i,
-                                    idOf,
-                                  ),
-                                ],
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(padH, 0, padH, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (isMobile)
+                          Column(
+                            children: [
+                              for (var i = 0; i < list.length; i++) ...[
+                                if (i > 0) const SizedBox(height: 16),
+                                _buildEventCard(
+                                  context,
+                                  list[i],
+                                  cardW,
+                                  i,
+                                  idOf,
+                                ),
                               ],
-                            )
-                          else
-                            _buildDesktopGrid(
-                              context,
-                              list,
-                              crossCount,
-                              cardW,
-                              idOf,
-                            ),
-                          const SizedBox(height: 16),
-                          _buildHintCard(context),
-                        ],
-                      ),
+                            ],
+                          )
+                        else
+                          _buildDesktopGrid(
+                            context,
+                            list,
+                            crossCount,
+                            cardW,
+                            idOf,
+                          ),
+                        const SizedBox(height: 16),
+                        _buildHintCard(context),
+                      ],
                     ),
                   ),
                   const FooterSection(),

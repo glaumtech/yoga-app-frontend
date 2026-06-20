@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/layout/home_layout.dart';
@@ -260,7 +263,11 @@ class _LandingUserMenuButton extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.account_circle, color: Colors.white, size: 24),
+          child: const Icon(
+            Icons.account_circle,
+            color: Colors.white,
+            size: 24,
+          ),
         ),
       ),
     );
@@ -282,7 +289,9 @@ class _LandingUserMenuCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = userName?.trim().isNotEmpty == true ? userName!.trim() : 'User';
+    final name = userName?.trim().isNotEmpty == true
+        ? userName!.trim()
+        : 'User';
     final role = userRole?.trim() ?? '';
 
     return Material(
@@ -429,28 +438,26 @@ class HomeLandingAppBar extends StatelessWidget implements PreferredSizeWidget {
         ? Get.find<AuthController>()
         : Get.put(AuthController());
 
-    return Obx(
-      () {
-        final user = userController.currentUser.value;
-        final isAuthenticated = userController.isAuthenticated;
+    return Obx(() {
+      final user = userController.currentUser.value;
+      final isAuthenticated = userController.isAuthenticated;
 
-        return HomeLandingNavBar(
-          isAuthenticated: isAuthenticated,
-          onLogin: () => context.go(AppRoutes.login),
-          onLogout: isAuthenticated
-              ? () async {
-                  await authController.signOut();
-                  if (context.mounted) {
-                    context.go(AppRoutes.login);
-                  }
+      return HomeLandingNavBar(
+        isAuthenticated: isAuthenticated,
+        onLogin: () => context.go(AppRoutes.login),
+        onLogout: isAuthenticated
+            ? () async {
+                await authController.signOut();
+                if (context.mounted) {
+                  context.go(AppRoutes.login);
                 }
-              : null,
-          showUserProfile: isAuthenticated,
-          userName: user?.name,
-          userRole: user?.userTypeName?.trim().toUpperCase(),
-        );
-      },
-    );
+              }
+            : null,
+        showUserProfile: isAuthenticated,
+        userName: user?.name,
+        userRole: user?.userTypeName?.trim().toUpperCase(),
+      );
+    });
   }
 }
 
@@ -513,7 +520,8 @@ class _NavLink extends StatelessWidget {
 }
 
 typedef _HeroBannerSlide = ({
-  String imageAsset,
+  String? imageAsset,
+  String? videoAsset,
   String headline,
   String subtitle,
   String buttonLabel,
@@ -533,12 +541,26 @@ class HomeHeroSection extends StatefulWidget {
 
 class _HomeHeroSectionState extends State<HomeHeroSection> {
   int _currentIndex = 0;
+  Timer? _autoPlayTimer;
   final CarouselSliderController _carouselController =
       CarouselSliderController();
 
+  static const Duration _videoSlideDuration = Duration(seconds: 10);
+  static const Duration _imageSlideDuration = Duration(seconds: 5);
+
   static final List<_HeroBannerSlide> _slides = [
     (
+      imageAsset: null,
+      videoAsset: 'assets/images/videos/app-inaguration.mp4',
+      headline: 'Welcome to Yoga Champ',
+      subtitle:
+          'Celebrating the inauguration of your Yogasana competition platform.',
+      buttonLabel: 'Explore Competitions',
+      action: _HeroSlideAction.explore,
+    ),
+    (
       imageAsset: 'assets/images/banners/banner-1.jpg',
+      videoAsset: null,
       headline: 'Register, Compete & Celebrate Excellence',
       subtitle:
           'Your platform for Yogasana championships — registration, scoring, and results in one place.',
@@ -547,6 +569,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
     ),
     (
       imageAsset: 'assets/images/banners/banner-2.jpg',
+      videoAsset: null,
       headline: 'Digital Scoring & Transparent Results',
       subtitle:
           'Jury panels, live marks entry, and published results — all managed online.',
@@ -555,6 +578,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
     ),
     (
       imageAsset: 'assets/images/banners/banner-3.jpg',
+      videoAsset: null,
       headline: 'Practice. Compete. Grow.',
       subtitle:
           'Join Yogasana championships near you — register online and showcase your talent.',
@@ -564,7 +588,37 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _scheduleAutoPlay();
+  }
+
+  Duration _durationForSlide(int index) {
+    final slide = _slides[index];
+    final hasVideo = slide.videoAsset != null && slide.videoAsset!.isNotEmpty;
+    return hasVideo ? _videoSlideDuration : _imageSlideDuration;
+  }
+
+  void _scheduleAutoPlay() {
+    _autoPlayTimer?.cancel();
+    if (_slides.length <= 1) return;
+
+    _autoPlayTimer = Timer(_durationForSlide(_currentIndex), () {
+      if (!mounted) return;
+      final next = (_currentIndex + 1) % _slides.length;
+      _carouselController.animateToPage(next);
+    });
+  }
+
+  void _onPageChanged(int index) {
+    if (!mounted) return;
+    setState(() => _currentIndex = index);
+    _scheduleAutoPlay();
+  }
+
+  @override
   void dispose() {
+    _autoPlayTimer?.cancel();
     _carouselController.stopAutoPlay();
     super.dispose();
   }
@@ -586,7 +640,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < HomeLayout.mobile;
     final padH = HomeLayout.sectionHorizontalPadding(width);
-    final bannerHeight = isMobile ? 380.0 : 480.0;
+    final bannerHeight = isMobile ? 540.0 : 700.0;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(padH, 12, padH, 8),
@@ -607,22 +661,21 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
                   return _HeroSlideView(
                     slide: slide,
                     isMobile: isMobile,
+                    isActive: index == _currentIndex,
                     onPressed: () => _onSlideAction(slide.action),
                   );
                 },
                 options: CarouselOptions(
                   height: bannerHeight,
                   viewportFraction: 1.0,
-                  autoPlay: _slides.length > 1,
-                  autoPlayInterval: const Duration(seconds: 5),
+                  autoPlay: false,
                   autoPlayAnimationDuration: const Duration(milliseconds: 700),
                   enlargeCenterPage: false,
                   enableInfiniteScroll: _slides.length > 1,
                   onPageChanged: (index, reason) {
-                    if (!mounted) return;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (!mounted) return;
-                      setState(() => _currentIndex = index);
+                      _onPageChanged(index);
                     });
                   },
                 ),
@@ -668,26 +721,37 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
 class _HeroSlideView extends StatelessWidget {
   final _HeroBannerSlide slide;
   final bool isMobile;
+  final bool isActive;
   final VoidCallback onPressed;
 
   const _HeroSlideView({
     required this.slide,
     required this.isMobile,
+    required this.isActive,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
+    final videoAsset = slide.videoAsset;
+    final imageAsset = slide.imageAsset;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(
-          slide.imageAsset,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          errorBuilder: (_, __, ___) => Container(color: AppTheme.primaryColor),
-        ),
+        if (videoAsset != null && videoAsset.isNotEmpty)
+          _HeroVideoBackground(assetPath: videoAsset, isActive: isActive)
+        else if (imageAsset != null && imageAsset.isNotEmpty)
+          Image.asset(
+            imageAsset,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            errorBuilder: (_, __, ___) =>
+                Container(color: AppTheme.primaryColor),
+          )
+        else
+          Container(color: AppTheme.primaryColor),
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -768,6 +832,134 @@ class _HeroSlideView extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroVideoBackground extends StatefulWidget {
+  final String assetPath;
+  final bool isActive;
+
+  const _HeroVideoBackground({required this.assetPath, required this.isActive});
+
+  @override
+  State<_HeroVideoBackground> createState() => _HeroVideoBackgroundState();
+}
+
+class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
+  VideoPlayerController? _controller;
+  bool _initialized = false;
+  bool _soundOn = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HeroVideoBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.assetPath != widget.assetPath) {
+      _disposeController();
+      _initController();
+      return;
+    }
+    _syncPlayback();
+  }
+
+  Future<void> _initController() async {
+    final controller = VideoPlayerController.asset(widget.assetPath);
+    _controller = controller;
+    try {
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(_soundOn ? 1.0 : 0.0);
+      if (!mounted) return;
+      setState(() => _initialized = true);
+      _syncPlayback();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _initialized = false);
+    }
+  }
+
+  Future<void> _toggleSound() async {
+    final controller = _controller;
+    if (controller == null || !_initialized) return;
+
+    final enableSound = !_soundOn;
+    setState(() => _soundOn = enableSound);
+    await controller.setVolume(enableSound ? 1.0 : 0.0);
+    if (enableSound && widget.isActive && !controller.value.isPlaying) {
+      await controller.play();
+    }
+  }
+
+  void _syncPlayback() {
+    final controller = _controller;
+    if (controller == null || !_initialized) return;
+    if (widget.isActive) {
+      controller.setVolume(_soundOn ? 1.0 : 0.0);
+      controller.play();
+    } else {
+      controller.pause();
+    }
+  }
+
+  void _disposeController() {
+    _controller?.dispose();
+    _controller = null;
+    _initialized = false;
+  }
+
+  @override
+  void dispose() {
+    _disposeController();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (!_initialized ||
+        controller == null ||
+        !controller.value.isInitialized) {
+      return Container(color: AppTheme.primaryColor);
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: controller.value.size.width,
+              height: controller.value.size.height,
+              child: VideoPlayer(controller),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 12,
+          right: 12,
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.45),
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: IconButton(
+              onPressed: _toggleSound,
+              tooltip: _soundOn ? 'Mute video' : 'Unmute video',
+              icon: Icon(
+                _soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                color: Colors.white,
+              ),
+            ),
           ),
         ),
       ],
@@ -1518,6 +1710,324 @@ class _ServiceIllustration extends StatelessWidget {
   }
 }
 
+class HomeEventsCarouselSection extends StatefulWidget {
+  const HomeEventsCarouselSection({super.key});
+
+  @override
+  State<HomeEventsCarouselSection> createState() =>
+      _HomeEventsCarouselSectionState();
+}
+
+typedef _EventCarouselItem = ({
+  String? imageAsset,
+  String? videoAsset,
+  String title,
+  String subtitle,
+});
+
+class _HomeEventsCarouselSectionState extends State<HomeEventsCarouselSection> {
+  int _currentIndex = 0;
+  final CarouselSliderController _carouselController =
+      CarouselSliderController();
+
+  static const List<_EventCarouselItem> _items = [
+    (
+      imageAsset: null,
+      videoAsset: 'assets/images/videos/app-inaguration.mp4',
+      title: 'App Inauguration',
+      subtitle: 'Launch of the Yoga Champ platform',
+    ),
+    (
+      imageAsset: 'assets/images/banners/banner-1.jpg',
+      videoAsset: null,
+      title: 'State Championships',
+      subtitle: 'Register and compete at state level',
+    ),
+    (
+      imageAsset: 'assets/images/banners/banner-2.jpg',
+      videoAsset: null,
+      title: 'Digital Scoring',
+      subtitle: 'Transparent jury evaluation workflows',
+    ),
+    (
+      imageAsset: 'assets/images/banners/banner-3.jpg',
+      videoAsset: null,
+      title: 'Practice & Grow',
+      subtitle: 'Yogasana events near you',
+    ),
+  ];
+
+  double _viewportFraction(double width) {
+    if (width >= HomeLayout.tablet) return 0.26;
+    if (width >= HomeLayout.mobile) return 0.34;
+    return 0.86;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isMobile = width < HomeLayout.mobile;
+    final padH = HomeLayout.sectionHorizontalPadding(width);
+    final cardHeight = isMobile ? 240.0 : 300.0;
+
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: EdgeInsets.fromLTRB(padH, 36, padH, 40),
+      child: Column(
+        children: [
+          const _SectionHeader(
+            title: 'Events',
+            subtitle: 'Highlights from our yoga championship journey',
+          ),
+          const SizedBox(height: 24),
+          CarouselSlider.builder(
+            carouselController: _carouselController,
+            itemCount: _items.length,
+            itemBuilder: (context, index, realIndex) {
+              final active = index == _currentIndex;
+              return _EventCarouselCard(
+                item: _items[index],
+                isActive: active,
+                height: cardHeight,
+              );
+            },
+            options: CarouselOptions(
+              height: cardHeight + 56,
+              viewportFraction: _viewportFraction(width),
+              enlargeCenterPage: true,
+              enlargeFactor: 0.18,
+              enableInfiniteScroll: _items.length > 1,
+              autoPlay: _items.length > 1,
+              autoPlayInterval: const Duration(seconds: 4),
+              autoPlayAnimationDuration: const Duration(milliseconds: 650),
+              onPageChanged: (index, reason) {
+                if (!mounted) return;
+                setState(() => _currentIndex = index);
+              },
+            ),
+          ),
+          if (_items.length > 1) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(_items.length, (index) {
+                final active = _currentIndex == index;
+                return GestureDetector(
+                  onTap: () => _carouselController.animateToPage(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    width: active ? 24 : 8,
+                    height: 8,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: active
+                          ? AppTheme.primaryColor
+                          : AppTheme.primaryColor.withValues(alpha: 0.25),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EventCarouselCard extends StatelessWidget {
+  final _EventCarouselItem item;
+  final bool isActive;
+  final double height;
+
+  const _EventCarouselCard({
+    required this.item,
+    required this.isActive,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final videoAsset = item.videoAsset;
+    final imageAsset = item.imageAsset;
+
+    return AnimatedScale(
+      scale: isActive ? 1.0 : 0.94,
+      duration: const Duration(milliseconds: 300),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (videoAsset != null && videoAsset.isNotEmpty)
+                      _EventCarouselVideo(
+                        assetPath: videoAsset,
+                        isActive: isActive,
+                      )
+                    else if (imageAsset != null && imageAsset.isNotEmpty)
+                      Image.asset(
+                        imageAsset,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            Container(color: AppTheme.primaryColor),
+                      )
+                    else
+                      Container(color: AppTheme.primaryColor),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.72),
+                          ],
+                          stops: const [0.45, 1.0],
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      bottom: 12,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              fontSize: 12,
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventCarouselVideo extends StatefulWidget {
+  final String assetPath;
+  final bool isActive;
+
+  const _EventCarouselVideo({
+    required this.assetPath,
+    required this.isActive,
+  });
+
+  @override
+  State<_EventCarouselVideo> createState() => _EventCarouselVideoState();
+}
+
+class _EventCarouselVideoState extends State<_EventCarouselVideo> {
+  VideoPlayerController? _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EventCarouselVideo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.assetPath != widget.assetPath) {
+      _disposeController();
+      _initController();
+      return;
+    }
+    _syncPlayback();
+  }
+
+  Future<void> _initController() async {
+    final controller = VideoPlayerController.asset(widget.assetPath);
+    _controller = controller;
+    try {
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(0);
+      if (!mounted) return;
+      setState(() => _initialized = true);
+      _syncPlayback();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _initialized = false);
+    }
+  }
+
+  void _syncPlayback() {
+    final controller = _controller;
+    if (controller == null || !_initialized) return;
+    if (widget.isActive) {
+      controller.play();
+    } else {
+      controller.pause();
+    }
+  }
+
+  void _disposeController() {
+    _controller?.dispose();
+    _controller = null;
+    _initialized = false;
+  }
+
+  @override
+  void dispose() {
+    _disposeController();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (!_initialized || controller == null || !controller.value.isInitialized) {
+      return Container(color: AppTheme.primaryColor);
+    }
+
+    return FittedBox(
+      fit: BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(
+        width: controller.value.size.width,
+        height: controller.value.size.height,
+        child: VideoPlayer(controller),
+      ),
+    );
+  }
+}
+
 class HomeEnquireSection extends StatefulWidget {
   const HomeEnquireSection({super.key});
 
@@ -2041,6 +2551,7 @@ class HomeLandingFooter extends StatelessWidget {
     return const Column(
       children: [
         HomeServicesSection(),
+        HomeEventsCarouselSection(),
         HomeEnquireSection(),
         HomeWhyChooseUsSection(),
         HomeNewsletterSection(),

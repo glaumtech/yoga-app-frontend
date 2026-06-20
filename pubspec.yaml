@@ -71,6 +71,9 @@ dependencies:
   
   # Carousel Slider
   carousel_slider: ^5.0.0
+
+  # Hero banner video
+  video_player: ^2.10.0
   
   # Cached Network Image
   cached_network_image: ^3.3.1
@@ -113,6 +116,7 @@ flutter:
     - assets/images/banners/banner-1.jpg
     - assets/images/banners/banner-2.jpg
     - assets/images/banners/banner-3.jpg
+    - assets/images/videos/app-inaguration.mp4
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

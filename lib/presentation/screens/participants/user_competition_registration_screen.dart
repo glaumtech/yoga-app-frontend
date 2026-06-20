@@ -35,6 +35,10 @@ class _UserCompetitionRegistrationScreenState
     extends State<UserCompetitionRegistrationScreen> {
   final GlobalKey _formSectionKey = GlobalKey();
 
+  /// Wide event banner aspect (similar to NovaRace / Metro Kidathon posters).
+  static const double _bannerAspectRatio = 16 / 9;
+  static const double _sidebarWidth = 320;
+
   @override
   void initState() {
     super.initState();
@@ -108,7 +112,8 @@ class _UserCompetitionRegistrationScreenState
         }),
       ),
       body: Obx(() {
-        final isLoading = competitionController.isLoadingHomeCompetitions.value &&
+        final isLoading =
+            competitionController.isLoadingHomeCompetitions.value &&
             competitionController.homeCompetitions.isEmpty;
 
         if (isLoading) {
@@ -132,20 +137,20 @@ class _UserCompetitionRegistrationScreenState
                     child: competition == null
                         ? _buildMissingCompetition(context)
                         : isMobile
-                            ? _buildMobileContent(
-                                context,
-                                competition,
-                                fullCompetition,
-                                competitionController,
-                                participantController,
-                              )
-                            : _buildDesktopContent(
-                                context,
-                                competition,
-                                fullCompetition,
-                                competitionController,
-                                participantController,
-                              ),
+                        ? _buildMobileContent(
+                            context,
+                            competition,
+                            fullCompetition,
+                            competitionController,
+                            participantController,
+                          )
+                        : _buildDesktopContent(
+                            context,
+                            competition,
+                            fullCompetition,
+                            competitionController,
+                            participantController,
+                          ),
                   ),
                 ),
               ),
@@ -163,9 +168,9 @@ class _UserCompetitionRegistrationScreenState
       children: [
         Text(
           'Competition not found',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         Text(
@@ -193,30 +198,19 @@ class _UserCompetitionRegistrationScreenState
       children: [
         RegistrationEventHeader(competition: competition),
         const SizedBox(height: 20),
-        _buildBanner(competition, isMobile: true),
-        const SizedBox(height: 24),
+        _buildEventBanner(competition),
+        const SizedBox(height: 20),
         RegistrationEventSidebar(
           competition: competition,
           fullCompetition: fullCompetition,
           onRegisterTap: _scrollToRegistrationForm,
         ),
-        const SizedBox(height: 32),
-        if (competition.description.trim().isNotEmpty) ...[
-          _buildDescription(context, competition.description),
-          const SizedBox(height: 32),
-        ],
-        const RegistrationEventHighlights(),
-        const SizedBox(height: 32),
-        RegistrationCategoryCards(
-          competition: competition,
-          fullCompetition: fullCompetition,
-          competitionController: competitionController,
-          participantController: participantController,
-          onRegisterTap: _scrollToRegistrationForm,
-        ),
-        const SizedBox(height: 32),
-        _buildRegistrationSection(
+        const SizedBox(height: 20),
+        ..._buildEventDetailsSections(
           context,
+          competition,
+          fullCompetition,
+          competitionController,
           participantController,
         ),
       ],
@@ -234,9 +228,7 @@ class _UserCompetitionRegistrationScreenState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         RegistrationEventHeader(competition: competition),
-        const SizedBox(height: 24),
-        _buildBanner(competition, isMobile: false),
-        const SizedBox(height: 32),
+        const SizedBox(height: 20),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -244,25 +236,22 @@ class _UserCompetitionRegistrationScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (competition.description.trim().isNotEmpty) ...[
-                    _buildDescription(context, competition.description),
-                    const SizedBox(height: 36),
-                  ],
-                  const RegistrationEventHighlights(),
-                  const SizedBox(height: 36),
-                  RegistrationCategoryCards(
-                    competition: competition,
-                    fullCompetition: fullCompetition,
-                    competitionController: competitionController,
-                    participantController: participantController,
-                    onRegisterTap: _scrollToRegistrationForm,
+                  _buildEventBanner(competition),
+                  const SizedBox(height: 16),
+                  ..._buildEventDetailsSections(
+                    context,
+                    competition,
+                    fullCompetition,
+                    competitionController,
+                    participantController,
+                    includeRegistration: false,
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 28),
+            const SizedBox(width: 24),
             SizedBox(
-              width: 300,
+              width: _sidebarWidth,
               child: RegistrationEventSidebar(
                 competition: competition,
                 fullCompetition: fullCompetition,
@@ -271,43 +260,65 @@ class _UserCompetitionRegistrationScreenState
             ),
           ],
         ),
-        const SizedBox(height: 36),
-        _buildRegistrationSection(
-          context,
-          participantController,
-        ),
+        const SizedBox(height: 28),
+        _buildRegistrationSection(context, participantController),
       ],
     );
   }
 
-  Widget _buildBanner(HomeCompetitionModel competition, {required bool isMobile}) {
-    final bannerUrl = competitionBrochureBannerUrl(competition);
-    final height = isMobile ? 220.0 : 320.0;
-
-    if (bannerUrl != null && bannerUrl.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          width: double.infinity,
-          height: height,
-          child: Image.network(
-            bannerUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                _buildDefaultBanner(height, competition.competitionName),
-          ),
-        ),
-      );
-    }
-    return _buildDefaultBanner(height, competition.competitionName);
+  List<Widget> _buildEventDetailsSections(
+    BuildContext context,
+    HomeCompetitionModel competition,
+    CompetitionModel? fullCompetition,
+    CompetitionController competitionController,
+    ParticipantController participantController, {
+    bool includeRegistration = true,
+  }) {
+    return [
+      if (competition.description.trim().isNotEmpty) ...[
+        _buildDescription(context, competition.description),
+        const SizedBox(height: 24),
+      ],
+      const RegistrationEventHighlights(),
+      const SizedBox(height: 24),
+      RegistrationCategoryCards(
+        competition: competition,
+        fullCompetition: fullCompetition,
+        competitionController: competitionController,
+        participantController: participantController,
+        onRegisterTap: _scrollToRegistrationForm,
+      ),
+      if (includeRegistration) ...[
+        const SizedBox(height: 28),
+        _buildRegistrationSection(context, participantController),
+      ],
+    ];
   }
 
-  Widget _buildDefaultBanner(double height, String title) {
+  Widget _buildEventBanner(HomeCompetitionModel competition) {
+    final bannerUrl = competitionBrochureBannerUrl(competition);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: _bannerAspectRatio,
+        child: bannerUrl != null && bannerUrl.isNotEmpty
+            ? Image.network(
+                bannerUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                errorBuilder: (_, __, ___) =>
+                    _buildDefaultEventBanner(competition.competitionName),
+              )
+            : _buildDefaultEventBanner(competition.competitionName),
+      ),
+    );
+  }
+
+  Widget _buildDefaultEventBanner(String title) {
     return Container(
       width: double.infinity,
-      height: height,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -318,16 +329,17 @@ class _UserCompetitionRegistrationScreenState
         ),
       ),
       alignment: Alignment.center,
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-          ),
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        title,
+        textAlign: TextAlign.center,
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 28,
+          fontWeight: FontWeight.w800,
+          height: 1.2,
         ),
       ),
     );
@@ -377,7 +389,8 @@ class _UserCompetitionRegistrationScreenState
             if (participantController.registrationSaved.value) {
               return RegistrationSuccessPanel(
                 participantController: participantController,
-                participant: participantController.lastRegisteredParticipant.value,
+                participant:
+                    participantController.lastRegisteredParticipant.value,
                 onRegisterAnother: () {
                   participantController.clearRegistrationConfirmation();
                   participantController.resetForm();
