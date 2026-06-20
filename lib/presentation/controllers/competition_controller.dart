@@ -417,6 +417,7 @@ class CompetitionController extends GetxController {
 
   /// Loads home competitions when scope changes or cache was invalidated.
   Future<void> ensureHomeCompetitionsLoaded() async {
+    await _yieldPastBuildIfNeeded();
     final scope = _homeCompetitionsScopeKey();
     if (_homeCompetitionsScope == scope) {
       if (isLoadingHomeCompetitions.value) return;
@@ -427,6 +428,7 @@ class CompetitionController extends GetxController {
 
   /// Load competitions for home screen (public API; branch-scoped when logged in)
   Future<void> loadCompetitionsForHome({bool force = false}) async {
+    await _yieldPastBuildIfNeeded();
     final scope = _homeCompetitionsScopeKey();
     if (!force && _homeCompetitionsScope == scope) {
       return;
@@ -445,6 +447,7 @@ class CompetitionController extends GetxController {
       homeCompetitions.clear();
       _homeCompetitionsScope = null;
     } finally {
+      await _yieldPastBuildIfNeeded();
       isLoadingHomeCompetitions.value = false;
     }
   }

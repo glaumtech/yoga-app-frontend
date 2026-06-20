@@ -80,6 +80,8 @@ class EndPoints {
       '/participant-registration/$id';
   static String participantRegistrationDetailsPdf(String id) =>
       '/participant-registration/$id/registration-details';
+  static String participantRegistrationDetailsImage(String id) =>
+      '/participant-registration/$id/registration-details-image';
   static String participantRegistrationForScoring =
       '/participant-registration/for-scoring';
   static String participantRegistrationImport =

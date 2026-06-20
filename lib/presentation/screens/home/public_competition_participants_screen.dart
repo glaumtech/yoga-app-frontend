@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/participant_e_certificate_download.dart';
-import '../../../core/utils/participant_registration_details_download.dart';
+import '../../../core/utils/participant_receipt_image_download.dart';
 import '../../../data/models/participant_model.dart';
 import '../../../data/repositories/competition_repository.dart';
 import '../../../data/repositories/participant_repository.dart';
@@ -220,7 +220,12 @@ class _PublicCompetitionParticipantsScreenState
     final idNum = int.tryParse(regId);
     if (idNum != null) setState(() => _downloadingDetailsId = idNum);
 
-    await downloadParticipantRegistrationDetailsPdf(context, regId);
+    await downloadParticipantReceiptImageByRegistrationId(
+      context,
+      regId,
+      seedParticipant: p,
+      competitionName: widget.competitionName,
+    );
 
     if (mounted) setState(() => _downloadingDetailsId = null);
   }

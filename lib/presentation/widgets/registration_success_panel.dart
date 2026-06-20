@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/participant_receipt_image_download.dart';
 import '../../data/models/participant_model.dart';
 import '../controllers/participant_controller.dart';
+import 'participant_payment_receipt_view.dart';
 
 /// Post-registration confirmation styled as a payment success screen.
 class RegistrationSuccessPanel extends StatefulWidget {
-  static const Color _successGreen = Color(0xFF4CAF50);
   static const Color _receiptBlue = Color(0xFF3B59F6);
 
   final ParticipantController participantController;
@@ -37,10 +36,6 @@ class _RegistrationSuccessPanelState extends State<RegistrationSuccessPanel> {
   @override
   Widget build(BuildContext context) {
     final hasParticipant = participant != null;
-    final hasPayment = hasParticipant && _hasPaymentDetails(participant!);
-    final timestamp = hasParticipant ? participant!.createdAt : DateTime.now();
-    final dateFormat = DateFormat('dd-MM-yyyy');
-    final timeFormat = DateFormat('HH:mm:ss');
 
     return Center(
       child: ConstrainedBox(
@@ -50,109 +45,8 @@ class _RegistrationSuccessPanelState extends State<RegistrationSuccessPanel> {
           children: [
             RepaintBoundary(
               key: _receiptCaptureKey,
-              child: ColoredBox(
-                color: AppTheme.backgroundColor,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: const BoxDecoration(
-                        color: RegistrationSuccessPanel._successGreen,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 42,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      hasPayment
-                          ? 'Payment successful!'
-                          : 'Registration successful!',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _orderIdLabel(participant),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 18,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          _detailRow('Date', dateFormat.format(timestamp)),
-                          _detailRow('Time', timeFormat.format(timestamp)),
-                          if (hasParticipant) ...[
-                            if (_text(participant!.registrationNo).isNotEmpty)
-                              _detailRow(
-                                'Registration No',
-                                _text(participant!.registrationNo),
-                                emphasizeValue: true,
-                              ),
-                            if (_text(participant!.competitionName).isNotEmpty)
-                              _detailRow(
-                                'Competition',
-                                _text(participant!.competitionName),
-                              ),
-                            _detailRow(
-                              'Participant',
-                              participant!.participantName,
-                            ),
-                            if (hasPayment) ...[
-                              if (_text(participant!.paymentMode).isNotEmpty)
-                                _detailRow(
-                                  'Payment method',
-                                  _formatPaymentMode(participant!),
-                                ),
-                              if (_text(participant!.paymentStatus).isNotEmpty)
-                                _detailRow(
-                                  'Status',
-                                  _formatPaymentStatus(
-                                    participant!.paymentStatus!,
-                                  ),
-                                ),
-                              if (participant!.amount != null)
-                                _detailRow(
-                                  'Total amount',
-                                  '₹${participant!.amount!.toStringAsFixed(0)}',
-                                  emphasizeValue: true,
-                                ),
-                            ] else
-                              _detailRow('Status', 'Registered'),
-                          ] else
-                            _detailRow('Status', 'Saved successfully'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              child: ParticipantPaymentReceiptView(
+                participant: participant,
               ),
             ),
             const SizedBox(height: 24),
@@ -165,6 +59,7 @@ class _RegistrationSuccessPanelState extends State<RegistrationSuccessPanel> {
                     ? () => downloadParticipantReceiptImage(
                         context,
                         _receiptCaptureKey,
+                        registrationId: participant!.id,
                         registrationNo: participant!.registrationNo,
                       )
                     : null,
@@ -188,87 +83,6 @@ class _RegistrationSuccessPanelState extends State<RegistrationSuccessPanel> {
             ],
           ],
         ),
-      ),
-    );
-  }
-
-  String _text(String? value) => value?.trim() ?? '';
-
-  String _orderIdLabel(ParticipantModel? p) {
-    if (p == null) return 'Reference: —';
-    final paymentId = _text(p.razorpayPaymentId);
-    if (paymentId.isNotEmpty) return 'Order id: $paymentId';
-    final orderId = _text(p.razorpayOrderId);
-    if (orderId.isNotEmpty) return 'Order id: $orderId';
-    final regNo = _text(p.registrationNo);
-    if (regNo.isNotEmpty) return 'Registration no: $regNo';
-    return 'Reference: —';
-  }
-
-  bool _hasPaymentDetails(ParticipantModel p) {
-    return _text(p.paymentMode).isNotEmpty ||
-        _text(p.paymentStatus).isNotEmpty ||
-        p.amount != null ||
-        _text(p.razorpayPaymentId).isNotEmpty;
-  }
-
-  String _formatPaymentMode(ParticipantModel p) {
-    final mode = _text(p.paymentMode);
-    switch (mode.toUpperCase()) {
-      case 'ONLINE':
-        return 'Online (Razorpay)';
-      case 'GPAY':
-        return 'GPay';
-      case 'CASH':
-        return 'Cash';
-      default:
-        return mode;
-    }
-  }
-
-  String _formatPaymentStatus(String status) {
-    final normalized = status.trim().toUpperCase();
-    if (normalized == 'PAID' ||
-        normalized == 'SUCCESS' ||
-        normalized == 'SUCCESSFUL') {
-      return 'Successful';
-    }
-    return status;
-  }
-
-  Widget _detailRow(
-    String label,
-    String value, {
-    bool emphasizeValue = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 5,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 6,
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: emphasizeValue ? FontWeight.bold : FontWeight.w500,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

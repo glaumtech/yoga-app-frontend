@@ -323,6 +323,12 @@ class ParticipantModel {
     String? eventId,
     bool? isSpotRegistration,
     bool? optForECertificate,
+    String? competitionName,
+    String? paymentMode,
+    String? paymentStatus,
+    double? amount,
+    String? razorpayOrderId,
+    String? razorpayPaymentId,
   }) {
     return ParticipantModel(
       id: id ?? this.id,
@@ -352,6 +358,12 @@ class ParticipantModel {
       eventId: eventId ?? this.eventId,
       isSpotRegistration: isSpotRegistration ?? this.isSpotRegistration,
       optForECertificate: optForECertificate ?? this.optForECertificate,
+      competitionName: competitionName ?? this.competitionName,
+      paymentMode: paymentMode ?? this.paymentMode,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      amount: amount ?? this.amount,
+      razorpayOrderId: razorpayOrderId ?? this.razorpayOrderId,
+      razorpayPaymentId: razorpayPaymentId ?? this.razorpayPaymentId,
     );
   }
 
