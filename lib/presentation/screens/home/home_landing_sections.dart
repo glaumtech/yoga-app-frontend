@@ -1953,6 +1953,7 @@ class _EventCarouselVideo extends StatefulWidget {
 class _EventCarouselVideoState extends State<_EventCarouselVideo> {
   VideoPlayerController? _controller;
   bool _initialized = false;
+  bool _userStartedPlayback = false;
 
   @override
   void initState() {
@@ -1987,13 +1988,24 @@ class _EventCarouselVideoState extends State<_EventCarouselVideo> {
     }
   }
 
+  Future<void> _onPlayTap() async {
+    if (!widget.isActive) return;
+    final controller = _controller;
+    if (controller == null || !_initialized) return;
+
+    await controller.play();
+    if (!mounted) return;
+    setState(() => _userStartedPlayback = true);
+  }
+
   void _syncPlayback() {
     final controller = _controller;
     if (controller == null || !_initialized) return;
-    if (widget.isActive) {
-      controller.play();
-    } else {
+    if (!widget.isActive) {
       controller.pause();
+      if (_userStartedPlayback) {
+        setState(() => _userStartedPlayback = false);
+      }
     }
   }
 
@@ -2001,6 +2013,7 @@ class _EventCarouselVideoState extends State<_EventCarouselVideo> {
     _controller?.dispose();
     _controller = null;
     _initialized = false;
+    _userStartedPlayback = false;
   }
 
   @override
@@ -2016,14 +2029,51 @@ class _EventCarouselVideoState extends State<_EventCarouselVideo> {
       return Container(color: AppTheme.primaryColor);
     }
 
-    return FittedBox(
-      fit: BoxFit.cover,
-      clipBehavior: Clip.hardEdge,
-      child: SizedBox(
-        width: controller.value.size.width,
-        height: controller.value.size.height,
-        child: VideoPlayer(controller),
-      ),
+    final showPlayIcon = widget.isActive && !_userStartedPlayback;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        FittedBox(
+          fit: BoxFit.cover,
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(
+            width: controller.value.size.width,
+            height: controller.value.size.height,
+            child: VideoPlayer(controller),
+          ),
+        ),
+        if (showPlayIcon)
+          Center(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _onPlayTap,
+                customBorder: const CircleBorder(),
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.92),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 44,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
