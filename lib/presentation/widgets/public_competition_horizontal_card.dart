@@ -8,6 +8,7 @@ import '../../core/utils/competition_brochure_banner_url.dart';
 import '../../core/utils/competition_registration_url.dart';
 import '../../data/models/competition_model.dart';
 import '../../routes/app_routes.dart';
+import 'competition_participants_qr_image.dart';
 import 'competition_registration_qr_image.dart';
 import 'primary_button.dart';
 
@@ -17,6 +18,7 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   final double width;
   final VoidCallback onViewParticipants;
   final bool showRegistrationQr;
+  final bool showParticipantsQr;
   final bool showShareLinkOption;
   final bool showRegistrationButton;
   final bool showResultsButton;
@@ -27,25 +29,14 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
     required this.width,
     required this.onViewParticipants,
     this.showRegistrationQr = false,
+    this.showParticipantsQr = false,
     this.showShareLinkOption = false,
     this.showRegistrationButton = true,
     this.showResultsButton = false,
   });
 
-  static const double bannerHeight = 180;
-  static const double actionButtonHeight = 44;
-
-  /// Taller when QR + register row are shown; shorter for past events.
-  double get computedHeight {
-    final hasQr = showRegistrationQr &&
-        (competition.idStr ?? '${competition.id}').isNotEmpty;
-    final extraResults = showResultsButton && competition.areCertificatesAvailable
-        ? 52.0
-        : 0.0;
-    if (!showRegistrationButton && !hasQr) return 400 + extraResults;
-    if (hasQr) return 488 + extraResults;
-    return 448 + extraResults;
-  }
+  static const double bannerHeight = 168;
+  static const double actionButtonHeight = 42;
 
   String? get _bannerUrl => competitionBrochureBannerUrl(competition);
 
@@ -63,7 +54,6 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
       color: Colors.transparent,
       child: Container(
         width: width,
-        height: computedHeight,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -84,7 +74,7 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
             children: [
               _buildBanner(context),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -108,10 +98,10 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           _buildDateAddressQrSection(context, id),
                           if (competition.categories.isNotEmpty) ...[
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Wrap(
                               spacing: 6,
                               runSpacing: 4,
@@ -124,11 +114,11 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     _buildActions(context, id),
                     if (showResultsButton &&
                         competition.areCertificatesAvailable) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _buildDownloadCertificateButton(context),
                     ],
                   ],
@@ -267,7 +257,9 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   Widget _buildDateAddressQrSection(BuildContext context, String id) {
     final hasDate = _startDate != null;
     final hasAddress = competition.address.isNotEmpty;
-    final hasQr = showRegistrationQr && id.isNotEmpty;
+    final hasRegQr = showRegistrationQr && id.isNotEmpty;
+    final hasParticipantsQr = showParticipantsQr && id.isNotEmpty;
+    final hasQr = hasRegQr || hasParticipantsQr;
 
     if (!hasDate && !hasAddress && !hasQr) {
       return const SizedBox.shrink();
@@ -300,13 +292,17 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
         ),
         if (hasQr) ...[
           const SizedBox(width: 8),
-          _buildQrAside(context, id),
+          _buildQrAside(context, id, participantsQr: hasParticipantsQr),
         ],
       ],
     );
   }
 
-  Widget _buildQrAside(BuildContext context, String competitionId) {
+  Widget _buildQrAside(
+    BuildContext context,
+    String competitionId, {
+    bool participantsQr = false,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -317,15 +313,21 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
             border: Border.all(color: AppTheme.primaryColor.withOpacity(0.25)),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: CompetitionRegistrationQrImage(
-            competitionId: competitionId,
-            size: 72,
-            borderRadius: BorderRadius.circular(4),
-          ),
+          child: participantsQr
+              ? CompetitionParticipantsQrImage(
+                  competitionId: competitionId,
+                  size: 72,
+                  borderRadius: BorderRadius.circular(4),
+                )
+              : CompetitionRegistrationQrImage(
+                  competitionId: competitionId,
+                  size: 72,
+                  borderRadius: BorderRadius.circular(4),
+                ),
         ),
         const SizedBox(height: 4),
         Text(
-          'Scan to\nregister',
+          participantsQr ? 'Scan for\nresults' : 'Scan to\nregister',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: AppTheme.primaryColor,

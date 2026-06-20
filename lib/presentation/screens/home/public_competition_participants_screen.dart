@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/participant_e_certificate_download.dart';
-import '../../../core/utils/participant_registration_details_download.dart';
+import '../../../core/utils/participant_receipt_image_download.dart';
 import '../../../data/models/participant_model.dart';
 import '../../../data/repositories/competition_repository.dart';
 import '../../../data/repositories/participant_repository.dart';
-import '../../widgets/app_navbar.dart';
 import '../../widgets/footer_section.dart';
+import 'home_landing_sections.dart';
 
 /// Public list of registrations for one competition with e-certificate download.
 class PublicCompetitionParticipantsScreen extends StatefulWidget {
@@ -220,7 +220,12 @@ class _PublicCompetitionParticipantsScreenState
     final idNum = int.tryParse(regId);
     if (idNum != null) setState(() => _downloadingDetailsId = idNum);
 
-    await downloadParticipantRegistrationDetailsPdf(context, regId);
+    await downloadParticipantReceiptImageByRegistrationId(
+      context,
+      regId,
+      seedParticipant: p,
+      competitionName: widget.competitionName,
+    );
 
     if (mounted) setState(() => _downloadingDetailsId = null);
   }
@@ -240,35 +245,57 @@ class _PublicCompetitionParticipantsScreenState
     final isNarrow = MediaQuery.sizeOf(context).width < 520;
 
     return Scaffold(
-      appBar: AppNavbar(title: title),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: isNarrow
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildSearchField(),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: _buildPaginationControls(),
-                      ),
-                    ],
-                  )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(child: _buildSearchField()),
-                      const SizedBox(width: 12),
-                      _buildPaginationControls(),
-                    ],
+      appBar: const HomeLandingAppBar(),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await _loadCompetitionMeta();
+          await _loadParticipants(page: _currentPage);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: isNarrow
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildSearchField(),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: _buildPaginationControls(),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(child: _buildSearchField()),
+                          const SizedBox(width: 12),
+                          _buildPaginationControls(),
+                        ],
+                      ),
+              ),
+              _buildBodyContent(),
+              const FooterSection(),
+            ],
           ),
-          Expanded(child: _buildBody()),
-          const FooterSection(),
-        ],
+        ),
       ),
     );
   }
@@ -354,77 +381,178 @@ class _PublicCompetitionParticipantsScreenState
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildParticipantSkeleton() {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              backgroundColor: Colors.grey.shade200,
+              radius: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 160,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 100,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 120,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingList() {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      itemCount: 7,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Row(
+            children: [
+              Container(
+                width: 120,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Loading participants...',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: Colors.grey[600]),
+              ),
+            ],
+          );
+        }
+        return _buildParticipantSkeleton();
+      },
+    );
+  }
+
+  Widget _buildBodyContent() {
     if (_loading && _participants.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildLoadingList();
     }
 
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => _loadParticipants(),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        child: Column(
+          children: [
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _loadParticipants(),
+              child: const Text('Retry'),
+            ),
+          ],
         ),
       );
     }
 
     if (_participants.isEmpty) {
-      return Center(
-        child: Text(
-          _searchQuery.isEmpty
-              ? 'No participants registered yet'
-              : 'No matching participants',
-          style: Theme.of(context).textTheme.titleMedium,
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        child: Center(
+          child: Text(
+            _searchQuery.isEmpty
+                ? 'No participants registered yet'
+                : 'No matching participants',
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        await _loadCompetitionMeta();
-        await _loadParticipants(page: _currentPage);
-      },
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-        itemCount: _participants.length + 1,
-        separatorBuilder: (_, index) => index < _participants.length
-            ? const SizedBox(height: 10)
-            : const SizedBox.shrink(),
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return Text(
-              '$_totalItems participant${_totalItems == 1 ? '' : 's'}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
-            );
-          }
-          final p = _participants[index - 1];
-          return _ParticipantTile(
-            participant: p,
-            showCertificateDownload: _certificatesReleased,
-            downloadingCert: _downloadingCertId == int.tryParse(p.id ?? ''),
-            downloadingDetails:
-                _downloadingDetailsId == int.tryParse(p.id ?? ''),
-            onDownloadCert: _canDownloadCert(p)
-                ? () => _onDownloadCert(p)
-                : null,
-            onDownloadDetails: p.id != null && p.id!.trim().isNotEmpty
-                ? () => _onDownloadDetails(p)
-                : null,
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      itemCount: _participants.length + 1,
+      separatorBuilder: (_, index) => index < _participants.length
+          ? const SizedBox(height: 10)
+          : const SizedBox.shrink(),
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Text(
+            '$_totalItems participant${_totalItems == 1 ? '' : 's'}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
           );
-        },
-      ),
+        }
+        final p = _participants[index - 1];
+        return _ParticipantTile(
+          participant: p,
+          showCertificateDownload: _certificatesReleased,
+          downloadingCert: _downloadingCertId == int.tryParse(p.id ?? ''),
+          downloadingDetails:
+              _downloadingDetailsId == int.tryParse(p.id ?? ''),
+          onDownloadCert: _canDownloadCert(p)
+              ? () => _onDownloadCert(p)
+              : null,
+          onDownloadDetails: p.id != null && p.id!.trim().isNotEmpty
+              ? () => _onDownloadDetails(p)
+              : null,
+        );
+      },
     );
   }
 }

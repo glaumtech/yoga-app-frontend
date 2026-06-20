@@ -19,6 +19,8 @@ class SubscriptionPackageModel {
   final bool isAddon;
   final bool requiresSubscriptionPayment;
   final bool isEligibleForCompetitionTopUp;
+  final bool isExtraFeeIncludedForCompetition;
+  final bool isExtraFeeIncludedForParticipantReg;
 
   SubscriptionPackageModel({
     required this.id,
@@ -39,6 +41,8 @@ class SubscriptionPackageModel {
     required this.isAddon,
     required this.requiresSubscriptionPayment,
     required this.isEligibleForCompetitionTopUp,
+    this.isExtraFeeIncludedForCompetition = false,
+    this.isExtraFeeIncludedForParticipantReg = false,
   });
 
   factory SubscriptionPackageModel.fromJson(Map<String, dynamic> json) {
@@ -90,6 +94,14 @@ class SubscriptionPackageModel {
       fallback:
           requiresSubscriptionPayment || paymentModel == 'PAY_PER_PARTICIPANT',
     );
+    final isExtraFeeIncludedForCompetition = parseBool(
+      json['isExtraFeeIncludedForCompetition'],
+      fallback: false,
+    );
+    final isExtraFeeIncludedForParticipantReg = parseBool(
+      json['isExtraFeeIncludedForParticipantReg'],
+      fallback: false,
+    );
 
     final tierLabel = json['tierLabel']?.toString().trim().isNotEmpty == true
         ? json['tierLabel'].toString()
@@ -132,6 +144,8 @@ class SubscriptionPackageModel {
       isAddon: isAddon,
       requiresSubscriptionPayment: requiresSubscriptionPayment,
       isEligibleForCompetitionTopUp: isEligibleForCompetitionTopUp,
+      isExtraFeeIncludedForCompetition: isExtraFeeIncludedForCompetition,
+      isExtraFeeIncludedForParticipantReg: isExtraFeeIncludedForParticipantReg,
     );
   }
 

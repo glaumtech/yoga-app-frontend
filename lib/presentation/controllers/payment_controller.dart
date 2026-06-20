@@ -79,7 +79,9 @@ class PaymentController extends GetxController {
         'razorpay_signature': signature,
       };
     } catch (e) {
-      final message = e.toString().replaceFirst('Exception: ', '');
+      final message = _normalizePaymentError(
+        e.toString().replaceFirst('Exception: ', ''),
+      );
       final cancelled = message.toLowerCase().contains('cancelled');
       final orderId = order?.orderId;
       if (orderId != null && orderId.isNotEmpty) {
@@ -120,5 +122,15 @@ class PaymentController extends GetxController {
   void onClose() {
     _checkout.dispose();
     super.onClose();
+  }
+
+  String _normalizePaymentError(String message) {
+    final lower = message.toLowerCase();
+    if (lower.contains('pay-per-participant') ||
+        lower.contains('on demand subscription')) {
+      return 'You can register for competitions only if the organization '
+          'has On Demand subscription type.';
+    }
+    return message;
   }
 }

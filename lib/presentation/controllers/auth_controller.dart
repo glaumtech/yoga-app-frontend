@@ -309,7 +309,9 @@ class AuthController extends GetxController {
           await Future.delayed(const Duration(milliseconds: 100));
 
           if (Get.isRegistered<CompetitionController>()) {
-            await Get.find<CompetitionController>().loadCompetitionsForHome(
+            final competitionController = Get.find<CompetitionController>();
+            competitionController.invalidateHomeCompetitionsScope();
+            await competitionController.ensureRegistrationCompetitionChoicesLoaded(
               force: true,
             );
           }
@@ -495,7 +497,7 @@ class AuthController extends GetxController {
 
       safeDelete<UserManagementController>();
       safeDelete<CompetitionsListController>();
-      safeDelete<CompetitionController>();
+      // Keep CompetitionController alive — public home/competitions screens need it.
       safeDelete<ParticipantController>();
       try {
         if (Get.isRegistered<ParticipantRegistrationFormController>(

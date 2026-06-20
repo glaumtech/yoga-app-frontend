@@ -1,46 +1,59 @@
 import '../constants/app_constants.dart';
 import '../../data/models/competition_model.dart';
 
-/// URL to show a competition brochure as a banner image.
+/// URL to show a competition brochure as a banner image in [Image.network].
 ///
-/// When [HomeCompetitionModel] has an `id`, uses `GET /competition/{id}/brochure`
-/// so the banner loads even if the public list omits `brochureUrl` / `brochureFilePath`.
-/// [Image.network] [Image.errorBuilder] should handle 404 or non-image bodies (e.g. PDF).
+/// Uses `GET /competition/{id}/brochure`, which resolves the stored file path
+/// on the server. PDF-only brochures return null so callers show a default banner.
 String? competitionBrochureBannerUrl(HomeCompetitionModel c) {
-  final raw = c.brochureUrl?.trim();
-  final rawPath = c.brochureFilePath?.trim();
-  final combined = raw ?? rawPath;
+  final filePath = c.brochureFilePath?.trim();
+  final brochureUrl = c.brochureUrl?.trim();
 
-  // Prefer explicit absolute image URLs when the API returns a direct link.
-  if (combined != null && combined.isNotEmpty) {
-    final lower = combined.toLowerCase();
-    if (combined.startsWith('http://') || combined.startsWith('https://')) {
-      if (lower.endsWith('.jpg') ||
-          lower.endsWith('.jpeg') ||
-          lower.endsWith('.png') ||
-          lower.endsWith('.webp')) {
-        return combined;
-      }
-    }
+  if (!_hasBrochure(filePath, brochureUrl)) {
+    return null;
+  }
+
+  if (_isPdfOnlyBrochure(filePath, brochureUrl)) {
+    return null;
   }
 
   final id = c.idStr ?? (c.id != null ? '${c.id}' : null);
   if (id != null && id.isNotEmpty) {
-    final base = BaseUrl.baseUrl.replaceAll(RegExp(r'/$'), '');
-    return '$base${EndPoints.competitionBrochure(id)}';
+    return '${_apiBase()}${EndPoints.competitionBrochure(id)}';
   }
 
-  // No id: resolve relative image paths only.
-  if (combined != null && combined.isNotEmpty) {
-    final lower = combined.toLowerCase();
-    if (lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png') ||
-        lower.endsWith('.webp')) {
-      final base = BaseUrl.baseUrl.replaceAll(RegExp(r'/$'), '');
-      final p = combined.startsWith('/') ? combined : '/$combined';
-      return '$base$p';
-    }
+  if (brochureUrl != null &&
+      (brochureUrl.startsWith('http://') || brochureUrl.startsWith('https://')) &&
+      _isImagePath(brochureUrl)) {
+    return brochureUrl;
   }
+
   return null;
+}
+
+String _apiBase() => BaseUrl.baseUrl.replaceAll(RegExp(r'/$'), '');
+
+bool _hasBrochure(String? filePath, String? brochureUrl) {
+  return (filePath != null && filePath.isNotEmpty) ||
+      (brochureUrl != null && brochureUrl.isNotEmpty);
+}
+
+bool _isPdfOnlyBrochure(String? filePath, String? brochureUrl) {
+  if (_isImagePath(filePath ?? '') || _isImagePath(brochureUrl ?? '')) {
+    return false;
+  }
+  return _isPdfPath(filePath) || _isPdfPath(brochureUrl);
+}
+
+bool _isImagePath(String path) {
+  final lower = path.toLowerCase();
+  return lower.endsWith('.jpg') ||
+      lower.endsWith('.jpeg') ||
+      lower.endsWith('.png') ||
+      lower.endsWith('.webp');
+}
+
+bool _isPdfPath(String? path) {
+  if (path == null || path.trim().isEmpty) return false;
+  return path.trim().toLowerCase().endsWith('.pdf');
 }

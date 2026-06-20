@@ -80,6 +80,8 @@ class EndPoints {
       '/participant-registration/$id';
   static String participantRegistrationDetailsPdf(String id) =>
       '/participant-registration/$id/registration-details';
+  static String participantRegistrationDetailsImage(String id) =>
+      '/participant-registration/$id/registration-details-image';
   static String participantRegistrationForScoring =
       '/participant-registration/for-scoring';
   static String participantRegistrationImport =
@@ -118,9 +120,13 @@ class EndPoints {
   static String competitionList = '/competition/list';
   static String competitionUpdate(String id) => '/competition/$id';
   static String competitionById(String id) => '/competition/$id';
+  static String competitionDeletionInfo(String id) =>
+      '/competition/$id/deletion-info';
   static String competitionBrochure(String id) => '/competition/$id/brochure';
   static String competitionRegistrationQr(String id) =>
       '/competition/$id/registration-qr';
+  static String competitionParticipantsQr(String id) =>
+      '/competition/$id/participants-qr';
 
   /// Public competitions list (home / unauthenticated)
   static String competitionPublic = '/competition/public';

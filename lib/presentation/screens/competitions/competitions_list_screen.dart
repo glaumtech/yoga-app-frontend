@@ -6,11 +6,24 @@ import '../../../core/utils/permission_store.dart';
 import '../../controllers/competition_controller.dart';
 import '../../controllers/competitions_list_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/competition_model.dart';
 import '../../widgets/competition_registration_qr_panel.dart';
 
 class CompetitionsListScreen extends StatelessWidget {
   const CompetitionsListScreen({super.key});
+
+  static const Map<int, TableColumnWidth> _desktopColumnWidths = {
+    0: FlexColumnWidth(1.5),
+    1: FlexColumnWidth(2.0),
+    2: FlexColumnWidth(1.6),
+    3: FlexColumnWidth(1.5),
+    4: FlexColumnWidth(1.5),
+    5: FlexColumnWidth(1.5),
+    6: FlexColumnWidth(1.5),
+    7: FlexColumnWidth(1.5),
+    8: FixedColumnWidth(132),
+  };
 
   // Helper method to get prize names from competition (handles both IDs and names)
   String _getPrizeNames(
@@ -503,116 +516,90 @@ class CompetitionsListScreen extends StatelessWidget {
   ) {
     return RefreshIndicator(
       onRefresh: () => controller.loadCompetitions(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth - 32; // Account for padding
-          return SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: tableWidth,
-                child: Table(
-                  border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                  columnWidths: {
-                    0: FlexColumnWidth(1.5),
-                    1: FlexColumnWidth(2.0),
-                    2: FlexColumnWidth(1.6), // Date (start + end)
-                    3: FlexColumnWidth(1.5),
-                    4: FlexColumnWidth(1.5),
-                    5: FlexColumnWidth(1.5),
-                    6: FlexColumnWidth(1.5), // Created
-                    7: FlexColumnWidth(1.5), // Updated
-                    8: FlexColumnWidth(0.8), // Action column
-                  },
-                  children: [
-                    // Header Row
-                    TableRow(
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
-                      ),
-                      children: [
-                        _buildSortableHeader(
-                          'COMPETITION NAME',
-                          'createdAt',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'ADDRESS',
-                          'createdAt',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'DATE',
-                          'eventStartDate',
-                          controller,
-                        ),
-                        _buildSortableHeader(
-                          'PRIZES',
-                          'createdAt',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'CATEGORIES',
-                          'createdAt',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'STAGES',
-                          'createdAt',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'CREATED',
-                          'createdAt',
-                          controller,
-                        ),
-                        _buildSortableHeader(
-                          'UPDATED',
-                          'updatedAt',
-                          controller,
-                        ),
-                        _buildTableCell('ACTION', isHeader: true),
-                      ],
-                    ),
-                    // Data Rows
-                    ...competitions.map((competition) {
-                      return TableRow(
-                        children: [
-                          _buildClickableCell(
-                            context,
-                            competition.competitionName,
-                            competition,
-                            controller,
-                          ),
-                          _buildTableCell(competition.address),
-                          _buildDateTableCell(competition),
-                          _buildTableCell(
-                            _getPrizeNames(competition, controller),
-                          ),
-                          _buildTableCell(
-                            _getCategoryNames(competition, controller),
-                          ),
-                          _buildTableCell(
-                            _getStageNames(competition, controller),
-                          ),
-                          _buildTableCell(_buildCreatedCell(competition)),
-                          _buildTableCell(_buildUpdatedCell(competition)),
-                          _buildActionCell(context, competition, controller),
-                        ],
-                      );
-                    }).toList(),
-                  ],
-                ),
-              ),
+      child: ResponsiveAdminTable(
+        columnWidths: _desktopColumnWidths,
+        rows: [
+          // Header Row
+          TableRow(
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withOpacity(0.1),
             ),
-          );
-        },
+            children: [
+              _buildSortableHeader(
+                'COMPETITION NAME',
+                'createdAt',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'ADDRESS',
+                'createdAt',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'DATE',
+                'eventStartDate',
+                controller,
+              ),
+              _buildSortableHeader(
+                'PRIZES',
+                'createdAt',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'CATEGORIES',
+                'createdAt',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'STAGES',
+                'createdAt',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'CREATED',
+                'createdAt',
+                controller,
+              ),
+              _buildSortableHeader(
+                'UPDATED',
+                'updatedAt',
+                controller,
+              ),
+              _buildTableCell('ACTION', isHeader: true),
+            ],
+          ),
+          ...competitions.map((competition) {
+            return TableRow(
+              children: [
+                _buildClickableCell(
+                  context,
+                  competition.competitionName,
+                  competition,
+                  controller,
+                ),
+                _buildTableCell(competition.address),
+                _buildDateTableCell(competition),
+                _buildTableCell(
+                  _getPrizeNames(competition, controller),
+                ),
+                _buildTableCell(
+                  _getCategoryNames(competition, controller),
+                ),
+                _buildTableCell(
+                  _getStageNames(competition, controller),
+                ),
+                _buildTableCell(_buildCreatedCell(competition)),
+                _buildTableCell(_buildUpdatedCell(competition)),
+                _buildActionCell(context, competition, controller),
+              ],
+            );
+          }),
+        ],
       ),
     );
   }
@@ -664,51 +651,52 @@ class CompetitionsListScreen extends StatelessWidget {
     CompetitionModel competition,
     CompetitionController controller,
   ) {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Obx(() {
-            final permissionStore = Get.isRegistered<PermissionStore>()
-                ? Get.find<PermissionStore>()
-                : Get.put(PermissionStore());
-            if (competition.id == null ||
-                competition.id!.isEmpty ||
-                !permissionStore.has('SHOW_COMP_QR_CODE_ON_ADMIN')) {
-              return const SizedBox.shrink();
-            }
-            return IconButton(
-              icon: Icon(
-                Icons.qr_code_2,
-                size: 18,
-                color: AppTheme.primaryColor,
-              ),
-              onPressed: () =>
-                  showCompetitionRegistrationQrDialog(context, competition),
-              tooltip: 'Registration QR',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            );
-          }),
-          IconButton(
-            icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
-            onPressed: () async {
-              await controller.editCompetition(context, competition);
-            },
-            tooltip: 'Edit',
+    return AdminTableActionCell(
+      actions: [
+        Obx(() {
+          final permissionStore = Get.isRegistered<PermissionStore>()
+              ? Get.find<PermissionStore>()
+              : Get.put(PermissionStore());
+          if (competition.id == null ||
+              competition.id!.isEmpty ||
+              !permissionStore.has('SHOW_COMP_QR_CODE_ON_ADMIN')) {
+            return const SizedBox.shrink();
+          }
+          return IconButton(
+            icon: Icon(
+              Icons.qr_code_2,
+              size: 18,
+              color: AppTheme.primaryColor,
+            ),
+            onPressed: () =>
+                showCompetitionRegistrationQrDialog(context, competition),
+            tooltip: 'Registration QR',
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-          // IconButton(
-          //   icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-          //   onPressed: () => controller.deleteCompetition(context, competition),
-          //   tooltip: 'Delete',
-          //   padding: EdgeInsets.zero,
-          //   constraints: const BoxConstraints(),
-          // ),
-        ],
-      ),
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            visualDensity: VisualDensity.compact,
+          );
+        }),
+        IconButton(
+          icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
+          onPressed: () async {
+            await controller.editCompetition(context, competition);
+          },
+          tooltip: 'Edit',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          visualDensity: VisualDensity.compact,
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+          onPressed: () async {
+            await controller.deleteCompetition(context, competition);
+          },
+          tooltip: 'Delete',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
     );
   }
 

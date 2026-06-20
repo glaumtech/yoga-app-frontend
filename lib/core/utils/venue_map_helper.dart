@@ -12,14 +12,34 @@ class VenueMapHelper {
     return 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(trimmed)}';
   }
 
+  /// Embeddable Google Maps preview URL (no API key required for basic embed).
+  static String? googleMapsEmbedUrl(String? address) {
+    final trimmed = address?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return 'https://maps.google.com/maps?q=${Uri.encodeComponent(trimmed)}&z=15&output=embed';
+  }
+
   static Future<String?> staticMapPreviewUrl(String? address) async {
     final trimmed = address?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
 
+    final queries = <String>[
+      trimmed,
+      if (!trimmed.toLowerCase().contains('india')) '$trimmed, India',
+    ];
+
+    for (final query in queries) {
+      final preview = await _staticMapPreviewForQuery(query);
+      if (preview != null) return preview;
+    }
+    return null;
+  }
+
+  static Future<String?> _staticMapPreviewForQuery(String query) async {
     try {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search'
-        '?q=${Uri.encodeComponent(trimmed)}&format=json&limit=1',
+        '?q=${Uri.encodeComponent(query)}&format=json&limit=1',
       );
       final response = await http.get(
         uri,
@@ -37,7 +57,7 @@ class VenueMapHelper {
       if (lat == null || lon == null) return null;
 
       return 'https://staticmap.openstreetmap.de/staticmap.php'
-          '?center=$lat,$lon&zoom=15&size=480x160&markers=$lat,$lon';
+          '?center=$lat,$lon&zoom=15&size=480x200&markers=$lat,$lon';
     } catch (_) {
       return null;
     }

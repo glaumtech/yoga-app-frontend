@@ -49,9 +49,9 @@ class UsersListController extends GetxController {
   }
 
   Future<void> _ensureCompetitionsLoaded() async {
-    if (competitionController.competitions.isEmpty &&
+    if (!competitionController.isLoadingHomeCompetitions.value &&
         !competitionController.isLoading.value) {
-      await competitionController.loadCompetitions();
+      await competitionController.ensureRegistrationCompetitionChoicesLoaded();
     }
 
     // Load users only when a competition is already selected.

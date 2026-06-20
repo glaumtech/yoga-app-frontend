@@ -28,7 +28,6 @@ import '../../core/utils/photo_capture_service.dart';
 import '../../core/utils/photo_upload_processor.dart';
 import '../../core/utils/upload_filename_helper.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/utils/subscription_catalog_filter.dart';
 import '../models/bulk_registration_row.dart';
 import 'competition_controller.dart';
 
@@ -1258,7 +1257,7 @@ class ParticipantController extends GetxController {
     _ensureParticipantsListRunning = true;
     try {
       if (competitionController.competitions.isEmpty) {
-        await competitionController.loadCompetitions();
+        await competitionController.ensureRegistrationCompetitionChoicesLoaded();
       }
 
       var eventId = selectedEventId.value;
@@ -1530,12 +1529,6 @@ class ParticipantController extends GetxController {
     if (proof != null && proof.isNotEmpty) {
       existingPaymentProofPath.value = proof;
     }
-  }
-
-  bool _requiresGpayProofUpload() {
-    if (selectedPaymentMode.value != 'GPAY') return false;
-    if (paymentProofImage.value != null) return false;
-    return existingPaymentProofPath.value.trim().isEmpty;
   }
 
   /// Normalize API/UI gender variants into values used by the form radio group.
@@ -2874,18 +2867,11 @@ class ParticipantController extends GetxController {
     //   nextRegistrationNo = await _generateNextRegistrationNumber(...);
     // }
 
-    final paymentModel = _resolvePaymentModel(compController, eventId);
     final payBeforeSave = _shouldCollectRegistrationPaymentBeforeSave(
       compController,
       eventId,
       categoryId,
     );
-    if (_isManualPaymentModel(paymentModel) &&
-        _requiresGpayProofUpload() &&
-        !payBeforeSave) {
-      errorMessage.value = 'Please upload payment proof';
-      return false;
-    }
 
     Map<String, String>? prepaidCheckout;
     if (payBeforeSave) {
@@ -2918,9 +2904,9 @@ class ParticipantController extends GetxController {
             description: 'Competition registration fee',
           );
       if (prepaidCheckout == null) {
-        errorMessage.value =
-            registrationPaymentController.paymentError.value.isNotEmpty
-            ? registrationPaymentController.paymentError.value
+        final paymentErr = registrationPaymentController.paymentError.value;
+        errorMessage.value = paymentErr.isNotEmpty
+            ? paymentErr
             : 'Payment failed. Registration was not saved.';
         return false;
       }
@@ -3259,39 +3245,6 @@ class ParticipantController extends GetxController {
     }
   }
 
-  String _resolvePaymentModel(
-    CompetitionController compController,
-    String eventId,
-  ) {
-    if (compController.isOnDemandOrg.value ||
-        compController.requiresPrepaidCompetitionPayment) {
-      return SubscriptionCatalogFilter.onDemandModeKey;
-    }
-    final home = compController.homeCompetitions.firstWhereOrNull(
-      (c) => c.id?.toString() == eventId,
-    );
-    if (home?.paymentModel != null && home!.paymentModel!.isNotEmpty) {
-      return home.paymentModel!;
-    }
-    final orgModel = compController.organizationPaymentModel.value
-        .toUpperCase();
-    if (orgModel == SubscriptionCatalogFilter.onDemandModeKey) {
-      return SubscriptionCatalogFilter.onDemandModeKey;
-    }
-    if (orgModel == 'USER_PACK_SUBSCRIPTION') {
-      return 'USER_PACK_SUBSCRIPTION';
-    }
-    return 'ORG_SUBSCRIPTION';
-  }
-
-  bool requiresOnlineRegistrationPayment(
-    CompetitionController compController,
-    String eventId,
-  ) {
-    return _resolvePaymentModel(compController, eventId).toUpperCase() ==
-        SubscriptionCatalogFilter.onDemandModeKey;
-  }
-
   String registrationSubmitButtonLabel(
     CompetitionController compController,
     String eventId,
@@ -3319,9 +3272,7 @@ class ParticipantController extends GetxController {
     if (isEditMode) {
       return false;
     }
-    if (!requiresOnlineRegistrationPayment(compController, eventId)) {
-      return false;
-    }
+    // On Demand only: online Razorpay when the category has a registration fee.
     return _resolveRegistrationFeePaise(compController, eventId, categoryId) >=
         100;
   }
@@ -3334,18 +3285,12 @@ class ParticipantController extends GetxController {
         registrationPaymentController.isPaymentInProgress.value;
   }
 
-  bool _isManualPaymentModel(String model) =>
-      model == 'ORG_SUBSCRIPTION' || model == 'USER_PACK_SUBSCRIPTION';
-
   String _resolvePaymentModeForSubmit(
     CompetitionController compController,
     String eventId,
   ) {
-    final model = _resolvePaymentModel(compController, eventId);
-    if (model == 'PAY_PER_PARTICIPANT') {
-      return 'ONLINE';
-    }
-    return selectedPaymentMode.value;
+    // On Demand only — registration fees are collected online via Razorpay.
+    return 'ONLINE';
   }
 
   int? _extractRegistrationId(Map<String, dynamic>? data) {

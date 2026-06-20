@@ -6,10 +6,24 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/participant_model.dart';
 
 class ParticipantsListScreen extends StatelessWidget {
   const ParticipantsListScreen({super.key});
+
+  static const Map<int, TableColumnWidth> _desktopColumnWidths = {
+    0: FixedColumnWidth(80),
+    1: FlexColumnWidth(2.0),
+    2: FlexColumnWidth(1.3),
+    3: FlexColumnWidth(1.2),
+    4: FlexColumnWidth(2.0),
+    5: FlexColumnWidth(1.5),
+    6: FlexColumnWidth(1.4),
+    7: FlexColumnWidth(1.4),
+    8: FixedColumnWidth(80),
+    9: FixedColumnWidth(136),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -586,111 +600,83 @@ class ParticipantsListScreen extends StatelessWidget {
         }
         return Future.value();
       },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth - 32;
-          return SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: tableWidth,
-                child: Table(
-                  border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                  columnWidths: {
-                    0: const FixedColumnWidth(80),
-                    1: FlexColumnWidth(2.0),
-                    2: FlexColumnWidth(1.3), // AGE & GENDER combined
-                    3: FlexColumnWidth(1.2), // CATEGORY / GROUP combined
-                    4: FlexColumnWidth(2.0),
-                    5: FlexColumnWidth(1.5),
-                    6: FlexColumnWidth(1.4),
-                    7: FlexColumnWidth(1.4),
-                    8: const FixedColumnWidth(80), // SPOT REG
-                    9: const FixedColumnWidth(140),
-                  },
-                  children: [
-                    // Header Row
-                    TableRow(
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
-                      ),
-                      children: [
-                        _buildTableCell('PHOTO', isHeader: true),
-                        _buildSortableHeader(
-                          'NAME',
-                          'participantName',
-                          controller,
-                        ),
-                        _buildSortableHeader('AGE & GENDER', 'age', controller),
-                        _buildTableCell('CATEGORY / GROUP', isHeader: true),
-                        _buildSortableHeader(
-                          'INSTITUTION',
-                          'institutionName',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'YOGA TEACHER',
-                          'yogaTeacherName',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'CREATED',
-                          'createdAt',
-                          controller,
-                        ),
-                        _buildSortableHeader(
-                          'UPDATED',
-                          'updatedAt',
-                          controller,
-                        ),
-                        _buildTableCell('SPOT REG', isHeader: true),
-                        _buildCenteredTableHeaderCell('ACTIONS'),
-                      ],
-                    ),
-                    // Data Rows
-                    ...participants.map((participant) {
-                      return TableRow(
-                        children: [
-                          TableCell(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Center(
-                                child: _buildParticipantPhoto(participant, 40),
-                              ),
-                            ),
-                          ),
-                          _buildClickableNameCell(
-                            context,
-                            participant.participantName,
-                            participant,
-                            controller,
-                          ),
-                          _buildTableCell(
-                            '${participant.age} | ${participant.gender}',
-                          ),
-                          _buildTableCell(
-                            '${participant.category} / ${participant.standard}',
-                          ),
-                          _buildTableCell(participant.schoolName),
-                          _buildTableCell(participant.yogaMasterName),
-                          _buildCreatedCellWidget(participant),
-                          _buildUpdatedCellWidget(participant),
-                          _buildTableCell(
-                            participant.isSpotRegistration ? 'Yes' : 'No',
-                          ),
-                          _buildActionCell(context, participant, controller),
-                        ],
-                      );
-                    }).toList(),
-                  ],
-                ),
-              ),
+      child: ResponsiveAdminTable(
+        columnWidths: _desktopColumnWidths,
+        rows: [
+          TableRow(
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withOpacity(0.1),
             ),
-          );
-        },
+            children: [
+              _buildTableCell('PHOTO', isHeader: true),
+              _buildSortableHeader(
+                'NAME',
+                'participantName',
+                controller,
+              ),
+              _buildSortableHeader('AGE & GENDER', 'age', controller),
+              _buildTableCell('CATEGORY / GROUP', isHeader: true),
+              _buildSortableHeader(
+                'INSTITUTION',
+                'institutionName',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'YOGA TEACHER',
+                'yogaTeacherName',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'CREATED',
+                'createdAt',
+                controller,
+              ),
+              _buildSortableHeader(
+                'UPDATED',
+                'updatedAt',
+                controller,
+              ),
+              _buildTableCell('SPOT REG', isHeader: true),
+              _buildCenteredTableHeaderCell('ACTIONS'),
+            ],
+          ),
+          ...participants.map((participant) {
+            return TableRow(
+              children: [
+                TableCell(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Center(
+                      child: _buildParticipantPhoto(participant, 40),
+                    ),
+                  ),
+                ),
+                _buildClickableNameCell(
+                  context,
+                  participant.participantName,
+                  participant,
+                  controller,
+                ),
+                _buildTableCell(
+                  '${participant.age} | ${participant.gender}',
+                ),
+                _buildTableCell(
+                  '${participant.category} / ${participant.standard}',
+                ),
+                _buildTableCell(participant.schoolName),
+                _buildTableCell(participant.yogaMasterName),
+                _buildCreatedCellWidget(participant),
+                _buildUpdatedCellWidget(participant),
+                _buildTableCell(
+                  participant.isSpotRegistration ? 'Yes' : 'No',
+                ),
+                _buildActionCell(context, participant, controller),
+              ],
+            );
+          }),
+        ],
       ),
     );
   }
@@ -904,72 +890,52 @@ class ParticipantsListScreen extends StatelessWidget {
     ParticipantModel participant,
     ParticipantController controller,
   ) {
-    return TableCell(
-      verticalAlignment: TableCellVerticalAlignment.middle,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: Icon(
-                  Icons.picture_as_pdf_outlined,
-                  size: 18,
-                  color: Colors.blue.shade800,
-                ),
-                onPressed: participant.id == null || participant.id!.isEmpty
-                    ? null
-                    : () => controller.downloadParticipantRegistrationDetails(
-                        participant.id!,
-                      ),
-                tooltip: 'Download registration details',
-                padding: const EdgeInsets.all(4),
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(
-                  Icons.edit,
-                  size: 18,
-                  color: AppTheme.primaryColor,
-                ),
-                onPressed: () {
-                  controller.initializeFormFromModel(participant);
-                  controller.toggleViewMode(false);
-                },
-                tooltip: 'Edit',
-                padding: const EdgeInsets.all(4),
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                onPressed: () {
-                  if (participant.id != null) {
-                    _showDeleteDialog(context, controller, participant);
-                  }
-                },
-                tooltip: 'Delete',
-                padding: const EdgeInsets.all(4),
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
+    return AdminTableActionCell(
+      actions: [
+        IconButton(
+          icon: Icon(
+            Icons.picture_as_pdf_outlined,
+            size: 18,
+            color: Colors.blue.shade800,
           ),
+          onPressed: participant.id == null || participant.id!.isEmpty
+              ? null
+              : () => controller.downloadParticipantRegistrationDetails(
+                  participant.id!,
+                ),
+          tooltip: 'Download registration details',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          visualDensity: VisualDensity.compact,
         ),
-      ),
+        IconButton(
+          icon: Icon(
+            Icons.edit,
+            size: 18,
+            color: AppTheme.primaryColor,
+          ),
+          onPressed: () {
+            controller.initializeFormFromModel(participant);
+            controller.toggleViewMode(false);
+          },
+          tooltip: 'Edit',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          visualDensity: VisualDensity.compact,
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+          onPressed: () {
+            if (participant.id != null) {
+              _showDeleteDialog(context, controller, participant);
+            }
+          },
+          tooltip: 'Delete',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
     );
   }
 

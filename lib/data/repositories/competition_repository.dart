@@ -40,8 +40,8 @@ class CompetitionRepository {
       final competitionJson = competition.toJson();
       if (maintenancePaymentOrderId != null &&
           maintenancePaymentOrderId.trim().isNotEmpty) {
-        competitionJson['maintenancePaymentOrderId'] =
-            maintenancePaymentOrderId.trim();
+        competitionJson['maintenancePaymentOrderId'] = maintenancePaymentOrderId
+            .trim();
       }
       final dataJsonString = jsonEncode(competitionJson);
 
@@ -49,8 +49,8 @@ class CompetitionRepository {
       http.MultipartFile multipartFile;
 
       if (kIsWeb && brochureBytes != null) {
-        final filename = (brochureFilename != null &&
-                brochureFilename.trim().isNotEmpty)
+        final filename =
+            (brochureFilename != null && brochureFilename.trim().isNotEmpty)
             ? brochureFilename.trim()
             : 'competition_brochure.pdf';
         multipartFile = http.MultipartFile.fromBytes(
@@ -155,8 +155,8 @@ class CompetitionRepository {
 
       http.MultipartFile? multipartFile;
       if (kIsWeb && brochureBytes != null && brochureBytes.isNotEmpty) {
-        final filename = (brochureFilename != null &&
-                brochureFilename.trim().isNotEmpty)
+        final filename =
+            (brochureFilename != null && brochureFilename.trim().isNotEmpty)
             ? brochureFilename.trim()
             : 'competition_brochure.pdf';
         multipartFile = http.MultipartFile.fromBytes(
@@ -229,7 +229,11 @@ class CompetitionRepository {
   }
 
   /// DELETE /competition/{id}
-  Future<ApiResponse<void>> deleteCompetition(String id) async {
+  Future<ApiResponse<void>> deleteCompetition(
+    String id, {
+    required String deletionReasonType,
+    String? deletionReasonNote,
+  }) async {
     try {
       if (id.isEmpty) {
         return ApiResponse(
@@ -241,6 +245,11 @@ class CompetitionRepository {
       final response = await _apiService.getResponse<dynamic>(
         url: EndPoints.competitionUpdate(id),
         apiType: APIType.aDelete,
+        body: {
+          'deletionReasonType': deletionReasonType,
+          if (deletionReasonNote != null && deletionReasonNote.trim().isNotEmpty)
+            'deletionReasonNote': deletionReasonNote.trim(),
+        },
         fromJson: (json) => json,
       );
 
@@ -262,6 +271,37 @@ class CompetitionRepository {
       return ApiResponse(
         success: false,
         message: 'Error deleting competition: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> getCompetitionDeletionInfo(
+    String id,
+  ) async {
+    try {
+      if (id.isEmpty) {
+        return ApiResponse(success: false, message: 'Competition ID is required');
+      }
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionDeletionInfo(id),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+      if (response.success && response.data is Map) {
+        return ApiResponse(
+          success: true,
+          data: Map<String, dynamic>.from(response.data as Map),
+        );
+      }
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to load deletion info',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error loading deletion info: ${e.toString()}',
       );
     }
   }

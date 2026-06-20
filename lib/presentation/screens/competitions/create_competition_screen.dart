@@ -261,6 +261,36 @@ class CreateCompetitionScreen extends StatelessWidget {
                     isMobile,
                   ),
 
+                Obx(() {
+                  if (controller.isEditMode.value ||
+                      controller.isViewMode.value ||
+                      !controller.isOnDemandOrg.value) {
+                    return const SizedBox.shrink();
+                  }
+                  controller.onDemandMaintenanceFeePaise.value;
+                  controller.onDemandExtraFeeForCompetition.value;
+                  controller.onDemandPaymentGatewayFeePercent.value;
+                  controller.onDemandPlatformFeePercent.value;
+                  final total = controller.calculateCompetitionMaintenanceTotal();
+                  if (total <= 0) return const SizedBox.shrink();
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      top: isMobile ? 8 : 12,
+                      bottom: isMobile ? 8 : 12,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Total payable: ₹${total.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+
                 // Submit and Cancel Buttons
                 Obx(
                   () => controller.isEditMode.value
