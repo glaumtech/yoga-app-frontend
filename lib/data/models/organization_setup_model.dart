@@ -3,17 +3,20 @@ import 'dart:convert';
 class SetupAdminUserRequestModel {
   final String name;
   final String userName;
+  final String? email;
   final String password;
 
   SetupAdminUserRequestModel({
     required this.name,
     required this.userName,
+    this.email,
     required this.password,
   });
 
   Map<String, dynamic> toJson() => {
     'name': name,
     'userName': userName,
+    if (email != null && email!.trim().isNotEmpty) 'email': email!.trim(),
     'password': password,
   };
 }

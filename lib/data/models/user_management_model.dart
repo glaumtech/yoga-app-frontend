@@ -6,6 +6,7 @@ class UserManagementModel {
 
   /// Display name stored as `user_name` on the server (optional).
   final String? userName;
+  final String? email;
   final int? branchId; // New API: branch scope
   final String? password;
   final String? photoUrl;
@@ -48,6 +49,7 @@ class UserManagementModel {
     this.id,
     required this.name,
     this.userName,
+    this.email,
     this.branchId,
     this.password,
     this.photoUrl,
@@ -181,6 +183,7 @@ class UserManagementModel {
       id: json['id']?.toString() ?? json['_id']?.toString(),
       name: json['name']?.toString() ?? json['username']?.toString() ?? '',
       userName: json['userName']?.toString() ?? json['user_name']?.toString(),
+      email: json['email']?.toString(),
       branchId: branchId,
       password: json['password']?.toString(),
       photoUrl:
@@ -251,6 +254,9 @@ class UserManagementModel {
     if (useNewFormat) {
       // New API format (always send so display name can be cleared on update)
       json['userName'] = userName?.trim() ?? '';
+      if (email != null) {
+        json['email'] = email!.trim();
+      }
       if (branchId != null) json['branchId'] = branchId;
       if (competitionId != null) json['competitionId'] = competitionId;
       if (userTypeId != null) json['userTypeId'] = userTypeId;
@@ -307,6 +313,7 @@ class UserManagementModel {
     String? id,
     String? name,
     String? userName,
+    String? email,
     int? branchId,
     String? password,
     String? photoUrl,
@@ -340,6 +347,7 @@ class UserManagementModel {
       id: id ?? this.id,
       name: name ?? this.name,
       userName: userName ?? this.userName,
+      email: email ?? this.email,
       branchId: branchId ?? this.branchId,
       password: password ?? this.password,
       photoUrl: photoUrl ?? this.photoUrl,

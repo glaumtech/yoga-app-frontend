@@ -108,6 +108,8 @@ class OrganizationSetupController extends GetxController {
       TextEditingController();
   final TextEditingController branchAdminUserNameController =
       TextEditingController();
+  final TextEditingController branchAdminEmailController =
+      TextEditingController();
   final TextEditingController branchAdminPasswordController =
       TextEditingController();
   final RxBool branchAdminPasswordVisible = false.obs;
@@ -153,6 +155,7 @@ class OrganizationSetupController extends GetxController {
     orgAdminPasswordController.dispose();
     branchAdminNameController.dispose();
     branchAdminUserNameController.dispose();
+    branchAdminEmailController.dispose();
     branchAdminPasswordController.dispose();
     super.onClose();
   }
@@ -296,6 +299,7 @@ class OrganizationSetupController extends GetxController {
 
     branchAdminNameController.clear();
     branchAdminUserNameController.clear();
+    branchAdminEmailController.clear();
     branchAdminPasswordController.clear();
     branchAdminPasswordVisible.value = false;
     orgAdminPhoto.value = null;
@@ -525,7 +529,42 @@ class OrganizationSetupController extends GetxController {
       branchAdminPasswordController.text =
           OrganizationSetupCredentials.generatePassword();
     }
+    if (branchAdminEmailController.text.trim().isEmpty &&
+        emailController.text.trim().isNotEmpty) {
+      branchAdminEmailController.text = emailController.text.trim();
+    }
     assignAllPermissions();
+  }
+
+  String? emailValidator(String? value, {String fieldName = 'Email'}) {
+    if (value == null || value.trim().isEmpty) {
+      return '$fieldName is required';
+    }
+    final email = value.trim();
+    if (!GetUtils.isEmail(email)) {
+      return 'Enter a valid email address';
+    }
+    return null;
+  }
+
+  String _branchAdminEmailTrimmed() => branchAdminEmailController.text.trim();
+
+  SetupAdminUserRequestModel _buildOrgAdminUserRequest() {
+    return SetupAdminUserRequestModel(
+      name: orgAdminNameController.text.trim(),
+      userName: orgAdminUserNameController.text.trim(),
+      email: _branchAdminEmailTrimmed(),
+      password: orgAdminPasswordController.text,
+    );
+  }
+
+  SetupAdminUserRequestModel _buildBranchAdminUserRequest() {
+    return SetupAdminUserRequestModel(
+      name: branchAdminNameController.text.trim(),
+      userName: branchAdminUserNameController.text.trim(),
+      email: _branchAdminEmailTrimmed(),
+      password: branchAdminPasswordController.text,
+    );
   }
 
   Future<void> pickOrgAdminPhoto(
@@ -638,16 +677,8 @@ class OrganizationSetupController extends GetxController {
       branch: foundation.branch,
       selectedPackageId: foundation.selectedPackageId,
       checkoutMethod: foundation.checkoutMethod,
-      orgAdminUser: SetupAdminUserRequestModel(
-        name: orgAdminNameController.text.trim(),
-        userName: orgAdminUserNameController.text.trim(),
-        password: orgAdminPasswordController.text,
-      ),
-      branchAdminUser: SetupAdminUserRequestModel(
-        name: branchAdminNameController.text.trim(),
-        userName: branchAdminUserNameController.text.trim(),
-        password: branchAdminPasswordController.text,
-      ),
+      orgAdminUser: _buildOrgAdminUserRequest(),
+      branchAdminUser: _buildBranchAdminUserRequest(),
       orgAdminPermissionIds: orgAdminPermissionIds.toList()..sort(),
       branchAdminPermissionIds: branchAdminPermissionIds.toList()..sort(),
     );
@@ -667,16 +698,8 @@ class OrganizationSetupController extends GetxController {
     return OrganizationSetupAdminsRequestModel(
       organizationId: foundation.organization.id,
       branchId: branchId,
-      orgAdminUser: SetupAdminUserRequestModel(
-        name: orgAdminNameController.text.trim(),
-        userName: orgAdminUserNameController.text.trim(),
-        password: orgAdminPasswordController.text,
-      ),
-      branchAdminUser: SetupAdminUserRequestModel(
-        name: branchAdminNameController.text.trim(),
-        userName: branchAdminUserNameController.text.trim(),
-        password: branchAdminPasswordController.text,
-      ),
+      orgAdminUser: _buildOrgAdminUserRequest(),
+      branchAdminUser: _buildBranchAdminUserRequest(),
       orgAdminPermissionIds: orgAdminPermissionIds.toList()..sort(),
       branchAdminPermissionIds: branchAdminPermissionIds.toList()..sort(),
     );
@@ -711,6 +734,14 @@ class OrganizationSetupController extends GetxController {
     );
     if (username != null) {
       errorMessage.value = username;
+      return false;
+    }
+    final emailError = emailValidator(
+      branchAdminEmailController.text,
+      fieldName: 'Email',
+    );
+    if (emailError != null) {
+      errorMessage.value = emailError;
       return false;
     }
     if (branchAdminPasswordController.text.trim().isEmpty) {

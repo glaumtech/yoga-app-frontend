@@ -17,7 +17,10 @@ class SessionExpiryHandler {
   static bool _isAuthRequest(String requestUrl) {
     return requestUrl == EndPoints.logIn ||
         requestUrl == EndPoints.register ||
-        requestUrl == EndPoints.logOut;
+        requestUrl == EndPoints.logOut ||
+        requestUrl == EndPoints.forgotPassword ||
+        requestUrl == EndPoints.verifyOtp ||
+        requestUrl == EndPoints.resetPassword;
   }
 
   /// Payment gateway errors (e.g. invalid Razorpay keys) must not sign the user out.
