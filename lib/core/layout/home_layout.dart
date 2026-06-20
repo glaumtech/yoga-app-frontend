@@ -43,11 +43,11 @@ class HomeLayout {
     return crossAxisCount >= 3 ? 0.60 : 0.54;
   }
 
-  /// Hero banner min height by available width.
-  static double heroBannerMinHeight(double width) {
-    if (width < mobile) return 420;
-    if (width < tablet) return 480;
-    return 520;
+  /// Hero carousel banner height by viewport width.
+  static double heroBannerHeight(double width) {
+    if (width < mobile) return 620;
+    if (width < tablet) return 760;
+    return 820;
   }
 }
 

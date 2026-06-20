@@ -550,7 +550,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
 
   static final List<_HeroBannerSlide> _slides = [
     (
-      imageAsset: null,
+      imageAsset: 'assets/images/banners/banner-3.jpg',
       videoAsset: 'assets/images/videos/app-inaguration.mp4',
       headline: 'Welcome to Yoga Champ',
       subtitle:
@@ -619,6 +619,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
   @override
   void dispose() {
     _autoPlayTimer?.cancel();
+    _autoPlayTimer = null;
     _carouselController.stopAutoPlay();
     super.dispose();
   }
@@ -640,7 +641,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < HomeLayout.mobile;
     final padH = HomeLayout.sectionHorizontalPadding(width);
-    final bannerHeight = isMobile ? 540.0 : 700.0;
+    final bannerHeight = HomeLayout.heroBannerHeight(width);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(padH, 12, padH, 8),
@@ -736,105 +737,130 @@ class _HeroSlideView extends StatelessWidget {
     final videoAsset = slide.videoAsset;
     final imageAsset = slide.imageAsset;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (videoAsset != null && videoAsset.isNotEmpty)
-          _HeroVideoBackground(assetPath: videoAsset, isActive: isActive)
-        else if (imageAsset != null && imageAsset.isNotEmpty)
-          Image.asset(
-            imageAsset,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            errorBuilder: (_, __, ___) =>
-                Container(color: AppTheme.primaryColor),
-          )
-        else
-          Container(color: AppTheme.primaryColor),
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Colors.black.withValues(alpha: 0.55),
-                  Colors.black.withValues(alpha: 0.2),
-                  Colors.transparent,
-                ],
-                stops: const [0.0, 0.42, 0.72],
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _buildSlideBackground(videoAsset, imageAsset),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.55),
+                    Colors.black.withValues(alpha: 0.2),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.42, 0.72],
+                ),
               ),
             ),
           ),
-        ),
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            isMobile ? 20 : 48,
-            isMobile ? 28 : 40,
-            isMobile ? 20 : 48,
-            isMobile ? 44 : 52,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                slide.headline,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isMobile ? 22 : 34,
-                  fontWeight: FontWeight.bold,
-                  height: 1.25,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black45,
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                slide.subtitle,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.95),
-                  fontSize: isMobile ? 14 : 16,
-                  height: 1.45,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black38,
-                      blurRadius: 6,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 22),
-              ElevatedButton(
-                onPressed: onPressed,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppTheme.primaryColor,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isMobile ? 22 : 28,
-                    vertical: 12,
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              isMobile ? 20 : 48,
+              isMobile ? 28 : 40,
+              isMobile ? 20 : 48,
+              isMobile ? 44 : 52,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  slide.headline,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: isMobile ? 22 : 34,
+                    fontWeight: FontWeight.bold,
+                    height: 1.25,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black45,
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  slide.subtitle,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.95),
+                    fontSize: isMobile ? 14 : 16,
+                    height: 1.45,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black38,
+                        blurRadius: 6,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
                   ),
-                  elevation: 2,
                 ),
-                child: Text(
-                  slide.buttonLabel,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: onPressed,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.primaryColor,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 22 : 28,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: Text(
+                    slide.buttonLabel,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlideBackground(String? videoAsset, String? imageAsset) {
+    if (videoAsset != null && videoAsset.isNotEmpty) {
+      if (isActive) {
+        return _HeroVideoBackground(assetPath: videoAsset, isActive: true);
+      }
+      if (imageAsset != null && imageAsset.isNotEmpty) {
+        return _HeroCoverImage(assetPath: imageAsset);
+      }
+      return ColoredBox(color: AppTheme.primaryColor);
+    }
+
+    if (imageAsset != null && imageAsset.isNotEmpty) {
+      return _HeroCoverImage(assetPath: imageAsset);
+    }
+
+    return ColoredBox(color: AppTheme.primaryColor);
+  }
+}
+
+class _HeroCoverImage extends StatelessWidget {
+  final String assetPath;
+
+  const _HeroCoverImage({required this.assetPath});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      errorBuilder: (_, __, ___) => ColoredBox(color: AppTheme.primaryColor),
     );
   }
 }
@@ -853,11 +879,14 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
   VideoPlayerController? _controller;
   bool _initialized = false;
   bool _soundOn = true;
+  int _initGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _initController();
+    if (widget.isActive) {
+      _initController();
+    }
   }
 
   @override
@@ -865,31 +894,53 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.assetPath != widget.assetPath) {
       _disposeController();
+      if (widget.isActive) {
+        _initController();
+      }
+      return;
+    }
+
+    if (widget.isActive && !_initialized) {
       _initController();
+      return;
+    }
+    if (!widget.isActive && _initialized) {
+      _disposeController();
       return;
     }
     _syncPlayback();
   }
 
   Future<void> _initController() async {
+    final generation = ++_initGeneration;
     final controller = VideoPlayerController.asset(widget.assetPath);
     _controller = controller;
     try {
       await controller.initialize();
+      if (!mounted || generation != _initGeneration) {
+        await controller.dispose();
+        return;
+      }
       await controller.setLooping(true);
       await controller.setVolume(_soundOn ? 1.0 : 0.0);
-      if (!mounted) return;
+      if (!mounted || generation != _initGeneration) {
+        await controller.dispose();
+        return;
+      }
       setState(() => _initialized = true);
       _syncPlayback();
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _initGeneration) {
+        await controller.dispose();
+        return;
+      }
       setState(() => _initialized = false);
     }
   }
 
   Future<void> _toggleSound() async {
     final controller = _controller;
-    if (controller == null || !_initialized) return;
+    if (controller == null || !_initialized || !mounted) return;
 
     final enableSound = !_soundOn;
     setState(() => _soundOn = enableSound);
@@ -900,20 +951,27 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
   }
 
   void _syncPlayback() {
+    if (!mounted) return;
     final controller = _controller;
     if (controller == null || !_initialized) return;
     if (widget.isActive) {
       controller.setVolume(_soundOn ? 1.0 : 0.0);
-      controller.play();
+      controller.play().catchError((_) {});
     } else {
-      controller.pause();
+      controller.pause().catchError((_) {});
     }
   }
 
   void _disposeController() {
-    _controller?.dispose();
+    _initGeneration++;
+    final controller = _controller;
     _controller = null;
     _initialized = false;
+    if (controller == null) return;
+    try {
+      controller.pause();
+    } catch (_) {}
+    controller.dispose();
   }
 
   @override
@@ -1179,7 +1237,15 @@ class HomeEventCard extends StatelessWidget {
                         Image.network(
                           bannerUrl,
                           fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          gaplessPlayback: true,
+                          filterQuality: FilterQuality.medium,
                           errorBuilder: (_, __, ___) => _placeholderImage(),
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return _placeholderImage(loading: true);
+                          },
                         )
                       else
                         _placeholderImage(),
@@ -1307,15 +1373,33 @@ class HomeEventCard extends StatelessWidget {
     );
   }
 
-  Widget _placeholderImage() {
+  Widget _placeholderImage({bool loading = false}) {
     return Container(
-      color: AppTheme.accentSoft(0.06),
-      child: Center(
-        child: Icon(
-          Icons.emoji_events_outlined,
-          size: 32,
-          color: AppTheme.primaryColor.withValues(alpha: 0.4),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.primaryColor.withValues(alpha: 0.88),
+            AppTheme.secondaryColor,
+          ],
         ),
+      ),
+      child: Center(
+        child: loading
+            ? SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              )
+            : Icon(
+                Icons.emoji_events_outlined,
+                size: 36,
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
       ),
     );
   }
@@ -1954,11 +2038,12 @@ class _EventCarouselVideoState extends State<_EventCarouselVideo> {
   VideoPlayerController? _controller;
   bool _initialized = false;
   bool _userStartedPlayback = false;
+  int _initGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _initController();
+    _ensureControllerForActiveSlide();
   }
 
   @override
@@ -1966,59 +2051,85 @@ class _EventCarouselVideoState extends State<_EventCarouselVideo> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.assetPath != widget.assetPath) {
       _disposeController();
-      _initController();
+      _ensureControllerForActiveSlide();
       return;
     }
-    _syncPlayback();
+
+    if (!widget.isActive) {
+      _pauseAndDispose();
+      return;
+    }
+
+    _ensureControllerForActiveSlide();
+  }
+
+  void _ensureControllerForActiveSlide() {
+    if (widget.isActive && !_initialized && _controller == null) {
+      _initController();
+    }
   }
 
   Future<void> _initController() async {
+    final generation = ++_initGeneration;
     final controller = VideoPlayerController.asset(widget.assetPath);
     _controller = controller;
     try {
       await controller.initialize();
+      if (!mounted || generation != _initGeneration) {
+        await controller.dispose();
+        return;
+      }
       await controller.setLooping(true);
       await controller.setVolume(0);
-      if (!mounted) return;
+      if (!mounted || generation != _initGeneration) {
+        await controller.dispose();
+        return;
+      }
       setState(() => _initialized = true);
-      _syncPlayback();
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _initGeneration) {
+        await controller.dispose();
+        return;
+      }
       setState(() => _initialized = false);
     }
   }
 
   Future<void> _onPlayTap() async {
-    if (!widget.isActive) return;
+    if (!widget.isActive || !mounted) return;
+
+    if (!_initialized || _controller == null) {
+      await _initController();
+    }
+
     final controller = _controller;
-    if (controller == null || !_initialized) return;
+    if (controller == null || !_initialized || !mounted) return;
 
     await controller.play();
     if (!mounted) return;
     setState(() => _userStartedPlayback = true);
   }
 
-  void _syncPlayback() {
-    final controller = _controller;
-    if (controller == null || !_initialized) return;
-    if (!widget.isActive) {
-      controller.pause();
-      if (_userStartedPlayback) {
-        setState(() => _userStartedPlayback = false);
-      }
-    }
+  void _pauseAndDispose() {
+    _userStartedPlayback = false;
+    _disposeController();
   }
 
   void _disposeController() {
-    _controller?.dispose();
+    _initGeneration++;
+    final controller = _controller;
     _controller = null;
     _initialized = false;
-    _userStartedPlayback = false;
+    if (controller == null) return;
+    try {
+      controller.pause();
+    } catch (_) {}
+    controller.dispose();
   }
 
   @override
   void dispose() {
-    _disposeController();
+    _pauseAndDispose();
     super.dispose();
   }
 
