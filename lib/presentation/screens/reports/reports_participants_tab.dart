@@ -1,5 +1,4 @@
 import 'dart:async' show Timer, unawaited;
-import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:html' as html show Blob, Url, AnchorElement;
 
@@ -13,6 +12,7 @@ import '../../../data/models/competition_grade_model.dart';
 import '../../controllers/reports_participants_tab_controller.dart';
 import '../../controllers/reports_participants_tab_logic.dart';
 import '../../widgets/location/district_search_field.dart';
+import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/district_model.dart';
 import '../../../data/models/school_model.dart';
 import '../../../data/models/state_model.dart';
@@ -519,24 +519,19 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
             final showGrades =
                 controller.hasGrades.value ||
                 controller.competitionGrades.isNotEmpty;
-            final w = constraints.maxWidth;
-            final minTableWidth = math.max(
-              _kMinParticipantTableWidth + (showGrades ? 76.0 : 0.0),
-              w.isFinite && w > 0 ? w : _kMinParticipantTableWidth,
-            );
+            final minTableWidth =
+                _kMinParticipantTableWidth + (showGrades ? 76.0 : 0.0);
 
             return Material(
               color: Colors.white,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: minTableWidth,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
+                  HorizontalScrollTable(
+                    minWidth: minTableWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                           IntrinsicHeight(
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -844,7 +839,6 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                       ],
                     ),
                   ),
-                ),
                 Container(
                   decoration: const BoxDecoration(
                     color: AppColors.rowAlt,

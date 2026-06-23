@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:carousel_slider/carousel_slider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -530,6 +531,34 @@ typedef _HeroBannerSlide = ({
 
 enum _HeroSlideAction { explore, viewResults, viewCompetitions }
 
+/// Prefetches and reuses a hero banner video so carousel revisits avoid re-init.
+class _HeroVideoHandle {
+  VideoPlayerController? controller;
+  Future<void>? initFuture;
+  bool soundOn = !kIsWeb;
+
+  void prefetch(String assetPath) {
+    if (controller != null) return;
+    final videoController = VideoPlayerController.asset(assetPath);
+    controller = videoController;
+    initFuture = videoController.initialize().then((_) async {
+      await videoController.setLooping(true);
+      await videoController.setVolume(soundOn ? 1.0 : 0.0);
+    });
+  }
+
+  Future<void> dispose() async {
+    final videoController = controller;
+    controller = null;
+    initFuture = null;
+    if (videoController == null) return;
+    try {
+      await videoController.pause();
+    } catch (_) {}
+    await videoController.dispose();
+  }
+}
+
 class HomeHeroSection extends StatefulWidget {
   final VoidCallback onExplore;
 
@@ -544,6 +573,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
   Timer? _autoPlayTimer;
   final CarouselSliderController _carouselController =
       CarouselSliderController();
+  _HeroVideoHandle? _heroVideoHandle;
 
   static const Duration _videoSlideDuration = Duration(seconds: 10);
   static const Duration _imageSlideDuration = Duration(seconds: 5);
@@ -590,7 +620,18 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
   @override
   void initState() {
     super.initState();
+    _prefetchHeroVideo();
     _scheduleAutoPlay();
+  }
+
+  void _prefetchHeroVideo() {
+    for (final slide in _slides) {
+      final path = slide.videoAsset;
+      if (path != null && path.isNotEmpty) {
+        _heroVideoHandle = _HeroVideoHandle()..prefetch(path);
+        break;
+      }
+    }
   }
 
   Duration _durationForSlide(int index) {
@@ -621,6 +662,7 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
     _autoPlayTimer?.cancel();
     _autoPlayTimer = null;
     _carouselController.stopAutoPlay();
+    _heroVideoHandle?.dispose();
     super.dispose();
   }
 
@@ -664,6 +706,9 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
                     isMobile: isMobile,
                     isActive: index == _currentIndex,
                     onPressed: () => _onSlideAction(slide.action),
+                    videoHandle: slide.videoAsset != null
+                        ? _heroVideoHandle
+                        : null,
                   );
                 },
                 options: CarouselOptions(
@@ -719,23 +764,42 @@ class _HomeHeroSectionState extends State<HomeHeroSection> {
   }
 }
 
-class _HeroSlideView extends StatelessWidget {
+class _HeroSlideView extends StatefulWidget {
   final _HeroBannerSlide slide;
   final bool isMobile;
   final bool isActive;
   final VoidCallback onPressed;
+  final _HeroVideoHandle? videoHandle;
 
   const _HeroSlideView({
     required this.slide,
     required this.isMobile,
     required this.isActive,
     required this.onPressed,
+    this.videoHandle,
   });
 
   @override
+  State<_HeroSlideView> createState() => _HeroSlideViewState();
+}
+
+class _HeroSlideViewState extends State<_HeroSlideView> {
+  final GlobalKey<_HeroVideoBackgroundState> _videoKey =
+      GlobalKey<_HeroVideoBackgroundState>();
+
+  @override
   Widget build(BuildContext context) {
+    final slide = widget.slide;
     final videoAsset = slide.videoAsset;
     final imageAsset = slide.imageAsset;
+    final isMobile = widget.isMobile;
+    final videoState = _videoKey.currentState;
+    final showVideoMuteControl =
+        videoAsset != null &&
+        videoAsset.isNotEmpty &&
+        widget.isActive &&
+        videoState != null &&
+        videoState.isInitialized;
 
     return ClipRect(
       child: Stack(
@@ -743,21 +807,46 @@ class _HeroSlideView extends StatelessWidget {
         children: [
           _buildSlideBackground(videoAsset, imageAsset),
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.55),
-                    Colors.black.withValues(alpha: 0.2),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.42, 0.72],
+            // Let the hero video mute control receive taps in the top-right corner.
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.55),
+                      Colors.black.withValues(alpha: 0.2),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.42, 0.72],
+                  ),
                 ),
               ),
             ),
           ),
+          if (showVideoMuteControl)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.45),
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: IconButton(
+                  onPressed: () => videoState.toggleSound(),
+                  tooltip: videoState.isSoundOn
+                      ? 'Mute video'
+                      : 'Unmute video',
+                  icon: Icon(
+                    videoState.isSoundOn
+                        ? Icons.volume_up_rounded
+                        : Icons.volume_off_rounded,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
           Padding(
             padding: EdgeInsets.fromLTRB(
               isMobile ? 20 : 48,
@@ -803,7 +892,7 @@ class _HeroSlideView extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: onPressed,
+                  onPressed: widget.onPressed,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: AppTheme.primaryColor,
@@ -831,8 +920,17 @@ class _HeroSlideView extends StatelessWidget {
 
   Widget _buildSlideBackground(String? videoAsset, String? imageAsset) {
     if (videoAsset != null && videoAsset.isNotEmpty) {
-      if (isActive) {
-        return _HeroVideoBackground(assetPath: videoAsset, isActive: true);
+      if (widget.isActive) {
+        return _HeroVideoBackground(
+          key: _videoKey,
+          assetPath: videoAsset,
+          posterAssetPath: imageAsset,
+          isActive: true,
+          sharedHandle: widget.videoHandle,
+          onSoundChanged: () {
+            if (mounted) setState(() {});
+          },
+        );
       }
       if (imageAsset != null && imageAsset.isNotEmpty) {
         return _HeroCoverImage(assetPath: imageAsset);
@@ -867,9 +965,19 @@ class _HeroCoverImage extends StatelessWidget {
 
 class _HeroVideoBackground extends StatefulWidget {
   final String assetPath;
+  final String? posterAssetPath;
   final bool isActive;
+  final VoidCallback? onSoundChanged;
+  final _HeroVideoHandle? sharedHandle;
 
-  const _HeroVideoBackground({required this.assetPath, required this.isActive});
+  const _HeroVideoBackground({
+    super.key,
+    required this.assetPath,
+    this.posterAssetPath,
+    required this.isActive,
+    this.onSoundChanged,
+    this.sharedHandle,
+  });
 
   @override
   State<_HeroVideoBackground> createState() => _HeroVideoBackgroundState();
@@ -878,15 +986,46 @@ class _HeroVideoBackground extends StatefulWidget {
 class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
   VideoPlayerController? _controller;
   bool _initialized = false;
-  bool _soundOn = true;
+  bool _ownsController = true;
   int _initGeneration = 0;
+
+  bool get isInitialized => _initialized;
+
+  bool get isSoundOn => widget.sharedHandle?.soundOn ?? _localSoundOn;
+
+  bool _localSoundOn = !kIsWeb;
 
   @override
   void initState() {
     super.initState();
+    final sharedController = widget.sharedHandle?.controller;
+    if (sharedController != null) {
+      _controller = sharedController;
+      _ownsController = false;
+      _localSoundOn = widget.sharedHandle!.soundOn;
+      _bindSharedController();
+      return;
+    }
     if (widget.isActive) {
       _initController();
     }
+  }
+
+  Future<void> _bindSharedController() async {
+    final handle = widget.sharedHandle;
+    final future = handle?.initFuture;
+    if (future != null) {
+      try {
+        await future;
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _initialized = _controller?.value.isInitialized == true;
+      _localSoundOn = handle?.soundOn ?? _localSoundOn;
+    });
+    widget.onSoundChanged?.call();
+    _syncPlayback();
   }
 
   @override
@@ -905,7 +1044,11 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
       return;
     }
     if (!widget.isActive && _initialized) {
-      _disposeController();
+      if (_ownsController) {
+        _disposeController();
+      } else {
+        _syncPlayback();
+      }
       return;
     }
     _syncPlayback();
@@ -922,12 +1065,13 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
         return;
       }
       await controller.setLooping(true);
-      await controller.setVolume(_soundOn ? 1.0 : 0.0);
+      await controller.setVolume(isSoundOn ? 1.0 : 0.0);
       if (!mounted || generation != _initGeneration) {
         await controller.dispose();
         return;
       }
       setState(() => _initialized = true);
+      widget.onSoundChanged?.call();
       _syncPlayback();
     } catch (_) {
       if (!mounted || generation != _initGeneration) {
@@ -938,14 +1082,23 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
     }
   }
 
+  Future<void> toggleSound() => _toggleSound();
+
   Future<void> _toggleSound() async {
     final controller = _controller;
     if (controller == null || !_initialized || !mounted) return;
 
-    final enableSound = !_soundOn;
-    setState(() => _soundOn = enableSound);
+    final enableSound = !isSoundOn;
+    if (widget.sharedHandle != null) {
+      widget.sharedHandle!.soundOn = enableSound;
+    } else {
+      _localSoundOn = enableSound;
+    }
+    setState(() {});
+    widget.onSoundChanged?.call();
     await controller.setVolume(enableSound ? 1.0 : 0.0);
-    if (enableSound && widget.isActive && !controller.value.isPlaying) {
+    // Re-trigger play inside the user gesture so browsers allow unmuting audio.
+    if (enableSound && widget.isActive) {
       await controller.play();
     }
   }
@@ -955,7 +1108,7 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
     final controller = _controller;
     if (controller == null || !_initialized) return;
     if (widget.isActive) {
-      controller.setVolume(_soundOn ? 1.0 : 0.0);
+      controller.setVolume(isSoundOn ? 1.0 : 0.0);
       controller.play().catchError((_) {});
     } else {
       controller.pause().catchError((_) {});
@@ -963,6 +1116,13 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
   }
 
   void _disposeController() {
+    if (!_ownsController) {
+      try {
+        _controller?.pause();
+      } catch (_) {}
+      _initialized = false;
+      return;
+    }
     _initGeneration++;
     final controller = _controller;
     _controller = null;
@@ -976,50 +1136,47 @@ class _HeroVideoBackgroundState extends State<_HeroVideoBackground> {
 
   @override
   void dispose() {
-    _disposeController();
+    if (_ownsController) {
+      _disposeController();
+    } else {
+      try {
+        _controller?.pause();
+      } catch (_) {}
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    if (!_initialized ||
-        controller == null ||
-        !controller.value.isInitialized) {
-      return Container(color: AppTheme.primaryColor);
-    }
+    final videoReady = _initialized &&
+        controller != null &&
+        controller.value.isInitialized;
+    final posterPath = widget.posterAssetPath;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        SizedBox.expand(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(
-              width: controller.value.size.width,
-              height: controller.value.size.height,
-              child: VideoPlayer(controller),
-            ),
-          ),
-        ),
-        Positioned(
-          top: 12,
-          right: 12,
-          child: Material(
-            color: Colors.black.withValues(alpha: 0.45),
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: IconButton(
-              onPressed: _toggleSound,
-              tooltip: _soundOn ? 'Mute video' : 'Unmute video',
-              icon: Icon(
-                _soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                color: Colors.white,
+        if (posterPath != null && posterPath.isNotEmpty)
+          _HeroCoverImage(assetPath: posterPath)
+        else
+          ColoredBox(color: AppTheme.primaryColor),
+        if (videoReady)
+          AnimatedOpacity(
+            opacity: 1,
+            duration: const Duration(milliseconds: 280),
+            child: SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                clipBehavior: Clip.hardEdge,
+                child: SizedBox(
+                  width: controller.value.size.width,
+                  height: controller.value.size.height,
+                  child: VideoPlayer(controller),
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -1816,7 +1973,7 @@ class _HomeEventsCarouselSectionState extends State<HomeEventsCarouselSection> {
 
   static const List<_EventCarouselItem> _items = [
     (
-      imageAsset: null,
+      imageAsset: 'assets/images/banners/banner-3.jpg',
       videoAsset: 'assets/images/videos/app-inaguration.mp4',
       title: 'App Inauguration',
       subtitle: 'Launch of the Yoga Champ platform',
@@ -1954,6 +2111,7 @@ class _EventCarouselCard extends StatelessWidget {
                     if (videoAsset != null && videoAsset.isNotEmpty)
                       _EventCarouselVideo(
                         assetPath: videoAsset,
+                        posterAssetPath: imageAsset,
                         isActive: isActive,
                       )
                     else if (imageAsset != null && imageAsset.isNotEmpty)
@@ -2023,10 +2181,12 @@ class _EventCarouselCard extends StatelessWidget {
 
 class _EventCarouselVideo extends StatefulWidget {
   final String assetPath;
+  final String? posterAssetPath;
   final bool isActive;
 
   const _EventCarouselVideo({
     required this.assetPath,
+    this.posterAssetPath,
     required this.isActive,
   });
 
@@ -2136,24 +2296,34 @@ class _EventCarouselVideoState extends State<_EventCarouselVideo> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    if (!_initialized || controller == null || !controller.value.isInitialized) {
-      return Container(color: AppTheme.primaryColor);
-    }
-
+    final videoReady = _initialized &&
+        controller != null &&
+        controller.value.isInitialized;
+    final posterPath = widget.posterAssetPath;
     final showPlayIcon = widget.isActive && !_userStartedPlayback;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        FittedBox(
-          fit: BoxFit.cover,
-          clipBehavior: Clip.hardEdge,
-          child: SizedBox(
-            width: controller.value.size.width,
-            height: controller.value.size.height,
-            child: VideoPlayer(controller),
+        if (posterPath != null && posterPath.isNotEmpty)
+          Image.asset(
+            posterPath,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                ColoredBox(color: AppTheme.primaryColor),
+          )
+        else
+          ColoredBox(color: AppTheme.primaryColor),
+        if (videoReady)
+          FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: controller.value.size.width,
+              height: controller.value.size.height,
+              child: VideoPlayer(controller),
+            ),
           ),
-        ),
         if (showPlayIcon)
           Center(
             child: Material(

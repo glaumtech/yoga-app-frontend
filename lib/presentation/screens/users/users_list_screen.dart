@@ -11,6 +11,7 @@ import '../../../core/utils/recent_competition_store.dart';
 import '../../controllers/users_list_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/jury_login_qr_dialog.dart';
+import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/user_management_model.dart';
 
 class UsersListScreen extends StatelessWidget {
@@ -649,147 +650,126 @@ class UsersListScreen extends StatelessWidget {
         ? Get.find<PermissionStore>()
         : Get.put(PermissionStore());
 
-    return RefreshIndicator(
+    return ResponsiveAdminTable.refreshable(
       onRefresh: () => _reloadUsers(controller),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            var maxW = constraints.maxWidth;
-            if (!maxW.isFinite || maxW <= 0) {
-              maxW = MediaQuery.sizeOf(context).width;
-            }
-            final tableWidth = (maxW - 32).clamp(200.0, double.infinity);
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: tableWidth,
-                child: Obx(() {
-                  final canViewPassword = permissionStore.has(
-                    'SHOW_USER_PASSWORD',
-                  );
+      table: Obx(() {
+        final canViewPassword = permissionStore.has(
+          'SHOW_USER_PASSWORD',
+        );
 
-                  return Table(
-                    border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                    columnWidths: canViewPassword
-                        ? {
-                            0: const FixedColumnWidth(80),
-                            1: FlexColumnWidth(1.8), // API userName
-                            2: FlexColumnWidth(1.8), // API name
-                            3: FlexColumnWidth(1.4),
-                            4: FlexColumnWidth(2.2),
-                            5: FlexColumnWidth(1.2), // Password
-                            6: FlexColumnWidth(1.4), // Created
-                            7: FlexColumnWidth(1.4), // Updated
-                            8: const FixedColumnWidth(120),
-                          }
-                        : {
-                            0: const FixedColumnWidth(80),
-                            1: FlexColumnWidth(1.8), // API userName
-                            2: FlexColumnWidth(1.8), // API name
-                            3: FlexColumnWidth(1.4),
-                            4: FlexColumnWidth(2.2),
-                            5: FlexColumnWidth(1.4), // Created
-                            6: FlexColumnWidth(1.4), // Updated
-                            7: const FixedColumnWidth(120),
-                          },
-                    children: [
-                      // Header Row
-                      TableRow(
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryColor.withOpacity(0.1),
-                        ),
-                        children: canViewPassword
-                            ? [
-                                _buildTableCell('PHOTO', isHeader: true),
-                                _buildTableCell('USER NAME', isHeader: true),
-                                _buildTableCell('NAME', isHeader: true),
-                                _buildTableCell('TYPE', isHeader: true),
-                                _buildTableCell('COMPETITION', isHeader: true),
-                                _buildTableCell('PASSWORD', isHeader: true),
-                                _buildTableCell('CREATED', isHeader: true),
-                                _buildTableCell('UPDATED', isHeader: true),
-                                _buildTableCell('ACTIONS', isHeader: true),
-                              ]
-                            : [
-                                _buildTableCell('PHOTO', isHeader: true),
-                                _buildTableCell('USER NAME', isHeader: true),
-                                _buildTableCell('NAME', isHeader: true),
-                                _buildTableCell('TYPE', isHeader: true),
-                                _buildTableCell('COMPETITION', isHeader: true),
-                                _buildTableCell('CREATED', isHeader: true),
-                                _buildTableCell('UPDATED', isHeader: true),
-                                _buildTableCell('ACTIONS', isHeader: true),
-                              ],
-                      ),
-                      // Data Rows
-                      ...users.map((user) {
-                        return TableRow(
-                          children: canViewPassword
-                              ? [
-                                  TableCell(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: Center(
-                                        child: _buildUserPhoto(user, 40),
-                                      ),
-                                    ),
-                                  ),
-                                  _buildTableCell(_apiUserNameCell(user)),
-                                  _buildTableCell(user.name),
-                                  TableCell(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: Center(
-                                        child: _buildTypeChip(user.type),
-                                      ),
-                                    ),
-                                  ),
-                                  _buildTableCell(user.eventName ?? 'N/A'),
-                                  _buildPasswordTableCell(
-                                    context,
-                                    user.confirmPassword ??
-                                        user.password ??
-                                        'N/A',
-                                  ),
-                                  _buildTableCell(_buildCreatedCell(user)),
-                                  _buildTableCell(_buildUpdatedCell(user)),
-                                  _buildActionCell(context, user, controller),
-                                ]
-                              : [
-                                  TableCell(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: Center(
-                                        child: _buildUserPhoto(user, 40),
-                                      ),
-                                    ),
-                                  ),
-                                  _buildTableCell(_apiUserNameCell(user)),
-                                  _buildTableCell(user.name),
-                                  TableCell(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: Center(
-                                        child: _buildTypeChip(user.type),
-                                      ),
-                                    ),
-                                  ),
-                                  _buildTableCell(user.eventName ?? 'N/A'),
-                                  _buildTableCell(_buildCreatedCell(user)),
-                                  _buildTableCell(_buildUpdatedCell(user)),
-                                  _buildActionCell(context, user, controller),
-                                ],
-                        );
-                      }).toList(),
-                    ],
-                  );
-                }),
+        return ResponsiveAdminTable(
+          columnWidths: canViewPassword
+              ? {
+                  0: const FixedColumnWidth(80),
+                  1: FlexColumnWidth(1.8),
+                  2: FlexColumnWidth(1.8),
+                  3: FlexColumnWidth(1.4),
+                  4: FlexColumnWidth(2.2),
+                  5: FlexColumnWidth(1.2),
+                  6: FlexColumnWidth(1.4),
+                  7: FlexColumnWidth(1.4),
+                  8: const FixedColumnWidth(120),
+                }
+              : {
+                  0: const FixedColumnWidth(80),
+                  1: FlexColumnWidth(1.8),
+                  2: FlexColumnWidth(1.8),
+                  3: FlexColumnWidth(1.4),
+                  4: FlexColumnWidth(2.2),
+                  5: FlexColumnWidth(1.4),
+                  6: FlexColumnWidth(1.4),
+                  7: const FixedColumnWidth(120),
+                },
+          rows: [
+            TableRow(
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withOpacity(0.1),
               ),
-            );
-          },
-        ),
-      ),
+              children: canViewPassword
+                  ? [
+                      _buildTableCell('PHOTO', isHeader: true),
+                      _buildTableCell('USER NAME', isHeader: true),
+                      _buildTableCell('NAME', isHeader: true),
+                      _buildTableCell('TYPE', isHeader: true),
+                      _buildTableCell('COMPETITION', isHeader: true),
+                      _buildTableCell('PASSWORD', isHeader: true),
+                      _buildTableCell('CREATED', isHeader: true),
+                      _buildTableCell('UPDATED', isHeader: true),
+                      _buildTableCell('ACTIONS', isHeader: true),
+                    ]
+                  : [
+                      _buildTableCell('PHOTO', isHeader: true),
+                      _buildTableCell('USER NAME', isHeader: true),
+                      _buildTableCell('NAME', isHeader: true),
+                      _buildTableCell('TYPE', isHeader: true),
+                      _buildTableCell('COMPETITION', isHeader: true),
+                      _buildTableCell('CREATED', isHeader: true),
+                      _buildTableCell('UPDATED', isHeader: true),
+                      _buildTableCell('ACTIONS', isHeader: true),
+                    ],
+            ),
+            ...users.map((user) {
+              return TableRow(
+                children: canViewPassword
+                    ? [
+                        TableCell(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Center(
+                              child: _buildUserPhoto(user, 40),
+                            ),
+                          ),
+                        ),
+                        _buildTableCell(_apiUserNameCell(user)),
+                        _buildTableCell(user.name),
+                        TableCell(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Center(
+                              child: _buildTypeChip(user.type),
+                            ),
+                          ),
+                        ),
+                        _buildTableCell(user.eventName ?? 'N/A'),
+                        _buildPasswordTableCell(
+                          context,
+                          user.confirmPassword ??
+                              user.password ??
+                              'N/A',
+                        ),
+                        _buildTableCell(_buildCreatedCell(user)),
+                        _buildTableCell(_buildUpdatedCell(user)),
+                        _buildActionCell(context, user, controller),
+                      ]
+                    : [
+                        TableCell(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Center(
+                              child: _buildUserPhoto(user, 40),
+                            ),
+                          ),
+                        ),
+                        _buildTableCell(_apiUserNameCell(user)),
+                        _buildTableCell(user.name),
+                        TableCell(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Center(
+                              child: _buildTypeChip(user.type),
+                            ),
+                          ),
+                        ),
+                        _buildTableCell(user.eventName ?? 'N/A'),
+                        _buildTableCell(_buildCreatedCell(user)),
+                        _buildTableCell(_buildUpdatedCell(user)),
+                        _buildActionCell(context, user, controller),
+                      ],
+              );
+            }),
+          ],
+        );
+      }),
     );
   }
 

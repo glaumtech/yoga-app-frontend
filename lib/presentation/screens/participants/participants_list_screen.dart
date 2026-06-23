@@ -16,12 +16,12 @@ class ParticipantsListScreen extends StatelessWidget {
     0: FixedColumnWidth(80),
     1: FlexColumnWidth(2.0),
     2: FlexColumnWidth(1.3),
-    3: FlexColumnWidth(1.2),
+    3: FixedColumnWidth(132),
     4: FlexColumnWidth(2.0),
     5: FlexColumnWidth(1.5),
-    6: FlexColumnWidth(1.4),
-    7: FlexColumnWidth(1.4),
-    8: FixedColumnWidth(80),
+    6: FixedColumnWidth(104),
+    7: FixedColumnWidth(108),
+    8: FixedColumnWidth(88),
     9: FixedColumnWidth(136),
   };
 
@@ -592,7 +592,7 @@ class ParticipantsListScreen extends StatelessWidget {
     ParticipantController controller,
     bool isTablet,
   ) {
-    return RefreshIndicator(
+    return ResponsiveAdminTable.refreshable(
       onRefresh: () {
         final eventId = controller.selectedEventId.value;
         if (eventId.isNotEmpty) {
@@ -600,7 +600,7 @@ class ParticipantsListScreen extends StatelessWidget {
         }
         return Future.value();
       },
-      child: ResponsiveAdminTable(
+      table: ResponsiveAdminTable(
         columnWidths: _desktopColumnWidths,
         rows: [
           TableRow(
@@ -690,8 +690,9 @@ class ParticipantsListScreen extends StatelessWidget {
           fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
           fontSize: isHeader ? 14 : 13,
         ),
-        softWrap: true,
-        maxLines: null,
+        softWrap: !isHeader,
+        maxLines: isHeader ? 1 : null,
+        overflow: isHeader ? TextOverflow.ellipsis : null,
       ),
     );
   }
@@ -704,6 +705,9 @@ class ParticipantsListScreen extends StatelessWidget {
           text,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           textAlign: TextAlign.center,
+          softWrap: false,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );
@@ -1021,17 +1025,16 @@ class ParticipantsListScreen extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: isActive ? AppTheme.primaryColor : Colors.black87,
-                  ),
-                  softWrap: true,
-                  maxLines: null,
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: isActive ? AppTheme.primaryColor : Colors.black87,
                 ),
+                softWrap: false,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               if (isSortable) ...[
                 const SizedBox(width: 4),

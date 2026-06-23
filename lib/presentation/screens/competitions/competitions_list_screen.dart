@@ -514,9 +514,9 @@ class CompetitionsListScreen extends StatelessWidget {
     CompetitionController controller,
     bool isTablet,
   ) {
-    return RefreshIndicator(
+    return ResponsiveAdminTable.refreshable(
       onRefresh: () => controller.loadCompetitions(),
-      child: ResponsiveAdminTable(
+      table: ResponsiveAdminTable(
         columnWidths: _desktopColumnWidths,
         rows: [
           // Header Row

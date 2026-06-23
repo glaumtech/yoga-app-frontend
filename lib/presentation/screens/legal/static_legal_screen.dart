@@ -49,8 +49,8 @@ class StaticLegalScreen extends StatelessWidget {
     'Online payments processed via Razorpay are subject to the organizer\'s cancellation '
         'rules. Contact the organizer before the event date for refund requests.',
     'Spot registrations and manual payments follow the organizer\'s local refund policy.',
-    'For refund assistance, email praveen.sekar@glaum.in with your registration number '
-        'and competition name.',
+    'For refund assistance, contact the Competition Organizer with your registration '
+        'number and competition name.',
   ];
 
   static const _termsAndConditions = [
@@ -64,8 +64,16 @@ class StaticLegalScreen extends StatelessWidget {
     'For questions about terms, contact praveen.sekar@glaum.in.',
   ];
 
+  static const _refundBoldPhrase = 'contact the Competition Organizer';
+
   @override
   Widget build(BuildContext context) {
+    final textStyle = TextStyle(
+      fontSize: 15,
+      height: 1.6,
+      color: Theme.of(context).textTheme.bodyLarge?.color,
+    );
+
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: ListView(
@@ -74,11 +82,29 @@ class StaticLegalScreen extends StatelessWidget {
           for (final paragraph in paragraphs)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: Text(
-                paragraph,
-                style: const TextStyle(fontSize: 15, height: 1.6),
-              ),
+              child: _buildParagraph(paragraph, textStyle),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParagraph(String paragraph, TextStyle textStyle) {
+    if (!paragraph.contains(_refundBoldPhrase)) {
+      return Text(paragraph, style: textStyle);
+    }
+
+    final parts = paragraph.split(_refundBoldPhrase);
+    return Text.rich(
+      TextSpan(
+        style: textStyle,
+        children: [
+          TextSpan(text: parts[0]),
+          TextSpan(
+            text: _refundBoldPhrase,
+            style: textStyle.copyWith(fontWeight: FontWeight.bold),
+          ),
+          if (parts.length > 1) TextSpan(text: parts[1]),
         ],
       ),
     );

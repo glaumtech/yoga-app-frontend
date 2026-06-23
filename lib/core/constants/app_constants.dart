@@ -92,6 +92,8 @@ class EndPoints {
   static String participantRegistrationImport =
       '/participant-registration/import';
   static String juryScoring = '/jury-scoring';
+  static String juryScoringResetCompetitionData =
+      '/jury-scoring/reset-competition-data';
 
   /// SCORING
   static String scoringSave = '/scoring/save';
