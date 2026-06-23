@@ -150,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Championship 2025',
+                            'Championship ${DateTime.now().year}',
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(
                                   color: Colors.grey[600],

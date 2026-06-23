@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/responsive_admin_table.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../../data/models/district_model.dart';
 import '../../../data/models/school_model.dart';
@@ -14,8 +13,16 @@ import '../../../data/models/school_model.dart';
 class SchoolListScreen extends StatelessWidget {
   const SchoolListScreen({super.key});
 
-  /// Minimum width so date/action columns are not squeezed (sidebar layouts).
-  static const double _kMinInstitutionTableWidth = 1120;
+  static const Map<int, TableColumnWidth> _desktopColumnWidths = {
+    0: FixedColumnWidth(80),
+    1: FlexColumnWidth(2.5),
+    2: FlexColumnWidth(2.5),
+    3: FlexColumnWidth(1.5),
+    4: FlexColumnWidth(1.5),
+    5: FixedColumnWidth(190),
+    6: FixedColumnWidth(190),
+    7: FixedColumnWidth(108),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -697,166 +704,135 @@ class SchoolListScreen extends StatelessWidget {
     SchoolController controller,
     bool isTablet,
   ) {
-    return RefreshIndicator(
+    return ResponsiveAdminTable.refreshable(
       onRefresh: () => controller.loadSchools(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          var viewportWidth = constraints.maxWidth;
-          if (!viewportWidth.isFinite || viewportWidth <= 0) {
-            viewportWidth = MediaQuery.sizeOf(context).width;
-          }
-          final tableWidth = math.max(
-            _kMinInstitutionTableWidth,
-            viewportWidth,
-          );
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: tableWidth,
-                child: Table(
-                  border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                  columnWidths: const {
-                    0: FixedColumnWidth(80),
-                    1: FlexColumnWidth(2.5),
-                    2: FlexColumnWidth(2.5),
-                    3: FlexColumnWidth(1.5),
-                    4: FlexColumnWidth(1.5),
-                    5: FixedColumnWidth(190),
-                    6: FixedColumnWidth(190),
-                    7: FixedColumnWidth(108),
-                  },
-                  children: [
-                    // Header Row
-                    TableRow(
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
-                      ),
+      table: ResponsiveAdminTable(
+        columnWidths: _desktopColumnWidths,
+        rows: [
+          // Header Row
+          TableRow(
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withOpacity(0.1),
+            ),
+            children: [
+              _buildTableCell('ICON', isHeader: true),
+              _buildSortableHeader(
+                'INSTITUTION NAME',
+                'institutionName',
+                controller,
+              ),
+              _buildSortableHeader(
+                'ADDRESS & LOCATION',
+                'address',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'TYPE & CATEGORY',
+                'institutionType',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'EMAIL ID',
+                'email',
+                controller,
+                isSortable: false,
+              ),
+              _buildSortableHeader(
+                'CREATED',
+                'createdAt',
+                controller,
+              ),
+              _buildSortableHeader(
+                'UPDATED',
+                'updatedAt',
+                controller,
+              ),
+              _buildTableCell('ACTIONS', isHeader: true),
+            ],
+          ),
+          // Data Rows
+          ...schools.map((school) {
+            return TableRow(
+              children: [
+                TableCell(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Center(
+                      child: _buildSchoolIcon(school, 40),
+                    ),
+                  ),
+                ),
+                _buildTableCell(
+                  _buildInstitutionNameWithShortName(school),
+                ),
+                _buildTableCell(_buildAddressLocationText(school)),
+                TableCell(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Center(
+                      child: _buildTypeAndCategoryChip(school),
+                    ),
+                  ),
+                ),
+                _buildTableCell(school.email ?? '-'),
+                _buildCreatedCellWidget(school),
+                _buildUpdatedCellWidget(school),
+                TableCell(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildTableCell('ICON', isHeader: true),
-                        _buildSortableHeader(
-                          'INSTITUTION NAME',
-                          'institutionName',
-                          controller,
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 18),
+                          color: Colors.blue,
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
+                          onPressed: () {
+                            if (school.id != null) {
+                              controller.loadSchoolForEdit(
+                                school.id!,
+                              );
+                            }
+                          },
                         ),
-                        _buildSortableHeader(
-                          'ADDRESS & LOCATION',
-                          'address',
-                          controller,
-                          isSortable: false,
+                        IconButton(
+                          icon: const Icon(Icons.delete, size: 18),
+                          color: Colors.red,
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
+                          onPressed: () {
+                            if (school.id != null) {
+                              _showDeleteDialog(
+                                context,
+                                controller,
+                                school.id!,
+                              );
+                            }
+                          },
                         ),
-                        _buildSortableHeader(
-                          'TYPE & CATEGORY',
-                          'institutionType',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'EMAIL ID',
-                          'email',
-                          controller,
-                          isSortable: false,
-                        ),
-                        _buildSortableHeader(
-                          'CREATED',
-                          'createdAt',
-                          controller,
-                        ),
-                        _buildSortableHeader(
-                          'UPDATED',
-                          'updatedAt',
-                          controller,
-                        ),
-                        _buildTableCell('ACTIONS', isHeader: true),
                       ],
                     ),
-                    // Data Rows
-                    ...schools.map((school) {
-                      return TableRow(
-                        children: [
-                          TableCell(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Center(
-                                child: _buildSchoolIcon(school, 40),
-                              ),
-                            ),
-                          ),
-                          _buildTableCell(
-                            _buildInstitutionNameWithShortName(school),
-                          ),
-                          _buildTableCell(_buildAddressLocationText(school)),
-                          TableCell(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Center(
-                                child: _buildTypeAndCategoryChip(school),
-                              ),
-                            ),
-                          ),
-                          _buildTableCell(school.email ?? '-'),
-                          _buildCreatedCellWidget(school),
-                          _buildUpdatedCellWidget(school),
-                          TableCell(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 8,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, size: 18),
-                                    color: Colors.blue,
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 36,
-                                      minHeight: 36,
-                                    ),
-                                    onPressed: () {
-                                      if (school.id != null) {
-                                        controller.loadSchoolForEdit(
-                                          school.id!,
-                                        );
-                                      }
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, size: 18),
-                                    color: Colors.red,
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 36,
-                                      minHeight: 36,
-                                    ),
-                                    onPressed: () {
-                                      if (school.id != null) {
-                                        _showDeleteDialog(
-                                          context,
-                                          controller,
-                                          school.id!,
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          );
-        },
+              ],
+            );
+          }),
+        ],
       ),
     );
   }

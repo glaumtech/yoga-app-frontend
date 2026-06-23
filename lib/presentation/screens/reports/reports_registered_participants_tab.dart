@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:html' as html show Blob, Url, AnchorElement;
 
@@ -14,6 +13,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/reports_repository.dart';
 import '../../controllers/reports_registered_participants_tab_controller.dart';
 import '../../controllers/reports_participants_tab_logic.dart';
+import '../../widgets/responsive_admin_table.dart';
 import 'reports_participants_tab.dart';
 
 /// Registered participants report (table view, competition filters).
@@ -324,31 +324,25 @@ class _RegisteredParticipantsTable extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final tableWidth = math.max(_minWidth, w.isFinite ? w : _minWidth);
-
           return Stack(
             alignment: Alignment.center,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: tableWidth,
-                      child: Column(
-                        children: [
-                          _headerRow(),
-                          for (final row in items)
-                            _dataRow(
-                              context,
-                              row,
-                              competitionName:
-                                  controller.tableCompetitionName.value,
-                            ),
-                        ],
-                      ),
+                  HorizontalScrollTable(
+                    minWidth: _minWidth,
+                    child: Column(
+                      children: [
+                        _headerRow(),
+                        for (final row in items)
+                          _dataRow(
+                            context,
+                            row,
+                            competitionName:
+                                controller.tableCompetitionName.value,
+                          ),
+                      ],
                     ),
                   ),
                   _pagination(),

@@ -2,6 +2,72 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+/// Horizontal scroll wrapper with a visible scrollbar when content overflows.
+class HorizontalScrollTable extends StatefulWidget {
+  final Widget child;
+  final double minWidth;
+  final EdgeInsetsGeometry padding;
+
+  const HorizontalScrollTable({
+    super.key,
+    required this.child,
+    required this.minWidth,
+    this.padding = EdgeInsets.zero,
+  });
+
+  @override
+  State<HorizontalScrollTable> createState() => _HorizontalScrollTableState();
+}
+
+class _HorizontalScrollTableState extends State<HorizontalScrollTable> {
+  late final ScrollController _horizontalScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        var availableWidth = constraints.maxWidth;
+        if (!availableWidth.isFinite || availableWidth <= 0) {
+          availableWidth = MediaQuery.sizeOf(context).width;
+        }
+
+        final contentWidth = math.max(widget.minWidth, availableWidth);
+        final needsHorizontalScroll = contentWidth > availableWidth + 1;
+
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: needsHorizontalScroll,
+          notificationPredicate: (notification) =>
+              notification.metrics.axis == Axis.horizontal,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: Padding(
+              padding: widget.padding,
+              child: SizedBox(
+                width: contentWidth,
+                child: widget.child,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Scrollable admin [Table] that never overflows on narrow viewports.
 ///
 /// Uses a computed minimum width (fixed columns + flex minimums) and expands
@@ -33,58 +99,53 @@ class ResponsiveAdminTable extends StatelessWidget {
       if (width is FixedColumnWidth) {
         fixedTotal += width.value;
       } else if (width is FlexColumnWidth) {
-        flexTotal += (width.flex as num?)?.toDouble() ?? 1.0;
+        flexTotal += width.value;
       }
     }
 
     return fixedTotal + (flexTotal * minFlexColumnWidth) + columnWidths.length;
   }
 
-  @override
-  Widget build(BuildContext context) {
+  /// Wraps [table] so [RefreshIndicator] can pull-to-refresh without nesting
+  /// vertical and horizontal scroll views inside the table widget.
+  static Widget refreshable({
+    required Future<void> Function() onRefresh,
+    required Widget table,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        var availableWidth = constraints.maxWidth;
-        if (!availableWidth.isFinite || availableWidth <= 0) {
-          availableWidth = MediaQuery.sizeOf(context).width;
-        }
-
-        final minRequired = computeMinTableWidth(
-          columnWidths,
-          minFlexColumnWidth: minFlexColumnWidth,
-        );
-        final tableWidth = math.max(minRequired, availableWidth);
-
-        return Scrollbar(
-          thumbVisibility: tableWidth > availableWidth + 1,
+        return RefreshIndicator(
+          onRefresh: onRefresh,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            child: Scrollbar(
-              thumbVisibility: tableWidth > availableWidth + 1,
-              notificationPredicate: (notification) =>
-                  notification.metrics.axis == Axis.horizontal,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Padding(
-                  padding: padding,
-                  child: SizedBox(
-                    width: tableWidth,
-                    child: Table(
-                      border:
-                          border ??
-                          TableBorder.all(color: Colors.grey[300]!, width: 1),
-                      columnWidths: columnWidths,
-                      defaultVerticalAlignment:
-                          TableCellVerticalAlignment.middle,
-                      children: rows,
-                    ),
-                  ),
-                ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
               ),
+              child: table,
             ),
           ),
         );
       },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final minRequired = computeMinTableWidth(
+      columnWidths,
+      minFlexColumnWidth: minFlexColumnWidth,
+    );
+
+    return HorizontalScrollTable(
+      minWidth: minRequired,
+      padding: padding,
+      child: Table(
+        border: border ?? TableBorder.all(color: Colors.grey[300]!, width: 1),
+        columnWidths: columnWidths,
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: rows,
+      ),
     );
   }
 }

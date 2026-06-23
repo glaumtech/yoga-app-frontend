@@ -4,10 +4,20 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/sponsor_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/sponsor_model.dart';
 
 class SponsorListScreen extends StatelessWidget {
   const SponsorListScreen({super.key});
+
+  static const Map<int, TableColumnWidth> _desktopColumnWidths = {
+    0: FixedColumnWidth(80),
+    1: FlexColumnWidth(2.0),
+    2: FlexColumnWidth(2.0),
+    3: FlexColumnWidth(1.0),
+    4: FlexColumnWidth(1.5),
+    5: FlexColumnWidth(1.5),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -203,68 +213,46 @@ class SponsorListScreen extends StatelessWidget {
     SponsorController controller,
     bool isTablet,
   ) {
-    return RefreshIndicator(
+    return ResponsiveAdminTable.refreshable(
       onRefresh: () => controller.loadSponsors(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth - 32;
-          return SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: tableWidth,
-                child: Table(
-                  border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                  columnWidths: {
-                    0: const FixedColumnWidth(80),
-                    1: FlexColumnWidth(2.0),
-                    2: FlexColumnWidth(2.0),
-                    3: FlexColumnWidth(1.0),
-                    4: FlexColumnWidth(1.5),
-                    5: FlexColumnWidth(1.5),
-                  },
-                  children: [
-                    // Header Row
-                    TableRow(
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
-                      ),
-                      children: [
-                        _buildTableCell('PHOTO', isHeader: true),
-                        _buildTableCell('NAME', isHeader: true),
-                        _buildTableCell('COMPETITION', isHeader: true),
-                        _buildTableCell('STUDENTS', isHeader: true),
-                        _buildTableCell('EMAIL', isHeader: true),
-                        _buildTableCell('CELL PHONE', isHeader: true),
-                      ],
-                    ),
-                    // Data Rows
-                    ...sponsors.map((sponsor) {
-                      return TableRow(
-                        children: [
-                          TableCell(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Center(
-                                child: _buildSponsorPhoto(sponsor, 40),
-                              ),
-                            ),
-                          ),
-                          _buildTableCell(sponsor.sponsorName),
-                          _buildTableCell(sponsor.competitionName),
-                          _buildTableCell('${sponsor.numberOfStudents}'),
-                          _buildTableCell(sponsor.email),
-                          _buildTableCell(sponsor.cellPhone),
-                        ],
-                      );
-                    }).toList(),
-                  ],
-                ),
-              ),
+      table: ResponsiveAdminTable(
+        columnWidths: _desktopColumnWidths,
+        rows: [
+          // Header Row
+          TableRow(
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withOpacity(0.1),
             ),
-          );
-        },
+            children: [
+              _buildTableCell('PHOTO', isHeader: true),
+              _buildTableCell('NAME', isHeader: true),
+              _buildTableCell('COMPETITION', isHeader: true),
+              _buildTableCell('STUDENTS', isHeader: true),
+              _buildTableCell('EMAIL', isHeader: true),
+              _buildTableCell('CELL PHONE', isHeader: true),
+            ],
+          ),
+          // Data Rows
+          ...sponsors.map((sponsor) {
+            return TableRow(
+              children: [
+                TableCell(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Center(
+                      child: _buildSponsorPhoto(sponsor, 40),
+                    ),
+                  ),
+                ),
+                _buildTableCell(sponsor.sponsorName),
+                _buildTableCell(sponsor.competitionName),
+                _buildTableCell('${sponsor.numberOfStudents}'),
+                _buildTableCell(sponsor.email),
+                _buildTableCell(sponsor.cellPhone),
+              ],
+            );
+          }),
+        ],
       ),
     );
   }

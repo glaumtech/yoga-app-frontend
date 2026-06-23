@@ -10,6 +10,7 @@ import '../../controllers/competition_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/responsive_admin_table.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/toggle_button_group.dart';
 import '../../widgets/buttons.dart';
@@ -2343,69 +2344,52 @@ class UserManagementScreen extends StatelessWidget {
     UserManagementController controller,
     bool isTablet,
   ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final tableWidth = constraints.maxWidth;
-        return SingleChildScrollView(
-          scrollDirection: Axis.vertical,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: tableWidth,
-              child: Table(
-                border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-                columnWidths: {
-                  0: const FixedColumnWidth(80),
-                  1: FlexColumnWidth(1.6),
-                  2: FlexColumnWidth(1.6),
-                  3: FlexColumnWidth(1.4),
-                  4: FlexColumnWidth(2.2),
-                  5: FlexColumnWidth(1.5),
-                },
-                children: [
-                  // Header Row
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withOpacity(0.1),
-                    ),
-                    children: [
-                      _buildTableCell('PHOTO', isHeader: true),
-                      _buildTableCell('USER NAME', isHeader: true),
-                      _buildTableCell('NAME', isHeader: true),
-                      _buildTableCell('TYPE', isHeader: true),
-                      _buildTableCell('COMPETITION', isHeader: true),
-                      _buildTableCell('CELL', isHeader: true),
-                    ],
-                  ),
-                  // Data Rows
-                  ...users.map((user) {
-                    return TableRow(
-                      children: [
-                        TableCell(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Center(child: _buildUserPhoto(user, 40)),
-                          ),
-                        ),
-                        _buildTableCell(_userNameOrDash(user), maxLines: 2),
-                        _buildTableCell(user.name, maxLines: 2),
-                        TableCell(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: _buildTypeChip(user.type),
-                          ),
-                        ),
-                        _buildTableCell(user.eventName ?? 'N/A', maxLines: 2),
-                        _buildTableCell(user.cell ?? 'N/A'),
-                      ],
-                    );
-                  }).toList(),
-                ],
-              ),
-            ),
-          ),
-        );
+    return ResponsiveAdminTable(
+      columnWidths: const {
+        0: FixedColumnWidth(80),
+        1: FlexColumnWidth(1.6),
+        2: FlexColumnWidth(1.6),
+        3: FlexColumnWidth(1.4),
+        4: FlexColumnWidth(2.2),
+        5: FlexColumnWidth(1.5),
       },
+      rows: [
+        TableRow(
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withOpacity(0.1),
+          ),
+          children: [
+            _buildTableCell('PHOTO', isHeader: true),
+            _buildTableCell('USER NAME', isHeader: true),
+            _buildTableCell('NAME', isHeader: true),
+            _buildTableCell('TYPE', isHeader: true),
+            _buildTableCell('COMPETITION', isHeader: true),
+            _buildTableCell('CELL', isHeader: true),
+          ],
+        ),
+        ...users.map((user) {
+          return TableRow(
+            children: [
+              TableCell(
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Center(child: _buildUserPhoto(user, 40)),
+                ),
+              ),
+              _buildTableCell(_userNameOrDash(user), maxLines: 2),
+              _buildTableCell(user.name, maxLines: 2),
+              TableCell(
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: _buildTypeChip(user.type),
+                ),
+              ),
+              _buildTableCell(user.eventName ?? 'N/A', maxLines: 2),
+              _buildTableCell(user.cell ?? 'N/A'),
+            ],
+          );
+        }),
+      ],
     );
   }
 
@@ -2900,69 +2884,52 @@ Widget _buildDesktopUserTable(
   UserManagementController controller,
   bool isTablet,
 ) {
-  return LayoutBuilder(
-    builder: (context, constraints) {
-      final tableWidth = constraints.maxWidth;
-      return SingleChildScrollView(
-        scrollDirection: Axis.vertical,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: tableWidth,
-            child: Table(
-              border: TableBorder.all(color: Colors.grey[300]!, width: 1),
-              columnWidths: {
-                0: const FixedColumnWidth(80),
-                1: FlexColumnWidth(1.6),
-                2: FlexColumnWidth(1.6),
-                3: FlexColumnWidth(1.4),
-                4: FlexColumnWidth(2.2),
-                5: FlexColumnWidth(1.5),
-              },
-              children: [
-                // Header Row
-                TableRow(
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withOpacity(0.1),
-                  ),
-                  children: [
-                    _buildTableCell('PHOTO', isHeader: true),
-                    _buildTableCell('USER NAME', isHeader: true),
-                    _buildTableCell('NAME', isHeader: true),
-                    _buildTableCell('TYPE', isHeader: true),
-                    _buildTableCell('COMPETITION', isHeader: true),
-                    _buildTableCell('CELL', isHeader: true),
-                  ],
-                ),
-                // Data Rows
-                ...users.map((user) {
-                  return TableRow(
-                    children: [
-                      TableCell(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Center(child: _buildUserPhoto(user, 40)),
-                        ),
-                      ),
-                      _buildTableCell(_userNameOrDash(user), maxLines: 2),
-                      _buildTableCell(user.name, maxLines: 2),
-                      TableCell(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: _buildTypeChip(user.type),
-                        ),
-                      ),
-                      _buildTableCell(user.eventName ?? 'N/A', maxLines: 2),
-                      _buildTableCell(user.cell ?? 'N/A'),
-                    ],
-                  );
-                }).toList(),
-              ],
-            ),
-          ),
-        ),
-      );
+  return ResponsiveAdminTable(
+    columnWidths: const {
+      0: FixedColumnWidth(80),
+      1: FlexColumnWidth(1.6),
+      2: FlexColumnWidth(1.6),
+      3: FlexColumnWidth(1.4),
+      4: FlexColumnWidth(2.2),
+      5: FlexColumnWidth(1.5),
     },
+    rows: [
+      TableRow(
+        decoration: BoxDecoration(
+          color: AppTheme.primaryColor.withOpacity(0.1),
+        ),
+        children: [
+          _buildTableCell('PHOTO', isHeader: true),
+          _buildTableCell('USER NAME', isHeader: true),
+          _buildTableCell('NAME', isHeader: true),
+          _buildTableCell('TYPE', isHeader: true),
+          _buildTableCell('COMPETITION', isHeader: true),
+          _buildTableCell('CELL', isHeader: true),
+        ],
+      ),
+      ...users.map((user) {
+        return TableRow(
+          children: [
+            TableCell(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Center(child: _buildUserPhoto(user, 40)),
+              ),
+            ),
+            _buildTableCell(_userNameOrDash(user), maxLines: 2),
+            _buildTableCell(user.name, maxLines: 2),
+            TableCell(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: _buildTypeChip(user.type),
+              ),
+            ),
+            _buildTableCell(user.eventName ?? 'N/A', maxLines: 2),
+            _buildTableCell(user.cell ?? 'N/A'),
+          ],
+        );
+      }),
+    ],
   );
 }
 
