@@ -42,7 +42,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     super.initState();
 
-    controller = Get.put(PasswordResetController(), permanent: false);
+    if (Get.isRegistered<PasswordResetController>()) {
+      controller = Get.find<PasswordResetController>();
+    } else {
+      controller = Get.put(PasswordResetController(), permanent: false);
+    }
+
+    controller.clearForgotPasswordForm();
 
   }
 
@@ -158,7 +164,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
             TextButton(
 
-              onPressed: () => context.go(AppRoutes.login),
+              onPressed: () {
+                controller.clearForgotPasswordForm(endFlow: true);
+                if (Get.isRegistered<PasswordResetController>()) {
+                  Get.delete<PasswordResetController>(force: true);
+                }
+                context.go(AppRoutes.login);
+              },
 
               child: Text(
 
