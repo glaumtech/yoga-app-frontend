@@ -134,6 +134,23 @@ class PasswordResetController extends GetxController {
     });
   }
 
+  void clearForgotPasswordForm({bool endFlow = false}) {
+    usernameController.clear();
+    emailController.clear();
+    errorMessage.value = '';
+
+    if (endFlow) {
+      resetUsername.value = '';
+      resetEmail.value = '';
+      resetToken.value = '';
+      otpController.clear();
+      newPasswordController.clear();
+      confirmPasswordController.clear();
+      _resendTimer?.cancel();
+      resendSecondsRemaining.value = 0;
+    }
+  }
+
   static const String usernameEmailMismatchMessage =
       'Username and email do not match. Please verify your details and try again.';
 
@@ -156,6 +173,7 @@ class PasswordResetController extends GetxController {
       resetUsername.value = userName;
       resetEmail.value = email;
       startResendTimer();
+      clearForgotPasswordForm();
       if (context.mounted) {
         await _showSuccessDialog(
           context,
@@ -197,6 +215,7 @@ class PasswordResetController extends GetxController {
           TextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
+              clearForgotPasswordForm();
               if (context.mounted) {
                 context.go(AppRoutes.forgotPassword);
               }

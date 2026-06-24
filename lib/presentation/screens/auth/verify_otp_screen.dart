@@ -145,7 +145,10 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
             ),
             const SizedBox(height: 16),
             TextButton(
-              onPressed: () => context.go(AppRoutes.forgotPassword),
+              onPressed: () {
+                controller.clearForgotPasswordForm(endFlow: true);
+                context.go(AppRoutes.forgotPassword);
+              },
               child: Text(
                 'Change Email',
                 style: TextStyle(
