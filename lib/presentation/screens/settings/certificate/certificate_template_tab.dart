@@ -2878,12 +2878,11 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     ScrollNotificationPredicate notificationPredicate =
         defaultScrollNotificationPredicate,
   }) {
-    if (!show) return child;
     return ScrollbarTheme(
       data: _scrollbarThemeData(),
       child: Scrollbar(
-        thumbVisibility: true,
-        trackVisibility: true,
+        thumbVisibility: show,
+        trackVisibility: show,
         thickness: _kScrollbarThickness,
         radius: const Radius.circular(_kScrollbarRadius),
         scrollbarOrientation: scrollbarOrientation,
@@ -3045,20 +3044,18 @@ class _HoverScrollbarState extends State<_HoverScrollbar> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: _isHovered
-          ? ScrollbarTheme(
-              data: widget.theme,
-              child: Scrollbar(
-                thumbVisibility: true,
-                trackVisibility: true,
-                thickness: _kScrollbarThickness,
-                radius: const Radius.circular(_kScrollbarRadius),
-                scrollbarOrientation: widget.scrollbarOrientation,
-                notificationPredicate: widget.notificationPredicate,
-                child: widget.child,
-              ),
-            )
-          : widget.child,
+      child: ScrollbarTheme(
+        data: widget.theme,
+        child: Scrollbar(
+          thumbVisibility: _isHovered,
+          trackVisibility: _isHovered,
+          thickness: _kScrollbarThickness,
+          radius: const Radius.circular(_kScrollbarRadius),
+          scrollbarOrientation: widget.scrollbarOrientation,
+          notificationPredicate: widget.notificationPredicate,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }
