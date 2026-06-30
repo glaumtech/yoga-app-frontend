@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:convert';
 import 'package:yoga_champ/routes/app_routes.dart';
 import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
@@ -29,15 +30,43 @@ import '../presentation/screens/participants/participant_management_screen.dart'
 import '../presentation/screens/participants/user_competition_registration_screen.dart';
 import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../presentation/screens/organization_setup/organization_setup_screen.dart';
+import '../presentation/screens/organization_update/organization_update_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/navigation/root_navigator_key.dart';
+import '../core/utils/organization_mandatory_checker.dart';
 import '../core/utils/storage_service.dart';
+
+import '../data/models/user_management_model.dart';
 
 Page<void> _noTransitionPage(GoRouterState state, Widget child) {
   return NoTransitionPage<void>(key: state.pageKey, child: child);
 }
 
 class AppRouter {
+  static void refresh() {
+    try {
+      router.refresh();
+    } catch (_) {}
+  }
+
+  static bool _isBranchAdminFromStorage() {
+    final userJson = StorageService.getString(AppConstants.userKey);
+    if (userJson == null || userJson.isEmpty) return false;
+    try {
+      final user = UserManagementModel.fromJson(
+        jsonDecode(userJson) as Map<String, dynamic>,
+      );
+      return isBranchAdminRole(user.userTypeName, fallbackType: user.type);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool _requiresMandatoryOrganizationUpdate() {
+    return StorageService.getBool(AppConstants.orgMandatoryUpdateRequiredKey) ==
+        true;
+  }
+
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: kIsWeb ? AppRoutes.home : AppRoutes.splash,
@@ -147,6 +176,15 @@ class AppRouter {
             return AppRoutes.juryScoring;
           }
 
+          // Super admin with incomplete organization details: lock to org complete only.
+          final isOrgCompleteRoute = location == AppRoutes.organizationComplete ||
+              location.startsWith(AppRoutes.organizationComplete);
+          if (_requiresMandatoryOrganizationUpdate() &&
+              _isBranchAdminFromStorage() &&
+              !isOrgCompleteRoute) {
+            return AppRoutes.organizationComplete;
+          }
+
           // Permission-based route access
           List<String>? requiredKeys;
           if (location == AppRoutes.adminDashboard ||
@@ -187,6 +225,12 @@ class AppRouter {
           } else if (location == AppRoutes.juryScoring ||
               location.startsWith('/jury/')) {
             requiredKeys = const ['SHOW_JURY_SCREEN'];
+          } else if (location == AppRoutes.organizationComplete ||
+              location.startsWith(AppRoutes.organizationComplete)) {
+            requiredKeys = null;
+          } else if (location == AppRoutes.organizationUpdate ||
+              location.startsWith('/organization/update')) {
+            requiredKeys = const ['ORGANIZATION_UPDATE'];
           }
 
           if (requiredKeys != null && !requiredKeys.any(hasKey)) {
@@ -397,6 +441,16 @@ class AppRouter {
         path: AppRoutes.organizationSetup,
         name: 'organization-setup',
         builder: (context, state) => const OrganizationSetupScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.organizationUpdate,
+        name: 'organization-update',
+        builder: (context, state) => const OrganizationUpdateScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.organizationComplete,
+        name: 'organization-complete',
+        builder: (context, state) => const OrganizationUpdateScreen(),
       ),
     ],
   );

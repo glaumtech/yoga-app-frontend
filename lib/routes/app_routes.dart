@@ -98,4 +98,6 @@ class AppRoutes {
 
   // Organization Setup
   static const String organizationSetup = '/organization/setup';
+  static const String organizationUpdate = '/organization/update';
+  static const String organizationComplete = '/organization/complete';
 }

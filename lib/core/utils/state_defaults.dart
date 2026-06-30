@@ -1,9 +1,10 @@
 import '../../data/models/state_model.dart';
 
-/// Default state pre-selection used across state search fields.
+/// Default location pre-selection used across organization forms.
 class StateDefaults {
   StateDefaults._();
 
+  static const String defaultCountry = 'India';
   static const String tamilNaduName = 'Tamil Nadu';
   static const String tamilNaduCode = 'TN';
 

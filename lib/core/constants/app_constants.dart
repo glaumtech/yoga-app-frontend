@@ -9,6 +9,8 @@ class AppConstants {
   static const String userKey = 'user_data';
   static const String roleKey = 'user_role';
   static const String permissionKeysKey = 'permission_keys';
+  static const String orgMandatoryUpdateRequiredKey =
+      'org_mandatory_update_required';
   static const String usersListRecentCompetitionsKey =
       'users_list_recent_competitions';
 
@@ -241,6 +243,15 @@ class EndPoints {
       '/organization/setup/foundation-with-payment';
   static String organizationSetupComplete = '/organization/setup/complete';
   static String organizationSetupAdmins = '/organization/setup/admins';
+
+  /// Organization / branch CRUD (authenticated).
+  static String organizationById(int id) => '/organization/$id';
+  static String branchById(int id) => '/branch/$id';
+  static String branchLogo(int id) => '/branch/$id/logo';
+  static String branchPanImage(int id) => '/branch/$id/pan-image';
+  static String branchAadharImage(int id) => '/branch/$id/aadhar-image';
+  static String branchAadharFrontImage(int id) => '/branch/$id/aadhar-front-image';
+  static String branchAadharBackImage(int id) => '/branch/$id/aadhar-back-image';
 
   /// Branch-level certificate template CRUD.
   static String certificateTemplates = '/settings/certificate-templates';

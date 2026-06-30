@@ -12,6 +12,8 @@ class CompetitionModel {
   final DateTime eventEndDate;
   final String? eventEndTime;
   final bool publishResultNow;
+  final DateTime? resultsPublishDate;
+  final String? resultsPublishTime;
   final DateTime? displayAdFrom;
   final bool spotRegistration;
   final int? participantsPerStage; // 1-5
@@ -53,6 +55,8 @@ class CompetitionModel {
     required this.eventEndDate,
     this.eventEndTime,
     this.publishResultNow = false,
+    this.resultsPublishDate,
+    this.resultsPublishTime,
     this.displayAdFrom,
     this.spotRegistration = false,
     this.participantsPerStage,
@@ -163,6 +167,19 @@ class CompetitionModel {
     return fallback;
   }
 
+  static DateTime? _parseOptionalEventDate(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return null;
+      return DateTime.tryParse(trimmed);
+    }
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    return null;
+  }
+
   static String? _timeFromDateTime(DateTime? value) {
     if (value == null) return null;
     if (value.hour == 0 && value.minute == 0 && value.second == 0) {
@@ -175,11 +192,16 @@ class CompetitionModel {
     final startDatetimeRaw =
         json['eventStartDatetime'] ?? json['event_start_datetime'];
     final endDatetimeRaw = json['eventEndDatetime'] ?? json['event_end_datetime'];
+    final resultsPublishDatetimeRaw =
+        json['resultsPublishDatetime'] ?? json['results_publish_datetime'];
     final parsedStartDatetime = startDatetimeRaw != null
         ? _parseEventDate(startDatetimeRaw, fallback: DateTime.now())
         : null;
     final parsedEndDatetime = endDatetimeRaw != null
         ? _parseEventDate(endDatetimeRaw, fallback: DateTime.now())
+        : null;
+    final parsedResultsPublishDatetime = resultsPublishDatetimeRaw != null
+        ? _parseOptionalEventDate(resultsPublishDatetimeRaw)
         : null;
 
     return CompetitionModel(
@@ -209,6 +231,19 @@ class CompetitionModel {
       publishResultNow: parseBool(
         json['publishResultNow'] ?? json['publish_result_now'],
       ),
+      resultsPublishDate: _parseOptionalEventDate(
+            json['resultsPublishDate'] ?? json['results_publish_date'],
+          ) ??
+          (parsedResultsPublishDatetime != null
+              ? DateTime(
+                  parsedResultsPublishDatetime.year,
+                  parsedResultsPublishDatetime.month,
+                  parsedResultsPublishDatetime.day,
+                )
+              : null),
+      resultsPublishTime: _timeFromDateTime(parsedResultsPublishDatetime) ??
+          json['resultsPublishTime']?.toString() ??
+          json['results_publish_time']?.toString(),
       displayAdFrom: json['displayAdFrom'] != null
           ? (json['displayAdFrom'] is String
                 ? DateTime.parse(json['displayAdFrom'])
@@ -388,6 +423,10 @@ class CompetitionModel {
       if (eventEndTime != null && eventEndTime!.trim().isNotEmpty)
         'eventEndTime': eventEndTime,
       'publishResultNow': publishResultNow,
+      if (resultsPublishDate != null)
+        'resultsPublishDate': formatDate(resultsPublishDate!),
+      if (resultsPublishTime != null && resultsPublishTime!.trim().isNotEmpty)
+        'resultsPublishTime': resultsPublishTime,
       if (displayAdFrom != null) 'displayAdFrom': formatDate(displayAdFrom!),
       'spotRegistration': spotRegistration,
       if (participantsPerStage != null)
@@ -434,6 +473,8 @@ class CompetitionModel {
     DateTime? eventEndDate,
     String? eventEndTime,
     bool? publishResultNow,
+    DateTime? resultsPublishDate,
+    String? resultsPublishTime,
     DateTime? displayAdFrom,
     bool? spotRegistration,
     int? participantsPerStage,
@@ -468,6 +509,8 @@ class CompetitionModel {
       eventEndDate: eventEndDate ?? this.eventEndDate,
       eventEndTime: eventEndTime ?? this.eventEndTime,
       publishResultNow: publishResultNow ?? resolvedPublishResultNow,
+      resultsPublishDate: resultsPublishDate ?? this.resultsPublishDate,
+      resultsPublishTime: resultsPublishTime ?? this.resultsPublishTime,
       displayAdFrom: displayAdFrom ?? this.displayAdFrom,
       spotRegistration: spotRegistration ?? resolvedSpotRegistration,
       participantsPerStage: participantsPerStage ?? this.participantsPerStage,
@@ -536,9 +579,28 @@ class CompetitionModel {
     );
   }
 
-  /// E-certificates may be downloaded when results are published early or the event has ended.
+  /// Scheduled results publish as a single [DateTime] (uses event end date when date unset).
+  DateTime? get resultsPublishDateTime {
+    if (resolvedPublishResultNow) return null;
+    final publishTime = parseTime(resultsPublishTime);
+    if (publishTime == null) return null;
+    final date = resultsPublishDate ?? eventEndDate;
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      publishTime.hour,
+      publishTime.minute,
+    );
+  }
+
+  /// E-certificates may be downloaded when results are published early or the scheduled time has passed.
   bool get areCertificatesAvailable {
     if (resolvedPublishResultNow) return true;
+    final publishAt = resultsPublishDateTime;
+    if (publishAt != null) {
+      return !DateTime.now().isBefore(publishAt);
+    }
     return !DateTime.now().isBefore(eventEndDateTime);
   }
 }
@@ -554,6 +616,8 @@ class HomeCompetitionModel {
   final String? eventEndDate;
   final String? eventEndTime;
   final bool publishResultNow;
+  final String? resultsPublishDate;
+  final String? resultsPublishTime;
   final String? displayAdFrom;
   final List<String> categories;
   final Map<String, double> categoryAmounts;
@@ -578,6 +642,8 @@ class HomeCompetitionModel {
     this.eventEndDate,
     this.eventEndTime,
     this.publishResultNow = false,
+    this.resultsPublishDate,
+    this.resultsPublishTime,
     this.displayAdFrom,
     this.categories = const [],
     this.categoryAmounts = const {},
@@ -623,6 +689,10 @@ class HomeCompetitionModel {
       publishResultNow: CompetitionModel.parseBool(
         json['publishResultNow'] ?? json['publish_result_now'],
       ),
+      resultsPublishDate: json['resultsPublishDate']?.toString() ??
+          json['results_publish_date']?.toString(),
+      resultsPublishTime: json['resultsPublishTime']?.toString() ??
+          json['results_publish_time']?.toString(),
       displayAdFrom: json['displayAdFrom']?.toString(),
       categories: json['categories'] != null
           ? List<String>.from(json['categories'])
@@ -672,9 +742,32 @@ class HomeCompetitionModel {
     );
   }
 
-  /// E-certificates are available after event end or when results are published early.
+  DateTime? get resultsPublishDateTime {
+    if (publishResultNow) return null;
+    final publishTime = CompetitionModel.parseTime(resultsPublishTime);
+    if (publishTime == null) return null;
+    final dateRaw = resultsPublishDate?.trim().isNotEmpty == true
+        ? resultsPublishDate
+        : eventEndDate;
+    if (dateRaw == null || dateRaw.trim().isEmpty) return null;
+    final parsedDate = DateTime.tryParse(dateRaw);
+    if (parsedDate == null) return null;
+    return DateTime(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day,
+      publishTime.hour,
+      publishTime.minute,
+    );
+  }
+
+  /// E-certificates are available after scheduled publish time or when results are published early.
   bool get areCertificatesAvailable {
     if (publishResultNow) return true;
+    final publishAt = resultsPublishDateTime;
+    if (publishAt != null) {
+      return !DateTime.now().isBefore(publishAt);
+    }
     final end = eventEndDateTime;
     if (end != null) {
       return !DateTime.now().isBefore(end);

@@ -7,6 +7,7 @@ import 'package:yoga_champ/core/utils/storage_service.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/models/user_model.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/services/organization_mandatory_gate_service.dart';
 import '../../routes/app_routes.dart';
 import 'participant_controller.dart';
 import 'participant_registration_form_controller.dart';
@@ -20,6 +21,7 @@ import 'settings_controller.dart';
 import 'reports_participants_tab_controller.dart';
 import 'reports_registered_participants_tab_controller.dart';
 import 'reports_users_tab_controller.dart';
+import '../../core/utils/organization_mandatory_checker.dart';
 import '../../core/utils/permission_store.dart';
 import '../../core/theme/role_theme_controller.dart';
 
@@ -333,6 +335,21 @@ class AuthController extends GetxController {
                 // Redirect JURY users to jury scoring screen
                 if (userTypeUpper == 'JURY' || userTypeUpper.contains('JURY')) {
                   context.go(AppRoutes.juryScoring);
+                } else if (isBranchAdminRole(
+                  currentUser.userTypeName,
+                  fallbackType: currentUser.type,
+                )) {
+                  final gate = Get.isRegistered<OrganizationMandatoryGateService>()
+                      ? Get.find<OrganizationMandatoryGateService>()
+                      : Get.put(OrganizationMandatoryGateService(), permanent: true);
+                  final needsOrgUpdate =
+                      await gate.evaluateForCurrentUser();
+                  if (!context.mounted) return;
+                  if (needsOrgUpdate) {
+                    context.go(AppRoutes.organizationComplete);
+                  } else {
+                    context.go(AppRoutes.home);
+                  }
                 } else {
                   // Navigate to home for other user types
                   context.go(AppRoutes.home);
@@ -399,6 +416,10 @@ class AuthController extends GetxController {
 
     // Call repository signOut (calls API and clears storage)
     await _authRepository.signOut();
+
+    if (Get.isRegistered<OrganizationMandatoryGateService>()) {
+      await Get.find<OrganizationMandatoryGateService>().clear();
+    }
 
     // Clear any remaining cached/local app data
     // (some screens store additional keys beyond token/user/role)

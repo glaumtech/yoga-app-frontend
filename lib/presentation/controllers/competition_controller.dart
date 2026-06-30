@@ -54,8 +54,30 @@ class CompetitionController extends GetxController {
   static const String dateFieldStartTime = 'startTime';
   static const String dateFieldEndTime = 'endTime';
   static const String dateFieldDisplayAd = 'displayAd';
+  static const String dateFieldResultsPublishTime = 'resultsPublishTime';
 
   final RxSet<String> touchedCompetitionDateFields = <String>{}.obs;
+
+  static const int descriptionMinLength = 10;
+  static const String descriptionMinLengthMessage =
+      'Description is required and must be at least 10 characters';
+
+  static const int addressMinLength = 10;
+  static const String addressMinLengthMessage =
+      'Address is required and must be at least 10 characters';
+
+  final RxBool descriptionTouched = false.obs;
+  final RxString descriptionText = ''.obs;
+  final RxBool addressTouched = false.obs;
+  final RxString addressText = ''.obs;
+
+  void markDescriptionTouched() {
+    descriptionTouched.value = true;
+  }
+
+  void markAddressTouched() {
+    addressTouched.value = true;
+  }
 
   void _refreshFormKeys() {
     _formKey = GlobalKey<FormState>();
@@ -184,6 +206,7 @@ class CompetitionController extends GetxController {
   final Rx<TimeOfDay?> eventEndTime = Rx<TimeOfDay?>(null);
   final Rx<DateTime?> displayAdFrom = Rx<DateTime?>(null);
   final RxBool publishResultNow = false.obs;
+  final Rx<TimeOfDay?> resultsPublishTime = Rx<TimeOfDay?>(null);
   final RxBool spotRegistration = false.obs;
   final Rx<ChampionshipStyle?> championshipStyle = Rx<ChampionshipStyle?>(null);
   final RxInt participantsPerStage = RxInt(0);
@@ -1897,6 +1920,24 @@ class CompetitionController extends GetxController {
     return null;
   }
 
+  String? validateResultsPublishTime(
+    TimeOfDay? value, {
+    bool requireWhenEmpty = false,
+  }) {
+    if (publishResultNow.value) {
+      return null;
+    }
+    if (value == null) {
+      if (requireWhenEmpty ||
+          shouldShowCompetitionDateError(dateFieldResultsPublishTime)) {
+        return 'Please select results publish time';
+      }
+      return null;
+    }
+
+    return null;
+  }
+
   String? validateCompetitionDates({bool forSubmit = false}) {
     return validateEventStartDate(
           eventStartDate.value,
@@ -1908,6 +1949,10 @@ class CompetitionController extends GetxController {
           requireWhenEmpty: forSubmit,
         ) ??
         validateEventEndTime(eventEndTime.value, requireWhenEmpty: forSubmit) ??
+        validateResultsPublishTime(
+          resultsPublishTime.value,
+          requireWhenEmpty: forSubmit,
+        ) ??
         validateDisplayAdFrom(displayAdFrom.value, requireWhenEmpty: forSubmit);
   }
 
@@ -1919,6 +1964,7 @@ class CompetitionController extends GetxController {
         eventEndDate.value != null ||
         eventStartTime.value != null ||
         eventEndTime.value != null ||
+        resultsPublishTime.value != null ||
         displayAdFrom.value != null;
     if (!hasAnyDate) return;
     Get.snackbar(
@@ -2022,6 +2068,10 @@ class CompetitionController extends GetxController {
         eventEndDate: eventEndDate.value!,
         eventEndTime: CompetitionModel.formatTimeOfDay(eventEndTime.value),
         publishResultNow: publishResultNow.value,
+        resultsPublishDate: publishResultNow.value ? null : eventEndDate.value,
+        resultsPublishTime: publishResultNow.value
+            ? null
+            : CompetitionModel.formatTimeOfDay(resultsPublishTime.value),
         displayAdFrom: displayAdFrom.value,
         spotRegistration: spotRegistration.value,
         participantsPerStage: participantsPerStage.value > 0
@@ -2171,6 +2221,10 @@ class CompetitionController extends GetxController {
         eventEndDate: eventEndDate.value!,
         eventEndTime: CompetitionModel.formatTimeOfDay(eventEndTime.value),
         publishResultNow: publishResultNow.value,
+        resultsPublishDate: publishResultNow.value ? null : eventEndDate.value,
+        resultsPublishTime: publishResultNow.value
+            ? null
+            : CompetitionModel.formatTimeOfDay(resultsPublishTime.value),
         displayAdFrom: displayAdFrom.value,
         spotRegistration: spotRegistration.value,
         participantsPerStage: participantsPerStage.value > 0
@@ -2400,7 +2454,11 @@ class CompetitionController extends GetxController {
     // Load data into form fields
     competitionNameController.text = competition.competitionName;
     descriptionController.text = competition.description;
+    descriptionTouched.value = false;
+    descriptionText.value = competition.description;
     addressController.text = competition.address;
+    addressTouched.value = false;
+    addressText.value = competition.address;
     eventStartDate.value = competition.eventStartDate;
     eventEndDate.value = competition.eventEndDate;
     eventStartTime.value = CompetitionModel.parseTime(
@@ -2409,6 +2467,9 @@ class CompetitionController extends GetxController {
     eventEndTime.value = CompetitionModel.parseTime(competition.eventEndTime);
     displayAdFrom.value = competition.displayAdFrom;
     publishResultNow.value = competition.resolvedPublishResultNow;
+    resultsPublishTime.value = CompetitionModel.parseTime(
+      competition.resultsPublishTime,
+    );
     spotRegistration.value = competition.resolvedSpotRegistration;
     championshipStyle.value =
         ChampionshipStyle.fromApiValue(competition.championshipStyle) ??
@@ -2847,7 +2908,11 @@ class CompetitionController extends GetxController {
     // Clear text controllers first
     competitionNameController.clear();
     descriptionController.clear();
+    descriptionTouched.value = false;
+    descriptionText.value = '';
     addressController.clear();
+    addressTouched.value = false;
+    addressText.value = '';
 
     // Clear reactive values
     eventStartDate.value = null;
@@ -2856,6 +2921,7 @@ class CompetitionController extends GetxController {
     eventEndTime.value = null;
     displayAdFrom.value = null;
     publishResultNow.value = false;
+    resultsPublishTime.value = null;
     spotRegistration.value = false;
     championshipStyle.value = null;
     participantsPerStage.value = 0;

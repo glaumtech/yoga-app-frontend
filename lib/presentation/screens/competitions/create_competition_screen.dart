@@ -494,6 +494,14 @@ class CreateCompetitionScreen extends StatelessWidget {
           maxLines: 2,
           isMobile: isMobile,
           isTablet: isTablet,
+          minTrimmedLength: CompetitionController.descriptionMinLength,
+          minLengthMessage: CompetitionController.descriptionMinLengthMessage,
+          lengthWarningTouched: controller.descriptionTouched,
+          lengthWarningText: controller.descriptionText,
+          onLengthWarningChanged: (value) {
+            controller.markDescriptionTouched();
+            controller.descriptionText.value = value;
+          },
         ),
         gap,
         _buildTextField(
@@ -505,6 +513,14 @@ class CreateCompetitionScreen extends StatelessWidget {
           maxLines: 2,
           isMobile: isMobile,
           isTablet: isTablet,
+          minTrimmedLength: CompetitionController.addressMinLength,
+          minLengthMessage: CompetitionController.addressMinLengthMessage,
+          lengthWarningTouched: controller.addressTouched,
+          lengthWarningText: controller.addressText,
+          onLengthWarningChanged: (value) {
+            controller.markAddressTouched();
+            controller.addressText.value = value;
+          },
         ),
         gap,
         if (isMobile)
@@ -1136,6 +1152,11 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isMobile = false,
     bool isTablet = false,
     TextAlign textAlign = TextAlign.left,
+    int? minTrimmedLength,
+    String? minLengthMessage,
+    RxBool? lengthWarningTouched,
+    RxString? lengthWarningText,
+    ValueChanged<String>? onLengthWarningChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1147,6 +1168,7 @@ class CreateCompetitionScreen extends StatelessWidget {
             maxLines: maxLines,
             textAlign: textAlign,
             readOnly: competitionController.isViewMode.value,
+            onChanged: onLengthWarningChanged,
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -1160,18 +1182,65 @@ class CreateCompetitionScreen extends StatelessWidget {
                 vertical: isMobile ? 12 : 16,
               ),
               isDense: isMobile,
+              errorStyle: minTrimmedLength != null
+                  ? const TextStyle(height: 0, fontSize: 0)
+                  : null,
             ),
             validator: isRequired && !competitionController.isViewMode.value
                 ? (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'This field is required';
+                      return minLengthMessage ?? 'This field is required';
+                    }
+                    if (minTrimmedLength != null &&
+                        value.trim().length < minTrimmedLength) {
+                      return minLengthMessage;
                     }
                     return null;
                   }
                 : null,
           ),
         ),
+        if (minTrimmedLength != null &&
+            minLengthMessage != null &&
+            lengthWarningTouched != null &&
+            lengthWarningText != null)
+          Obx(() {
+            final showWarning =
+                !competitionController.isViewMode.value &&
+                (lengthWarningTouched.value ||
+                    competitionController.hasAttemptedSubmit.value) &&
+                lengthWarningText.value.trim().length < minTrimmedLength;
+            if (!showWarning) return const SizedBox.shrink();
+            return _buildInlineFieldWarning(minLengthMessage);
+          }),
       ],
+    );
+  }
+
+  Widget _buildInlineFieldWarning(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.red.withOpacity(0.3)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: Colors.red[700], fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1964,7 +2033,13 @@ class CreateCompetitionScreen extends StatelessWidget {
     return true;
   }
 
-  String _timeFieldKey({required bool isStartTime}) {
+  String _timeFieldKey({
+    required bool isStartTime,
+    bool isResultsPublishTime = false,
+  }) {
+    if (isResultsPublishTime) {
+      return CompetitionController.dateFieldResultsPublishTime;
+    }
     return isStartTime
         ? CompetitionController.dateFieldStartTime
         : CompetitionController.dateFieldEndTime;
@@ -1973,7 +2048,11 @@ class CreateCompetitionScreen extends StatelessWidget {
   String? Function(TimeOfDay?) _timeFieldValidator(
     CompetitionController controller, {
     required bool isStartTime,
+    bool isResultsPublishTime = false,
   }) {
+    if (isResultsPublishTime) {
+      return controller.validateResultsPublishTime;
+    }
     return isStartTime
         ? controller.validateEventStartTime
         : controller.validateEventEndTime;
@@ -1992,12 +2071,26 @@ class CreateCompetitionScreen extends StatelessWidget {
     required bool isRequired,
     bool isMobile = false,
     bool isTablet = false,
+    bool isResultsPublishTime = false,
   }) {
     final validateTime = _timeFieldValidator(
       controller,
       isStartTime: isStartTime,
+      isResultsPublishTime: isResultsPublishTime,
     );
-    final timeFieldKey = _timeFieldKey(isStartTime: isStartTime);
+    final timeFieldKey = _timeFieldKey(
+      isStartTime: isStartTime,
+      isResultsPublishTime: isResultsPublishTime,
+    );
+
+    TimeOfDay? readTime() {
+      if (isResultsPublishTime) {
+        return controller.resultsPublishTime.value;
+      }
+      return isStartTime
+          ? controller.eventStartTime.value
+          : controller.eventEndTime.value;
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2014,16 +2107,12 @@ class CreateCompetitionScreen extends StatelessWidget {
             timeFieldKey,
           );
           return FormField<TimeOfDay?>(
-            initialValue: isStartTime
-                ? controller.eventStartTime.value
-                : controller.eventEndTime.value,
+            initialValue: readTime(),
             validator: validateTime,
             builder: (FormFieldState<TimeOfDay?> field) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (!field.mounted) return;
-                final syncedTime = isStartTime
-                    ? controller.eventStartTime.value
-                    : controller.eventEndTime.value;
+                final syncedTime = readTime();
                 if (field.value != syncedTime) {
                   field.didChange(syncedTime);
                 }
@@ -2033,34 +2122,33 @@ class CreateCompetitionScreen extends StatelessWidget {
               });
 
               return Obx(() {
-                final displayedTime = isStartTime
-                    ? controller.eventStartTime.value
-                    : controller.eventEndTime.value;
+                final displayedTime = readTime();
+                final fieldEnabled = !controller.isViewMode.value &&
+                    (!isResultsPublishTime || !controller.publishResultNow.value);
 
                 return InkWell(
-                  onTap: controller.isViewMode.value
-                      ? null
-                      : () async {
+                  onTap: fieldEnabled
+                      ? () async {
                           final didPick = await _selectTime(
                             context,
                             controller,
                             isStartTime: isStartTime,
+                            isResultsPublishTime: isResultsPublishTime,
                           );
                           if (didPick) {
                             controller.markCompetitionDateFieldTouched(
                               timeFieldKey,
                             );
                           }
-                          final updatedTime = isStartTime
-                              ? controller.eventStartTime.value
-                              : controller.eventEndTime.value;
+                          final updatedTime = readTime();
                           field.didChange(updatedTime);
                           field.validate();
                           controller.notifyCompetitionDatesChanged();
                           if (updatedTime != null) {
                             controller.alertCompetitionDateValidationIssue();
                           }
-                        },
+                        }
+                      : null,
                   child: InputDecorator(
                     decoration: InputDecoration(
                       hintText: isRequired ? 'Select time' : 'Optional',
@@ -2068,17 +2156,18 @@ class CreateCompetitionScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       filled: true,
-                      fillColor: controller.isViewMode.value
+                      fillColor: !fieldEnabled
                           ? Colors.grey[200]
-                          : Colors.grey[50],
+                          : (controller.isViewMode.value
+                              ? Colors.grey[200]
+                              : Colors.grey[50]),
                       contentPadding: EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: isMobile ? 12 : 16,
                       ),
                       isDense: isMobile,
-                      suffixIcon: controller.isViewMode.value
-                          ? null
-                          : Row(
+                      suffixIcon: fieldEnabled
+                          ? Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (isStartTime && displayedTime != null)
@@ -2097,9 +2186,29 @@ class CreateCompetitionScreen extends StatelessWidget {
                                           .notifyCompetitionDatesChanged();
                                     },
                                   ),
+                                if (isResultsPublishTime &&
+                                    displayedTime != null &&
+                                    !isRequired)
+                                  IconButton(
+                                    tooltip: 'Clear results publish time',
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      controller.resultsPublishTime.value =
+                                          null;
+                                      field.didChange(null);
+                                      field.validate();
+                                      controller
+                                          .markCompetitionDateFieldTouched(
+                                            timeFieldKey,
+                                          );
+                                      controller
+                                          .notifyCompetitionDatesChanged();
+                                    },
+                                  ),
                                 const Icon(Icons.access_time),
                               ],
-                            ),
+                            )
+                          : const Icon(Icons.access_time),
                       errorText: showErrors ? field.errorText : null,
                     ),
                     child: Text(
@@ -2126,10 +2235,13 @@ class CreateCompetitionScreen extends StatelessWidget {
     BuildContext context,
     CompetitionController controller, {
     required bool isStartTime,
+    bool isResultsPublishTime = false,
   }) async {
-    final current = isStartTime
-        ? controller.eventStartTime.value
-        : controller.eventEndTime.value;
+    final current = isResultsPublishTime
+        ? controller.resultsPublishTime.value
+        : (isStartTime
+            ? controller.eventStartTime.value
+            : controller.eventEndTime.value);
     final picked = await showTimePicker(
       context: context,
       initialTime:
@@ -2140,7 +2252,9 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
     if (picked == null) return false;
 
-    if (isStartTime) {
+    if (isResultsPublishTime) {
+      controller.resultsPublishTime.value = picked;
+    } else if (isStartTime) {
       controller.eventStartTime.value = picked;
     } else {
       controller.eventEndTime.value = picked;
@@ -2157,69 +2271,136 @@ class CreateCompetitionScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const FormLabelWithHint(
-          label: 'PUBLISH THE RESULT NOW :',
-          hintText: 'Optional',
-          reserveHintSpace: true,
-          bottomSpacing: 0,
-        ),
-        Obx(
-          () {
-            final enabled = !controller.isViewMode.value;
-            return InkWell(
-              onTap: enabled
-                  ? () {
-                      controller.publishResultNow.value =
-                          !controller.publishResultNow.value;
-                    }
-                  : null,
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  filled: true,
-                  fillColor: controller.isViewMode.value
-                      ? Colors.grey[200]
-                      : Colors.grey[50],
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: isMobile ? 4 : 8,
-                  ),
-                  isDense: isMobile,
-                ),
-                child: Row(
+        if (isMobile) ...[
+          const FormLabelWithHint(
+            label: 'PUBLISH THE RESULT NOW :',
+            hintText: 'Optional',
+            reserveHintSpace: true,
+            bottomSpacing: 0,
+          ),
+          _buildPublishResultNowCheckbox(context, controller, isMobile: isMobile),
+          const SizedBox(height: 12),
+          _buildResultsPublishTimeField(
+            context,
+            controller,
+            isMobile: isMobile,
+          ),
+        ] else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Checkbox(
-                      value: controller.publishResultNow.value,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                      onChanged: enabled
-                          ? (value) {
-                              controller.publishResultNow.value =
-                                  value ?? false;
-                            }
-                          : null,
+                    const FormLabelWithHint(
+                      label: 'PUBLISH THE RESULT NOW :',
+                      hintText: 'Optional',
+                      reserveHintSpace: true,
+                      bottomSpacing: 0,
                     ),
-                    Expanded(
-                      child: Text(
-                        'Publish results immediately',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: isMobile ? 13 : 14,
-                          color: enabled ? Colors.black : Colors.grey[700],
-                        ),
-                      ),
+                    _buildPublishResultNowCheckbox(
+                      context,
+                      controller,
+                      isMobile: isMobile,
                     ),
                   ],
                 ),
               ),
-            );
-          },
-        ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildResultsPublishTimeField(
+                  context,
+                  controller,
+                  isMobile: isMobile,
+                ),
+              ),
+            ],
+          ),
       ],
     );
+  }
+
+  Widget _buildPublishResultNowCheckbox(
+    BuildContext context,
+    CompetitionController controller, {
+    bool isMobile = false,
+  }) {
+    return Obx(
+      () {
+        final enabled = !controller.isViewMode.value;
+        return InkWell(
+          onTap: enabled
+              ? () {
+                  controller.publishResultNow.value =
+                      !controller.publishResultNow.value;
+                  controller.notifyCompetitionDatesChanged();
+                }
+              : null,
+          child: InputDecorator(
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              filled: true,
+              fillColor: controller.isViewMode.value
+                  ? Colors.grey[200]
+                  : Colors.grey[50],
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: isMobile ? 4 : 8,
+              ),
+              isDense: isMobile,
+            ),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: controller.publishResultNow.value,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: enabled
+                      ? (value) {
+                          controller.publishResultNow.value = value ?? false;
+                          controller.notifyCompetitionDatesChanged();
+                        }
+                      : null,
+                ),
+                Expanded(
+                  child: Text(
+                    'Publish results immediately',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: isMobile ? 13 : 14,
+                      color: enabled ? Colors.black : Colors.grey[700],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildResultsPublishTimeField(
+    BuildContext context,
+    CompetitionController controller, {
+    bool isMobile = false,
+  }) {
+    return Obx(() {
+      final isRequired = !controller.publishResultNow.value;
+      return _buildTimeField(
+        context,
+        controller,
+        label: 'RESULTS PUBLISH TIME :',
+        isStartTime: false,
+        isRequired: isRequired,
+        isMobile: isMobile,
+        isResultsPublishTime: true,
+      );
+    });
   }
 
   Widget _buildMarksField(
