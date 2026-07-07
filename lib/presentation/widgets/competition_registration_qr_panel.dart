@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/competition_registration_url.dart';
 import '../../data/models/competition_model.dart';
 import 'competition_registration_qr_image.dart';
+import 'pinned_scroll_views.dart';
 
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html show AnchorElement, Blob, Url;
@@ -201,7 +202,7 @@ Future<void> showCompetitionRegistrationQrDialog(
       ),
       content: SizedBox(
         width: 360,
-        child: SingleChildScrollView(
+        child: PinnedVerticalScrollView(
           child: CompetitionRegistrationQrPanel(competition: competition),
         ),
       ),

@@ -5,9 +5,7 @@ class RegistrationTermsAndConditions {
   static const String title = 'General Terms & Conditions';
 
   static const String agreementSummary =
-      'I agree to terms & conditions. Participants from all states can register '
-      'for the event. But participants from Tamil Nadu only are eligible for '
-      'prize categories, to avoid confusion and to encourage wider participation';
+      'I agree to the terms and conditions.';
 
   static const List<String> fullTextParagraphs = [
     'Participants from all states can register.',

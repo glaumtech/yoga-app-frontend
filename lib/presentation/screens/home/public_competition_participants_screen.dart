@@ -9,6 +9,7 @@ import '../../../data/models/participant_model.dart';
 import '../../../data/repositories/competition_repository.dart';
 import '../../../data/repositories/participant_repository.dart';
 import '../../widgets/footer_section.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import 'home_landing_sections.dart';
 
 /// Public list of registrations for one competition with e-certificate download.
@@ -251,7 +252,7 @@ class _PublicCompetitionParticipantsScreenState
           await _loadCompetitionMeta();
           await _loadParticipants(page: _currentPage);
         },
-        child: SingleChildScrollView(
+        child: PinnedVerticalScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

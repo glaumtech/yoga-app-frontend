@@ -6,6 +6,7 @@ import '../../../routes/app_routes.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/admin_sidebar_layout.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -114,7 +115,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                   return RefreshIndicator(
                     onRefresh: () => competitionController.loadCompetitions(),
-                    child: SingleChildScrollView(
+                    child: PinnedVerticalScrollView(
                       padding: EdgeInsets.all(isMobile ? 16 : 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../pinned_scroll_views.dart';
 import '../../../data/models/school_model.dart';
 
 /// Placeholder id used internally when the API returns no institutions (shows "add new" UI).
@@ -196,7 +197,7 @@ class InstitutionNameAutocompleteField extends StatelessWidget {
                   child: hasNoResults
                       ? Padding(
                           padding: const EdgeInsets.all(16.0),
-                          child: SingleChildScrollView(
+                          child: PinnedVerticalScrollView(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [

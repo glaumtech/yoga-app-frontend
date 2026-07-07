@@ -13,6 +13,7 @@ import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../widgets/organization/organization_proof_image_upload.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class OrganizationUpdateScreen extends StatelessWidget {
   const OrganizationUpdateScreen({super.key});
@@ -509,7 +510,7 @@ class OrganizationUpdateScreen extends StatelessWidget {
             );
           }
 
-          return SingleChildScrollView(
+          return PinnedVerticalScrollView(
             padding: EdgeInsets.all(isMobile ? 12 : 24),
             child: Center(
               child: ConstrainedBox(

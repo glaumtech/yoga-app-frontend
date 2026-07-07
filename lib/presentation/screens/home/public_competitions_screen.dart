@@ -10,6 +10,7 @@ import '../../controllers/competition_controller.dart';
 import '../../widgets/footer_section.dart';
 import 'home_landing_sections.dart';
 import '../../widgets/public_competition_horizontal_card.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 /// Public competitions list — horizontal carousel with compact cards.
 class PublicCompetitionsScreen extends StatelessWidget {
@@ -265,7 +266,7 @@ class PublicCompetitionsScreen extends StatelessWidget {
         ? w - 2 * padH
         : _gridCardWidth(w, crossCount, padH);
 
-    return SingleChildScrollView(
+    return PinnedVerticalScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -407,7 +408,7 @@ class PublicCompetitionsScreen extends StatelessWidget {
             final list = _filteredList(allCompetitions);
 
             if (!isLoading && list.isEmpty) {
-              return SingleChildScrollView(
+              return PinnedVerticalScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -428,7 +429,7 @@ class PublicCompetitionsScreen extends StatelessWidget {
                 ? w - 2 * padH
                 : _gridCardWidth(w, crossCount, padH);
 
-            return SingleChildScrollView(
+            return PinnedVerticalScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

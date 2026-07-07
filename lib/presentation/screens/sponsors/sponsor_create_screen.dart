@@ -4,6 +4,7 @@ import '../../controllers/sponsor_controller.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class SponsorCreateScreen extends StatelessWidget {
   const SponsorCreateScreen({super.key});
@@ -16,7 +17,7 @@ class SponsorCreateScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    return SingleChildScrollView(
+    return PinnedVerticalScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 16),
       child: Card(
         elevation: 4,

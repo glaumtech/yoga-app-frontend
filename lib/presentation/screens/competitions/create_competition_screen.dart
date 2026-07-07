@@ -21,6 +21,7 @@ import '../../widgets/toggle_button_group.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/form_label_with_hint.dart';
 import '../../widgets/competition_registration_qr_panel.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/subscription/subscription_plan_picker.dart';
 import '../../../data/models/subscription_package_model.dart';
 import 'competitions_list_screen.dart';
@@ -89,7 +90,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                 child: Obx(
                   () => controller.isListView.value
                       ? const CompetitionsListScreen()
-                      : SingleChildScrollView(
+                      : PinnedVerticalScrollView(
                           padding: EdgeInsets.all(isMobile ? 16 : 10),
                           child: Center(
                             child: ConstrainedBox(
@@ -2412,7 +2413,17 @@ class CreateCompetitionScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FormLabelWithHint(label: 'MARKS :'),
+        Row(
+          children: [
+            Expanded(
+              child: FormLabelWithHint(label: 'MARKS : Minimum'),
+            ),
+            SizedBox(width: isMobile ? 8 : 12),
+            Expanded(
+              child: FormLabelWithHint(label: 'Maximum'),
+            ),
+          ],
+        ),
         Row(
           children: [
             Expanded(
@@ -2436,7 +2447,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                     ),
                     isDense: isMobile,
                     hint: Text(
-                      'Min',
+                      'Select',
                       style: TextStyle(fontSize: isMobile ? 13 : 14),
                     ),
                   ),
@@ -2476,7 +2487,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                     ),
                     isDense: isMobile,
                     hint: Text(
-                      'Max',
+                      'Select',
                       style: TextStyle(fontSize: isMobile ? 13 : 14),
                     ),
                   ),
@@ -3016,7 +3027,7 @@ class CreateCompetitionScreen extends StatelessWidget {
         title: const Text('Add New Prize'),
         content: Form(
           key: formKey,
-          child: SingleChildScrollView(
+          child: PinnedVerticalScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -3093,7 +3104,7 @@ class CreateCompetitionScreen extends StatelessWidget {
         title: const Text('Add New Category'),
         content: Form(
           key: formKey,
-          child: SingleChildScrollView(
+          child: PinnedVerticalScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -3608,7 +3619,7 @@ class CreateCompetitionScreen extends StatelessWidget {
         title: const Text('Add New Stage'),
         content: Form(
           key: formKey,
-          child: SingleChildScrollView(
+          child: PinnedVerticalScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -3741,7 +3752,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                 ),
                 // Groups Grid - Show all groups, disable those assigned to other stages
                 Flexible(
-                  child: SingleChildScrollView(
+                  child: PinnedVerticalScrollView(
                     child: Wrap(
                       spacing: isMobile ? 8 : 12,
                       runSpacing: isMobile ? 8 : 12,
@@ -3913,7 +3924,7 @@ class CreateCompetitionScreen extends StatelessWidget {
         title: const Text('Add New Group'),
         content: Form(
           key: formKey,
-          child: SingleChildScrollView(
+          child: PinnedVerticalScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

@@ -7,6 +7,7 @@ import '../../../../core/utils/role_display_name.dart';
 import '../../../controllers/settings_controller.dart';
 import '../../../controllers/user_management_controller.dart';
 import '../../../widgets/primary_button.dart';
+import '../../../widgets/pinned_scroll_views.dart';
 
 class SettingsThemeTab extends StatelessWidget {
   const SettingsThemeTab({super.key});
@@ -31,7 +32,7 @@ class SettingsThemeTab extends StatelessWidget {
       final secondary = AppTheme.secondaryColorFor(previewColor);
       final themeableTypes = controller.themeableUserTypes;
 
-      return SingleChildScrollView(
+      return PinnedVerticalScrollView(
         padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Center(
           child: ConstrainedBox(

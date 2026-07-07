@@ -10,6 +10,7 @@ import 'dart:async';
 import '../../../../data/models/competition_model.dart';
 import '../../../../data/repositories/competition_repository.dart';
 import '../../../../data/repositories/participant_repository.dart';
+import '../../../widgets/pinned_scroll_views.dart';
 
 class SettingsImportsTab extends StatefulWidget {
   const SettingsImportsTab({super.key});
@@ -208,7 +209,7 @@ class _SettingsImportsTabState extends State<SettingsImportsTab> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
-    return SingleChildScrollView(
+    return PinnedVerticalScrollView(
       padding: const EdgeInsets.all(12),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 900),

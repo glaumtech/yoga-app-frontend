@@ -5,6 +5,7 @@ import '../../controllers/auth_controller.dart';
 // import '../../controllers/competition_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -69,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         child: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
+            child: PinnedVerticalScrollView(
               padding: EdgeInsets.all(isMobile ? 24.0 : 32.0),
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),

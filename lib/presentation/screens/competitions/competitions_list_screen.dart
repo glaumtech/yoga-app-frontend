@@ -6,6 +6,7 @@ import '../../../core/utils/permission_store.dart';
 import '../../controllers/competition_controller.dart';
 import '../../controllers/competitions_list_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/competition_model.dart';
 import '../../widgets/competition_registration_qr_panel.dart';
@@ -444,7 +445,7 @@ class CompetitionsListScreen extends StatelessWidget {
   ) {
     return RefreshIndicator(
       onRefresh: () => controller.loadCompetitions(),
-      child: ListView.builder(
+      child: PinnedListView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: competitions.length,
         itemBuilder: (context, index) {

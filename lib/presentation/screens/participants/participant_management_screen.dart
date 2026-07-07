@@ -9,6 +9,7 @@ import '../../widgets/toggle_button_group.dart';
 import 'participants_list_screen.dart';
 import 'participant_registration_form_screen.dart';
 import 'bulk_registration_screen.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class ParticipantManagementScreen extends StatefulWidget {
   const ParticipantManagementScreen({super.key});
@@ -135,7 +136,7 @@ class _ParticipantManagementScreenState
                           padding: const EdgeInsets.all(16),
                           child: const ParticipantsListScreen(),
                         )
-                      : SingleChildScrollView(
+                      : PinnedVerticalScrollView(
                           padding: EdgeInsets.all(isMobile ? 16 : 16),
                           child: Obx(() {
                             if (participantController.registrationSaved.value &&

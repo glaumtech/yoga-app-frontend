@@ -10,11 +10,9 @@ import 'package:get/get.dart';
 import '../../../../data/models/certificate_designer_envelope.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../controllers/certificate_template_controller.dart';
+import '../../../widgets/pinned_scroll_views.dart';
 
-const double _kScrollbarThickness = 8;
-const double _kScrollbarRadius = 4;
-const double _kScrollbarThumbMinLength = 48;
-const double _kScrollbarAreaGap = 4;
+const PinnedScrollBarStyle _kCertificateScrollbarStyle = PinnedScrollBarStyle.dark;
 
 enum _LayerKind { text, image }
 
@@ -1860,7 +1858,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return _HoverRegion(
+        return PinnedScrollHoverRegion(
           builder: (context, isHovered) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1883,10 +1881,11 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                     child: child,
                   ),
                 ),
-                _PinnedHorizontalScrollBar(
+                PinnedHorizontalScrollBar(
                   controller: controller,
                   viewportWidth: constraints.maxWidth,
                   visible: isHovered,
+                  style: _kCertificateScrollbarStyle,
                 ),
               ],
             );
@@ -2196,7 +2195,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                    child: _hoverScrollbar(
+                    child: PinnedVerticalScrollViewport(
+                      controller: _sidebarScrollController,
+                      style: _kCertificateScrollbarStyle,
                       child: SingleChildScrollView(
                         controller: _sidebarScrollController,
                         primary: false,
@@ -2622,7 +2623,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFF2E4568)),
                       ),
-                      child: _hoverScrollbar(
+                      child: PinnedVerticalScrollViewport(
+                        controller: _layersScrollController,
+                        style: _kCertificateScrollbarStyle,
                         child: ListView.builder(
                           controller: _layersScrollController,
                           primary: false,
@@ -2709,13 +2712,13 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                         padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
                         child: LayoutBuilder(
                           builder: (context, previewConstraints) {
-                            const barHeight = _kScrollbarThickness;
-                            const gap = _kScrollbarAreaGap;
+                            const barHeight = kPinnedScrollbarThickness;
+                            const gap = kPinnedScrollbarAreaGap;
                             final viewH =
                                 previewConstraints.maxHeight - barHeight - gap;
                             final viewW = previewConstraints.maxWidth;
 
-                            return _HoverRegion(
+                            return PinnedScrollHoverRegion(
                               builder: (context, isHovered) {
                                 return Column(
                                   crossAxisAlignment:
@@ -2724,94 +2727,110 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                                     SizedBox(
                                       width: viewW,
                                       height: viewH,
-                                      child: _hoverScrollbarWhen(
-                                        show: isHovered,
-                                        child: SingleChildScrollView(
-                                          controller:
-                                              _previewVerticalScrollController,
-                                          primary: false,
-                                          child: SizedBox(
-                                            height: math.max(
-                                              canvasSize.height,
-                                              viewH,
-                                            ),
-                                            child: Align(
-                                              alignment: Alignment.topLeft,
-                                              child: SizedBox(
-                                                width: viewW,
-                                                height: canvasSize.height,
-                                                child: SingleChildScrollView(
-                                                  controller:
-                                                      _previewHorizontalScrollController,
-                                                  primary: false,
-                                                  scrollDirection:
-                                                      Axis.horizontal,
-                                                  child: Container(
-                                                    width: canvasSize.width,
-                                                    height: canvasSize.height,
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            4,
-                                                          ),
-                                                      border: Border.all(
-                                                        color: const Color(
-                                                          0xFFCFD8DC,
-                                                        ),
-                                                        width: 1,
-                                                      ),
-                                                      boxShadow: const [
-                                                        BoxShadow(
-                                                          blurRadius: 24,
-                                                          color: Color(
-                                                            0x33000000,
-                                                          ),
-                                                          offset: Offset(0, 12),
-                                                        ),
-                                                      ],
-                                                      image:
-                                                          backgroundImageProvider ==
-                                                              null
-                                                          ? null
-                                                          : DecorationImage(
-                                                              image:
-                                                                  backgroundImageProvider,
-                                                              fit: BoxFit.cover,
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          SingleChildScrollView(
+                                            controller:
+                                                _previewVerticalScrollController,
+                                            primary: false,
+                                            child: SizedBox(
+                                              height: math.max(
+                                                canvasSize.height,
+                                                viewH,
+                                              ),
+                                              child: Align(
+                                                alignment: Alignment.topLeft,
+                                                child: SizedBox(
+                                                  width: viewW,
+                                                  height: canvasSize.height,
+                                                  child: SingleChildScrollView(
+                                                    controller:
+                                                        _previewHorizontalScrollController,
+                                                    primary: false,
+                                                    scrollDirection:
+                                                        Axis.horizontal,
+                                                    child: Container(
+                                                      width: canvasSize.width,
+                                                      height: canvasSize.height,
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              4,
                                                             ),
-                                                    ),
-                                                    child: Stack(
-                                                      children: [
-                                                        for (var i = 0;
-                                                            i < _layers.length;
-                                                            i++)
-                                                          _buildLayerItem(
-                                                            _layers[i],
-                                                            canvasSize,
-                                                            i ==
-                                                                    _selectedLayerIndex ||
-                                                                _selectedLayerIds
-                                                                    .contains(
-                                                                  _layers[i].id,
-                                                                ),
+                                                        border: Border.all(
+                                                          color: const Color(
+                                                            0xFFCFD8DC,
                                                           ),
-                                                      ],
+                                                          width: 1,
+                                                        ),
+                                                        boxShadow: const [
+                                                          BoxShadow(
+                                                            blurRadius: 24,
+                                                            color: Color(
+                                                              0x33000000,
+                                                            ),
+                                                            offset: Offset(0, 12),
+                                                          ),
+                                                        ],
+                                                        image:
+                                                            backgroundImageProvider ==
+                                                                null
+                                                            ? null
+                                                            : DecorationImage(
+                                                                image:
+                                                                    backgroundImageProvider,
+                                                                fit: BoxFit.cover,
+                                                              ),
+                                                      ),
+                                                      child: Stack(
+                                                        children: [
+                                                          for (var i = 0;
+                                                              i < _layers.length;
+                                                              i++)
+                                                            _buildLayerItem(
+                                                              _layers[i],
+                                                              canvasSize,
+                                                              i ==
+                                                                      _selectedLayerIndex ||
+                                                                  _selectedLayerIds
+                                                                      .contains(
+                                                                    _layers[i].id,
+                                                                  ),
+                                                            ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
+                                          Positioned(
+                                            right: 0,
+                                            top: 0,
+                                            height: viewH,
+                                            child: PinnedVerticalScrollBar(
+                                              controller:
+                                                  _previewVerticalScrollController,
+                                              viewportHeight: viewH,
+                                              contentHeight: canvasSize.height,
+                                              visible: isHovered,
+                                              style: _kCertificateScrollbarStyle,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     const SizedBox(height: gap),
-                                    _PinnedHorizontalScrollBar(
+                                    PinnedHorizontalScrollBar(
                                       controller:
                                           _previewHorizontalScrollController,
                                       viewportWidth: viewW,
                                       contentWidth: canvasSize.width,
                                       visible: isHovered,
+                                      style: _kCertificateScrollbarStyle,
                                     ),
                                   ],
                                 );
@@ -2838,58 +2857,6 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
         ),
       );
     });
-  }
-
-  ScrollbarThemeData _scrollbarThemeData() {
-    return ScrollbarThemeData(
-      thumbColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.dragged) ||
-            states.contains(WidgetState.hovered)) {
-          return const Color(0xFF7BA8FF);
-        }
-        return const Color(0xFF5B8DEF);
-      }),
-      trackColor: WidgetStateProperty.all(const Color(0xFF3A5070)),
-      thickness: WidgetStateProperty.all(_kScrollbarThickness),
-      radius: const Radius.circular(_kScrollbarRadius),
-      crossAxisMargin: 2,
-      mainAxisMargin: 4,
-    );
-  }
-
-  Widget _hoverScrollbar({
-    required Widget child,
-    ScrollbarOrientation? scrollbarOrientation,
-    ScrollNotificationPredicate notificationPredicate =
-        defaultScrollNotificationPredicate,
-  }) {
-    return _HoverScrollbar(
-      theme: _scrollbarThemeData(),
-      scrollbarOrientation: scrollbarOrientation,
-      notificationPredicate: notificationPredicate,
-      child: child,
-    );
-  }
-
-  Widget _hoverScrollbarWhen({
-    required bool show,
-    required Widget child,
-    ScrollbarOrientation? scrollbarOrientation,
-    ScrollNotificationPredicate notificationPredicate =
-        defaultScrollNotificationPredicate,
-  }) {
-    return ScrollbarTheme(
-      data: _scrollbarThemeData(),
-      child: Scrollbar(
-        thumbVisibility: show,
-        trackVisibility: show,
-        thickness: _kScrollbarThickness,
-        radius: const Radius.circular(_kScrollbarRadius),
-        scrollbarOrientation: scrollbarOrientation,
-        notificationPredicate: notificationPredicate,
-        child: child,
-      ),
-    );
   }
 
   InputDecoration _panelFieldDecoration() {
@@ -2992,210 +2959,6 @@ class _BottomActions extends StatelessWidget {
                 : const Text('Save'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _HoverRegion extends StatefulWidget {
-  const _HoverRegion({required this.builder});
-
-  final Widget Function(BuildContext context, bool isHovered) builder;
-
-  @override
-  State<_HoverRegion> createState() => _HoverRegionState();
-}
-
-class _HoverRegionState extends State<_HoverRegion> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: widget.builder(context, _isHovered),
-    );
-  }
-}
-
-class _HoverScrollbar extends StatefulWidget {
-  const _HoverScrollbar({
-    required this.child,
-    required this.theme,
-    this.scrollbarOrientation,
-    this.notificationPredicate = defaultScrollNotificationPredicate,
-  });
-
-  final Widget child;
-  final ScrollbarThemeData theme;
-  final ScrollbarOrientation? scrollbarOrientation;
-  final ScrollNotificationPredicate notificationPredicate;
-
-  @override
-  State<_HoverScrollbar> createState() => _HoverScrollbarState();
-}
-
-class _HoverScrollbarState extends State<_HoverScrollbar> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: ScrollbarTheme(
-        data: widget.theme,
-        child: Scrollbar(
-          thumbVisibility: _isHovered,
-          trackVisibility: _isHovered,
-          thickness: _kScrollbarThickness,
-          radius: const Radius.circular(_kScrollbarRadius),
-          scrollbarOrientation: widget.scrollbarOrientation,
-          notificationPredicate: widget.notificationPredicate,
-          child: widget.child,
-        ),
-      ),
-    );
-  }
-}
-
-class _PinnedHorizontalScrollBar extends StatefulWidget {
-  const _PinnedHorizontalScrollBar({
-    required this.controller,
-    required this.viewportWidth,
-    this.contentWidth,
-    this.visible = true,
-  });
-
-  final ScrollController controller;
-  final double viewportWidth;
-  final double? contentWidth;
-  final bool visible;
-
-  @override
-  State<_PinnedHorizontalScrollBar> createState() =>
-      _PinnedHorizontalScrollBarState();
-}
-
-class _PinnedHorizontalScrollBarState extends State<_PinnedHorizontalScrollBar> {
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_onScrollChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _PinnedHorizontalScrollBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_onScrollChanged);
-      widget.controller.addListener(_onScrollChanged);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_onScrollChanged);
-    super.dispose();
-  }
-
-  void _onScrollChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const trackHeight = _kScrollbarThickness;
-    const thumbMinWidth = _kScrollbarThumbMinLength;
-
-    double viewportDim = widget.viewportWidth;
-    double maxScroll = 0;
-    double pixels = 0;
-
-    if (widget.controller.hasClients &&
-        widget.controller.positions.length == 1) {
-      final position = widget.controller.positions.first;
-      viewportDim = position.viewportDimension;
-      maxScroll = position.maxScrollExtent;
-      pixels = position.pixels;
-    } else if (widget.contentWidth != null &&
-        widget.contentWidth! > widget.viewportWidth) {
-      maxScroll = widget.contentWidth! - widget.viewportWidth;
-    }
-
-    final trackWidth = widget.viewportWidth;
-    if (!widget.visible || maxScroll <= 0 || trackWidth <= 0) {
-      return const SizedBox.shrink();
-    }
-
-    final contentWidth = viewportDim + maxScroll;
-    final thumbWidth = (trackWidth * viewportDim / contentWidth)
-        .clamp(thumbMinWidth, trackWidth);
-    final scrollableRange = math.max(0.0, trackWidth - thumbWidth);
-    final thumbOffset = scrollableRange == 0
-        ? 0.0
-        : (pixels / maxScroll) * scrollableRange;
-
-    void scrollToThumbCenter(double localX) {
-      if (scrollableRange <= 0 || !widget.controller.hasClients) return;
-      final target =
-          ((localX - thumbWidth / 2) / scrollableRange).clamp(0.0, 1.0);
-      widget.controller.jumpTo(target * maxScroll);
-    }
-
-    void scrollByDragDelta(double deltaDx) {
-      if (scrollableRange <= 0 || !widget.controller.hasClients) return;
-      final position = widget.controller.positions.first;
-      final scrollDelta = deltaDx * maxScroll / scrollableRange;
-      widget.controller.jumpTo(
-        (position.pixels + scrollDelta).clamp(0.0, maxScroll),
-      );
-    }
-
-    return SizedBox(
-      height: trackHeight,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF3A5070),
-          borderRadius: BorderRadius.circular(_kScrollbarRadius),
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapDown: (details) =>
-                    scrollToThumbCenter(details.localPosition.dx),
-                onPanUpdate: (details) => scrollByDragDelta(details.delta.dx),
-              ),
-            ),
-            Positioned(
-              left: thumbOffset,
-              width: thumbWidth,
-              top: 0,
-              bottom: 0,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanUpdate: (details) => scrollByDragDelta(details.delta.dx),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.grab,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5B8DEF),
-                      borderRadius:
-                          BorderRadius.circular(_kScrollbarRadius),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

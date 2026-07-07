@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'pinned_scroll_views.dart';
+
 /// Horizontal scroll wrapper with a visible scrollbar when content overflows.
 class HorizontalScrollTable extends StatefulWidget {
   final Widget child;
@@ -116,7 +118,7 @@ class ResponsiveAdminTable extends StatelessWidget {
       builder: (context, constraints) {
         return RefreshIndicator(
           onRefresh: onRefresh,
-          child: SingleChildScrollView(
+          child: PinnedVerticalScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: ConstrainedBox(
               constraints: BoxConstraints(

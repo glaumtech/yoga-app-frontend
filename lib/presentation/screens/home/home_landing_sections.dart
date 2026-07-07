@@ -22,6 +22,7 @@ import '../../controllers/user_management_controller.dart';
 import '../../widgets/competition_participants_qr_image.dart';
 import '../../widgets/competition_registration_qr_image.dart';
 import '../../widgets/footer_section.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isAuthenticated;
@@ -2905,7 +2906,7 @@ class HomeLandingBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    return PinnedVerticalScrollView(
       controller: scrollController,
       child: Column(
         children: [

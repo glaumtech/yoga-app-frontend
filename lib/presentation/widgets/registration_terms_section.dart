@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../core/constants/registration_terms_and_conditions.dart';
 import '../../core/theme/app_theme.dart';
 import '../controllers/participant_controller.dart';
+import 'pinned_scroll_views.dart';
 
 class RegistrationTermsSection extends StatelessWidget {
   final ParticipantController controller;
@@ -31,10 +32,9 @@ class RegistrationTermsSection extends StatelessWidget {
           content: SizedBox(
             width: double.maxFinite,
             height: screenHeight * 0.65,
-            child: Scrollbar(
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                child: Column(
+            child: PinnedVerticalScrollView(
+              alwaysShowScrollbar: true,
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (final paragraph
@@ -48,7 +48,6 @@ class RegistrationTermsSection extends StatelessWidget {
                       ),
                   ],
                 ),
-              ),
             ),
           ),
           actions: [

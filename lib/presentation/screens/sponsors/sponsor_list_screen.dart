@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../controllers/sponsor_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/sponsor_model.dart';
 
@@ -142,7 +143,7 @@ class SponsorListScreen extends StatelessWidget {
   ) {
     return RefreshIndicator(
       onRefresh: () => controller.loadSponsors(),
-      child: ListView.builder(
+      child: PinnedListView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: sponsors.length,
         itemBuilder: (context, index) {

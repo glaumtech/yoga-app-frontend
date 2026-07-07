@@ -12,6 +12,7 @@ import '../../controllers/organization_setup_controller.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../widgets/organization/organization_proof_image_upload.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class OrganizationSetupScreen extends StatelessWidget {
   const OrganizationSetupScreen({super.key});
@@ -99,7 +100,7 @@ class OrganizationSetupScreen extends StatelessWidget {
                       controlAffinity: ListTileControlAffinity.trailing,
                     ),
                     Expanded(
-                      child: ListView.builder(
+                      child: PinnedListView.builder(
                         itemCount: filtered.length,
                         itemBuilder: (ctx, i) {
                           final p = filtered[i];
@@ -1245,7 +1246,7 @@ class OrganizationSetupScreen extends StatelessWidget {
         ),
         child: SafeArea(
           child: LayoutBuilder(
-            builder: (context, viewport) => SingleChildScrollView(
+            builder: (context, viewport) => PinnedVerticalScrollView(
               padding: EdgeInsets.symmetric(
                 horizontal: isMobile ? 10 : 0,
                 vertical: isMobile ? 12 : 10,

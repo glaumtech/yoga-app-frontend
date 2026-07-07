@@ -11,6 +11,7 @@ import '../../controllers/user_management_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../widgets/footer_section.dart';
 import '../home/home_landing_sections.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -78,7 +79,7 @@ class _AboutScreenState extends State<AboutScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
+      body: PinnedVerticalScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

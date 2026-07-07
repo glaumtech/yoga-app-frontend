@@ -28,6 +28,7 @@ import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../schools/school_create_screen.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 String? _eventIdForRegistrationSave(
   ParticipantController participantController,
@@ -219,12 +220,10 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             // `onUserInteraction` validates *all* fields after any field is touched
             // (Flutter behavior; see flutter/flutter#107350).
             autovalidateMode: AutovalidateMode.disabled,
-            child: SingleChildScrollView(
+            child: PinnedVerticalScrollView(
               physics: embeddedInLandingPage
                   ? const NeverScrollableScrollPhysics()
                   : null,
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2379,7 +2378,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     ),
                     // Form content
                     Expanded(
-                      child: SingleChildScrollView(
+                      child: PinnedVerticalScrollView(
                         child: const SchoolCreateScreen(hideButtons: true),
                       ),
                     ),

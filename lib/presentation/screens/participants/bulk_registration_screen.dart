@@ -13,6 +13,7 @@ import '../../widgets/location/state_search_field.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../core/utils/photo_capture_service.dart';
 import '../../../core/utils/photo_upload_processor.dart';
@@ -130,7 +131,7 @@ class BulkRegistrationScreen extends StatelessWidget {
           key: participantController.formKey,
           // Per-field `autovalidateMode` — Form-level `onUserInteraction` validates all fields.
           autovalidateMode: AutovalidateMode.disabled,
-          child: SingleChildScrollView(
+          child: PinnedVerticalScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

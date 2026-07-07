@@ -25,6 +25,7 @@ import '../../data/models/subscription_mode_model.dart';
 import '../../data/models/subscription_package_model.dart';
 import '../../data/repositories/payment_repository.dart';
 import '../../services/razorpay_checkout_service.dart';
+import '../widgets/pinned_scroll_views.dart';
 
 enum BrochureFileKind { image, pdf, unknown }
 
@@ -2701,7 +2702,7 @@ class CompetitionController extends GetxController {
             title: const Text('Delete Competition'),
             content: SizedBox(
               width: 480,
-              child: SingleChildScrollView(
+              child: PinnedVerticalScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,

@@ -9,6 +9,7 @@ import '../../../data/repositories/participant_repository.dart';
 import '../../controllers/participant_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/registration_event_venue_card.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 /// Read-only participant registration details (matches PDF/HTML template).
 class ParticipantRegistrationDetailsScreen extends StatefulWidget {
@@ -279,7 +280,7 @@ class _ParticipantRegistrationDetailsScreenState
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
                 ? _buildErrorState()
-                : SingleChildScrollView(
+                : PinnedVerticalScrollView(
                     padding: EdgeInsets.all(isMobile ? 12 : 24),
                     child: Center(
                       child: ConstrainedBox(

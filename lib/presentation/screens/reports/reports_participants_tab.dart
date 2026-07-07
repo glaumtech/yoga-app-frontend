@@ -13,6 +13,7 @@ import '../../controllers/reports_participants_tab_controller.dart';
 import '../../controllers/reports_participants_tab_logic.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/responsive_admin_table.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../../data/models/district_model.dart';
 import '../../../data/models/school_model.dart';
 import '../../../data/models/state_model.dart';
@@ -1509,7 +1510,7 @@ class ReportsParticipantFiltersDialogState
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Center(child: CircularProgressIndicator()),
               )
-            : SingleChildScrollView(
+            : PinnedVerticalScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
