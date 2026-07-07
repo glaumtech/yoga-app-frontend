@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
@@ -75,9 +74,6 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   final TextEditingController _customHeightMmController = TextEditingController(
     text: '794',
   );
-  final ScrollController _previewHorizontalScrollController =
-      ScrollController();
-  final ScrollController _previewVerticalScrollController = ScrollController();
   final ScrollController _sidebarScrollController = ScrollController();
   final ScrollController _layersScrollController = ScrollController();
   final ScrollController _textToolbarScrollController = ScrollController();
@@ -261,8 +257,6 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     _inlineEditFocusNode.dispose();
     _customWidthMmController.dispose();
     _customHeightMmController.dispose();
-    _previewHorizontalScrollController.dispose();
-    _previewVerticalScrollController.dispose();
     _sidebarScrollController.dispose();
     _layersScrollController.dispose();
     _textToolbarScrollController.dispose();
@@ -1111,7 +1105,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     }
   }
 
-  /// Full oriented canvas size in design pixels (scroll when larger than viewport).
+  /// Full oriented canvas size in design pixels.
   Size _paperOrientedCanvasSize() {
     final base = _paperDimensionsPx();
     final shortSide = base.width < base.height ? base.width : base.height;
@@ -1119,6 +1113,83 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     final rawWidth = _portrait ? shortSide : longSide;
     final rawHeight = _portrait ? longSide : shortSide;
     return Size(rawWidth, rawHeight);
+  }
+
+  Widget _buildCertificateCanvas({
+    required Size canvasSize,
+    required ImageProvider<Object>? backgroundImageProvider,
+  }) {
+    return Container(
+      width: canvasSize.width,
+      height: canvasSize.height,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: const Color(0xFFCFD8DC),
+          width: 1,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 24,
+            color: Color(0x33000000),
+            offset: Offset(0, 12),
+          ),
+        ],
+        image: backgroundImageProvider == null
+            ? null
+            : DecorationImage(
+                image: backgroundImageProvider,
+                fit: BoxFit.cover,
+              ),
+      ),
+      child: Stack(
+        children: [
+          for (var i = 0; i < _layers.length; i++)
+            _buildLayerItem(
+              _layers[i],
+              canvasSize,
+              i == _selectedLayerIndex ||
+                  _selectedLayerIds.contains(_layers[i].id),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Scales the canvas to the full preview width; scrolls vertically when needed.
+  Widget _buildScaledCertificatePreview({
+    required Size canvasSize,
+    required ImageProvider<Object>? backgroundImageProvider,
+    required double viewW,
+    required double viewH,
+  }) {
+    if (viewW <= 0 || viewH <= 0 || canvasSize.width <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final scaledHeight = canvasSize.height * (viewW / canvasSize.width);
+    final preview = SizedBox(
+      width: viewW,
+      height: scaledHeight,
+      child: FittedBox(
+        fit: BoxFit.fitWidth,
+        alignment: Alignment.topCenter,
+        child: _buildCertificateCanvas(
+          canvasSize: canvasSize,
+          backgroundImageProvider: backgroundImageProvider,
+        ),
+      ),
+    );
+
+    if (scaledHeight <= viewH) {
+      return Align(alignment: Alignment.topCenter, child: preview);
+    }
+
+    return SingleChildScrollView(
+      primary: false,
+      child: preview,
+    );
   }
 
   String _resolveTemplateText(String value) {
@@ -2188,8 +2259,8 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              width: isMobile ? 220 : 300,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+              width: isMobile ? 200 : 250,
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
               color: const Color(0xFF0E1D34),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2696,152 +2767,28 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                   children: [
                     if (selectedLayer?.kind == _LayerKind.text) ...[
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
                         child: Align(
                           alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1200),
-                            child: _buildTextStylePanel(selectedLayer!),
-                          ),
+                          child: _buildTextStylePanel(selectedLayer!),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 6),
                     ],
                     Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
-                        child: LayoutBuilder(
-                          builder: (context, previewConstraints) {
-                            const barHeight = kPinnedScrollbarThickness;
-                            const gap = kPinnedScrollbarAreaGap;
-                            final viewH =
-                                previewConstraints.maxHeight - barHeight - gap;
-                            final viewW = previewConstraints.maxWidth;
-
-                            return PinnedScrollHoverRegion(
-                              builder: (context, isHovered) {
-                                return Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    SizedBox(
-                                      width: viewW,
-                                      height: viewH,
-                                      child: Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          SingleChildScrollView(
-                                            controller:
-                                                _previewVerticalScrollController,
-                                            primary: false,
-                                            child: SizedBox(
-                                              height: math.max(
-                                                canvasSize.height,
-                                                viewH,
-                                              ),
-                                              child: Align(
-                                                alignment: Alignment.topLeft,
-                                                child: SizedBox(
-                                                  width: viewW,
-                                                  height: canvasSize.height,
-                                                  child: SingleChildScrollView(
-                                                    controller:
-                                                        _previewHorizontalScrollController,
-                                                    primary: false,
-                                                    scrollDirection:
-                                                        Axis.horizontal,
-                                                    child: Container(
-                                                      width: canvasSize.width,
-                                                      height: canvasSize.height,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.white,
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              4,
-                                                            ),
-                                                        border: Border.all(
-                                                          color: const Color(
-                                                            0xFFCFD8DC,
-                                                          ),
-                                                          width: 1,
-                                                        ),
-                                                        boxShadow: const [
-                                                          BoxShadow(
-                                                            blurRadius: 24,
-                                                            color: Color(
-                                                              0x33000000,
-                                                            ),
-                                                            offset: Offset(0, 12),
-                                                          ),
-                                                        ],
-                                                        image:
-                                                            backgroundImageProvider ==
-                                                                null
-                                                            ? null
-                                                            : DecorationImage(
-                                                                image:
-                                                                    backgroundImageProvider,
-                                                                fit: BoxFit.cover,
-                                                              ),
-                                                      ),
-                                                      child: Stack(
-                                                        children: [
-                                                          for (var i = 0;
-                                                              i < _layers.length;
-                                                              i++)
-                                                            _buildLayerItem(
-                                                              _layers[i],
-                                                              canvasSize,
-                                                              i ==
-                                                                      _selectedLayerIndex ||
-                                                                  _selectedLayerIds
-                                                                      .contains(
-                                                                    _layers[i].id,
-                                                                  ),
-                                                            ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Positioned(
-                                            right: 0,
-                                            top: 0,
-                                            height: viewH,
-                                            child: PinnedVerticalScrollBar(
-                                              controller:
-                                                  _previewVerticalScrollController,
-                                              viewportHeight: viewH,
-                                              contentHeight: canvasSize.height,
-                                              visible: isHovered,
-                                              style: _kCertificateScrollbarStyle,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: gap),
-                                    PinnedHorizontalScrollBar(
-                                      controller:
-                                          _previewHorizontalScrollController,
-                                      viewportWidth: viewW,
-                                      contentWidth: canvasSize.width,
-                                      visible: isHovered,
-                                      style: _kCertificateScrollbarStyle,
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                        ),
+                      child: LayoutBuilder(
+                        builder: (context, previewConstraints) {
+                          return _buildScaledCertificatePreview(
+                            canvasSize: canvasSize,
+                            backgroundImageProvider: backgroundImageProvider,
+                            viewW: previewConstraints.maxWidth,
+                            viewH: previewConstraints.maxHeight,
+                          );
+                        },
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                       child: _BottomActions(
                         c: c,
                         onSave: _onSave,
