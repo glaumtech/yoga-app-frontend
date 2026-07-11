@@ -3260,7 +3260,10 @@ class ParticipantController extends GetxController {
     String eventId,
     int categoryId,
   ) {
-    final fee = compController.resolveCategoryFeeRupees(eventId, categoryId);
+    final fee = compController.resolveCategoryPayableFeeRupees(
+      eventId,
+      categoryId,
+    );
     return (fee * 100).round();
   }
 

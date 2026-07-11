@@ -29,6 +29,8 @@ class CompetitionModel {
   final List<int>? categoryIds; // e.g., [1, 2, 3] - for API submission
   final Map<String, double>?
   categoryAmounts; // e.g., {"1": 500.0, "2": 600.0} - key is category ID as string
+  /// Per-category: when true, amount already includes gateway/platform fees.
+  final Map<String, bool>? categoryExtraFeeIncluded;
   final List<String>? stages; // e.g., ["A", "B", "C"] - for display/parsing
   final List<int>? stageIds; // e.g., [1, 2, 3] - for API submission
   final Map<String, List<int>>?
@@ -68,6 +70,7 @@ class CompetitionModel {
     this.categories,
     this.categoryIds,
     this.categoryAmounts,
+    this.categoryExtraFeeIncluded,
     this.stages,
     this.stageIds,
     this.stageGroups,
@@ -106,6 +109,23 @@ class CompetitionModel {
     final normalized = value.toString().trim().toLowerCase();
     if (normalized.isEmpty) return defaultValue;
     return normalized == 'true' || normalized == '1' || normalized == 'yes';
+  }
+
+  static bool? parseNullableBool(dynamic value) {
+    if (value == null) return null;
+    return parseBool(value);
+  }
+
+  static Map<String, bool> parseCategoryExtraFeeIncludedMap(dynamic raw) {
+    if (raw is! Map) return {};
+    final result = <String, bool>{};
+    for (final entry in raw.entries) {
+      final parsed = parseNullableBool(entry.value);
+      if (parsed != null) {
+        result[entry.key.toString()] = parsed;
+      }
+    }
+    return result;
   }
 
   /// Handles null API values and hot-reload instances missing newer bool fields.
@@ -371,6 +391,17 @@ class CompetitionModel {
               ),
             )
           : null,
+      categoryExtraFeeIncluded: parseCategoryExtraFeeIncludedMap(
+        json['categoryExtraFeeIncluded'] ??
+            json['categoryExtraFeeIncludedById'] ??
+            json['category_extra_fee_included'],
+      ).isEmpty
+          ? null
+          : parseCategoryExtraFeeIncludedMap(
+              json['categoryExtraFeeIncluded'] ??
+                  json['categoryExtraFeeIncludedById'] ??
+                  json['category_extra_fee_included'],
+            ),
       brochureUrl:
           json['brochureUrl']?.toString() ?? json['brochure_url']?.toString(),
       registrationUrl: json['registrationUrl']?.toString(),
@@ -440,6 +471,9 @@ class CompetitionModel {
         'categoryIds': categoryIds,
       if (categoryAmounts != null && categoryAmounts!.isNotEmpty)
         'categoryAmounts': categoryAmounts,
+      if (categoryExtraFeeIncluded != null &&
+          categoryExtraFeeIncluded!.isNotEmpty)
+        'categoryExtraFeeIncluded': categoryExtraFeeIncluded,
       if (stageIds != null && stageIds!.isNotEmpty) 'stageIds': stageIds,
       if (stageGroups != null && stageGroups!.isNotEmpty)
         'stageGroups': stageGroups,
@@ -486,6 +520,7 @@ class CompetitionModel {
     List<String>? categories,
     List<int>? categoryIds,
     Map<String, double>? categoryAmounts,
+    Map<String, bool>? categoryExtraFeeIncluded,
     List<String>? stages,
     List<int>? stageIds,
     Map<String, List<int>>? stageGroups,
@@ -523,6 +558,8 @@ class CompetitionModel {
       categories: categories ?? this.categories,
       categoryIds: categoryIds ?? this.categoryIds,
       categoryAmounts: categoryAmounts ?? this.categoryAmounts,
+      categoryExtraFeeIncluded:
+          categoryExtraFeeIncluded ?? this.categoryExtraFeeIncluded,
       stages: stages ?? this.stages,
       stageIds: stageIds ?? this.stageIds,
       stageGroups: stageGroups ?? this.stageGroups,
@@ -621,6 +658,7 @@ class HomeCompetitionModel {
   final String? displayAdFrom;
   final List<String> categories;
   final Map<String, double> categoryAmounts;
+  final Map<String, bool> categoryExtraFeeIncluded;
   final String? brochureUrl;
   final String? brochureFilePath;
   final String status;
@@ -647,6 +685,7 @@ class HomeCompetitionModel {
     this.displayAdFrom,
     this.categories = const [],
     this.categoryAmounts = const {},
+    this.categoryExtraFeeIncluded = const {},
     this.brochureUrl,
     this.brochureFilePath,
     this.status = 'upcoming',
@@ -698,6 +737,11 @@ class HomeCompetitionModel {
           ? List<String>.from(json['categories'])
           : [],
       categoryAmounts: amounts,
+      categoryExtraFeeIncluded: CompetitionModel.parseCategoryExtraFeeIncludedMap(
+        json['categoryExtraFeeIncluded'] ??
+            json['categoryExtraFeeIncludedById'] ??
+            json['category_extra_fee_included'],
+      ),
       brochureUrl: json['brochureUrl']?.toString(),
       brochureFilePath: json['brochureFilePath']?.toString(),
       status: json['status']?.toString() ?? 'upcoming',

@@ -6,8 +6,10 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/storage_service.dart';
+import '../../../core/services/first_competition_gate_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/auth_controller.dart';
+import '../../controllers/competition_controller.dart';
 import '../../controllers/organization_update_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/location/district_search_field.dart';
@@ -450,12 +452,21 @@ class OrganizationUpdateScreen extends StatelessWidget {
         SnackbarHelper.show(
           title: 'Updated',
           message: wasMandatory
-              ? 'Organization details saved. You can now use the app.'
+              ? 'Organization details saved. Please create your first competition to continue.'
               : 'Organization details updated successfully',
           backgroundColor: Colors.green,
         );
         if (wasMandatory && !c.mandatoryMode.value) {
-          context.go(AppRoutes.home);
+          final firstCompetitionGate =
+              Get.isRegistered<FirstCompetitionGateService>()
+              ? Get.find<FirstCompetitionGateService>()
+              : Get.put(FirstCompetitionGateService(), permanent: true);
+          await firstCompetitionGate.activateAfterMandatoryOrganizationSave();
+          if (Get.isRegistered<CompetitionController>()) {
+            Get.find<CompetitionController>().enterFirstCompetitionOnboardingMode();
+          }
+          if (!context.mounted) return;
+          context.go(AppRoutes.createCompetition);
         }
       } else if (c.errorMessage.value.isNotEmpty) {
         SnackbarHelper.show(

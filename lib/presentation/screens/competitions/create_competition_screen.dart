@@ -13,6 +13,11 @@ import '../../../core/utils/permission_store.dart';
 import '../../../config/app_config.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../data/models/competition_model.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/services/first_competition_gate_service.dart';
+import '../../../routes/app_routes.dart';
+import '../../controllers/auth_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../models/competition_grade_entry.dart';
 import '../../widgets/admin_sidebar_layout.dart';
@@ -32,14 +37,70 @@ class CreateCompetitionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = Get.put(CompetitionController());
+    final firstCompetitionGate =
+        Get.isRegistered<FirstCompetitionGateService>()
+        ? Get.find<FirstCompetitionGateService>()
+        : Get.put(FirstCompetitionGateService(), permanent: true);
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    return AdminSidebarLayout(
-      title: 'COMPETITIONS',
-      child: Container(
+    bool isMandatoryMode() {
+      firstCompetitionGate.requiresFirstCompetition.value;
+      return StorageService.getBool(AppConstants.firstCompetitionRequiredKey) ==
+              true ||
+          firstCompetitionGate.isGateActive();
+    }
+
+    Future<void> onLogout() async {
+      final authController = Get.find<AuthController>();
+      await authController.signOut();
+      if (!context.mounted) return;
+      context.go(AppRoutes.login);
+    }
+
+    Widget buildMandatoryBanner() {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        margin: EdgeInsets.only(
+          top: isMobile ? 8 : 10,
+          bottom: 12,
+          left: isMobile ? 16 : 24,
+          right: isMobile ? 16 : 24,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: Colors.orange.shade800,
+              size: 22,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Please create your first competition and complete payment to continue using the application.',
+                style: TextStyle(
+                  color: Colors.orange.shade900,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildPageContent({required bool mandatory}) {
+      return Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -55,53 +116,69 @@ class CreateCompetitionScreen extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-              // Toggle Buttons
-              Padding(
-                padding: EdgeInsets.only(
-                  top: isMobile ? 8 : 10,
-                  bottom: 0,
-                  left: isMobile ? 16 : 24,
-                  right: isMobile ? 16 : 24,
-                ),
-                child: Obx(
-                  () => ToggleButtonGroup(
-                    options: [
-                      ToggleButtonOption(
-                        label: controller.isViewMode.value
-                            ? ' VIEW'
-                            : controller.isEditMode.value
-                            ? ' EDIT'
-                            : ' CREATE',
-                        icon: controller.isViewMode.value
-                            ? Icons.visibility
-                            : controller.isEditMode.value
-                            ? Icons.edit
-                            : Icons.add,
-                      ),
-                      const ToggleButtonOption(label: '≡ LIST'),
-                    ],
-                    selectedIndex: controller.isListView.value ? 1 : 0,
-                    onTap: (index) => controller.toggleViewMode(index == 1),
+              if (mandatory) buildMandatoryBanner(),
+              if (!mandatory)
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: isMobile ? 8 : 10,
+                    bottom: 0,
+                    left: isMobile ? 16 : 24,
+                    right: isMobile ? 16 : 24,
+                  ),
+                  child: Obx(
+                    () => ToggleButtonGroup(
+                      options: [
+                        ToggleButtonOption(
+                          label: controller.isViewMode.value
+                              ? ' VIEW'
+                              : controller.isEditMode.value
+                              ? ' EDIT'
+                              : ' CREATE',
+                          icon: controller.isViewMode.value
+                              ? Icons.visibility
+                              : controller.isEditMode.value
+                              ? Icons.edit
+                              : Icons.add,
+                        ),
+                        const ToggleButtonOption(label: '≡ LIST'),
+                      ],
+                      selectedIndex: controller.isListView.value ? 1 : 0,
+                      onTap: (index) => controller.toggleViewMode(index == 1),
+                    ),
                   ),
                 ),
-              ),
-              // Content (Create Form or List View)
               Expanded(
                 child: Obx(
-                  () => controller.isListView.value
+                  () => controller.isListView.value && !mandatory
                       ? const CompetitionsListScreen()
                       : PinnedVerticalScrollView(
                           padding: EdgeInsets.all(isMobile ? 16 : 10),
                           child: Center(
                             child: ConstrainedBox(
-                              constraints: BoxConstraints(
+                              constraints: const BoxConstraints(
                                 maxWidth: double.infinity,
                               ),
-                              child: _buildForm(
-                                context,
-                                controller,
-                                isMobile,
-                                isTablet,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _buildForm(
+                                    context,
+                                    controller,
+                                    isMobile,
+                                    isTablet,
+                                  ),
+                                  if (mandatory) ...[
+                                    const SizedBox(height: 16),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: OutlinedButton.icon(
+                                        onPressed: onLogout,
+                                        icon: const Icon(Icons.logout, size: 18),
+                                        label: const Text('Logout'),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           ),
@@ -111,8 +188,38 @@ class CreateCompetitionScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
+    }
+
+    return Obx(() {
+      final mandatory = isMandatoryMode();
+      if (mandatory) {
+        if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+          controller.enterFirstCompetitionOnboardingMode();
+        } else {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            controller.enterFirstCompetitionOnboardingMode();
+          });
+        }
+        return PopScope(
+          canPop: false,
+          child: Scaffold(
+            appBar: AppBar(
+              automaticallyImplyLeading: false,
+              title: const Text('Create Your First Competition'),
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+            ),
+            body: buildPageContent(mandatory: true),
+          ),
+        );
+      }
+
+      return AdminSidebarLayout(
+        title: 'COMPETITIONS',
+        child: buildPageContent(mandatory: false),
+      );
+    });
   }
 
   Widget _buildForm(
@@ -4054,52 +4161,158 @@ class _CategoryAmountFieldState extends State<_CategoryAmountField> {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(
-      () => TextFormField(
-        controller: _amountController,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        readOnly: widget.controller.isViewMode.value,
-        style: TextStyle(
-          fontSize: widget.isMobile ? 14 : 15,
-          fontWeight: FontWeight.w500,
-        ),
-        decoration: InputDecoration(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey[400]!),
+    return Obx(() {
+      final categoryId =
+          widget.controller.getCategoryIdByName(widget.category);
+      final storedAmount = categoryId != null
+          ? widget.controller.categoryAmounts[categoryId.toString()] ?? 0.0
+          : 0.0;
+      final includePlatformFee = categoryId != null
+          ? widget.controller.categoryExtraFeeIncludedFor(categoryId)
+          : false;
+      if (categoryId != null) {
+        widget.controller.categoryIncludeFee[categoryId.toString()];
+      }
+      widget.controller.onDemandPlatformFeePercent.value;
+      widget.controller.onDemandPaymentGatewayFeePercent.value;
+      final showFeeBreakdown =
+          widget.controller.isOnDemandOrg.value && storedAmount > 0;
+      final breakdown = showFeeBreakdown && categoryId != null
+          ? widget.controller.breakdownCategoryAmount(
+              storedAmount,
+              includePlatformFee: includePlatformFee,
+              categoryId: categoryId,
+            )
+          : null;
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            readOnly: widget.controller.isViewMode.value,
+            style: TextStyle(
+              fontSize: widget.isMobile ? 14 : 15,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[400]!),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[400]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
+              ),
+              filled: true,
+              fillColor: widget.controller.isViewMode.value
+                  ? Colors.grey[200]
+                  : Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: widget.isMobile ? 14 : 16,
+              ),
+              isDense: false,
+              prefixText: '₹ ',
+              prefixStyle: TextStyle(
+                fontSize: widget.isMobile ? 14 : 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+            onChanged: widget.controller.isViewMode.value
+                ? null
+                : (value) {
+                    final amount = double.tryParse(value) ?? 0.0;
+                    widget.controller.updateCategoryAmount(
+                      widget.category,
+                      amount,
+                    );
+                  },
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey[400]!),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
-          ),
-          filled: true,
-          fillColor: widget.controller.isViewMode.value
-              ? Colors.grey[200]
-              : Colors.white,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: widget.isMobile ? 14 : 16,
-          ),
-          isDense: false,
-          prefixText: '₹ ',
-          prefixStyle: TextStyle(
-            fontSize: widget.isMobile ? 14 : 15,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey[800],
-          ),
-        ),
-        onChanged: widget.controller.isViewMode.value
-            ? null
-            : (value) {
-                final amount = double.tryParse(value) ?? 0.0;
-                widget.controller.updateCategoryAmount(widget.category, amount);
-              },
-      ),
-    );
+          if (widget.controller.isOnDemandOrg.value && categoryId != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Checkbox(
+                  value: includePlatformFee,
+                  onChanged: widget.controller.isViewMode.value
+                      ? null
+                      : (value) {
+                          widget.controller.toggleCategoryIncludeFee(
+                            widget.category,
+                            value,
+                          );
+                        },
+                  activeColor: AppTheme.primaryColor,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                Text(
+                  'INCLUDE FEE',
+                  style: TextStyle(
+                    fontSize: widget.isMobile ? 11 : 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (breakdown != null) ...[
+            const SizedBox(height: 6),
+            if (includePlatformFee) ...[
+              Text(
+                'Amount: ₹${breakdown.baseAmount.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: widget.isMobile ? 11 : 12,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Fee: ₹${breakdown.totalFee.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: widget.isMobile ? 11 : 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Total: ₹${breakdown.totalAmount.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: widget.isMobile ? 11 : 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ] else ...[
+              Text(
+                'Total payable: ₹${breakdown.totalAmount.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: widget.isMobile ? 11 : 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Fee: ₹${breakdown.totalFee.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: widget.isMobile ? 11 : 12,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ],
+          ],
+        ],
+      );
+    });
   }
 }
 

@@ -11,6 +11,8 @@ class AppConstants {
   static const String permissionKeysKey = 'permission_keys';
   static const String orgMandatoryUpdateRequiredKey =
       'org_mandatory_update_required';
+  static const String firstCompetitionRequiredKey =
+      'first_competition_required';
   static const String usersListRecentCompetitionsKey =
       'users_list_recent_competitions';
 

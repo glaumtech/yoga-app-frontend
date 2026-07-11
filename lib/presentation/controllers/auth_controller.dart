@@ -8,6 +8,7 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/models/user_model.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/organization_mandatory_gate_service.dart';
+import '../../core/services/first_competition_gate_service.dart';
 import '../../routes/app_routes.dart';
 import 'participant_controller.dart';
 import 'participant_registration_form_controller.dart';
@@ -348,7 +349,21 @@ class AuthController extends GetxController {
                   if (needsOrgUpdate) {
                     context.go(AppRoutes.organizationComplete);
                   } else {
-                    context.go(AppRoutes.home);
+                    final firstCompetitionGate =
+                        Get.isRegistered<FirstCompetitionGateService>()
+                        ? Get.find<FirstCompetitionGateService>()
+                        : Get.put(
+                            FirstCompetitionGateService(),
+                            permanent: true,
+                          );
+                    final needsFirstCompetition =
+                        await firstCompetitionGate.evaluateForCurrentUser();
+                    if (!context.mounted) return;
+                    if (needsFirstCompetition) {
+                      context.go(AppRoutes.createCompetition);
+                    } else {
+                      context.go(AppRoutes.home);
+                    }
                   }
                 } else {
                   // Navigate to home for other user types
@@ -419,6 +434,9 @@ class AuthController extends GetxController {
 
     if (Get.isRegistered<OrganizationMandatoryGateService>()) {
       await Get.find<OrganizationMandatoryGateService>().clear();
+    }
+    if (Get.isRegistered<FirstCompetitionGateService>()) {
+      await Get.find<FirstCompetitionGateService>().clear();
     }
 
     // Clear any remaining cached/local app data

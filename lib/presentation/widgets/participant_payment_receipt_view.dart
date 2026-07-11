@@ -113,11 +113,18 @@ class ParticipantPaymentReceiptView extends StatelessWidget {
       return content;
     }
 
-    return ColoredBox(
+    return Container(
+      width: double.infinity,
       color: pageBackground,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-        child: content,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+            child: content,
+          ),
+        ),
       ),
     );
   }

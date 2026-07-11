@@ -32,13 +32,6 @@ class RegistrationPaymentSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Registration fee',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
         if (!open)
           Container(
             padding: const EdgeInsets.all(12),
@@ -56,11 +49,10 @@ class RegistrationPaymentSection extends StatelessWidget {
             if (fee == null || fee <= 0) return const SizedBox.shrink();
             final total = _resolveTotalPayable(fee);
             return Text(
-              'Total payable: ₹${total.toStringAsFixed(2)}',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+              'Registration fee: ₹${total.toStringAsFixed(2)}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
             );
           }),
           const SizedBox(height: 8),
@@ -75,17 +67,36 @@ class RegistrationPaymentSection extends StatelessWidget {
 
   double _resolveTotalPayable(double baseFee) {
     final comp = competitionController;
-    if (comp != null) {
-      // Touch observables so Obx rebuilds when on-demand fee settings load.
-      comp.onDemandExtraFeeForParticipantReg.value;
-      comp.onDemandPaymentGatewayFeePercent.value;
-      comp.onDemandPlatformFeePercent.value;
-      return comp.calculateOnDemandTotalWithFees(
+    final eventId = participantController.selectedEventId.value;
+    if (comp != null && categoryId != null && eventId.isNotEmpty) {
+      comp.categoryIncludeFee[categoryId.toString()];
+      return comp.resolveCategoryPayableFeeRupees(eventId, categoryId!);
+    }
+    if (comp != null && categoryId != null) {
+      return comp.calculateCategoryAmountWithFees(
         baseFee,
-        forParticipantRegistration: true,
+        extraFeeIncluded: _resolveExtraFeeIncluded(),
+        categoryId: categoryId,
       );
     }
     return baseFee;
+  }
+
+  bool? _resolveExtraFeeIncluded() {
+    if (categoryId == null) return null;
+    final key = categoryId.toString();
+    final comp = competitionController;
+    final eventId = participantController.selectedEventId.value;
+    if (comp != null && eventId.isNotEmpty) {
+      comp.categoryIncludeFee[key];
+      return comp.resolveCategoryExtraFeeIncluded(eventId, categoryId!);
+    }
+    if (homeCompetition != null) {
+      if (homeCompetition!.categoryExtraFeeIncluded.containsKey(key)) {
+        return homeCompetition!.categoryExtraFeeIncluded[key];
+      }
+    }
+    return null;
   }
 
   bool _hasCategoryFee() {

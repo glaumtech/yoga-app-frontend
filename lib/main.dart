@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'core/theme/role_theme_controller.dart';
 import 'core/navigation/root_scaffold_messenger_key.dart';
 import 'core/services/organization_mandatory_gate_service.dart';
+import 'core/services/first_competition_gate_service.dart';
 import 'core/utils/storage_service.dart';
 import 'presentation/controllers/auth_controller.dart';
 import 'presentation/controllers/participant_controller.dart';
@@ -31,9 +32,17 @@ void main() async {
 
   final orgGate = Get.put(OrganizationMandatoryGateService(), permanent: true);
   await orgGate.initFromStorage();
+
+  final firstCompetitionGate =
+      Get.put(FirstCompetitionGateService(), permanent: true);
+  await firstCompetitionGate.initFromStorage();
+
   if (StorageService.getString(AppConstants.tokenKey) != null) {
     unawaited(
-      orgGate.evaluateForCurrentUser().then((_) => AppRouter.refresh()),
+      orgGate.evaluateForCurrentUser().then((_) async {
+        await firstCompetitionGate.evaluateForCurrentUser();
+        AppRouter.refresh();
+      }),
     );
   }
 

@@ -13,6 +13,8 @@ import '../../core/constants/championship_style.dart';
 import '../../core/utils/storage_service.dart';
 import '../../core/utils/dialog_helper.dart';
 import '../../core/utils/snackbar_helper.dart';
+import '../../core/services/first_competition_gate_service.dart';
+import '../../routes/app_router.dart';
 import '../../core/utils/photo_upload_processor.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
@@ -179,6 +181,7 @@ class CompetitionController extends GetxController {
   final RxDouble onDemandPlatformFeePercent = 3.0.obs;
   final RxBool onDemandExtraFeeForCompetition = true.obs;
   final RxBool onDemandExtraFeeForParticipantReg = false.obs;
+  final RxMap<String, bool> categoryIncludeFee = <String, bool>{}.obs;
   final RxString organizationPaymentModel =
       SubscriptionCatalogFilter.onDemandModeKey.obs;
   final RxBool isProcessingCompetitionPayment = false.obs;
@@ -522,7 +525,13 @@ class CompetitionController extends GetxController {
         ((existing.stageGroups != null && existing.stageGroups!.isNotEmpty) ||
             (existing.stageGroupLabels != null &&
                 existing.stageGroupLabels!.isNotEmpty));
-    if (hasGroupData) {
+    final hasCategoryFeeData = existing != null &&
+        ((existing.categoryAmounts != null &&
+                existing.categoryAmounts!.isNotEmpty) ||
+            (existing.categoryExtraFeeIncluded != null &&
+                existing.categoryExtraFeeIncluded!.isNotEmpty));
+    if (hasGroupData && hasCategoryFeeData) {
+      _syncCategoryIncludeFeeFromModel(existing);
       return;
     }
 
@@ -537,6 +546,7 @@ class CompetitionController extends GetxController {
         final response = await _repository.getCompetitionById(numericId);
         if (response.success && response.data != null) {
           _upsertCompetition(response.data!);
+          _syncCategoryIncludeFeeFromModel(response.data!);
           return;
         }
       }
@@ -545,7 +555,9 @@ class CompetitionController extends GetxController {
         (c) => c.id?.toString() == id,
       );
       if (home != null) {
-        _upsertCompetition(_competitionFromHome(home, existing));
+        final merged = _competitionFromHome(home, existing);
+        _upsertCompetition(merged);
+        _syncCategoryIncludeFeeFromModel(merged);
       }
     } catch (e) {
       print('Error loading competition for registration: $e');
@@ -599,6 +611,9 @@ class CompetitionController extends GetxController {
       categoryAmounts: home.categoryAmounts.isNotEmpty
           ? Map<String, double>.from(home.categoryAmounts)
           : existing?.categoryAmounts,
+      categoryExtraFeeIncluded: home.categoryExtraFeeIncluded.isNotEmpty
+          ? Map<String, bool>.from(home.categoryExtraFeeIncluded)
+          : existing?.categoryExtraFeeIncluded,
       stageGroups: existing?.stageGroups,
       stageIds: existing?.stageIds,
       stages: existing?.stages,
@@ -606,8 +621,20 @@ class CompetitionController extends GetxController {
     );
   }
 
+  void enterFirstCompetitionOnboardingMode() {
+    if (!isListView.value && !isEditMode.value && !isViewMode.value) {
+      return;
+    }
+    isListView.value = false;
+    isEditMode.value = false;
+    isViewMode.value = false;
+  }
+
   void onInit() {
     super.onInit();
+    if (_isFirstCompetitionGateActive()) {
+      enterFirstCompetitionOnboardingMode();
+    }
     // Initialize search controller text
     searchController.text = searchQuery.value;
     // Initialize search controller listener
@@ -640,6 +667,7 @@ class CompetitionController extends GetxController {
             data['extraFeeIncludedForCompetition'] == true;
         onDemandExtraFeeForParticipantReg.value =
             data['extraFeeIncludedForParticipantReg'] == true;
+        _syncCategoryPlatformFeeDefault();
       } else {
         _applyOnDemandDefaults();
       }
@@ -648,6 +676,130 @@ class CompetitionController extends GetxController {
     } finally {
       isLoadingOnDemandContext.value = false;
     }
+  }
+
+  void _syncCategoryPlatformFeeDefault() {
+    if (isEditMode.value || isViewMode.value) return;
+    for (final id in selectedCategoryIds) {
+      final key = id.toString();
+      if (!categoryIncludeFee.containsKey(key)) {
+        categoryIncludeFee[key] = onDemandExtraFeeForParticipantReg.value;
+      }
+    }
+  }
+
+  bool categoryExtraFeeIncludedFor(int categoryId) {
+    return categoryIncludeFee[categoryId.toString()] ??
+        onDemandExtraFeeForParticipantReg.value;
+  }
+
+  bool categoryExtraFeeIncludedForName(String categoryName) {
+    final categoryId = getCategoryIdByName(categoryName);
+    if (categoryId == null) return onDemandExtraFeeForParticipantReg.value;
+    return categoryExtraFeeIncludedFor(categoryId);
+  }
+
+  Map<String, bool> buildCategoryExtraFeeIncludedForSubmit() {
+    final result = <String, bool>{};
+    for (final id in selectedCategoryIds) {
+      result[id.toString()] = categoryExtraFeeIncludedFor(id);
+    }
+    return result;
+  }
+
+  void toggleCategoryIncludeFee(String categoryName, bool? value) {
+    final categoryId = getCategoryIdByName(categoryName);
+    if (categoryId == null) return;
+    final key = categoryId.toString();
+    final newInclude = value ?? false;
+    final oldInclude = categoryExtraFeeIncludedFor(categoryId);
+    if (newInclude != oldInclude) {
+      final stored = categoryAmounts[key] ?? 0.0;
+      if (stored > 0) {
+        final gatewayRate = onDemandPaymentGatewayFeePercent.value / 100;
+        final platformRate = onDemandPlatformFeePercent.value / 100;
+        final feeMultiplier = 1 + gatewayRate + platformRate;
+        categoryAmounts[key] = newInclude
+            ? _roundMoney(stored * feeMultiplier)
+            : _roundMoney(stored / feeMultiplier);
+        categoryAmounts.refresh();
+      }
+    }
+    categoryIncludeFee[key] = newInclude;
+  }
+
+  void _ensureCategoryIncludeFeeDefault(int categoryId) {
+    final key = categoryId.toString();
+    if (!categoryIncludeFee.containsKey(key)) {
+      categoryIncludeFee[key] = onDemandExtraFeeForParticipantReg.value;
+    }
+  }
+
+  double _roundMoney(double value) => double.parse(value.toStringAsFixed(2));
+
+  /// Splits or totals a stored category amount based on include/exclude mode.
+  ({
+    double baseAmount,
+    double platformFee,
+    double gatewayFee,
+    double totalFee,
+    double totalAmount,
+  }) breakdownCategoryAmount(
+    double storedAmount, {
+    bool? includePlatformFee,
+    int? categoryId,
+  }) {
+    final include = includePlatformFee ??
+        (categoryId != null
+            ? categoryExtraFeeIncludedFor(categoryId)
+            : onDemandExtraFeeForParticipantReg.value);
+    final gatewayRate = onDemandPaymentGatewayFeePercent.value / 100;
+    final platformRate = onDemandPlatformFeePercent.value / 100;
+    final feeMultiplier = 1 + gatewayRate + platformRate;
+
+    if (include) {
+      final total = storedAmount;
+      final base = total / feeMultiplier;
+      final gateway = base * gatewayRate;
+      final platform = base * platformRate;
+      return (
+        baseAmount: _roundMoney(base),
+        platformFee: _roundMoney(platform),
+        gatewayFee: _roundMoney(gateway),
+        totalFee: _roundMoney(gateway + platform),
+        totalAmount: _roundMoney(total),
+      );
+    }
+
+    final base = storedAmount;
+    final gateway = base * gatewayRate;
+    final platform = base * platformRate;
+    return (
+      baseAmount: _roundMoney(base),
+      platformFee: _roundMoney(platform),
+      gatewayFee: _roundMoney(gateway),
+      totalFee: _roundMoney(gateway + platform),
+      totalAmount: _roundMoney(base + gateway + platform),
+    );
+  }
+
+  double calculateCategoryAmountWithFees(
+    double storedAmount, {
+    bool? extraFeeIncluded,
+    int? categoryId,
+  }) {
+    final include = extraFeeIncluded ??
+        (categoryId != null
+            ? categoryExtraFeeIncludedFor(categoryId)
+            : onDemandExtraFeeForParticipantReg.value);
+    if (include) {
+      return storedAmount;
+    }
+    return breakdownCategoryAmount(
+      storedAmount,
+      includePlatformFee: false,
+      categoryId: categoryId,
+    ).totalAmount;
   }
 
   void _applyOnDemandDefaults() {
@@ -667,10 +819,12 @@ class CompetitionController extends GetxController {
   double calculateOnDemandTotalWithFees(
     double baseAmount, {
     bool forParticipantRegistration = false,
+    bool? extraFeeIncludedOverride,
   }) {
-    final feesIncluded = forParticipantRegistration
-        ? onDemandExtraFeeForParticipantReg.value
-        : onDemandExtraFeeForCompetition.value;
+    final feesIncluded = extraFeeIncludedOverride ??
+        (forParticipantRegistration
+            ? onDemandExtraFeeForParticipantReg.value
+            : onDemandExtraFeeForCompetition.value);
     if (feesIncluded) {
       return baseAmount;
     }
@@ -1345,6 +1499,64 @@ class CompetitionController extends GetxController {
     return _feeFromAmountMap(competition?.categoryAmounts, categoryId);
   }
 
+  bool resolveCategoryExtraFeeIncluded(String competitionId, int categoryId) {
+    final key = categoryId.toString();
+    if (categoryIncludeFee.containsKey(key)) {
+      return categoryIncludeFee[key]!;
+    }
+
+    final competition = competitions.firstWhereOrNull(
+      (c) => c.id == competitionId,
+    );
+    final byCompetition = competition?.categoryExtraFeeIncluded;
+    if (byCompetition != null && byCompetition.isNotEmpty) {
+      final byId = byCompetition[key];
+      if (byId != null) return byId;
+      final name = getCategoryNameById(categoryId);
+      if (name != null && byCompetition.containsKey(name)) {
+        return byCompetition[name]!;
+      }
+    }
+
+    final home = homeCompetitions.firstWhereOrNull(
+      (c) => c.id?.toString() == competitionId,
+    );
+    if (home != null) {
+      if (home.categoryExtraFeeIncluded.containsKey(key)) {
+        return home.categoryExtraFeeIncluded[key]!;
+      }
+    }
+
+    return onDemandExtraFeeForParticipantReg.value;
+  }
+
+  /// Participant payable amount after applying per-category include/exclude fee.
+  double resolveCategoryPayableFeeRupees(String competitionId, int categoryId) {
+    final stored = resolveCategoryFeeRupees(competitionId, categoryId);
+    if (stored <= 0) return 0;
+    final include = resolveCategoryExtraFeeIncluded(competitionId, categoryId);
+    return calculateCategoryAmountWithFees(
+      stored,
+      extraFeeIncluded: include,
+      categoryId: categoryId,
+    );
+  }
+
+  void _syncCategoryIncludeFeeFromModel(CompetitionModel? competition) {
+    if (competition?.categoryExtraFeeIncluded == null ||
+        competition!.categoryExtraFeeIncluded!.isEmpty) {
+      return;
+    }
+    for (final entry in competition.categoryExtraFeeIncluded!.entries) {
+      final parsedId = int.tryParse(entry.key);
+      final categoryId = parsedId ?? getCategoryIdByName(entry.key);
+      if (categoryId != null) {
+        categoryIncludeFee[categoryId.toString()] = entry.value;
+      }
+    }
+    categoryIncludeFee.refresh();
+  }
+
   String? getStageNameById(int id) {
     try {
       return stageOptions.firstWhere((opt) => opt.id == id).name;
@@ -1486,6 +1698,7 @@ class CompetitionController extends GetxController {
     if (selectedCategoryIds.contains(championsId)) {
       selectedCategoryIds.remove(championsId);
       categoryAmounts.remove(championsId.toString());
+      categoryIncludeFee.remove(championsId.toString());
     }
   }
 
@@ -1542,9 +1755,11 @@ class CompetitionController extends GetxController {
     if (selectedCategoryIds.contains(categoryId)) {
       selectedCategoryIds.remove(categoryId);
       categoryAmounts.remove(categoryIdStr);
+      categoryIncludeFee.remove(categoryIdStr);
     } else {
       selectedCategoryIds.add(categoryId);
       categoryAmounts[categoryIdStr] = 0.0;
+      _ensureCategoryIncludeFeeDefault(categoryId);
     }
   }
 
@@ -2083,6 +2298,9 @@ class CompetitionController extends GetxController {
         prizeIds: selectedPrizeIds.where((id) => id > 0).toList(),
         categoryIds: selectedCategoryIds.where((id) => id > 0).toList(),
         categoryAmounts: Map<String, double>.from(categoryAmounts),
+        categoryExtraFeeIncluded: isOnDemandOrg.value
+            ? buildCategoryExtraFeeIncludedForSubmit()
+            : null,
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
         championshipStyle: championshipStyle.value?.apiValue,
@@ -2105,13 +2323,19 @@ class CompetitionController extends GetxController {
         final created = response.data!.competition;
         lastSavedCompetitionForQr.value = created;
         await loadCompetitions(resetPage: true);
+        if (Get.isRegistered<FirstCompetitionGateService>()) {
+          await Get.find<FirstCompetitionGateService>().clear();
+        }
+        AppRouter.refresh();
         clearForm();
         _notifySuccess(
           requiresPrepaidCompetitionPayment
               ? 'Payment completed and competition created successfully'
               : 'Competition created successfully',
         );
-        toggleViewMode(true);
+        if (!_isFirstCompetitionGateActive()) {
+          toggleViewMode(true);
+        }
         return true;
       } else {
         lastSavedCompetitionForQr.value = null;
@@ -2236,6 +2460,9 @@ class CompetitionController extends GetxController {
         prizeIds: selectedPrizeIds.where((id) => id > 0).toList(),
         categoryIds: selectedCategoryIds.where((id) => id > 0).toList(),
         categoryAmounts: Map<String, double>.from(categoryAmounts),
+        categoryExtraFeeIncluded: isOnDemandOrg.value
+            ? buildCategoryExtraFeeIncludedForSubmit()
+            : null,
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
         championshipStyle: championshipStyle.value?.apiValue,
@@ -2549,6 +2776,24 @@ class CompetitionController extends GetxController {
     } else {
       selectedCategoryIds.clear();
       categoryAmounts.clear();
+    }
+
+    categoryIncludeFee.clear();
+    if (competition.categoryExtraFeeIncluded != null &&
+        competition.categoryExtraFeeIncluded!.isNotEmpty) {
+      for (final entry in competition.categoryExtraFeeIncluded!.entries) {
+        final parsedId = int.tryParse(entry.key);
+        int? categoryId = parsedId;
+        if (categoryId == null) {
+          categoryId = getCategoryIdByName(entry.key);
+        }
+        if (categoryId != null) {
+          categoryIncludeFee[categoryId.toString()] = entry.value;
+        }
+      }
+    }
+    for (final id in selectedCategoryIds) {
+      _ensureCategoryIncludeFeeDefault(id);
     }
 
     if (championshipStyle.value == ChampionshipStyle.fromFirstPlaceWinners) {
@@ -2885,6 +3130,9 @@ class CompetitionController extends GetxController {
 
   // Toggle view mode
   void toggleViewMode(bool isList) {
+    if (isList && _isFirstCompetitionGateActive()) {
+      return;
+    }
     isListView.value = isList;
     if (isList) {
       // Reset edit mode when switching to list view
@@ -2932,6 +3180,7 @@ class CompetitionController extends GetxController {
     selectedPrizeIds.clear();
     selectedCategoryIds.clear();
     categoryAmounts.clear();
+    categoryIncludeFee.clear();
     selectedStageIds.clear();
     stageGroups.clear();
     clearGradeEntries();
@@ -2946,5 +3195,14 @@ class CompetitionController extends GetxController {
     isEditMode.value = false;
     isViewMode.value = false;
     competitionToEdit.value = null;
+  }
+
+  bool _isFirstCompetitionGateActive() {
+    if (StorageService.getBool(AppConstants.firstCompetitionRequiredKey) ==
+        true) {
+      return true;
+    }
+    if (!Get.isRegistered<FirstCompetitionGateService>()) return false;
+    return Get.find<FirstCompetitionGateService>().isGateActive();
   }
 }

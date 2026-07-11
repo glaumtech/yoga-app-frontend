@@ -152,6 +152,7 @@ class AdaptivePaymentSection extends StatelessWidget {
   Widget _buildOnlineSection(BuildContext context) {
     final fee = _resolveCategoryFee();
     final open = homeCompetition?.registrationOpen ?? true;
+    final totalPayable = fee != null && fee > 0 ? _resolveTotalPayable(fee) : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,9 +176,9 @@ class AdaptivePaymentSection extends StatelessWidget {
             ),
           )
         else ...[
-          if (fee != null && fee > 0)
+          if (totalPayable != null)
             Text(
-              'Amount: ₹${fee.toStringAsFixed(0)}',
+              'Amount: ₹${totalPayable.toStringAsFixed(2)}',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           const SizedBox(height: 8),
@@ -192,13 +193,51 @@ class AdaptivePaymentSection extends StatelessWidget {
   }
 
   double? _resolveCategoryFee() {
-    if (categoryId != null && competitionController != null) {
-      final amounts = competitionController!.categoryAmounts;
-      return amounts[categoryId.toString()];
+    if (categoryId == null) return null;
+    if (competitionController != null &&
+        controller.selectedEventId.value.isNotEmpty) {
+      return competitionController!.resolveCategoryFeeRupees(
+        controller.selectedEventId.value,
+        categoryId!,
+      );
     }
     if (homeCompetition != null && categoryId != null) {
       return homeCompetition!.categoryAmounts[categoryId.toString()];
     }
     return null;
+  }
+
+  bool? _resolveExtraFeeIncluded() {
+    if (categoryId == null) return null;
+    final key = categoryId.toString();
+    final comp = competitionController;
+    final eventId = controller.selectedEventId.value;
+    if (comp != null && eventId.isNotEmpty) {
+      comp.categoryIncludeFee[key];
+      return comp.resolveCategoryExtraFeeIncluded(eventId, categoryId!);
+    }
+    if (homeCompetition != null) {
+      if (homeCompetition!.categoryExtraFeeIncluded.containsKey(key)) {
+        return homeCompetition!.categoryExtraFeeIncluded[key];
+      }
+    }
+    return null;
+  }
+
+  double _resolveTotalPayable(double baseFee) {
+    final comp = competitionController;
+    final eventId = controller.selectedEventId.value;
+    if (comp != null && categoryId != null && eventId.isNotEmpty) {
+      comp.categoryIncludeFee[categoryId.toString()];
+      return comp.resolveCategoryPayableFeeRupees(eventId, categoryId!);
+    }
+    if (comp != null && categoryId != null) {
+      return comp.calculateCategoryAmountWithFees(
+        baseFee,
+        extraFeeIncluded: _resolveExtraFeeIncluded(),
+        categoryId: categoryId,
+      );
+    }
+    return baseFee;
   }
 }

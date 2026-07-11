@@ -67,6 +67,11 @@ class AppRouter {
         true;
   }
 
+  static bool _requiresFirstCompetition() {
+    return StorageService.getBool(AppConstants.firstCompetitionRequiredKey) ==
+        true;
+  }
+
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: kIsWeb ? AppRoutes.home : AppRoutes.splash,
@@ -185,6 +190,17 @@ class AppRouter {
             return AppRoutes.organizationComplete;
           }
 
+          // Branch admin with no competition yet: lock to competition creation only.
+          final isCompetitionCreateRoute =
+              location == AppRoutes.createCompetition ||
+              location.startsWith(AppRoutes.createCompetition);
+          if (!_requiresMandatoryOrganizationUpdate() &&
+              _requiresFirstCompetition() &&
+              _isBranchAdminFromStorage() &&
+              !isCompetitionCreateRoute) {
+            return AppRoutes.createCompetition;
+          }
+
           // Permission-based route access
           List<String>? requiredKeys;
           if (location == AppRoutes.adminDashboard ||
@@ -202,7 +218,11 @@ class AppRouter {
             ];
           } else if (location == AppRoutes.createCompetition ||
               location.startsWith('/admin/competitions')) {
-            requiredKeys = const ['MENU_COMPETITIONS'];
+            if (_requiresFirstCompetition() && _isBranchAdminFromStorage()) {
+              requiredKeys = null;
+            } else {
+              requiredKeys = const ['MENU_COMPETITIONS'];
+            }
           } else if (location == AppRoutes.userManagement ||
               location.startsWith('/admin/users')) {
             requiredKeys = const ['MENU_USERS'];
@@ -233,7 +253,9 @@ class AppRouter {
             requiredKeys = const ['ORGANIZATION_UPDATE'];
           }
 
-          if (requiredKeys != null && !requiredKeys.any(hasKey)) {
+          if (requiredKeys != null &&
+              !requiredKeys.any(hasKey) &&
+              !(_requiresFirstCompetition() && _isBranchAdminFromStorage())) {
             // If user doesn't have permission for the route, send them home.
             return AppRoutes.home;
           }
