@@ -15,8 +15,10 @@ class JuryScoringScreen extends StatelessWidget {
     required bool isMobile,
     bool isTablet = false,
   }) {
-    final hasScore = scoreText.trim().isNotEmpty;
-    final display = hasScore ? scoreText.trim() : 'Not scored';
+    final trimmed = scoreText.trim();
+    final isSkipped = trimmed.toLowerCase().startsWith('skipped');
+    final hasScore = trimmed.isNotEmpty;
+    final display = hasScore ? trimmed : 'Not scored';
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -24,12 +26,16 @@ class JuryScoringScreen extends StatelessWidget {
         vertical: isMobile ? 5 : 6,
       ),
       decoration: BoxDecoration(
-        color: hasScore
+        color: isSkipped
+            ? Colors.orange.withOpacity(0.12)
+            : hasScore
             ? AppTheme.primaryColor.withOpacity(0.12)
             : Colors.grey[100],
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: hasScore
+          color: isSkipped
+              ? Colors.orange.withOpacity(0.45)
+              : hasScore
               ? AppTheme.primaryColor.withOpacity(0.35)
               : Colors.grey[300]!,
         ),
@@ -39,7 +45,11 @@ class JuryScoringScreen extends StatelessWidget {
         style: TextStyle(
           fontSize: isMobile ? 13 : (isTablet ? 14 : 15),
           fontWeight: FontWeight.w800,
-          color: hasScore ? AppTheme.primaryColor : Colors.grey[700],
+          color: isSkipped
+              ? Colors.orange[900]
+              : hasScore
+              ? AppTheme.primaryColor
+              : Colors.grey[700],
         ),
       ),
     );
@@ -456,7 +466,7 @@ class JuryScoringScreen extends StatelessWidget {
                                       if (!readyToSubmit) ...[
                                         const SizedBox(height: 6),
                                         Text(
-                                          'Please enter scores for all 5 asanas for all participants (whole score $minWhole–$maxWhole).',
+                                          'Please enter scores for all 5 asanas for all participants (whole score $minWhole–$maxWhole, or mark skipped).',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             fontSize: isMobile ? 11 : 13,
@@ -1082,54 +1092,37 @@ class JuryScoringScreen extends StatelessWidget {
                             );
                             final wholeValue = score?['whole'] ?? 0;
                             final decimalValue = score?['decimal'] ?? 0;
+                            final isSkipped = controller.isAsanaSkipped(
+                              participantId,
+                              asanaNum,
+                            );
                             final wholeOptions =
                                 controller.wholeScoreValueOptions;
                             final minWhole = controller.effectiveMinimumMarks;
 
-                            return isMobile
-                                ? Column(
-                                    children: [
-                                      _buildScoreSlider(
-                                        label: '',
-                                        values: wholeOptions,
-                                        currentValue: wholeValue > 0
-                                            ? wholeValue
-                                            : 0,
-                                        onValueChanged: (value) {
-                                          controller.setAsanaScore(
-                                            participantId,
-                                            asanaNum,
-                                            value,
-                                            decimalValue,
-                                          );
-                                        },
-                                        isMobile: isMobile,
+                            return Column(
+                              children: [
+                                _buildSkippedAsanaOption(
+                                  isSkipped: isSkipped,
+                                  skippedMark:
+                                      controller.effectiveSkippedAsanaMarks,
+                                  isMobile: isMobile,
+                                  isTablet: isTablet,
+                                  onChanged: (value) => controller
+                                      .setAsanaSkipped(
+                                        participantId,
+                                        asanaNum,
+                                        value ?? false,
                                       ),
-                                      const SizedBox(height: 6),
-                                      // Decimal slider (0, 0.25, 0.5, 0.75)
-                                      _buildScoreSlider(
-                                        label: '',
-                                        values: [0, 25, 50, 75],
-                                        currentValue: decimalValue,
-                                        onValueChanged: (value) {
-                                          controller.setAsanaScore(
-                                            participantId,
-                                            asanaNum,
-                                            wholeValue > 0
-                                                ? wholeValue
-                                                : minWhole,
-                                            value,
-                                          );
-                                        },
-                                        isMobile: isMobile,
-                                        isDecimal: true,
-                                      ),
-                                    ],
-                                  )
-                                : Row(
-                                    children: [
-                                      Expanded(
-                                        child: _buildScoreSlider(
+                                ),
+                                const SizedBox(height: 8),
+                                Opacity(
+                                  opacity: isSkipped ? 0.45 : 1,
+                                  child: IgnorePointer(
+                                    ignoring: isSkipped,
+                                    child: Column(
+                                      children: [
+                                        _buildScoreSlider(
                                           label: '',
                                           values: wholeOptions,
                                           currentValue: wholeValue > 0
@@ -1144,12 +1137,9 @@ class JuryScoringScreen extends StatelessWidget {
                                             );
                                           },
                                           isMobile: isMobile,
-                                          isTablet: isTablet,
                                         ),
-                                      ),
-                                      SizedBox(width: isTablet ? 12 : 16),
-                                      Expanded(
-                                        child: _buildScoreSlider(
+                                        const SizedBox(height: 6),
+                                        _buildScoreSlider(
                                           label: '',
                                           values: [0, 25, 50, 75],
                                           currentValue: decimalValue,
@@ -1164,12 +1154,14 @@ class JuryScoringScreen extends StatelessWidget {
                                             );
                                           },
                                           isMobile: isMobile,
-                                          isTablet: isTablet,
                                           isDecimal: true,
                                         ),
-                                      ),
-                                    ],
-                                  );
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
                           }),
                         ],
                       ),
@@ -1244,12 +1236,36 @@ class JuryScoringScreen extends StatelessWidget {
                               );
                               final wholeValue = score?['whole'] ?? 0;
                               final decimalValue = score?['decimal'] ?? 0;
+                              final isSkipped = controller.isAsanaSkipped(
+                                participantId,
+                                asanaNum,
+                              );
                               final wholeOptions =
                                   controller.wholeScoreValueOptions;
                               final minWhole = controller.effectiveMinimumMarks;
 
                               return Column(
                                 children: [
+                                  _buildSkippedAsanaOption(
+                                    isSkipped: isSkipped,
+                                    skippedMark:
+                                        controller.effectiveSkippedAsanaMarks,
+                                    isMobile: isMobile,
+                                    isTablet: isTablet,
+                                    onChanged: (value) => controller
+                                        .setAsanaSkipped(
+                                          participantId,
+                                          asanaNum,
+                                          value ?? false,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Opacity(
+                                    opacity: isSkipped ? 0.45 : 1,
+                                    child: IgnorePointer(
+                                      ignoring: isSkipped,
+                                      child: Column(
+                                        children: [
                                   _buildScoreSlider(
                                     label: '',
                                     values: wholeOptions,
@@ -1284,6 +1300,10 @@ class JuryScoringScreen extends StatelessWidget {
                                     isTablet: isTablet,
                                     isDecimal: true,
                                   ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               );
                             }),
@@ -1296,6 +1316,63 @@ class JuryScoringScreen extends StatelessWidget {
         ],
       );
     });
+  }
+
+  Widget _buildSkippedAsanaOption({
+    required bool isSkipped,
+    required int skippedMark,
+    required bool isMobile,
+    required bool isTablet,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return Material(
+      color: isSkipped ? Colors.orange.withOpacity(0.12) : Colors.grey[100],
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: () => onChanged(!isSkipped),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 10 : 12,
+            vertical: isMobile ? 8 : 10,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSkipped
+                  ? Colors.orange.withOpacity(0.55)
+                  : Colors.grey[300]!,
+            ),
+          ),
+          child: Row(
+            children: [
+              Checkbox(
+                value: isSkipped,
+                onChanged: onChanged,
+                activeColor: Colors.orange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Skipped Asana (mark as $skippedMark)',
+                  style: TextStyle(
+                    fontSize: isMobile ? 12 : (isTablet ? 13 : 14),
+                    fontWeight: FontWeight.w700,
+                    color: isSkipped ? Colors.orange[900] : Colors.grey[800],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildScoreSlider({

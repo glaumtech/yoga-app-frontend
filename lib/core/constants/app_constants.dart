@@ -233,8 +233,14 @@ class EndPoints {
   static String competitionParticipantsPrint(int competitionId) =>
       '/reports/competition/$competitionId/print/participants';
 
+  static String competitionInstitutionsPrint(int competitionId) =>
+      '/reports/competition/$competitionId/print/institutions';
+
   static String competitionParticipantsExcel(int competitionId) =>
       '/reports/competition/$competitionId/print/participants/excel';
+
+  static String competitionRegisteredParticipantsExcel(int competitionId) =>
+      '/reports/competition/$competitionId/print/participants/registered/excel';
 
   static String competitionParticipantECertificatePrint(int competitionId) =>
       '/reports/competition/$competitionId/print/participant-e-certificate';

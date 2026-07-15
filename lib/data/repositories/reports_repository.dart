@@ -24,6 +24,9 @@ class ReportsRepository {
     String? registrationPrefix,
     String? institutionKind,
     bool? hasInstitution,
+    String? yogaTeacherName,
+    String? yogaTeacherCell,
+    String? search,
   }) {
     final segments = <String>[];
     if (stageIds != null) {
@@ -90,6 +93,19 @@ class ReportsRepository {
     if (hasInstitution == true) {
       segments.add('hasInstitution=true');
     }
+    if (yogaTeacherName != null && yogaTeacherName.trim().isNotEmpty) {
+      segments.add(
+        'yogaTeacherName=${Uri.encodeQueryComponent(yogaTeacherName.trim())}',
+      );
+    }
+    if (yogaTeacherCell != null && yogaTeacherCell.trim().isNotEmpty) {
+      segments.add(
+        'yogaTeacherCell=${Uri.encodeQueryComponent(yogaTeacherCell.trim())}',
+      );
+    }
+    if (search != null && search.trim().isNotEmpty) {
+      segments.add('search=${Uri.encodeQueryComponent(search.trim())}');
+    }
     if (segments.isEmpty) return '';
     return '?${segments.join('&')}';
   }
@@ -113,6 +129,8 @@ class ReportsRepository {
     String? registrationPrefix,
     String? institutionKind,
     bool? hasInstitution,
+    String? yogaTeacherName,
+    String? yogaTeacherCell,
   }) {
     final segments = <String>[];
     final filter = participantReportQuery(
@@ -130,6 +148,8 @@ class ReportsRepository {
       registrationPrefix: registrationPrefix,
       institutionKind: institutionKind,
       hasInstitution: hasInstitution,
+      yogaTeacherName: yogaTeacherName,
+      yogaTeacherCell: yogaTeacherCell,
     );
     if (filter.isNotEmpty) {
       segments.add(filter.substring(1));
@@ -343,6 +363,8 @@ class ReportsRepository {
     String? registrationPrefix,
     String? institutionKind,
     bool? hasInstitution,
+    String? yogaTeacherName,
+    String? yogaTeacherCell,
   }) async {
     final q = participantsTableQuery(
       page: page,
@@ -362,6 +384,8 @@ class ReportsRepository {
       registrationPrefix: registrationPrefix,
       institutionKind: institutionKind,
       hasInstitution: hasInstitution,
+      yogaTeacherName: yogaTeacherName,
+      yogaTeacherCell: yogaTeacherCell,
     );
 
     final response = await _apiService.getResponse<Map<String, dynamic>>(
@@ -590,6 +614,69 @@ class ReportsRepository {
     }
   }
 
+  Future<ApiResponse<Uint8List>> getCompetitionInstitutionsPrintPdf(
+    int competitionId, {
+    String? institutionKind,
+    bool sortDesc = true,
+    String? search,
+    String? title,
+  }) async {
+    try {
+      final params = <String>[];
+      if (institutionKind != null && institutionKind.trim().isNotEmpty) {
+        params.add(
+          'institutionKind=${Uri.encodeQueryComponent(institutionKind.trim())}',
+        );
+      }
+      params.add('sortDesc=$sortDesc');
+      if (search != null && search.trim().isNotEmpty) {
+        params.add('search=${Uri.encodeQueryComponent(search.trim())}');
+      }
+      if (title != null && title.trim().isNotEmpty) {
+        params.add('title=${Uri.encodeQueryComponent(title.trim())}');
+      }
+      final q = params.isEmpty ? '' : '?${params.join('&')}';
+
+      final path = EndPoints.competitionInstitutionsPrint(competitionId);
+      final url = BaseUrl.baseUrl + path + q;
+      final uri = Uri.parse(url);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept': 'application/pdf',
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to generate Institutions PDF (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error generating Institutions PDF: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
+  }
+
   Future<ApiResponse<Uint8List>> getCompetitionParticipantsPrintPdf(
     int competitionId, {
     List<int>? stageIds,
@@ -600,6 +687,13 @@ class ReportsRepository {
     int? institutionId,
     int? districtId,
     List<String>? genders,
+    List<String>? categoryTypes,
+    bool? spotRegistration,
+    int? age,
+    String? registrationPrefix,
+    String? institutionKind,
+    bool? hasInstitution,
+    String? search,
   }) async {
     try {
       final q = participantReportQuery(
@@ -611,6 +705,13 @@ class ReportsRepository {
         institutionId: institutionId,
         districtId: districtId,
         genders: genders,
+        categoryTypes: categoryTypes,
+        spotRegistration: spotRegistration,
+        age: age,
+        registrationPrefix: registrationPrefix,
+        institutionKind: institutionKind,
+        hasInstitution: hasInstitution,
+        search: search,
       );
 
       final path = EndPoints.competitionParticipantsPrint(competitionId);
@@ -649,6 +750,86 @@ class ReportsRepository {
       return ApiResponse(
         success: false,
         message: 'Error generating Participants PDF: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
+  }
+
+  Future<ApiResponse<Uint8List>> getRegisteredParticipantsExcel(
+    int competitionId, {
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    int? districtId,
+    List<String>? genders,
+    List<String>? categoryTypes,
+    bool? spotRegistration,
+    int? age,
+    String? registrationPrefix,
+    String? institutionKind,
+    bool? hasInstitution,
+    String? search,
+  }) async {
+    try {
+      final q = participantReportQuery(
+        stageIds: stageIds,
+        categoryIds: categoryIds,
+        groupIds: groupIds,
+        stateId: stateId,
+        cityId: cityId,
+        institutionId: institutionId,
+        districtId: districtId,
+        genders: genders,
+        categoryTypes: categoryTypes,
+        spotRegistration: spotRegistration,
+        age: age,
+        registrationPrefix: registrationPrefix,
+        institutionKind: institutionKind,
+        hasInstitution: hasInstitution,
+        search: search,
+      );
+
+      final path =
+          EndPoints.competitionRegisteredParticipantsExcel(competitionId);
+      final url = BaseUrl.baseUrl + path + q;
+      final uri = Uri.parse(url);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept':
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to generate Registered Participants Excel (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message:
+            'Error generating Registered Participants Excel: ${e.toString()}',
         statusCode: 0,
       );
     }

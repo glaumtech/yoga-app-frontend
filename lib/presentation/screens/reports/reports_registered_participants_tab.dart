@@ -18,7 +18,15 @@ import 'reports_participants_tab.dart';
 
 /// Registered participants report (table view, competition filters).
 class ReportsRegisteredParticipantsTab extends StatelessWidget {
-  const ReportsRegisteredParticipantsTab({super.key});
+  const ReportsRegisteredParticipantsTab({
+    super.key,
+    this.controllerTag,
+  });
+
+  /// When set, uses a dedicated GetX controller (for full-screen list route).
+  final String? controllerTag;
+
+  static const String defaultControllerTag = 'reports_registered_tab';
 
   Future<void> _downloadPdf(Uint8List bytes, String filename) async {
     await ReportsParticipantsTabLogic.downloadReportPdfBytes(bytes, filename);
@@ -26,10 +34,18 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabController = Get.put(
-      ReportsRegisteredParticipantsTabController(),
-      permanent: false,
-    );
+    final tag = controllerTag ?? defaultControllerTag;
+    if (!Get.isRegistered<ReportsRegisteredParticipantsTabController>(
+      tag: tag,
+    )) {
+      Get.put(
+        ReportsRegisteredParticipantsTabController(),
+        tag: tag,
+        permanent: false,
+      );
+    }
+    final tabController =
+        Get.find<ReportsRegisteredParticipantsTabController>(tag: tag);
     final repo = ReportsRepository();
 
     Future<void> printReport() async {
@@ -38,6 +54,7 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
       );
       if (competitionId == null) return;
 
+      final prefix = tabController.registrationPrefix.value.trim();
       final resp = await repo.getCompetitionParticipantsPrintPdf(
         competitionId,
         stageIds: tabController.selectedStageIds.isEmpty
@@ -51,10 +68,22 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
             : List<int>.from(tabController.selectedGroupIds),
         stateId: tabController.selectedStateId.value,
         institutionId: tabController.selectedInstitutionId.value,
-        districtId: tabController.selectedDistrictFilter.value,
+        districtId: tabController.districtQueryParam(),
         genders: tabController.selectedGenders.isEmpty
             ? null
             : List<String>.from(tabController.selectedGenders),
+        categoryTypes: tabController.selectedCategoryTypes.isEmpty
+            ? null
+            : List<String>.from(tabController.selectedCategoryTypes),
+        spotRegistration: tabController.spotRegistrationFilter.value,
+        age: tabController.filterAge.value,
+        registrationPrefix: prefix.isEmpty ? null : prefix,
+        institutionKind: tabController.selectedInstitutionKind.value,
+        hasInstitution:
+            tabController.requireInstitutionFilter.value ? true : null,
+        search: tabController.participantSearchQuery.value.trim().isEmpty
+            ? null
+            : tabController.participantSearchQuery.value.trim(),
       );
 
       if (!resp.success || resp.data == null) {
@@ -78,19 +107,12 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
       );
       if (competitionId == null) return;
 
-      if (tabController.selectedStageIds.length != 1) {
-        Get.snackbar(
-          'Stage required',
-          'Select exactly one stage in Report filters to download Excel.',
-          backgroundColor: Colors.orange.shade800,
-          colorText: Colors.white,
-        );
-        return;
-      }
-
-      final resp = await repo.getCompetitionParticipantsExcel(
+      final prefix = tabController.registrationPrefix.value.trim();
+      final resp = await repo.getRegisteredParticipantsExcel(
         competitionId,
-        stageIds: List<int>.from(tabController.selectedStageIds),
+        stageIds: tabController.selectedStageIds.isEmpty
+            ? null
+            : List<int>.from(tabController.selectedStageIds),
         categoryIds: tabController.selectedCategoryIds.isEmpty
             ? null
             : List<int>.from(tabController.selectedCategoryIds),
@@ -99,10 +121,22 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
             : List<int>.from(tabController.selectedGroupIds),
         stateId: tabController.selectedStateId.value,
         institutionId: tabController.selectedInstitutionId.value,
-        districtId: tabController.selectedDistrictFilter.value,
+        districtId: tabController.districtQueryParam(),
         genders: tabController.selectedGenders.isEmpty
             ? null
             : List<String>.from(tabController.selectedGenders),
+        categoryTypes: tabController.selectedCategoryTypes.isEmpty
+            ? null
+            : List<String>.from(tabController.selectedCategoryTypes),
+        spotRegistration: tabController.spotRegistrationFilter.value,
+        age: tabController.filterAge.value,
+        registrationPrefix: prefix.isEmpty ? null : prefix,
+        institutionKind: tabController.selectedInstitutionKind.value,
+        hasInstitution:
+            tabController.requireInstitutionFilter.value ? true : null,
+        search: tabController.participantSearchQuery.value.trim().isEmpty
+            ? null
+            : tabController.participantSearchQuery.value.trim(),
       );
 
       if (!resp.success || resp.data == null) {
@@ -122,7 +156,10 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
         final blob = html.Blob([bytes], mime);
         final url = html.Url.createObjectUrlFromBlob(blob);
         html.AnchorElement(href: url)
-          ..setAttribute('download', 'registered_participants_$competitionId.xlsx')
+          ..setAttribute(
+            'download',
+            'registered_participants_$competitionId.xlsx',
+          )
           ..click();
         html.Url.revokeObjectUrl(url);
       } else {
@@ -185,6 +222,7 @@ class ReportsRegisteredParticipantsTab extends StatelessWidget {
               isMobile: isMobile,
               onPrint: printReport,
               onDownloadExcel: downloadExcel,
+              requireSingleStageForExcel: false,
               searchHint: 'Search participant name or reg. no.',
               emptyFiltersHint:
                   'Filter by stage, category, group, gender, institution, category type, and registration type. Click dashboard counts to open with presets.',
@@ -330,19 +368,22 @@ class _RegisteredParticipantsTable extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  HorizontalScrollTable(
-                    minWidth: _minWidth,
-                    child: Column(
-                      children: [
-                        _headerRow(),
-                        for (final row in items)
-                          _dataRow(
-                            context,
-                            row,
-                            competitionName:
-                                controller.tableCompetitionName.value,
-                          ),
-                      ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: HorizontalScrollTable(
+                      minWidth: _minWidth,
+                      child: Column(
+                        children: [
+                          _headerRow(),
+                          for (final row in items)
+                            _dataRow(
+                              context,
+                              row,
+                              competitionName:
+                                  controller.tableCompetitionName.value,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   _pagination(),

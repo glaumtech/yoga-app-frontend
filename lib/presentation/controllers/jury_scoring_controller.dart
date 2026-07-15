@@ -102,6 +102,15 @@ class JuryScoringController extends GetxController {
     return 10;
   }
 
+  /// Mark used when jury marks an asana as skipped (from competition config).
+  int get effectiveSkippedAsanaMarks {
+    final j = juryAssignment.value;
+    if (j == null) return 0;
+    final skipped = j.skippedAsanaMarks;
+    if (skipped < 0) return 0;
+    return skipped;
+  }
+
   /// Hide stage/group only for Champions jury on FROM_FIRST_PLACE_WINNERS competitions.
   bool get hideStageAndGroupSelection {
     final j = juryAssignment.value;
@@ -130,6 +139,15 @@ class JuryScoringController extends GetxController {
 
   bool _isWholeScoreValid(int whole) {
     return whole >= effectiveMinimumMarks && whole <= effectiveMaximumMarks;
+  }
+
+  bool isAsanaSkipped(String participantId, int asanaNum) {
+    final score = scoreValues[participantId]?[asanaNum];
+    return (score?['skipped'] ?? 0) == 1;
+  }
+
+  bool _isAsanaScoreComplete(int whole, bool skipped) {
+    return skipped || _isWholeScoreValid(whole);
   }
 
   @override
@@ -525,6 +543,7 @@ class JuryScoringController extends GetxController {
                 scoreValues[participant.id!]![asanaNum] = {
                   'whole': 0,
                   'decimal': 0,
+                  'skipped': 0,
                 };
               }
             }
@@ -563,6 +582,29 @@ class JuryScoringController extends GetxController {
     selectedParticipantCheckboxes[participantId] = !currentValue;
   }
 
+  void setAsanaSkipped(String participantId, int asanaNum, bool skipped) {
+    if (!scoreValues.containsKey(participantId)) {
+      scoreValues[participantId] = {};
+    }
+    if (!scoreValues[participantId]!.containsKey(asanaNum)) {
+      scoreValues[participantId]![asanaNum] = {
+        'whole': 0,
+        'decimal': 0,
+        'skipped': 0,
+      };
+    }
+    scoreValues[participantId]![asanaNum]!['skipped'] = skipped ? 1 : 0;
+    if (skipped) {
+      final skippedMark = effectiveSkippedAsanaMarks;
+      scoreValues[participantId]![asanaNum]!['whole'] = skippedMark;
+      scoreValues[participantId]![asanaNum]!['decimal'] = 0;
+      final controller = scoreControllers[participantId]?[asanaNum];
+      controller?.text = skippedMark.toString();
+    }
+    scoreUpdateTrigger.value = scoreUpdateTrigger.value + 1;
+    _recomputeScoreFlags();
+  }
+
   // Set score for a participant's asana using whole number and decimal
   void setAsanaScore(
     String participantId,
@@ -574,8 +616,13 @@ class JuryScoringController extends GetxController {
       scoreValues[participantId] = {};
     }
     if (!scoreValues[participantId]!.containsKey(asanaNum)) {
-      scoreValues[participantId]![asanaNum] = {'whole': 0, 'decimal': 0};
+      scoreValues[participantId]![asanaNum] = {
+        'whole': 0,
+        'decimal': 0,
+        'skipped': 0,
+      };
     }
+    scoreValues[participantId]![asanaNum]!['skipped'] = 0;
     scoreValues[participantId]![asanaNum]!['whole'] = whole;
     scoreValues[participantId]![asanaNum]!['decimal'] = decimal;
     // Trigger reactivity by updating the trigger
@@ -618,7 +665,8 @@ class JuryScoringController extends GetxController {
       } else {
         final score = participantScores[asanaNum];
         final whole = score?['whole'] ?? 0;
-        if (!_isWholeScoreValid(whole)) {
+        final skipped = (score?['skipped'] ?? 0) == 1;
+        if (!_isAsanaScoreComplete(whole, skipped)) {
           currentAsanaComplete = false;
         }
       }
@@ -626,7 +674,8 @@ class JuryScoringController extends GetxController {
       for (int a = 1; a <= numberOfAsanas; a++) {
         final score = participantScores?[a];
         final whole = score?['whole'] ?? 0;
-        if (_isWholeScoreValid(whole)) {
+        final skipped = (score?['skipped'] ?? 0) == 1;
+        if (_isAsanaScoreComplete(whole, skipped)) {
           any = true;
           break;
         }
@@ -645,6 +694,9 @@ class JuryScoringController extends GetxController {
   // Get formatted score string (e.g., "6.5", "6.25", "6.75")
   String getFormattedScore(String participantId, int asanaNum) {
     final score = getAsanaScore(participantId, asanaNum);
+    if (score != null && (score['skipped'] ?? 0) == 1) {
+      return 'Skipped (${effectiveSkippedAsanaMarks})';
+    }
     if (score == null || (score['whole'] == 0 && score['decimal'] == 0)) {
       return '';
     }
@@ -681,7 +733,9 @@ class JuryScoringController extends GetxController {
     for (final participant in currentParticipants) {
       if (participant.id != null) {
         final score = getAsanaScore(participant.id!, currentAsana.value);
-        if (score == null || (score['whole'] == 0 && score['decimal'] == 0)) {
+        final skipped = (score?['skipped'] ?? 0) == 1;
+        if (score == null ||
+            (!skipped && (score['whole'] == 0 && score['decimal'] == 0))) {
           return false;
         }
       }
@@ -706,7 +760,8 @@ class JuryScoringController extends GetxController {
           if (score == null) return false;
 
           final whole = score['whole'] ?? 0;
-          if (!_isWholeScoreValid(whole)) return false;
+          final skipped = (score['skipped'] ?? 0) == 1;
+          if (!_isAsanaScoreComplete(whole, skipped)) return false;
         }
       }
     }
@@ -727,7 +782,8 @@ class JuryScoringController extends GetxController {
             final score = participantScores[asanaNum];
             if (score != null) {
               final whole = score['whole'] ?? 0;
-              if (_isWholeScoreValid(whole)) {
+              final skipped = (score['skipped'] ?? 0) == 1;
+              if (_isAsanaScoreComplete(whole, skipped)) {
                 return true;
               }
             }
@@ -862,10 +918,11 @@ class JuryScoringController extends GetxController {
           break;
         }
         final whole = score['whole'] ?? 0;
-        if (!_isWholeScoreValid(whole)) {
+        final skipped = (score['skipped'] ?? 0) == 1;
+        if (!_isAsanaScoreComplete(whole, skipped)) {
           currentAsanaFilled = false;
           missingScoreInfo =
-              'Invalid score for ${participant.participantName} - ASANA $asanaNum (whole must be ${effectiveMinimumMarks}-${effectiveMaximumMarks})';
+              'Invalid score for ${participant.participantName} - ASANA $asanaNum (enter a score ${effectiveMinimumMarks}-${effectiveMaximumMarks} or mark as skipped)';
           break;
         }
       }
@@ -915,7 +972,8 @@ class JuryScoringController extends GetxController {
         for (int a = 1; a <= numberOfAsanas; a++) {
           final score = participantScores[a];
           final whole = score?['whole'] ?? 0;
-          if (score == null || !_isWholeScoreValid(whole)) {
+          final skipped = (score?['skipped'] ?? 0) == 1;
+          if (score == null || !_isAsanaScoreComplete(whole, skipped)) {
             allScoresFilled = false;
             break;
           }
@@ -1063,8 +1121,9 @@ class JuryScoringController extends GetxController {
 
             final whole = score['whole'] ?? 0;
             final decimal = score['decimal'] ?? 0;
+            final skipped = (score['skipped'] ?? 0) == 1;
 
-            if (!_isWholeScoreValid(whole)) {
+            if (!_isAsanaScoreComplete(whole, skipped)) {
               print(
                 'Error: Invalid score for participant ${participant.id} - ASANA $asanaNum (whole: $whole)',
               );
@@ -1072,7 +1131,7 @@ class JuryScoringController extends GetxController {
               _showSnackbar(
                 title: 'Error',
                 message:
-                    'Invalid score for ${participant.participantName} - ASANA $asanaNum (whole number must be ${effectiveMinimumMarks}-${effectiveMaximumMarks})',
+                    'Invalid score for ${participant.participantName} - ASANA $asanaNum (enter a score ${effectiveMinimumMarks}-${effectiveMaximumMarks} or mark as skipped)',
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 4),
               );
@@ -1080,11 +1139,14 @@ class JuryScoringController extends GetxController {
             }
 
             // Decimal values: 25 = 0.25, 50 = 0.5, 75 = 0.75
-            final totalScore = whole + (decimal / 100);
+            final totalScore = skipped
+                ? effectiveSkippedAsanaMarks.toDouble()
+                : whole + (decimal / 100);
 
             asanaScores.add({
               'asanaName': 'ASANA $asanaNum',
               'score': totalScore,
+              'isSkipped': skipped,
             });
           }
 

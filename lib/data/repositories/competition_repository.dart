@@ -790,6 +790,37 @@ class CompetitionRepository {
     }
   }
 
+  /// Create responses wrap the option under keys like `prize` / `category` / `stage` / `group`.
+  /// [ApiService] already unwraps the outer `data`, so [raw] is typically `{ "prize": {...} }`.
+  static CompetitionOptionModel? parseCreatedOption(
+    dynamic raw, {
+    required String entityKey,
+  }) {
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(raw as Map);
+
+    Map<String, dynamic>? candidate;
+    final nested = map[entityKey];
+    if (nested is Map) {
+      candidate = Map<String, dynamic>.from(nested);
+    } else if (map['data'] is Map) {
+      final inner = Map<String, dynamic>.from(map['data'] as Map);
+      final nestedInner = inner[entityKey];
+      if (nestedInner is Map) {
+        candidate = Map<String, dynamic>.from(nestedInner);
+      } else if (inner.containsKey('id')) {
+        candidate = inner;
+      }
+    } else if (map.containsKey('id')) {
+      candidate = map;
+    }
+
+    if (candidate == null) return null;
+    final option = CompetitionOptionModel.fromJson(candidate);
+    if (option.id <= 0 || option.name.trim().isEmpty) return null;
+    return option;
+  }
+
   // Create new category
   Future<ApiResponse<CompetitionOptionModel>> createCategory({
     required String name,
@@ -810,17 +841,10 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionOptionModel? category;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          dynamic categoryData = dataMap['data'] ?? dataMap;
-
-          if (categoryData is Map<String, dynamic>) {
-            category = CompetitionOptionModel.fromJson(categoryData);
-          }
-        }
-
+        final category = parseCreatedOption(
+          response.data,
+          entityKey: 'category',
+        );
         if (category != null) {
           return ApiResponse(success: true, data: category);
         }
@@ -859,17 +883,7 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionOptionModel? prize;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          dynamic prizeData = dataMap['data'] ?? dataMap;
-
-          if (prizeData is Map<String, dynamic>) {
-            prize = CompetitionOptionModel.fromJson(prizeData);
-          }
-        }
-
+        final prize = parseCreatedOption(response.data, entityKey: 'prize');
         if (prize != null) {
           return ApiResponse(success: true, data: prize);
         }
@@ -908,17 +922,7 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionOptionModel? stage;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          dynamic stageData = dataMap['data'] ?? dataMap;
-
-          if (stageData is Map<String, dynamic>) {
-            stage = CompetitionOptionModel.fromJson(stageData);
-          }
-        }
-
+        final stage = parseCreatedOption(response.data, entityKey: 'stage');
         if (stage != null) {
           return ApiResponse(success: true, data: stage);
         }
@@ -957,17 +961,7 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionOptionModel? group;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          dynamic groupData = dataMap['data'] ?? dataMap;
-
-          if (groupData is Map<String, dynamic>) {
-            group = CompetitionOptionModel.fromJson(groupData);
-          }
-        }
-
+        final group = parseCreatedOption(response.data, entityKey: 'group');
         if (group != null) {
           return ApiResponse(success: true, data: group);
         }

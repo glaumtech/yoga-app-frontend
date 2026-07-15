@@ -6,6 +6,7 @@ class JuryAssignmentModel {
   final String competitionName;
   final int minimumMarks;
   final int maximumMarks;
+  final int skippedAsanaMarks;
   final bool male;
   final bool female;
   final String? championshipStyle;
@@ -19,6 +20,7 @@ class JuryAssignmentModel {
     required this.competitionName,
     required this.minimumMarks,
     required this.maximumMarks,
+    this.skippedAsanaMarks = 0,
     this.male = false,
     this.female = false,
     this.championshipStyle,
@@ -54,6 +56,7 @@ class JuryAssignmentModel {
       minimumMarks: json['minimumMarks'] as int? ?? 0,
       // Use 0 when absent so callers can fall back to a default range (e.g. 3–10).
       maximumMarks: json['maximumMarks'] as int? ?? 0,
+      skippedAsanaMarks: json['skippedAsanaMarks'] as int? ?? 0,
       male: json['male'] as bool? ?? false,
       female: json['female'] as bool? ?? false,
       championshipStyle: json['championshipStyle']?.toString(),
@@ -70,6 +73,7 @@ class JuryAssignmentModel {
       'competitionName': competitionName,
       'minimumMarks': minimumMarks,
       'maximumMarks': maximumMarks,
+      'skippedAsanaMarks': skippedAsanaMarks,
       'male': male,
       'female': female,
       if (championshipStyle != null) 'championshipStyle': championshipStyle,

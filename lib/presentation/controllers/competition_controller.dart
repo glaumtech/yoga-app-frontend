@@ -128,6 +128,9 @@ class CompetitionController extends GetxController {
 
   // Observable state
   final RxBool isLoading = false.obs;
+  /// Loading flag for Add More prize/category/stage/group dialogs only.
+  /// Kept separate from [isLoading] so the create form does not rebuild under an open dialog.
+  final RxBool isAddingOption = false.obs;
   final RxString errorMessage = ''.obs;
   final RxList<CompetitionModel> competitions = <CompetitionModel>[].obs;
 
@@ -216,6 +219,7 @@ class CompetitionController extends GetxController {
   final RxInt participantsPerStage = RxInt(0);
   final RxInt minimumMarks = RxInt(0);
   final RxInt maximumMarks = RxInt(0);
+  final RxInt skippedAsanaMarks = RxInt(0);
   final TextEditingController bestSchoolAwardMinParticipantsController =
       TextEditingController();
   // Track selected IDs (for API submission)
@@ -1590,7 +1594,7 @@ class CompetitionController extends GetxController {
     if (prizeName.isEmpty) return false;
 
     try {
-      isLoading.value = true;
+      isAddingOption.value = true;
       errorMessage.value = '';
 
       final response = await _repository.createPrize(
@@ -1599,10 +1603,17 @@ class CompetitionController extends GetxController {
       );
 
       if (response.success && response.data != null) {
-        // Reload only prizes to include the new one
-        await reloadPrizeOptions();
-        // Force UI update of options list
+        final created = response.data!;
+        final existingIndex = prizeOptions.indexWhere((p) => p.id == created.id);
+        if (existingIndex >= 0) {
+          prizeOptions[existingIndex] = created;
+        } else {
+          prizeOptions.add(created);
+        }
         prizeOptions.refresh();
+        if (!selectedPrizeIds.contains(created.id)) {
+          selectedPrizeIds.add(created.id);
+        }
 
         Get.snackbar('Success', 'Prize "$prizeName" created successfully');
         return true;
@@ -1616,7 +1627,7 @@ class CompetitionController extends GetxController {
       Get.snackbar('Error', errorMessage.value);
       return false;
     } finally {
-      isLoading.value = false;
+      isAddingOption.value = false;
     }
   }
 
@@ -1771,7 +1782,7 @@ class CompetitionController extends GetxController {
     if (categoryName.isEmpty) return false;
 
     try {
-      isLoading.value = true;
+      isAddingOption.value = true;
       errorMessage.value = '';
 
       final response = await _repository.createCategory(
@@ -1780,10 +1791,20 @@ class CompetitionController extends GetxController {
       );
 
       if (response.success && response.data != null) {
-        // Reload only categories to include the new one
-        await reloadCategoryOptions();
-        // Force UI update of options list
+        final created = response.data!;
+        final existingIndex =
+            categoryOptions.indexWhere((c) => c.id == created.id);
+        if (existingIndex >= 0) {
+          categoryOptions[existingIndex] = created;
+        } else {
+          categoryOptions.add(created);
+        }
         categoryOptions.refresh();
+        if (!selectedCategoryIds.contains(created.id)) {
+          selectedCategoryIds.add(created.id);
+          categoryAmounts[created.id.toString()] = 0.0;
+          _ensureCategoryIncludeFeeDefault(created.id);
+        }
 
         Get.snackbar(
           'Success',
@@ -1800,7 +1821,7 @@ class CompetitionController extends GetxController {
       Get.snackbar('Error', errorMessage.value);
       return false;
     } finally {
-      isLoading.value = false;
+      isAddingOption.value = false;
     }
   }
 
@@ -1853,7 +1874,7 @@ class CompetitionController extends GetxController {
     if (stageName.isEmpty) return false;
 
     try {
-      isLoading.value = true;
+      isAddingOption.value = true;
       errorMessage.value = '';
 
       final response = await _repository.createStage(
@@ -1862,10 +1883,18 @@ class CompetitionController extends GetxController {
       );
 
       if (response.success && response.data != null) {
-        // Reload only stages to include the new one
-        await reloadStageOptions();
-        // Force UI update of options list
+        final created = response.data!;
+        final existingIndex = stageOptions.indexWhere((s) => s.id == created.id);
+        if (existingIndex >= 0) {
+          stageOptions[existingIndex] = created;
+        } else {
+          stageOptions.add(created);
+        }
         stageOptions.refresh();
+        if (!selectedStageIds.contains(created.id)) {
+          selectedStageIds.add(created.id);
+          stageGroups[created.id.toString()] = [];
+        }
 
         Get.snackbar('Success', 'Stage "$stageName" created successfully');
         return true;
@@ -1879,7 +1908,7 @@ class CompetitionController extends GetxController {
       Get.snackbar('Error', errorMessage.value);
       return false;
     } finally {
-      isLoading.value = false;
+      isAddingOption.value = false;
     }
   }
 
@@ -1970,7 +1999,7 @@ class CompetitionController extends GetxController {
     if (groupName.isEmpty) return false;
 
     try {
-      isLoading.value = true;
+      isAddingOption.value = true;
       errorMessage.value = '';
 
       final response = await _repository.createGroup(
@@ -1979,9 +2008,13 @@ class CompetitionController extends GetxController {
       );
 
       if (response.success && response.data != null) {
-        // Reload only groups to include the new one
-        await reloadGroupOptions();
-        // Force UI update of options list
+        final created = response.data!;
+        final existingIndex = groupOptions.indexWhere((g) => g.id == created.id);
+        if (existingIndex >= 0) {
+          groupOptions[existingIndex] = created;
+        } else {
+          groupOptions.add(created);
+        }
         groupOptions.refresh();
 
         Get.snackbar('Success', 'Group "$groupName" created successfully');
@@ -1996,7 +2029,7 @@ class CompetitionController extends GetxController {
       Get.snackbar('Error', errorMessage.value);
       return false;
     } finally {
-      isLoading.value = false;
+      isAddingOption.value = false;
     }
   }
 
@@ -2295,6 +2328,7 @@ class CompetitionController extends GetxController {
             : null,
         minimumMarks: minimumMarks.value > 0 ? minimumMarks.value : null,
         maximumMarks: maximumMarks.value > 0 ? maximumMarks.value : null,
+        skippedAsanaMarks: skippedAsanaMarks.value,
         prizeIds: selectedPrizeIds.where((id) => id > 0).toList(),
         categoryIds: selectedCategoryIds.where((id) => id > 0).toList(),
         categoryAmounts: Map<String, double>.from(categoryAmounts),
@@ -2457,6 +2491,7 @@ class CompetitionController extends GetxController {
             : null,
         minimumMarks: minimumMarks.value > 0 ? minimumMarks.value : null,
         maximumMarks: maximumMarks.value > 0 ? maximumMarks.value : null,
+        skippedAsanaMarks: skippedAsanaMarks.value,
         prizeIds: selectedPrizeIds.where((id) => id > 0).toList(),
         categoryIds: selectedCategoryIds.where((id) => id > 0).toList(),
         categoryAmounts: Map<String, double>.from(categoryAmounts),
@@ -2705,6 +2740,7 @@ class CompetitionController extends GetxController {
     participantsPerStage.value = competition.participantsPerStage ?? 0;
     minimumMarks.value = competition.minimumMarks ?? 0;
     maximumMarks.value = competition.maximumMarks ?? 0;
+    skippedAsanaMarks.value = competition.skippedAsanaMarks ?? 0;
     bestSchoolAwardMinParticipantsController.text =
         competition.bestSchoolAwardMinParticipants != null &&
             competition.bestSchoolAwardMinParticipants! > 0
@@ -3176,6 +3212,7 @@ class CompetitionController extends GetxController {
     participantsPerStage.value = 0;
     minimumMarks.value = 0;
     maximumMarks.value = 0;
+    skippedAsanaMarks.value = 0;
     bestSchoolAwardMinParticipantsController.clear();
     selectedPrizeIds.clear();
     selectedCategoryIds.clear();

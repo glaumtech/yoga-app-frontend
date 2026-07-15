@@ -2517,6 +2517,41 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isMobile,
     bool isTablet,
   ) {
+    InputDecoration markDecoration() {
+      return InputDecoration(
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        filled: true,
+        fillColor: controller.isViewMode.value
+            ? Colors.grey[200]
+            : Colors.grey[50],
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: isMobile ? 10 : 14,
+        ),
+        isDense: true,
+        hint: Text(
+          'Select',
+          style: TextStyle(fontSize: isMobile ? 12 : 13),
+        ),
+      );
+    }
+
+    List<DropdownMenuItem<int>> markItems() {
+      return CompetitionController.marksOptions
+          .map(
+            (value) => DropdownMenuItem(
+              value: value,
+              child: Text(
+                value.toString(),
+                style: TextStyle(fontSize: isMobile ? 12 : 13),
+              ),
+            ),
+          )
+          .toList();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2525,9 +2560,13 @@ class CreateCompetitionScreen extends StatelessWidget {
             Expanded(
               child: FormLabelWithHint(label: 'MARKS : Minimum'),
             ),
-            SizedBox(width: isMobile ? 8 : 12),
+            SizedBox(width: isMobile ? 6 : 8),
             Expanded(
               child: FormLabelWithHint(label: 'Maximum'),
+            ),
+            SizedBox(width: isMobile ? 6 : 8),
+            Expanded(
+              child: FormLabelWithHint(label: 'Skipped Asana'),
             ),
           ],
         ),
@@ -2540,39 +2579,16 @@ class CreateCompetitionScreen extends StatelessWidget {
                   value: controller.minimumMarks.value > 0
                       ? controller.minimumMarks.value
                       : null,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    filled: true,
-                    fillColor: controller.isViewMode.value
-                        ? Colors.grey[200]
-                        : Colors.grey[50],
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: isMobile ? 12 : 16,
-                    ),
-                    isDense: isMobile,
-                    hint: Text(
-                      'Select',
-                      style: TextStyle(fontSize: isMobile ? 13 : 14),
-                    ),
-                  ),
-                  items: CompetitionController.marksOptions
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value.toString()),
-                        ),
-                      )
-                      .toList(),
+                  decoration: markDecoration(),
+                  items: markItems(),
                   onChanged: controller.isViewMode.value
                       ? null
-                      : (value) => controller.minimumMarks.value = value ?? 0,
+                      : (value) =>
+                            controller.minimumMarks.value = value ?? 0,
                 ),
               ),
             ),
-            SizedBox(width: isMobile ? 8 : 12),
+            SizedBox(width: isMobile ? 6 : 8),
             Expanded(
               child: Obx(
                 () => DropdownButtonFormField<int>(
@@ -2580,35 +2596,27 @@ class CreateCompetitionScreen extends StatelessWidget {
                   value: controller.maximumMarks.value > 0
                       ? controller.maximumMarks.value
                       : null,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    filled: true,
-                    fillColor: controller.isViewMode.value
-                        ? Colors.grey[200]
-                        : Colors.grey[50],
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: isMobile ? 12 : 16,
-                    ),
-                    isDense: isMobile,
-                    hint: Text(
-                      'Select',
-                      style: TextStyle(fontSize: isMobile ? 13 : 14),
-                    ),
-                  ),
-                  items: CompetitionController.marksOptions
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value.toString()),
-                        ),
-                      )
-                      .toList(),
+                  decoration: markDecoration(),
+                  items: markItems(),
                   onChanged: controller.isViewMode.value
                       ? null
-                      : (value) => controller.maximumMarks.value = value ?? 0,
+                      : (value) =>
+                            controller.maximumMarks.value = value ?? 0,
+                ),
+              ),
+            ),
+            SizedBox(width: isMobile ? 6 : 8),
+            Expanded(
+              child: Obx(
+                () => DropdownButtonFormField<int>(
+                  isExpanded: true,
+                  value: controller.skippedAsanaMarks.value,
+                  decoration: markDecoration(),
+                  items: markItems(),
+                  onChanged: controller.isViewMode.value
+                      ? null
+                      : (value) =>
+                            controller.skippedAsanaMarks.value = value ?? 0,
                 ),
               ),
             ),
@@ -2715,103 +2723,90 @@ class CreateCompetitionScreen extends StatelessWidget {
               return null;
             },
             builder: (FormFieldState<List<String>> field) {
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  return Obx(() {
-                    // Update field value when prizes change
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (field.value != controller.selectedPrizes.toList()) {
-                        field.didChange(controller.selectedPrizes.toList());
-                        field.validate();
-                      }
-                    });
+              return Obx(() {
+                // Update field value when prizes change
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (field.value != controller.selectedPrizes.toList()) {
+                    field.didChange(controller.selectedPrizes.toList());
+                    field.validate();
+                  }
+                });
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: isMobile ? 8 : 16,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Flexible(
-                              child: Wrap(
-                                spacing: isMobile ? 8 : 16,
-                                runSpacing: 8,
-                                children: [
-                                  ...controller.prizeOptionNames.map((prize) {
-                                    final isSelected = controller.selectedPrizes
-                                        .contains(prize);
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Checkbox(
-                                          value: isSelected,
-                                          onChanged: controller.isViewMode.value
-                                              ? null
-                                              : (value) {
-                                                  controller.togglePrize(prize);
-                                                  field.didChange(
-                                                    controller.selectedPrizes
-                                                        .toList(),
-                                                  );
-                                                  field.validate();
-                                                },
-                                          activeColor: AppTheme.primaryColor,
-                                          materialTapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                          visualDensity: VisualDensity.compact,
-                                        ),
-                                        Text(prize),
-                                      ],
-                                    );
-                                  }),
-                                ],
+                        ...controller.prizeOptionNames.map((prize) {
+                          final isSelected =
+                              controller.selectedPrizes.contains(prize);
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Checkbox(
+                                value: isSelected,
+                                onChanged: controller.isViewMode.value
+                                    ? null
+                                    : (value) {
+                                        controller.togglePrize(prize);
+                                        field.didChange(
+                                          controller.selectedPrizes.toList(),
+                                        );
+                                        field.validate();
+                                      },
+                                activeColor: AppTheme.primaryColor,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              Text(prize),
+                            ],
+                          );
+                        }),
+                        if (!controller.isViewMode.value)
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                _showAddPrizeDialog(context, controller),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Add More'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.primaryColor,
+                              side: BorderSide(
+                                color: AppTheme.primaryColor,
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isMobile ? 12 : 16,
+                                vertical: isMobile ? 8 : 10,
                               ),
                             ),
-                            if (!controller.isViewMode.value) ...[
-                              const SizedBox(width: 12),
-                              OutlinedButton.icon(
-                                onPressed: () =>
-                                    _showAddPrizeDialog(context, controller),
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('Add More'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppTheme.primaryColor,
-                                  side: BorderSide(
-                                    color: AppTheme.primaryColor,
-                                  ),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: isMobile ? 12 : 16,
-                                    vertical: isMobile ? 8 : 10,
-                                  ),
+                          ),
+                      ],
+                    ),
+                    Obx(
+                      () =>
+                          controller.hasAttemptedSubmit.value &&
+                              field.errorText != null
+                          ? Padding(
+                              padding: const EdgeInsets.only(
+                                top: 8,
+                                left: 12,
+                              ),
+                              child: Text(
+                                field.errorText!,
+                                style: TextStyle(
+                                  color: Colors.red[700],
+                                  fontSize: 12,
                                 ),
                               ),
-                            ],
-                          ],
-                        ),
-                        Obx(
-                          () =>
-                              controller.hasAttemptedSubmit.value &&
-                                  field.errorText != null
-                              ? Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 8,
-                                    left: 12,
-                                  ),
-                                  child: Text(
-                                    field.errorText!,
-                                    style: TextStyle(
-                                      color: Colors.red[700],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ],
-                    );
-                  });
-                },
-              );
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                );
+              });
             },
           ),
         ),
@@ -3130,63 +3125,64 @@ class CreateCompetitionScreen extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Add New Prize'),
         content: Form(
           key: formKey,
-          child: PinnedVerticalScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Prize Name *',
-                    hintText: 'e.g., 6th, 7th',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Prize name is required';
-                    }
-                    return null;
-                  },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Prize Name *',
+                  hintText: 'e.g., 6th, 7th',
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Optional description',
-                  ),
-                  maxLines: 3,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Prize name is required';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  hintText: 'Optional description',
                 ),
-              ],
-            ),
+                maxLines: 3,
+              ),
+            ],
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           Obx(
-            () => controller.isLoading.value
+            () => controller.isAddingOption.value
                 ? const Padding(
                     padding: EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   )
                 : TextButton(
                     onPressed: () async {
-                      if (formKey.currentState!.validate()) {
-                        final success = await controller.addCustomPrize(
-                          nameController.text.trim(),
-                          description: descriptionController.text.trim().isEmpty
-                              ? null
-                              : descriptionController.text.trim(),
-                        );
-                        if (success && context.mounted) {
-                          Navigator.pop(context);
-                        }
+                      if (!formKey.currentState!.validate()) return;
+                      final success = await controller.addCustomPrize(
+                        nameController.text.trim(),
+                        description: descriptionController.text.trim().isEmpty
+                            ? null
+                            : descriptionController.text.trim(),
+                      );
+                      if (success && dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
                       }
                     },
                     child: const Text('Add'),
@@ -3207,63 +3203,64 @@ class CreateCompetitionScreen extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Add New Category'),
         content: Form(
           key: formKey,
-          child: PinnedVerticalScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Category Name *',
-                    hintText: 'e.g., SENIOR, JUNIOR',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Category name is required';
-                    }
-                    return null;
-                  },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Category Name *',
+                  hintText: 'e.g., SENIOR, JUNIOR',
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Optional description',
-                  ),
-                  maxLines: 3,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Category name is required';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  hintText: 'Optional description',
                 ),
-              ],
-            ),
+                maxLines: 3,
+              ),
+            ],
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           Obx(
-            () => controller.isLoading.value
+            () => controller.isAddingOption.value
                 ? const Padding(
                     padding: EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   )
                 : TextButton(
                     onPressed: () async {
-                      if (formKey.currentState!.validate()) {
-                        final success = await controller.addCustomCategory(
-                          nameController.text.trim(),
-                          description: descriptionController.text.trim().isEmpty
-                              ? null
-                              : descriptionController.text.trim(),
-                        );
-                        if (success && context.mounted) {
-                          Navigator.pop(context);
-                        }
+                      if (!formKey.currentState!.validate()) return;
+                      final success = await controller.addCustomCategory(
+                        nameController.text.trim(),
+                        description: descriptionController.text.trim().isEmpty
+                            ? null
+                            : descriptionController.text.trim(),
+                      );
+                      if (success && dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
                       }
                     },
                     child: const Text('Add'),
@@ -3722,70 +3719,70 @@ class CreateCompetitionScreen extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Add New Stage'),
         content: Form(
           key: formKey,
-          child: PinnedVerticalScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: textController,
-                  maxLength: 100,
-                  decoration: const InputDecoration(
-                    labelText: 'Stage Name *',
-                    hintText: 'e.g., G, H',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Stage name is required';
-                    }
-                    if (value.trim().length > 100) {
-                      return 'Stage name must be 100 characters or less';
-                    }
-                    return null;
-                  },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: textController,
+                maxLength: 100,
+                decoration: const InputDecoration(
+                  labelText: 'Stage Name *',
+                  hintText: 'e.g., G, H',
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Optional description',
-                  ),
-                  maxLines: 3,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Stage name is required';
+                  }
+                  if (value.trim().length > 100) {
+                    return 'Stage name must be 100 characters or less';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  hintText: 'Optional description',
                 ),
-              ],
-            ),
+                maxLines: 3,
+              ),
+            ],
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           Obx(
-            () => controller.isLoading.value
+            () => controller.isAddingOption.value
                 ? const Padding(
                     padding: EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   )
                 : TextButton(
                     onPressed: () async {
-                      if (formKey.currentState!.validate()) {
-                        final stageName = textController.text
-                            .trim()
-                            .toUpperCase();
-                        final success = await controller.addCustomStage(
-                          stageName,
-                          description: descriptionController.text.trim().isEmpty
-                              ? null
-                              : descriptionController.text.trim(),
-                        );
-                        if (success && context.mounted) {
-                          Navigator.pop(context);
-                        }
+                      if (!formKey.currentState!.validate()) return;
+                      final stageName =
+                          textController.text.trim().toUpperCase();
+                      final success = await controller.addCustomStage(
+                        stageName,
+                        description: descriptionController.text.trim().isEmpty
+                            ? null
+                            : descriptionController.text.trim(),
+                      );
+                      if (success && dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
                       }
                     },
                     child: const Text('Add'),
@@ -4031,38 +4028,36 @@ class CreateCompetitionScreen extends StatelessWidget {
         title: const Text('Add New Group'),
         content: Form(
           key: formKey,
-          child: PinnedVerticalScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Group Name *',
-                    hintText: 'e.g., XIV, XV',
-                  ),
-                  maxLength: 100,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Group name is required';
-                    }
-                    if (value.trim().length > 100) {
-                      return 'Group name must be 100 characters or less';
-                    }
-                    return null;
-                  },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Group Name *',
+                  hintText: 'e.g., XIV, XV',
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Optional description',
-                  ),
-                  maxLines: 3,
+                maxLength: 100,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Group name is required';
+                  }
+                  if (value.trim().length > 100) {
+                    return 'Group name must be 100 characters or less';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  hintText: 'Optional description',
                 ),
-              ],
-            ),
+                maxLines: 3,
+              ),
+            ],
           ),
         ),
         actions: [
@@ -4071,24 +4066,29 @@ class CreateCompetitionScreen extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           Obx(
-            () => controller.isLoading.value
+            () => controller.isAddingOption.value
                 ? const Padding(
                     padding: EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   )
                 : TextButton(
                     onPressed: () async {
-                      if (formKey.currentState!.validate()) {
-                        final groupName = nameController.text.trim();
-                        final success = await controller.addCustomGroup(
-                          groupName,
-                          description: descriptionController.text.trim().isEmpty
-                              ? null
-                              : descriptionController.text.trim(),
-                        );
-                        if (success && dialogContext.mounted) {
-                          Navigator.pop(dialogContext);
-                          // Reopen the stage groups dialog with updated groups
+                      if (!formKey.currentState!.validate()) return;
+                      final groupName = nameController.text.trim();
+                      final success = await controller.addCustomGroup(
+                        groupName,
+                        description: descriptionController.text.trim().isEmpty
+                            ? null
+                            : descriptionController.text.trim(),
+                      );
+                      if (success && dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                        // Reopen the stage groups dialog with updated groups
+                        if (context.mounted) {
                           _showStageGroupsDialog(context, controller, stage);
                         }
                       }

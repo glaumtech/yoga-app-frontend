@@ -19,6 +19,8 @@ class CompetitionModel {
   final int? participantsPerStage; // 1-5
   final int? minimumMarks;
   final int? maximumMarks;
+  /// Mark applied when jury selects skipped asana (typically 0).
+  final int? skippedAsanaMarks;
   /// Schools with at least this many participants qualify for Best School Award in reports.
   final int? bestSchoolAwardMinParticipants;
   final List<String>?
@@ -64,6 +66,7 @@ class CompetitionModel {
     this.participantsPerStage,
     this.minimumMarks,
     this.maximumMarks,
+    this.skippedAsanaMarks,
     this.bestSchoolAwardMinParticipants,
     this.prizes,
     this.prizeIds,
@@ -282,6 +285,8 @@ class CompetitionModel {
           json['participantsPerStage'] ?? json['participants_per_stage'],
       minimumMarks: json['minimumMarks'] ?? json['minimum_marks'],
       maximumMarks: json['maximumMarks'] ?? json['maximum_marks'],
+      skippedAsanaMarks:
+          json['skippedAsanaMarks'] ?? json['skipped_asana_marks'],
       bestSchoolAwardMinParticipants:
           json['bestSchoolAwardMinParticipants'] ??
           json['best_school_award_min_participants'],
@@ -464,6 +469,7 @@ class CompetitionModel {
         'participantsPerStage': participantsPerStage,
       if (minimumMarks != null) 'minimumMarks': minimumMarks,
       if (maximumMarks != null) 'maximumMarks': maximumMarks,
+      if (skippedAsanaMarks != null) 'skippedAsanaMarks': skippedAsanaMarks,
       'bestSchoolAwardMinParticipants': bestSchoolAwardMinParticipants,
       // Send IDs for API submission
       if (prizeIds != null && prizeIds!.isNotEmpty) 'prizeIds': prizeIds,
@@ -514,6 +520,7 @@ class CompetitionModel {
     int? participantsPerStage,
     int? minimumMarks,
     int? maximumMarks,
+    int? skippedAsanaMarks,
     int? bestSchoolAwardMinParticipants,
     List<String>? prizes,
     List<int>? prizeIds,
@@ -551,6 +558,7 @@ class CompetitionModel {
       participantsPerStage: participantsPerStage ?? this.participantsPerStage,
       minimumMarks: minimumMarks ?? this.minimumMarks,
       maximumMarks: maximumMarks ?? this.maximumMarks,
+      skippedAsanaMarks: skippedAsanaMarks ?? this.skippedAsanaMarks,
       bestSchoolAwardMinParticipants: bestSchoolAwardMinParticipants ??
           this.bestSchoolAwardMinParticipants,
       prizes: prizes ?? this.prizes,

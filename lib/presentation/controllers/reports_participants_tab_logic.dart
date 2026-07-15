@@ -406,6 +406,10 @@ class ReportsParticipantsTabLogic {
                               (m['asanaScores'] as Map?)
                                       ?.cast<String, dynamic>() ??
                                   {};
+                          final asanaSkipped =
+                              (m['asanaSkipped'] as Map?)
+                                      ?.cast<String, dynamic>() ??
+                                  {};
 
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 10),
@@ -509,38 +513,69 @@ class ReportsParticipantsTabLogic {
                                                   children: [
                                                     for (final entry
                                                         in asanaScores.entries)
-                                                      Container(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 5,
-                                                        ),
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: AppTheme
-                                                              .softTintSurface(),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(8),
-                                                          border: Border.all(
-                                                            color: AppTheme
-                                                                .primaryColor
-                                                                .withValues(
-                                                              alpha: 0.35,
+                                                      Builder(
+                                                        builder: (context) {
+                                                          final skipped =
+                                                              asanaSkipped[entry
+                                                                      .key] ==
+                                                                  true;
+                                                          return Container(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 5,
                                                             ),
-                                                          ),
-                                                        ),
-                                                        child: Text(
-                                                          '${entry.key}: ${entry.value}',
-                                                          style: TextStyle(
-                                                            fontSize: 11,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                            color: AppTheme
-                                                                .chipTintText(),
-                                                          ),
-                                                        ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: skipped
+                                                                  ? Colors
+                                                                        .orange
+                                                                        .withValues(
+                                                                      alpha:
+                                                                          0.12,
+                                                                    )
+                                                                  : AppTheme
+                                                                        .softTintSurface(),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                8,
+                                                              ),
+                                                              border: Border.all(
+                                                                color: skipped
+                                                                    ? Colors
+                                                                          .orange
+                                                                          .withValues(
+                                                                        alpha:
+                                                                            0.55,
+                                                                      )
+                                                                    : AppTheme
+                                                                          .primaryColor
+                                                                          .withValues(
+                                                                        alpha:
+                                                                            0.35,
+                                                                      ),
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              skipped
+                                                                  ? '${entry.key}: ${entry.value} (SKIPPED)'
+                                                                  : '${entry.key}: ${entry.value}',
+                                                              style: TextStyle(
+                                                                fontSize: 11,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                                color: skipped
+                                                                    ? Colors
+                                                                          .orange[900]
+                                                                    : AppTheme
+                                                                          .chipTintText(),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
                                                       ),
                                                   ],
                                                 ),

@@ -44,6 +44,11 @@ class _HorizontalScrollTableState extends State<HorizontalScrollTable> {
         if (!availableWidth.isFinite || availableWidth <= 0) {
           availableWidth = MediaQuery.sizeOf(context).width;
         }
+        // Guard against absurd/unbounded widths that blow Expanded table rows.
+        final screenW = MediaQuery.sizeOf(context).width;
+        if (availableWidth > screenW * 2 || availableWidth > 4000) {
+          availableWidth = screenW;
+        }
 
         final contentWidth = math.max(widget.minWidth, availableWidth);
         final needsHorizontalScroll = contentWidth > availableWidth + 1;

@@ -15,6 +15,9 @@ import '../../controllers/reports_participants_list_preset.dart';
 import 'reports_users_tab.dart';
 import 'reports_participants_tab.dart';
 import 'reports_registered_participants_tab.dart';
+import 'reports_registered_participants_popup.dart';
+import 'reports_institutions_details_popup.dart';
+import 'reports_masters_details_popup.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Reports Screen
@@ -203,7 +206,54 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   void _openRegisteredParticipants(ReportsParticipantsListPreset preset) {
-    controller.openParticipantsReport(preset);
+    final competitionId = controller.selectedCompetitionId.value;
+    if (competitionId == null || competitionId.isEmpty) {
+      Get.snackbar(
+        'Competition required',
+        'Select a competition first.',
+        backgroundColor: Colors.orange.shade800,
+        colorText: Colors.white,
+      );
+      return;
+    }
+    ReportsRegisteredParticipantsPopup.show(
+      context,
+      competitionId: competitionId,
+      preset: preset,
+    );
+  }
+
+  void _openInstitutionsDetails({
+    required String title,
+    required InstitutionsListKind kind,
+    required List<Map<String, dynamic>> institutions,
+  }) {
+    final competitionId = controller.selectedCompetitionId.value;
+    if (competitionId == null || competitionId.isEmpty) {
+      Get.snackbar(
+        'Competition required',
+        'Select a competition first.',
+        backgroundColor: Colors.orange.shade800,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    String? competitionName;
+    for (final c in controller.competitions) {
+      if (c.id == competitionId) {
+        competitionName = c.competitionName;
+        break;
+      }
+    }
+    ReportsInstitutionsDetailsPopup.show(
+      context,
+      title: title,
+      kind: kind,
+      institutions: institutions,
+      competitionId: competitionId,
+      competitionName: competitionName,
+    );
   }
 
   @override
@@ -351,7 +401,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       if (isWideWeb) ...[
         sectionsRow,
         const SizedBox(height: 12),
-        _buildBestSchoolAwardSection(report, isMobile),
+        _buildBestSchoolAndTopMastersRow(report, isMobile),
         const SizedBox(height: 20),
       ] else ...[
         _buildCategoryCountsSection(report, isMobile),
@@ -361,9 +411,35 @@ class _ReportsScreenState extends State<ReportsScreen>
         _buildInstitutionsSection(report, isMobile),
         const SizedBox(height: 12),
         _buildBestSchoolAwardSection(report, isMobile),
+        const SizedBox(height: 12),
+        _buildTopMastersSection(report, isMobile),
         const SizedBox(height: 20),
       ],
     ];
+  }
+
+  Widget _buildBestSchoolAndTopMastersRow(
+    Map<String, dynamic> report,
+    bool isMobile,
+  ) {
+    final institutions =
+        (report['institutions'] as Map?)?.cast<String, dynamic>() ?? {};
+    final threshold = (institutions['bestSchoolAwardMinParticipants'] as num?)
+        ?.toInt();
+    final showBestSchool = threshold != null && threshold > 0;
+
+    if (!showBestSchool) {
+      return _buildTopMastersSection(report, isMobile);
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _buildBestSchoolAwardSection(report, isMobile)),
+        const SizedBox(width: 12),
+        Expanded(child: _buildTopMastersSection(report, isMobile)),
+      ],
+    );
   }
 
   Widget _buildCompetitionSelector(bool isMobile) {
@@ -582,17 +658,28 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   Widget _buildPrefixAgeSection(Map<String, dynamic> report, bool isMobile) {
-    final prefixAgeCounts =
+    final raw =
         (report['prefixAgeCounts'] as Map?)?.cast<String, dynamic>() ?? {};
 
-    if (prefixAgeCounts.isEmpty) {
+    if (raw.isEmpty) {
       return _buildInfoCard(
         'No Age data found (needs registrationNo + age).',
         icon: Icons.group,
       );
     }
 
-    final prefixKeys = prefixAgeCounts.keys.toList()..sort();
+    // Prefer nested shape: category -> prefix -> ages.
+    // Fall back to legacy flat shape: prefix -> ages.
+    final byCategory = _groupPrefixAgeCountsByCategory(raw);
+    if (byCategory.isEmpty) {
+      return _buildInfoCard(
+        'No Age data found (needs registrationNo + age).',
+        icon: Icons.group,
+      );
+    }
+
+    final categoryKeys = byCategory.keys.toList()
+      ..sort(_compareCategoryTypeKeys);
 
     return Card(
       elevation: 2,
@@ -604,24 +691,17 @@ class _ReportsScreenState extends State<ReportsScreen>
           children: [
             _sectionTitle('Age wise Participants'),
             const SizedBox(height: 10),
-            ...prefixKeys.map((prefix) {
-              final agesMap =
-                  (prefixAgeCounts[prefix] as Map?)?.cast<String, dynamic>() ??
-                  {};
-              final ageKeys = agesMap.keys.toList()
-                ..sort((a, b) {
-                  final ai = int.tryParse(a) ?? 0;
-                  final bi = int.tryParse(b) ?? 0;
-                  return ai.compareTo(bi);
-                });
+            ...categoryKeys.map((categoryKey) {
+              final prefixMap = byCategory[categoryKey]!;
+              final prefixKeys = prefixMap.keys.toList()..sort();
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.only(bottom: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      prefix,
+                      _categoryTypeDisplayName(categoryKey),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -629,28 +709,56 @@ class _ReportsScreenState extends State<ReportsScreen>
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: ageKeys
-                          .map(
-                            (age) => _miniPill(
-                              'Age $age',
-                              '${agesMap[age] ?? 0}',
-                              onTap: () {
-                                final ageInt = int.tryParse(age);
-                                if (ageInt == null) return;
-                                _openRegisteredParticipants(
-                                  ReportsParticipantsListPreset.prefixAndAge(
-                                    prefix: prefix,
-                                    age: ageInt,
-                                  ),
-                                );
-                              },
+                    ...prefixKeys.map((prefix) {
+                      final agesMap = prefixMap[prefix]!;
+                      final ageKeys = agesMap.keys.toList()
+                        ..sort((a, b) {
+                          final ai = int.tryParse(a) ?? 0;
+                          final bi = int.tryParse(b) ?? 0;
+                          return ai.compareTo(bi);
+                        });
+
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 8, bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              prefix,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey[800],
+                              ),
                             ),
-                          )
-                          .toList(),
-                    ),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: ageKeys
+                                  .map(
+                                    (age) => _miniPill(
+                                      'Age $age',
+                                      '${agesMap[age] ?? 0}',
+                                      onTap: () {
+                                        final ageInt = int.tryParse(age);
+                                        if (ageInt == null) return;
+                                        _openRegisteredParticipants(
+                                          ReportsParticipantsListPreset
+                                              .prefixAndAge(
+                                            prefix: prefix,
+                                            age: ageInt,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
                   ],
                 ),
               );
@@ -659,6 +767,90 @@ class _ReportsScreenState extends State<ReportsScreen>
         ),
       ),
     );
+  }
+
+  /// Normalizes report payload to: category -> prefix -> age -> count.
+  Map<String, Map<String, Map<String, dynamic>>>
+  _groupPrefixAgeCountsByCategory(Map<String, dynamic> raw) {
+    if (raw.isEmpty) return {};
+
+    final firstValue = raw.values.first;
+    final nested =
+        firstValue is Map &&
+        firstValue.isNotEmpty &&
+        firstValue.values.first is Map;
+
+    if (nested) {
+      final out = <String, Map<String, Map<String, dynamic>>>{};
+      for (final entry in raw.entries) {
+        final prefixMap =
+            (entry.value as Map?)?.cast<String, dynamic>() ?? {};
+        if (prefixMap.isEmpty) continue;
+        final prefixes = <String, Map<String, dynamic>>{};
+        for (final p in prefixMap.entries) {
+          final ages = (p.value as Map?)?.cast<String, dynamic>() ?? {};
+          if (ages.isEmpty) continue;
+          prefixes[p.key] = ages;
+        }
+        if (prefixes.isNotEmpty) {
+          out[entry.key.toUpperCase()] = prefixes;
+        }
+      }
+      return out;
+    }
+
+    // Legacy flat: prefix -> ages. Infer category from registration prefix letter.
+    final out = <String, Map<String, Map<String, dynamic>>>{};
+    for (final entry in raw.entries) {
+      final prefix = entry.key;
+      final ages = (entry.value as Map?)?.cast<String, dynamic>() ?? {};
+      if (ages.isEmpty) continue;
+      final category = _categoryTypeFromRegistrationPrefix(prefix);
+      out.putIfAbsent(category, () => {})[prefix] = ages;
+    }
+    return out;
+  }
+
+  String _categoryTypeFromRegistrationPrefix(String prefix) {
+    if (prefix.isEmpty) return 'UNKNOWN';
+    switch (prefix[0].toUpperCase()) {
+      case 'C':
+        return 'COMMON';
+      case 'S':
+        return 'SPECIAL';
+      case 'H':
+        return 'CHAMPIONS';
+      default:
+        return 'UNKNOWN';
+    }
+  }
+
+  String _categoryTypeDisplayName(String key) {
+    switch (key.toUpperCase()) {
+      case 'COMMON':
+        return 'Common';
+      case 'SPECIAL':
+        return 'Special';
+      case 'CHAMPIONS':
+        return 'Champions';
+      case 'UNKNOWN':
+        return 'Other';
+      default:
+        if (key.isEmpty) return key;
+        return key[0].toUpperCase() + key.substring(1).toLowerCase();
+    }
+  }
+
+  int _compareCategoryTypeKeys(String a, String b) {
+    const order = ['COMMON', 'SPECIAL', 'CHAMPIONS'];
+    final ai = order.indexOf(a.toUpperCase());
+    final bi = order.indexOf(b.toUpperCase());
+    if (ai >= 0 || bi >= 0) {
+      if (ai < 0) return 1;
+      if (bi < 0) return -1;
+      return ai.compareTo(bi);
+    }
+    return a.compareTo(b);
   }
 
   Widget _buildBestSchoolAwardSection(
@@ -752,7 +944,202 @@ class _ReportsScreenState extends State<ReportsScreen>
     );
   }
 
-  Widget _buildInstitutionsSection(Map<String, dynamic> report, bool isMobile) {
+  Widget _buildTopMastersSection(
+    Map<String, dynamic> report,
+    bool isMobile,
+  ) {
+    final masters = (report['topMasters'] as List?)
+            ?.map((row) => (row as Map).cast<String, dynamic>())
+            .toList() ??
+        const <Map<String, dynamic>>[];
+    final totalMasters = masters.length;
+    final topMaster = masters.isNotEmpty ? masters.first : null;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle("Top Master's Report"),
+            const SizedBox(height: 6),
+            // Text(
+            //   'Yoga masters who brought the most students (by teacher name & cell)',
+            //   style: TextStyle(
+            //     fontSize: 12,
+            //     color: Colors.grey[700],
+            //     fontWeight: FontWeight.w600,
+            //   ),
+            // ),
+            const SizedBox(height: 10),
+            if (masters.isEmpty)
+              _buildInfoCard(
+                'No yoga teacher data available yet.',
+                icon: Icons.person_outline,
+              )
+            else
+              Wrap(
+                runSpacing: 10,
+                spacing: 10,
+                children: [
+                  _statTile(
+                    'Total Masters',
+                    '$totalMasters',
+                    onTap: () => _openTopMastersDetails(
+                      title: 'All Masters',
+                      masters: masters,
+                    ),
+                  ),
+                  _buildTopMasterSummaryTile(
+                    topMaster!,
+                    onTap: () {
+                      final name =
+                          (topMaster['yogaTeacherName'] ?? '').toString().trim();
+                      _openTopMastersDetails(
+                        title: name.isNotEmpty
+                            ? "$name's Details"
+                            : "Top Master's Details",
+                        masters: [topMaster],
+                      );
+                    },
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopMasterSummaryTile(
+    Map<String, dynamic> topMaster, {
+    VoidCallback? onTap,
+  }) {
+    final name = (topMaster['yogaTeacherName'] ?? '').toString().trim();
+    final cell = (topMaster['yogaTeacherCell'] ?? '').toString().trim();
+    final participantCount =
+        (topMaster['participantCount'] as num?)?.toInt() ?? 0;
+    final institutionCount =
+        (topMaster['institutionCount'] as num?)?.toInt() ?? 0;
+
+    final tile = Container(
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 360),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            name.isNotEmpty ? name : 'Unknown master',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primaryColor,
+            ),
+          ),
+          if (cell.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              cell,
+              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              Text(
+                '$institutionCount institution${institutionCount == 1 ? '' : 's'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
+              ),
+              Text(
+                '·',
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+              Text(
+                '$participantCount participant${participantCount == 1 ? '' : 's'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Top Master',
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+          ),
+        ],
+      ),
+    );
+
+    if (onTap == null) return tile;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: tile,
+        ),
+      ),
+    );
+  }
+
+  void _openTopMastersDetails({
+    required String title,
+    required List<Map<String, dynamic>> masters,
+  }) {
+    final competitionId = controller.selectedCompetitionId.value;
+    if (competitionId == null || competitionId.isEmpty) {
+      Get.snackbar(
+        'Competition required',
+        'Select a competition first.',
+        backgroundColor: Colors.orange.shade800,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    String? competitionName;
+    for (final c in controller.competitions) {
+      if (c.id == competitionId) {
+        competitionName = c.competitionName;
+        break;
+      }
+    }
+
+    ReportsMastersDetailsPopup.show(
+      context,
+      title: title,
+      masters: masters,
+      competitionId: competitionId,
+      competitionName: competitionName,
+    );
+  }
+
+  Widget _buildInstitutionsSection(
+    Map<String, dynamic> report,
+    bool isMobile,
+  ) {
     final institutions =
         (report['institutions'] as Map?)?.cast<String, dynamic>() ?? {};
 
@@ -760,8 +1147,14 @@ class _ReportsScreenState extends State<ReportsScreen>
         institutions['totalInstitutionsParticipated'] ?? 0;
     final totalSchools = institutions['totalSchoolsParticipated'] ?? 0;
     final totalColleges = institutions['totalCollegesParticipated'] ?? 0;
-    final list =
-        (institutions['institutionsByParticipantCount'] as List?)?.cast() ?? [];
+    final totalYogaCenters =
+        institutions['totalYogaCentersParticipated'] ?? 0;
+    final rawList =
+        (institutions['institutionsByParticipantCount'] as List?)?.cast() ??
+            [];
+    final list = rawList
+        .map((row) => (row as Map).cast<String, dynamic>())
+        .toList();
 
     return Card(
       elevation: 2,
@@ -780,81 +1173,41 @@ class _ReportsScreenState extends State<ReportsScreen>
                 _statTile(
                   'Total Institutions',
                   '$totalInstitutions',
-                  onTap: () => _openRegisteredParticipants(
-                    ReportsParticipantsListPreset.allInstitutions(),
+                  onTap: () => _openInstitutionsDetails(
+                    title: 'Total Institutions',
+                    kind: InstitutionsListKind.all,
+                    institutions: list,
                   ),
                 ),
                 _statTile(
                   'Total Schools',
                   '$totalSchools',
-                  onTap: () => _openRegisteredParticipants(
-                    ReportsParticipantsListPreset.schoolsOnly(),
+                  onTap: () => _openInstitutionsDetails(
+                    title: 'Total Schools',
+                    kind: InstitutionsListKind.schools,
+                    institutions: list,
                   ),
                 ),
                 _statTile(
                   'Total Colleges',
                   '$totalColleges',
-                  onTap: () => _openRegisteredParticipants(
-                    ReportsParticipantsListPreset.collegesOnly(),
+                  onTap: () => _openInstitutionsDetails(
+                    title: 'Total Colleges',
+                    kind: InstitutionsListKind.colleges,
+                    institutions: list,
+                  ),
+                ),
+                _statTile(
+                  'Total Yoga Centers',
+                  '$totalYogaCenters',
+                  onTap: () => _openInstitutionsDetails(
+                    title: 'Total Yoga Centers',
+                    kind: InstitutionsListKind.yogaCenters,
+                    institutions: list,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            if (list.isEmpty)
-              _buildInfoCard(
-                'No institution list found.',
-                icon: Icons.school_outlined,
-              )
-            else
-              Column(
-                children: list.take(30).map((row) {
-                  final m = (row as Map).cast<String, dynamic>();
-                  final name = (m['institutionName'] ?? '').toString();
-                  final count = (m['participantCount'] ?? 0).toString();
-                  final type = (m['institutionType'] ?? '').toString();
-
-                  final institutionId = (m['institutionId'] as num?)?.toInt();
-
-                  return ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    onTap: institutionId != null
-                        ? () => _openRegisteredParticipants(
-                            ReportsParticipantsListPreset.institution(
-                              institutionId,
-                              institutionName:
-                                  name.isNotEmpty ? name : null,
-                            ),
-                          )
-                        : null,
-                    leading: CircleAvatar(
-                      backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
-                      child: Text(
-                        count,
-                        style: TextStyle(
-                          color: AppTheme.primaryColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      name.isNotEmpty ? name : 'Unknown institution',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: type.isNotEmpty ? Text(type) : null,
-                  );
-                }).toList(),
-              ),
-            if (list.length > 30) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Showing top 30 institutions (by participants).',
-                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-              ),
-            ],
           ],
         ),
       ),
@@ -1435,12 +1788,15 @@ class _ReportsScreenState extends State<ReportsScreen>
 
     if (onTap == null) return tile;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: tile,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: tile,
+        ),
       ),
     );
   }

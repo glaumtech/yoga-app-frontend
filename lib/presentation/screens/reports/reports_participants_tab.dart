@@ -982,6 +982,7 @@ class ReportsParticipantFiltersBar extends StatelessWidget {
     required this.onDownloadExcel,
     required this.searchHint,
     required this.emptyFiltersHint,
+    this.requireSingleStageForExcel = true,
   });
 
   final ReportsParticipantsTabController controller;
@@ -990,6 +991,9 @@ class ReportsParticipantFiltersBar extends StatelessWidget {
   final VoidCallback onDownloadExcel;
   final String searchHint;
   final String emptyFiltersHint;
+
+  /// Score Excel export needs exactly one stage; registered list Excel does not.
+  final bool requireSingleStageForExcel;
 
   @override
   Widget build(BuildContext context) {
@@ -1141,15 +1145,18 @@ class ReportsParticipantFiltersBar extends StatelessWidget {
     );
 
     final downloadButton = Obx(() {
-      final stageSelected = controller.selectedStageIds.length == 1;
+      // Always read an observable so Obx is valid when stage is not required.
+      final stageCount = controller.selectedStageIds.length;
+      final canDownload =
+          !requireSingleStageForExcel || stageCount == 1;
       return IconButton(
-        tooltip: stageSelected
+        tooltip: canDownload
             ? 'Download Excel'
             : 'Select exactly one stage for Excel',
-        onPressed: stageSelected ? onDownloadExcel : null,
+        onPressed: canDownload ? onDownloadExcel : null,
         icon: Icon(
           Icons.download,
-          color: stageSelected ? AppTheme.primaryColor : Colors.grey,
+          color: canDownload ? AppTheme.primaryColor : Colors.grey,
         ),
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
