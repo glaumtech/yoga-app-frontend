@@ -40,8 +40,56 @@ class JuryScoringController extends GetxController {
   final RxMap<String, bool> selectedParticipantCheckboxes =
       <String, bool>{}.obs; // Map of participantId to checkbox state
 
-  // Number of asanas to score (default: 5)
-  static const int numberOfAsanas = 5;
+  // Number of asanas to score — from selected category config (compulsory + own choice).
+  // Falls back to 5 when no category is selected / config missing.
+  static const int defaultNumberOfAsanas = 5;
+
+  /// When true, scoring is restricted to one tie-breaker asana for tied participants.
+  final RxBool tieBreakerMode = false.obs;
+  final RxString tieBreakerAsanaName = 'TIE BREAKER'.obs;
+  final RxList<int> tieBreakerParticipantIds = <int>[].obs;
+
+  /// Reactive asana count for the currently selected category.
+  int get numberOfAsanas {
+    if (tieBreakerMode.value) return 1;
+    final categoryName = selectedCategory.value;
+    final assignment = juryAssignment.value;
+    if (assignment == null || categoryName.isEmpty) {
+      return defaultNumberOfAsanas;
+    }
+    final match = assignment.categories.where(
+      (c) => c.categoryName == categoryName,
+    );
+    if (match.isEmpty) return defaultNumberOfAsanas;
+    final count = match.first.numberOfAsanas;
+    return count > 0 ? count : defaultNumberOfAsanas;
+  }
+
+  String asanaDisplayName(int asanaNum) {
+    if (tieBreakerMode.value) {
+      final name = tieBreakerAsanaName.value.trim();
+      return name.isEmpty ? 'TIE BREAKER' : name;
+    }
+    return 'ASANA $asanaNum';
+  }
+
+  void enableTieBreakerMode({
+    required String asanaName,
+    required List<int> participantRegistrationIds,
+  }) {
+    tieBreakerMode.value = true;
+    tieBreakerAsanaName.value =
+        asanaName.trim().isEmpty ? 'TIE BREAKER' : asanaName.trim();
+    tieBreakerParticipantIds.assignAll(participantRegistrationIds);
+    currentAsana.value = 1;
+    submittedAsanas.clear();
+  }
+
+  void clearTieBreakerMode() {
+    tieBreakerMode.value = false;
+    tieBreakerAsanaName.value = 'TIE BREAKER';
+    tieBreakerParticipantIds.clear();
+  }
 
   // Score controllers for each participant and asana
   // Format: Map<participantId, Map<asanaNumber, TextEditingController>>
@@ -58,10 +106,10 @@ class JuryScoringController extends GetxController {
   final RxBool hasScoresEntered = false.obs;
   final RxBool canSubmitScores = false.obs;
 
-  // Current asana being scored (1-5)
+  // Current asana being scored (1..numberOfAsanas)
   final RxInt currentAsana = 1.obs;
 
-  // Asana numbers (1-5) for which user has clicked Submit this round; API is called only when all 5 are submitted
+  // Asana numbers submitted this round; API is called only when all configured asanas are submitted
   final RxList<int> submittedAsanas = <int>[].obs;
 
   // Jury submission status
@@ -269,11 +317,11 @@ class JuryScoringController extends GetxController {
         juryAssignment.value = response.data!;
 
         // Populate available stages and categories
-        availableStages.value = response.data!.stages;
-        availableCategories.value = response.data!.categories;
+        availableStages.assignAll(response.data!.stages);
+        availableCategories.assignAll(response.data!.categories);
 
-        // Clear groups initially - will be populated when stage is selected
-        availableGroups.clear();
+        // Refresh groups if a stage is already selected (e.g. after reload).
+        _syncGroupsForSelectedStage();
       } else {
         errorMessage.value =
             response.message ?? 'Failed to load jury assignments';
@@ -316,24 +364,12 @@ class JuryScoringController extends GetxController {
   void setSelectedStage(String stage) {
     selectedStage.value = stage;
 
-    // Update available groups based on selected stage
-    if (stage.isNotEmpty && juryAssignment.value != null) {
-      final stageAssignment = availableStages.firstWhereOrNull(
-        (s) => s.stageName == stage,
-      );
-      if (stageAssignment != null) {
-        availableGroups.value = stageAssignment.groups;
-      } else {
-        availableGroups.clear();
-      }
-    } else {
-      availableGroups.clear();
-    }
-
-    // Clear group selection if stage changes
+    // Clear group when stage changes — options come from the new stage.
     if (selectedGroup.value.isNotEmpty) {
       selectedGroup.value = '';
     }
+
+    _syncGroupsForSelectedStage();
 
     // Clear participants if stage is cleared
     if (stage.isEmpty) {
@@ -348,6 +384,8 @@ class JuryScoringController extends GetxController {
 
   // Set selected category
   void setSelectedCategory(String category) {
+    final wasChampions =
+        selectedCategory.value.trim().toUpperCase() == 'CHAMPIONS';
     selectedCategory.value = category;
 
     // Clear participants if category is cleared
@@ -363,14 +401,38 @@ class JuryScoringController extends GetxController {
     if (j != null &&
         j.isWinnerBasedChampionship &&
         j.hasChampionsCategoryAssignment &&
+        wasChampions &&
         category.trim().toUpperCase() != 'CHAMPIONS') {
       selectedStage.value = '';
       selectedGroup.value = '';
       availableGroups.clear();
+    } else {
+      // Keep / refresh groups for the currently selected stage.
+      _syncGroupsForSelectedStage();
     }
 
     // Check if all dropdowns are selected, then call API
     _checkAndCallApiIfAllSelected();
+  }
+
+  /// Rebuild [availableGroups] from the currently selected stage assignment.
+  void _syncGroupsForSelectedStage() {
+    final stage = selectedStage.value;
+    if (stage.isEmpty || juryAssignment.value == null) {
+      availableGroups.clear();
+      return;
+    }
+    final stageAssignment = availableStages.firstWhereOrNull(
+      (s) => s.stageName == stage,
+    );
+    if (stageAssignment == null) {
+      availableGroups.clear();
+      return;
+    }
+    // Copy into a new list so RxList always notifies listeners.
+    availableGroups.assignAll(
+      List<GroupAssignment>.from(stageAssignment.groups),
+    );
   }
 
   // Set selected group
@@ -512,10 +574,21 @@ class JuryScoringController extends GetxController {
 
       if (response.success && response.data != null) {
         // Extract participants and remaining count
-        final participants = response.data!.participants;
+        var participants = response.data!.participants;
+        if (tieBreakerMode.value && tieBreakerParticipantIds.isNotEmpty) {
+          final allowed = tieBreakerParticipantIds.toSet();
+          participants = participants
+              .where((p) {
+                final id = int.tryParse(p.id ?? '');
+                return id != null && allowed.contains(id);
+              })
+              .toList();
+        }
         print('Loaded ${participants.length} participants');
-        // Take first 3 participants (A, B, C)
-        currentParticipants.value = participants.take(3).toList();
+        // Take first 3 participants (A, B, C) — or all tied participants in TB mode
+        currentParticipants.value = tieBreakerMode.value
+            ? participants
+            : participants.take(3).toList();
 
         // Update remaining count if available
         if (response.data!.remainingCount != null) {
@@ -524,7 +597,7 @@ class JuryScoringController extends GetxController {
           remainingCount.value = 0;
         }
 
-        // Initialize score controllers and values for new participants (5 asanas each)
+        // Initialize score controllers and values for new participants (all configured asanas)
         for (final participant in currentParticipants) {
           if (participant.id != null) {
             if (!scoreControllers.containsKey(participant.id)) {
@@ -533,7 +606,7 @@ class JuryScoringController extends GetxController {
             if (!scoreValues.containsKey(participant.id)) {
               scoreValues[participant.id!] = {};
             }
-            // Initialize controllers and score values for all 5 asanas
+            // Initialize controllers and score values for all configured asanas
             for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
               if (!scoreControllers[participant.id!]!.containsKey(asanaNum)) {
                 scoreControllers[participant.id!]![asanaNum] =
@@ -622,9 +695,12 @@ class JuryScoringController extends GetxController {
         'skipped': 0,
       };
     }
+    // At max whole marks (e.g. 10), fractions like 0.25 would exceed the limit.
+    final effectiveDecimal =
+        whole >= effectiveMaximumMarks ? 0 : decimal;
     scoreValues[participantId]![asanaNum]!['skipped'] = 0;
     scoreValues[participantId]![asanaNum]!['whole'] = whole;
-    scoreValues[participantId]![asanaNum]!['decimal'] = decimal;
+    scoreValues[participantId]![asanaNum]!['decimal'] = effectiveDecimal;
     // Trigger reactivity by updating the trigger
     scoreUpdateTrigger.value = scoreUpdateTrigger.value + 1;
 
@@ -635,13 +711,13 @@ class JuryScoringController extends GetxController {
 
     // Update text controller with formatted score
     // Decimal values: 25 = 0.25, 50 = 0.5, 75 = 0.75
-    final score = whole + (decimal / 100);
+    final score = whole + (effectiveDecimal / 100);
     final controller = scoreControllers[participantId]?[asanaNum];
     if (controller != null) {
       // Format to show 1-2 decimal places (e.g., 6.5 or 6.75)
-      if (decimal == 0) {
+      if (effectiveDecimal == 0) {
         controller.text = whole.toString();
-      } else if (decimal == 50) {
+      } else if (effectiveDecimal == 50) {
         controller.text = score.toStringAsFixed(1); // 6.5
       } else {
         controller.text = score.toStringAsFixed(2); // 6.25 or 6.75
@@ -743,7 +819,7 @@ class JuryScoringController extends GetxController {
     return true;
   }
 
-  // Check if all participants have scores for all 5 asanas
+  // Check if all participants have scores for all configured asanas
   bool hasAllAsanasScored() {
     // Force reactivity for UI (scoreValues is a plain Map)
     scoreUpdateTrigger.value;
@@ -754,7 +830,7 @@ class JuryScoringController extends GetxController {
         final participantScores = scoreValues[participant.id!];
         if (participantScores == null) return false;
 
-        // Check all 5 asanas
+        // Check all configured asanas
         for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
           final score = participantScores[asanaNum];
           if (score == null) return false;
@@ -945,7 +1021,7 @@ class JuryScoringController extends GetxController {
         submittedAsanas.add(asanaNum);
       }
 
-      // If not all 5 asanas submitted yet, advance to next asana and return (no API call)
+      // If not all configured asanas submitted yet, advance to next asana and return (no API call)
       if (submittedAsanas.length < numberOfAsanas) {
         if (currentAsana.value < numberOfAsanas) {
           currentAsana.value++;
@@ -1099,7 +1175,7 @@ class JuryScoringController extends GetxController {
             continue;
           }
 
-          // Build asana scores array for all 5 asanas
+          // Build asana scores array for all configured asanas
           // Since validation passed, all scores should be present and valid
           final List<Map<String, dynamic>> asanaScores = [];
           for (int asanaNum = 1; asanaNum <= numberOfAsanas; asanaNum++) {
@@ -1144,7 +1220,7 @@ class JuryScoringController extends GetxController {
                 : whole + (decimal / 100);
 
             asanaScores.add({
-              'asanaName': 'ASANA $asanaNum',
+              'asanaName': asanaDisplayName(asanaNum),
               'score': totalScore,
               'isSkipped': skipped,
             });

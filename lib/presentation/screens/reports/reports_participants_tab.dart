@@ -627,6 +627,9 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                     child:
                                         ReportsParticipantsTabLogic.rowOptForECertificate(
                                           row,
+                                        ) &&
+                                        ReportsParticipantsTabLogic.rowCertificateAvailable(
+                                          row,
                                         )
                                         ? Tooltip(
                                             message: 'Download e-certificate',

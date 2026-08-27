@@ -18,6 +18,7 @@ import '../../routes/app_router.dart';
 import '../../core/utils/photo_upload_processor.dart';
 import '../../data/repositories/competition_repository.dart';
 import '../../data/models/competition_model.dart';
+import '../../data/models/category_config_model.dart';
 import '../../data/models/competition_grade_model.dart';
 import '../../data/models/user_management_model.dart';
 import '../models/competition_grade_entry.dart';
@@ -113,13 +114,191 @@ class CompetitionController extends GetxController {
     SnackbarHelper.showSuccessMessage(message);
   }
 
+  /// Section keys used to scroll when non-FormField checks fail on submit.
+  final GlobalKey competitionNameFieldKey = GlobalKey();
+  final GlobalKey descriptionFieldKey = GlobalKey();
+  final GlobalKey addressFieldKey = GlobalKey();
+  final GlobalKey eventStartDateFieldKey = GlobalKey();
+  final GlobalKey eventEndDateFieldKey = GlobalKey();
+  final GlobalKey displayAdFromFieldKey = GlobalKey();
+  final GlobalKey eventEndTimeFieldKey = GlobalKey();
+  final GlobalKey resultsPublishTimeFieldKey = GlobalKey();
+  final GlobalKey participantsPerStageFieldKey = GlobalKey();
+  final GlobalKey prizesSectionKey = GlobalKey();
+  final GlobalKey categoriesSectionKey = GlobalKey();
+  final GlobalKey stagesSectionKey = GlobalKey();
+  final GlobalKey gradesSectionKey = GlobalKey();
+  final GlobalKey brochureSectionKey = GlobalKey();
+
+  final FocusNode competitionNameFocusNode = FocusNode();
+  final FocusNode descriptionFocusNode = FocusNode();
+  final FocusNode addressFocusNode = FocusNode();
+
   bool _validateFormState() {
     final state = formKey.currentState;
     if (state == null) {
       _notifyError('Form is not ready. Please try again.');
       return false;
     }
-    return state.validate();
+    final isValid = state.validate();
+    if (!isValid) {
+      // Prefer stable section keys: FormField elements can remount after Obx
+      // rebuilds triggered by hasAttemptedSubmit.
+      final scrolled = scrollToFirstMissingMandatorySection(
+        includeBrochure: !isEditMode.value,
+      );
+      if (!scrolled) {
+        scrollToFirstInvalidFormField();
+      }
+      SnackbarHelper.showErrorMessage('Please fill all mandatory fields');
+    }
+    return isValid;
+  }
+
+  /// Scrolls to the first [FormField] with a validation error and focuses it
+  /// when it is a text input.
+  void scrollToFirstInvalidFormField() {
+    final formContext = formKey.currentContext;
+    if (formContext == null) return;
+
+    BuildContext? firstInvalid;
+    void visit(Element element) {
+      if (firstInvalid != null) return;
+      if (element is StatefulElement) {
+        final fieldState = element.state;
+        if (fieldState is FormFieldState &&
+            fieldState.mounted &&
+            fieldState.hasError) {
+          firstInvalid = element;
+          return;
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    formContext.visitChildElements(visit);
+    final target = firstInvalid;
+    if (target == null) return;
+    _scrollToAndFocus(target);
+  }
+
+  void scrollToSection(GlobalKey key, {FocusNode? focusNode}) {
+    final context = key.currentContext;
+    if (context == null) return;
+    _scrollToAndFocus(context, focusNode: focusNode);
+  }
+
+  void _scrollToAndFocus(BuildContext context, {FocusNode? focusNode}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+      if (focusNode != null) {
+        focusNode.requestFocus();
+        return;
+      }
+      _requestTextFocusIn(context);
+    });
+  }
+
+  void _requestTextFocusIn(BuildContext context) {
+    var focused = false;
+    void visit(Element element) {
+      if (focused) return;
+      final widget = element.widget;
+      if (widget is EditableText) {
+        widget.focusNode.requestFocus();
+        focused = true;
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    context.visitChildElements(visit);
+  }
+
+  /// Scrolls to the first missing mandatory value after form-level checks.
+  /// Returns true when a target section was found.
+  bool scrollToFirstMissingMandatorySection({
+    required bool includeBrochure,
+  }) {
+    if (competitionNameController.text.trim().isEmpty) {
+      scrollToSection(
+        competitionNameFieldKey,
+        focusNode: competitionNameFocusNode,
+      );
+      return true;
+    }
+    if (descriptionController.text.trim().length < descriptionMinLength) {
+      scrollToSection(descriptionFieldKey, focusNode: descriptionFocusNode);
+      return true;
+    }
+    if (addressController.text.trim().length < addressMinLength) {
+      scrollToSection(addressFieldKey, focusNode: addressFocusNode);
+      return true;
+    }
+    if (eventStartDate.value == null) {
+      scrollToSection(eventStartDateFieldKey);
+      return true;
+    }
+    if (eventEndDate.value == null) {
+      scrollToSection(eventEndDateFieldKey);
+      return true;
+    }
+    if (displayAdFrom.value == null) {
+      scrollToSection(displayAdFromFieldKey);
+      return true;
+    }
+    if (eventEndTime.value == null) {
+      scrollToSection(eventEndTimeFieldKey);
+      return true;
+    }
+    if (!publishResultNow.value && resultsPublishTime.value == null) {
+      scrollToSection(resultsPublishTimeFieldKey);
+      return true;
+    }
+    if (categoryConfigDrafts.isNotEmpty) {
+      if (categoryConfigDrafts.any(
+        (c) => c.isAsanas && !c.configured,
+      )) {
+        scrollToSection(categoriesSectionKey);
+        return true;
+      }
+    } else {
+      if (participantsPerStage.value <= 0) {
+        scrollToSection(participantsPerStageFieldKey);
+        return true;
+      }
+      if (selectedPrizeIds.isEmpty) {
+        scrollToSection(prizesSectionKey);
+        return true;
+      }
+      if (selectedCategoryIds.isEmpty) {
+        scrollToSection(categoriesSectionKey);
+        return true;
+      }
+      if (selectedStageIds.isEmpty) {
+        scrollToSection(stagesSectionKey);
+        return true;
+      }
+    }
+    if (validateGradeEntries() != null) {
+      scrollToSection(gradesSectionKey);
+      return true;
+    }
+    final hasBrochure =
+        brochureFile.value != null ||
+        brochureFileLocal.value != null ||
+        brochureBytes.value != null;
+    if (includeBrochure && !hasBrochure) {
+      scrollToSection(brochureSectionKey);
+      return true;
+    }
+    return false;
   }
 
   final competitionNameController = TextEditingController();
@@ -131,6 +310,8 @@ class CompetitionController extends GetxController {
   /// Loading flag for Add More prize/category/stage/group dialogs only.
   /// Kept separate from [isLoading] so the create form does not rebuild under an open dialog.
   final RxBool isAddingOption = false.obs;
+  /// Guards concurrent prize/category/stage/group option list fetches.
+  final RxBool isLoadingOptions = false.obs;
   final RxString errorMessage = ''.obs;
   final RxList<CompetitionModel> competitions = <CompetitionModel>[].obs;
 
@@ -193,7 +374,9 @@ class CompetitionController extends GetxController {
   bool get requiresPrepaidCompetitionPayment => !isEditMode.value;
 
   String get createCompetitionButtonLabel =>
-      requiresPrepaidCompetitionPayment ? 'Pay and Create Competition' : 'SAVE';
+      requiresPrepaidCompetitionPayment
+          ? 'Pay and Finalize'
+          : 'Finalize';
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -215,7 +398,20 @@ class CompetitionController extends GetxController {
   final RxBool publishResultNow = false.obs;
   final Rx<TimeOfDay?> resultsPublishTime = Rx<TimeOfDay?>(null);
   final RxBool spotRegistration = false.obs;
-  final Rx<ChampionshipStyle?> championshipStyle = Rx<ChampionshipStyle?>(null);
+  final Rx<ChampionshipStyle?> championshipStyle =
+      Rx<ChampionshipStyle?>(ChampionshipStyle.separateCategory);
+  /// ONLINE | OFFLINE
+  final RxString competitionMode = 'OFFLINE'.obs;
+  final TextEditingController googleDriveFolderUrlController =
+      TextEditingController();
+  final RxString googleDriveServiceAccountEmail = ''.obs;
+  final RxBool googleDriveServerConfigured = false.obs;
+
+  /// Server explanation when Drive uploads cannot run at all.
+  final RxString googleDriveServerReason = ''.obs;
+  /// Per-category Asanas/Challenge drafts for the redesigned create flow.
+  final RxList<CompetitionCategoryConfigModel> categoryConfigDrafts =
+      <CompetitionCategoryConfigModel>[].obs;
   final RxInt participantsPerStage = RxInt(0);
   final RxInt minimumMarks = RxInt(0);
   final RxInt maximumMarks = RxInt(0);
@@ -226,6 +422,8 @@ class CompetitionController extends GetxController {
   final RxList<int> selectedPrizeIds = <int>[].obs;
   final RxList<int> selectedCategoryIds = <int>[].obs;
   final RxMap<String, double> categoryAmounts =
+      <String, double>{}.obs;
+  final RxMap<String, double> categorySpotAmounts =
       <String, double>{}.obs; // Key: category ID as string
   final RxList<int> selectedStageIds = <int>[].obs;
   final RxMap<String, List<int>> stageGroups = <String, List<int>>{}
@@ -534,7 +732,10 @@ class CompetitionController extends GetxController {
                 existing.categoryAmounts!.isNotEmpty) ||
             (existing.categoryExtraFeeIncluded != null &&
                 existing.categoryExtraFeeIncluded!.isNotEmpty));
-    if (hasGroupData && hasCategoryFeeData) {
+    // categoryConfigs carries per-category stage allotment used to filter groups.
+    final hasCategoryConfigs =
+        existing != null && existing.categoryConfigs != null;
+    if (hasGroupData && hasCategoryFeeData && hasCategoryConfigs) {
       _syncCategoryIncludeFeeFromModel(existing);
       return;
     }
@@ -646,6 +847,22 @@ class CompetitionController extends GetxController {
     // Load options from API
     loadOptions();
     loadOnDemandContext();
+    loadGoogleDriveConfig();
+  }
+
+  Future<void> loadGoogleDriveConfig() async {
+    try {
+      final response = await _repository.getGoogleDriveConfig();
+      if (response.success && response.data != null) {
+        googleDriveServiceAccountEmail.value =
+            response.data!['serviceAccountEmail']?.toString() ?? '';
+        googleDriveServerConfigured.value = response.data!['configured'] == true;
+        googleDriveServerReason.value =
+            response.data!['reason']?.toString() ?? '';
+      }
+    } catch (_) {
+      // Hint text stays empty if the config endpoint is unavailable.
+    }
   }
 
   Future<void> loadOnDemandContext() async {
@@ -846,7 +1063,9 @@ class CompetitionController extends GetxController {
 
   // Load all options (categories, prizes, stages, groups) from API
   Future<void> loadOptions() async {
+    if (isLoadingOptions.value) return;
     try {
+      isLoadingOptions.value = true;
       // Load all options in parallel
       final results = await Future.wait([
         _repository.getAllCategories(),
@@ -857,26 +1076,28 @@ class CompetitionController extends GetxController {
 
       // Update categories
       if (results[0].success && results[0].data != null) {
-        categoryOptions.value = results[0].data!;
+        categoryOptions.assignAll(results[0].data!);
       }
 
       // Update prizes
       if (results[1].success && results[1].data != null) {
-        prizeOptions.value = results[1].data!;
+        prizeOptions.assignAll(results[1].data!);
       }
 
       // Update stages
       if (results[2].success && results[2].data != null) {
-        stageOptions.value = results[2].data!;
+        stageOptions.assignAll(results[2].data!);
       }
 
       // Update groups
       if (results[3].success && results[3].data != null) {
-        groupOptions.value = results[3].data!;
+        groupOptions.assignAll(results[3].data!);
       }
     } catch (e) {
       print('Error loading options: $e');
       // Fallback to empty lists if API fails
+    } finally {
+      isLoadingOptions.value = false;
     }
   }
 
@@ -930,9 +1151,13 @@ class CompetitionController extends GetxController {
     _debounceTimer?.cancel();
     _razorpayCheckout.dispose();
     clearGradeEntries();
+    competitionNameFocusNode.dispose();
+    descriptionFocusNode.dispose();
+    addressFocusNode.dispose();
     competitionNameController.dispose();
     descriptionController.dispose();
     addressController.dispose();
+    googleDriveFolderUrlController.dispose();
     searchController.dispose();
     super.onClose();
   }
@@ -1410,7 +1635,10 @@ class CompetitionController extends GetxController {
 
   int? getCategoryIdByName(String name) {
     try {
-      return categoryOptions.firstWhere((opt) => opt.name == name).id;
+      final target = name.trim().toUpperCase();
+      return categoryOptions
+          .firstWhere((opt) => opt.name.trim().toUpperCase() == target)
+          .id;
     } catch (e) {
       return null;
     }
@@ -1480,9 +1708,58 @@ class CompetitionController extends GetxController {
     return 0;
   }
 
+  void _loadCategorySpotAmountsFromCompetition(CompetitionModel competition) {
+    categorySpotAmounts.clear();
+    final source = competition.categorySpotAmounts;
+    if (source == null || source.isEmpty) {
+      // Fall back to online fees when spot fees are not present.
+      for (final entry in categoryAmounts.entries) {
+        categorySpotAmounts[entry.key] = entry.value;
+      }
+      return;
+    }
+    for (final entry in source.entries) {
+      final keyStr = entry.key.toString();
+      int? categoryId = int.tryParse(keyStr);
+      if (categoryId == null || !selectedCategoryIds.contains(categoryId)) {
+        categoryId = getCategoryIdByName(keyStr);
+      }
+      if (categoryId != null) {
+        categorySpotAmounts[categoryId.toString()] = entry.value;
+      }
+    }
+    for (final id in selectedCategoryIds) {
+      final key = id.toString();
+      if (!categorySpotAmounts.containsKey(key)) {
+        categorySpotAmounts[key] = categoryAmounts[key] ?? 0;
+      }
+    }
+  }
+
   /// Registration fee in INR for [categoryId] on [competitionId].
   /// API category amounts use category name keys; home/public APIs may use IDs.
-  double resolveCategoryFeeRupees(String competitionId, int categoryId) {
+  /// When [spotRegistration] is true, uses spot fee (falls back to online fee).
+  double resolveCategoryFeeRupees(
+    String competitionId,
+    int categoryId, {
+    bool spotRegistration = false,
+  }) {
+    if (spotRegistration) {
+      var spotFee = _feeFromAmountMap(
+        categorySpotAmounts.isEmpty
+            ? null
+            : Map<String, double>.from(categorySpotAmounts),
+        categoryId,
+      );
+      if (spotFee <= 0) {
+        final competition = competitions.firstWhereOrNull(
+          (c) => c.id == competitionId,
+        );
+        spotFee = _feeFromAmountMap(competition?.categorySpotAmounts, categoryId);
+      }
+      if (spotFee > 0) return spotFee;
+    }
+
     var fee = _feeFromAmountMap(
       categoryAmounts.isEmpty
           ? null
@@ -1535,8 +1812,16 @@ class CompetitionController extends GetxController {
   }
 
   /// Participant payable amount after applying per-category include/exclude fee.
-  double resolveCategoryPayableFeeRupees(String competitionId, int categoryId) {
-    final stored = resolveCategoryFeeRupees(competitionId, categoryId);
+  double resolveCategoryPayableFeeRupees(
+    String competitionId,
+    int categoryId, {
+    bool spotRegistration = false,
+  }) {
+    final stored = resolveCategoryFeeRupees(
+      competitionId,
+      categoryId,
+      spotRegistration: spotRegistration,
+    );
     if (stored <= 0) return 0;
     final include = resolveCategoryExtraFeeIncluded(competitionId, categoryId);
     return calculateCategoryAmountWithFees(
@@ -1635,6 +1920,35 @@ class CompetitionController extends GetxController {
     gradeEntries.add(CompetitionGradeEntry());
   }
 
+  /// Replaces empty grade rows with a common A+–F mark-range template.
+  void applyStandardGradeEntries() {
+    if (isViewMode.value) return;
+    final hasUserInput = gradeEntries.any((entry) => entry.hasAnyInput);
+    if (hasUserInput) {
+      // Keep existing data; only fill when the section is unused.
+      return;
+    }
+    clearGradeEntries();
+    const standards = <(String, int, int)>[
+      ('A+', 90, 100),
+      ('A', 80, 89),
+      ('B', 70, 79),
+      ('C', 60, 69),
+      ('D', 50, 59),
+      ('E', 40, 49),
+      ('F', 0, 39),
+    ];
+    for (final grade in standards) {
+      gradeEntries.add(
+        CompetitionGradeEntry(
+          gradeName: grade.$1,
+          markRangeMin: '${grade.$2}',
+          markRangeMax: '${grade.$3}',
+        ),
+      );
+    }
+  }
+
   void removeGradeEntry(int index) {
     if (index < 0 || index >= gradeEntries.length) return;
     gradeEntries[index].dispose();
@@ -1648,26 +1962,43 @@ class CompetitionController extends GetxController {
     gradeEntries.clear();
   }
 
+  /// Replaces all grade rows. Callers must pass entries that this controller owns
+  /// (previous entries are disposed).
+  void replaceGradeEntries(List<CompetitionGradeEntry> entries) {
+    clearGradeEntries();
+    gradeEntries.addAll(entries);
+    gradeEntries.refresh();
+  }
+
   List<CompetitionGradeModel> buildGradesForSubmit() {
-    return gradeEntries
+    final fromEntries = gradeEntries
         .map((entry) => entry.toModel())
         .whereType<CompetitionGradeModel>()
         .toList();
+    if (fromEntries.isNotEmpty) return fromEntries;
+    final grading = categoryConfigDrafts.firstWhereOrNull(
+      (c) => c.isAsanas && c.isGradingScoring && c.grades.isNotEmpty,
+    );
+    return grading?.grades ?? const <CompetitionGradeModel>[];
   }
 
-  String? validateGradeEntries() {
+  String? validateGradeEntries([List<CompetitionGradeEntry>? entries]) {
+    final list = entries ?? gradeEntries;
     final names = <String>{};
-    for (final entry in gradeEntries) {
+    for (final entry in list) {
       if (!entry.hasAnyInput) continue;
       if (!entry.isComplete) {
         return 'Please enter grade name and mark range for each grade row';
       }
       final model = entry.toModel();
       if (model == null) {
-        return 'Mark range must be whole numbers between 0 and 100';
+        return 'Mark range must be whole numbers between 0 and 999';
       }
-      if (model.markRangeMin < 0 || model.markRangeMax > 100) {
-        return 'Mark range must be between 0 and 100 for grade "${model.gradeName}"';
+      if (model.markRangeMin < 0 ||
+          model.markRangeMin > 999 ||
+          model.markRangeMax < 0 ||
+          model.markRangeMax > 999) {
+        return 'Mark range must be between 0 and 999 for grade "${model.gradeName}"';
       }
       if (model.markRangeMax < model.markRangeMin) {
         return 'Maximum mark must be greater than or equal to minimum for grade "${model.gradeName}"';
@@ -1709,6 +2040,7 @@ class CompetitionController extends GetxController {
     if (selectedCategoryIds.contains(championsId)) {
       selectedCategoryIds.remove(championsId);
       categoryAmounts.remove(championsId.toString());
+      categorySpotAmounts.remove(championsId.toString());
       categoryIncludeFee.remove(championsId.toString());
     }
   }
@@ -1728,24 +2060,15 @@ class CompetitionController extends GetxController {
   }
 
   Future<bool> confirmChampionshipStyleBeforeSave() async {
-    final style = championshipStyle.value;
-    if (style == null) {
-      _notifyError(
-        'Please select how the Champions category will be determined',
-      );
-      return false;
-    }
+    // Championship style UI removed from create screen; default to separate category.
+    championshipStyle.value ??= ChampionshipStyle.separateCategory;
 
     final categoryError = validateCategoriesForChampionshipStyle();
     if (categoryError != null) {
       _notifyError(categoryError);
       return false;
     }
-
-    return DialogHelper.confirm(
-      title: 'Confirm Champions setup',
-      message: style.confirmationMessage,
-    );
+    return true;
   }
 
   // Toggle category selection (by name for UI, stores ID internally)
@@ -1766,10 +2089,12 @@ class CompetitionController extends GetxController {
     if (selectedCategoryIds.contains(categoryId)) {
       selectedCategoryIds.remove(categoryId);
       categoryAmounts.remove(categoryIdStr);
+      categorySpotAmounts.remove(categoryIdStr);
       categoryIncludeFee.remove(categoryIdStr);
     } else {
       selectedCategoryIds.add(categoryId);
       categoryAmounts[categoryIdStr] = 0.0;
+      categorySpotAmounts[categoryIdStr] = 0.0;
       _ensureCategoryIncludeFeeDefault(categoryId);
     }
   }
@@ -1779,14 +2104,34 @@ class CompetitionController extends GetxController {
     String categoryName, {
     String? description,
   }) async {
-    if (categoryName.isEmpty) return false;
+    final id = await ensureCategoryPersisted(
+      categoryName,
+      description: description,
+      showFeedback: true,
+    );
+    return id != null;
+  }
+
+  /// Creates or reuses a master category in DB. Returns category id, or null on failure.
+  Future<int?> ensureCategoryPersisted(
+    String categoryName, {
+    String? description,
+    bool showFeedback = false,
+  }) async {
+    final name = categoryName.trim().toUpperCase();
+    if (name.isEmpty) return null;
+
+    final existingId = getCategoryIdByName(name);
+    if (existingId != null && existingId > 0) {
+      return existingId;
+    }
 
     try {
       isAddingOption.value = true;
       errorMessage.value = '';
 
       final response = await _repository.createCategory(
-        name: categoryName,
+        name: name,
         description: description,
       );
 
@@ -1803,23 +2148,230 @@ class CompetitionController extends GetxController {
         if (!selectedCategoryIds.contains(created.id)) {
           selectedCategoryIds.add(created.id);
           categoryAmounts[created.id.toString()] = 0.0;
+          categorySpotAmounts[created.id.toString()] = 0.0;
           _ensureCategoryIncludeFeeDefault(created.id);
         }
 
-        Get.snackbar(
-          'Success',
-          'Category "$categoryName" created successfully',
-        );
-        return true;
+        if (showFeedback) {
+          Get.snackbar(
+            'Success',
+            'Category "$name" created successfully',
+          );
+        }
+        return created.id;
       } else {
         errorMessage.value = response.message ?? 'Failed to create category';
         Get.snackbar('Error', errorMessage.value);
-        return false;
+        return null;
       }
     } catch (e) {
       errorMessage.value = 'Error creating category: ${e.toString()}';
       Get.snackbar('Error', errorMessage.value);
-      return false;
+      return null;
+    } finally {
+      isAddingOption.value = false;
+    }
+  }
+
+  /// Quietly create/reuse a stage master. Returns id or null.
+  Future<int?> ensureStagePersisted(String stageName) async {
+    final name = stageName.trim();
+    if (name.isEmpty) return null;
+    final existingId = getStageIdByName(name);
+    if (existingId != null && existingId > 0) return existingId;
+
+    try {
+      final response = await _repository.createStage(name: name);
+      if (response.success && response.data != null) {
+        final created = response.data!;
+        final existingIndex = stageOptions.indexWhere((s) => s.id == created.id);
+        if (existingIndex >= 0) {
+          stageOptions[existingIndex] = created;
+        } else {
+          stageOptions.add(created);
+        }
+        stageOptions.refresh();
+        if (!selectedStageIds.contains(created.id)) {
+          selectedStageIds.add(created.id);
+          stageGroups.putIfAbsent(created.id.toString(), () => <int>[]);
+        }
+        return created.id;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Quietly create/reuse a group master. Returns id or null.
+  Future<int?> ensureGroupPersisted(String groupName) async {
+    final name = groupName.trim();
+    if (name.isEmpty) return null;
+    final existingId = getGroupIdByName(name);
+    if (existingId != null && existingId > 0) return existingId;
+
+    try {
+      final response = await _repository.createGroup(name: name);
+      if (response.success && response.data != null) {
+        final created = response.data!;
+        final existingIndex = groupOptions.indexWhere((g) => g.id == created.id);
+        if (existingIndex >= 0) {
+          groupOptions[existingIndex] = created;
+        } else {
+          groupOptions.add(created);
+        }
+        groupOptions.refresh();
+        return created.id;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Create category in DB, then add an in-memory draft linked to that category id.
+  Future<CompetitionCategoryConfigModel?> createCategoryDraftPersisted({
+    required String name,
+    required String format,
+    String mode = 'OFFLINE',
+  }) async {
+    final normalizedName = name.trim().toUpperCase();
+    if (normalizedName.isEmpty) return null;
+    final normalizedMode =
+        mode.trim().toUpperCase() == 'ONLINE' ? 'ONLINE' : 'OFFLINE';
+
+    final duplicate = categoryConfigDrafts.any(
+      (c) =>
+          c.categoryName.trim().toUpperCase() == normalizedName &&
+          (c.mode.trim().toUpperCase() == 'ONLINE' ? 'ONLINE' : 'OFFLINE') ==
+              normalizedMode,
+    );
+    if (duplicate) {
+      final modeLabel = normalizedMode == 'ONLINE' ? 'Online' : 'Offline';
+      Get.snackbar(
+        'Duplicate category',
+        'Category "$normalizedName" already exists for $modeLabel mode',
+        backgroundColor: Colors.red.shade700,
+        colorText: Colors.white,
+      );
+      return null;
+    }
+
+    final categoryId = await ensureCategoryPersisted(
+      normalizedName,
+      description: 'Created from competition setup',
+      showFeedback: true,
+    );
+    if (categoryId == null) return null;
+
+    final draft = CompetitionCategoryConfigModel.freshAsanas(
+      categoryId: categoryId,
+      categoryName: normalizedName,
+      format: format,
+      mode: normalizedMode,
+    );
+    categoryConfigDrafts.add(draft);
+    categoryConfigDrafts.refresh();
+    _syncCategorySelectionFromDrafts();
+    return draft;
+  }
+
+  /// Persist wizard config: masters always; competition_category_configs when editing.
+  Future<CompetitionCategoryConfigModel?> persistCategoryConfigDraft(
+    CompetitionCategoryConfigModel draft, {
+    bool showFeedback = true,
+  }) async {
+    try {
+      isAddingOption.value = true;
+      errorMessage.value = '';
+      draft.syncGeneratedStages(regenerateNames: false);
+      draft.summary = draft.displaySummary;
+
+      final categoryId = await ensureCategoryPersisted(draft.categoryName);
+      if (categoryId == null) {
+        if (showFeedback) {
+          Get.snackbar(
+            'Error',
+            'Failed to save category "${draft.categoryName}"',
+          );
+        }
+        return null;
+      }
+      draft.categoryId = categoryId;
+
+      for (final stageName in draft.stageNames) {
+        await ensureStagePersisted(stageName);
+      }
+      final groupNames = <String>{
+        ...draft.selectedGroups,
+        for (final groups in draft.stageAllotment.values) ...groups,
+      };
+      for (final groupName in groupNames) {
+        await ensureGroupPersisted(groupName);
+      }
+      for (final entry in draft.stageAllotment.entries) {
+        if (entry.value.isNotEmpty) {
+          setStageGroups(entry.key, entry.value);
+        }
+      }
+
+      if (draft.upgradeToCategoryName != null &&
+          draft.upgradeToCategoryName!.trim().isNotEmpty &&
+          draft.upgradeToCategoryId == null) {
+        draft.upgradeToCategoryId = await ensureCategoryPersisted(
+          draft.upgradeToCategoryName!,
+        );
+      }
+
+      if (draft.categoryId != null) {
+        if (!selectedCategoryIds.contains(draft.categoryId)) {
+          selectedCategoryIds.add(draft.categoryId!);
+        }
+        categoryAmounts[draft.categoryId!.toString()] = draft.feeAmount;
+        categorySpotAmounts[draft.categoryId!.toString()] =
+            draft.spotFeeAmount > 0 ? draft.spotFeeAmount : draft.feeAmount;
+        categoryIncludeFee[draft.categoryId!.toString()] =
+            draft.includeFeeInRegistration;
+      }
+
+      upsertCategoryDraft(draft);
+
+      final competitionId = int.tryParse(competitionToEdit.value?.id ?? '');
+      if (competitionId != null && competitionId > 0) {
+        final response = await _repository.upsertCategoryConfig(
+          competitionId: competitionId,
+          config: draft,
+        );
+        if (!response.success) {
+          errorMessage.value =
+              response.message ?? 'Failed to save category configuration';
+          if (showFeedback) {
+            Get.snackbar('Error', errorMessage.value);
+          }
+          return null;
+        }
+        final saved = response.data;
+        if (saved != null) {
+          if (saved.categoryId != null) draft.categoryId = saved.categoryId;
+          if (saved.summary != null) draft.summary = saved.summary;
+          upsertCategoryDraft(draft);
+        }
+      }
+
+      if (showFeedback) {
+        Get.snackbar(
+          'Success',
+          'Configuration saved for "${draft.categoryName}"',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+      return draft;
+    } catch (e) {
+      errorMessage.value = 'Error saving configuration: ${e.toString()}';
+      if (showFeedback) {
+        Get.snackbar('Error', errorMessage.value);
+      }
+      return null;
     } finally {
       isAddingOption.value = false;
     }
@@ -1831,6 +2383,142 @@ class CompetitionController extends GetxController {
     if (categoryId != null) {
       categoryAmounts[categoryId.toString()] = amount;
     }
+  }
+
+  void setCompetitionMode(String mode) {
+    final normalized = mode.trim().toUpperCase();
+    competitionMode.value =
+        normalized == 'ONLINE' ? 'ONLINE' : 'OFFLINE';
+  }
+
+  CompetitionCategoryConfigModel addCategoryDraft({
+    required String name,
+    required String format,
+    String mode = 'OFFLINE',
+  }) {
+    final draft = CompetitionCategoryConfigModel.freshAsanas(
+      categoryName: name,
+      format: format,
+      mode: mode,
+    );
+    categoryConfigDrafts.add(draft);
+    categoryConfigDrafts.refresh();
+    _syncCategorySelectionFromDrafts();
+    return draft;
+  }
+
+  void removeCategoryDraft(String draftId) {
+    categoryConfigDrafts.removeWhere((c) => c.draftId == draftId);
+    categoryConfigDrafts.refresh();
+    _syncCategorySelectionFromDrafts();
+  }
+
+  void upsertCategoryDraft(CompetitionCategoryConfigModel draft) {
+    final index =
+        categoryConfigDrafts.indexWhere((c) => c.draftId == draft.draftId);
+    if (index >= 0) {
+      categoryConfigDrafts[index] = draft;
+    } else {
+      categoryConfigDrafts.add(draft);
+    }
+    categoryConfigDrafts.refresh();
+    _syncCategorySelectionFromDrafts();
+    _applyFirstAsanasFlatFieldsFromDrafts();
+  }
+
+  CompetitionCategoryConfigModel? nextUnconfiguredAsanasDraft({
+    String? afterDraftId,
+  }) {
+    final list = categoryConfigDrafts.where((c) => c.isAsanas && !c.configured);
+    if (afterDraftId == null) {
+      return list.isEmpty ? null : list.first;
+    }
+    final start = categoryConfigDrafts.indexWhere((c) => c.draftId == afterDraftId);
+    for (var i = start + 1; i < categoryConfigDrafts.length; i++) {
+      final c = categoryConfigDrafts[i];
+      if (c.isAsanas && !c.configured) return c;
+    }
+    for (var i = 0; i <= start && i < categoryConfigDrafts.length; i++) {
+      final c = categoryConfigDrafts[i];
+      if (c.isAsanas && !c.configured) return c;
+    }
+    return null;
+  }
+
+  void _syncCategorySelectionFromDrafts() {
+    if (categoryConfigDrafts.isEmpty) return;
+    selectedCategoryIds.clear();
+    categoryAmounts.clear();
+    categorySpotAmounts.clear();
+    categoryIncludeFee.clear();
+    for (final draft in categoryConfigDrafts) {
+      final existingId = draft.categoryId ??
+          getCategoryIdByName(draft.categoryName);
+      if (existingId == null) continue;
+      draft.categoryId = existingId;
+      if (!selectedCategoryIds.contains(existingId)) {
+        selectedCategoryIds.add(existingId);
+      }
+      final key = existingId.toString();
+      final spot = draft.spotFeeAmount > 0 ? draft.spotFeeAmount : draft.feeAmount;
+      if (draft.isOnlineMode) {
+        categoryAmounts[key] = draft.feeAmount;
+        categorySpotAmounts.putIfAbsent(key, () => spot);
+      } else {
+        categorySpotAmounts[key] = spot;
+        categoryAmounts.putIfAbsent(key, () => draft.feeAmount);
+      }
+      categoryIncludeFee.putIfAbsent(key, () => draft.includeFeeInRegistration);
+    }
+  }
+
+  void _applyFirstAsanasFlatFieldsFromDrafts() {
+    final first = categoryConfigDrafts.firstWhereOrNull((c) => c.isAsanas);
+    if (first == null) return;
+    if (first.participantsPerStage != null) {
+      participantsPerStage.value = first.participantsPerStage!;
+    }
+    if (first.minimumMarks != null) {
+      minimumMarks.value = first.minimumMarks!;
+    }
+    if (first.maximumMarks != null) {
+      maximumMarks.value = first.maximumMarks!;
+    }
+    skippedAsanaMarks.value = first.skippedAsanaMarks;
+    _syncGradeEntriesFromDrafts();
+  }
+
+  void _syncGradeEntriesFromDrafts() {
+    final grading = categoryConfigDrafts.firstWhereOrNull(
+      (c) => c.isAsanas && c.isGradingScoring && c.grades.isNotEmpty,
+    );
+    if (grading == null) return;
+    clearGradeEntries();
+    replaceGradeEntries(
+      grading.grades.map(CompetitionGradeEntry.fromModel).toList(),
+    );
+  }
+
+  List<CompetitionCategoryConfigModel> get categoryConfigsForSubmit =>
+      categoryConfigDrafts
+          .map((c) {
+            c.syncGeneratedStages(regenerateNames: false);
+            return c;
+          })
+          .toList();
+
+  String? _validateCategoryConfigDraftsForSubmit() {
+    if (categoryConfigDrafts.isEmpty) {
+      return 'Please add at least one category';
+    }
+    final unconfigured = categoryConfigDrafts
+        .where((c) => !c.configured)
+        .map((c) => c.categoryName)
+        .toList();
+    if (unconfigured.isNotEmpty) {
+      return 'Please configure rules for: ${unconfigured.join(', ')}';
+    }
+    return null;
   }
 
   // Toggle stage selection (by name for UI, stores ID internally)
@@ -2239,22 +2927,47 @@ class CompetitionController extends GetxController {
       final dateError = validateCompetitionDates(forSubmit: true);
       if (dateError != null) {
         _notifyError(dateError);
+        scrollToFirstMissingMandatorySection(includeBrochure: true);
         return false;
       }
 
-      if (participantsPerStage.value <= 0) {
-        _notifyError('Please select participants per stage');
+      final categoryConfigError = _validateCategoryConfigDraftsForSubmit();
+      if (categoryConfigError != null) {
+        _notifyError(categoryConfigError);
+        scrollToSection(categoriesSectionKey);
         return false;
       }
 
-      if (selectedCategoryIds.isEmpty) {
-        _notifyError('Please select at least one category');
-        return false;
+      if (categoryConfigDrafts.isEmpty) {
+        if (participantsPerStage.value <= 0) {
+          _notifyError('Please select participants per stage');
+          scrollToSection(participantsPerStageFieldKey);
+          return false;
+        }
+
+        if (selectedCategoryIds.isEmpty) {
+          _notifyError('Please select at least one category');
+          scrollToSection(categoriesSectionKey);
+          return false;
+        }
+
+        if (selectedStageIds.isEmpty) {
+          _notifyError('Please select at least one stage');
+          scrollToSection(stagesSectionKey);
+          return false;
+        }
+
+        if (selectedPrizeIds.isEmpty) {
+          _notifyError('Please select at least one prize');
+          scrollToSection(prizesSectionKey);
+          return false;
+        }
       }
 
       final categoryStyleError = validateCategoriesForChampionshipStyle();
       if (categoryStyleError != null) {
         _notifyError(categoryStyleError);
+        scrollToSection(categoriesSectionKey);
         return false;
       }
 
@@ -2262,25 +2975,17 @@ class CompetitionController extends GetxController {
         return false;
       }
 
-      if (selectedStageIds.isEmpty) {
-        _notifyError('Please select at least one stage');
-        return false;
-      }
-
-      if (selectedPrizeIds.isEmpty) {
-        _notifyError('Please select at least one prize');
-        return false;
-      }
-
       final gradeError = validateGradeEntries();
       if (gradeError != null) {
         _notifyError(gradeError);
+        scrollToSection(gradesSectionKey);
         return false;
       }
 
       // Validate brochure upload
       if (!validateBrochure()) {
         _notifyError(errorMessage.value);
+        scrollToSection(brochureSectionKey);
         return false;
       }
 
@@ -2308,6 +3013,12 @@ class CompetitionController extends GetxController {
         isLoading.value = true;
       }
 
+      final configs = categoryConfigsForSubmit;
+      if (configs.isNotEmpty) {
+        _applyFirstAsanasFlatFieldsFromDrafts();
+        _syncCategorySelectionFromDrafts();
+      }
+
       final competition = CompetitionModel(
         competitionName: competitionNameController.text.trim(),
         description: descriptionController.text.trim(),
@@ -2332,12 +3043,17 @@ class CompetitionController extends GetxController {
         prizeIds: selectedPrizeIds.where((id) => id > 0).toList(),
         categoryIds: selectedCategoryIds.where((id) => id > 0).toList(),
         categoryAmounts: Map<String, double>.from(categoryAmounts),
+        categorySpotAmounts: Map<String, double>.from(categorySpotAmounts),
         categoryExtraFeeIncluded: isOnDemandOrg.value
             ? buildCategoryExtraFeeIncludedForSubmit()
             : null,
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
-        championshipStyle: championshipStyle.value?.apiValue,
+        championshipStyle: championshipStyle.value?.apiValue ??
+            ChampionshipStyle.separateCategory.apiValue,
+        competitionMode: competitionMode.value,
+        googleDriveFolderUrl: googleDriveFolderUrlController.text.trim(),
+        categoryConfigs: configs.isNotEmpty ? configs : null,
         bestSchoolAwardMinParticipants: _parsedBestSchoolAwardMinParticipants(),
         grades: buildGradesForSubmit(),
       );
@@ -2422,22 +3138,47 @@ class CompetitionController extends GetxController {
       final dateError = validateCompetitionDates(forSubmit: true);
       if (dateError != null) {
         _notifyError(dateError);
+        scrollToFirstMissingMandatorySection(includeBrochure: false);
         return false;
       }
 
-      if (participantsPerStage.value <= 0) {
-        _notifyError('Please select participants per stage');
+      final categoryConfigError = _validateCategoryConfigDraftsForSubmit();
+      if (categoryConfigError != null) {
+        _notifyError(categoryConfigError);
+        scrollToSection(categoriesSectionKey);
         return false;
       }
 
-      if (selectedCategoryIds.isEmpty) {
-        _notifyError('Please select at least one category');
-        return false;
+      if (categoryConfigDrafts.isEmpty) {
+        if (participantsPerStage.value <= 0) {
+          _notifyError('Please select participants per stage');
+          scrollToSection(participantsPerStageFieldKey);
+          return false;
+        }
+
+        if (selectedCategoryIds.isEmpty) {
+          _notifyError('Please select at least one category');
+          scrollToSection(categoriesSectionKey);
+          return false;
+        }
+
+        if (selectedStageIds.isEmpty) {
+          _notifyError('Please select at least one stage');
+          scrollToSection(stagesSectionKey);
+          return false;
+        }
+
+        if (selectedPrizeIds.isEmpty) {
+          _notifyError('Please select at least one prize');
+          scrollToSection(prizesSectionKey);
+          return false;
+        }
       }
 
       final categoryStyleError = validateCategoriesForChampionshipStyle();
       if (categoryStyleError != null) {
         _notifyError(categoryStyleError);
+        scrollToSection(categoriesSectionKey);
         return false;
       }
 
@@ -2445,19 +3186,10 @@ class CompetitionController extends GetxController {
         return false;
       }
 
-      if (selectedStageIds.isEmpty) {
-        _notifyError('Please select at least one stage');
-        return false;
-      }
-
-      if (selectedPrizeIds.isEmpty) {
-        _notifyError('Please select at least one prize');
-        return false;
-      }
-
       final gradeError = validateGradeEntries();
       if (gradeError != null) {
         _notifyError(gradeError);
+        scrollToSection(gradesSectionKey);
         return false;
       }
 
@@ -2469,6 +3201,12 @@ class CompetitionController extends GetxController {
 
       isLoading.value = true;
       errorMessage.value = '';
+
+      final configs = categoryConfigsForSubmit;
+      if (configs.isNotEmpty) {
+        _applyFirstAsanasFlatFieldsFromDrafts();
+        _syncCategorySelectionFromDrafts();
+      }
 
       final competition = CompetitionModel(
         id: competitionToEdit.value!.id,
@@ -2495,12 +3233,17 @@ class CompetitionController extends GetxController {
         prizeIds: selectedPrizeIds.where((id) => id > 0).toList(),
         categoryIds: selectedCategoryIds.where((id) => id > 0).toList(),
         categoryAmounts: Map<String, double>.from(categoryAmounts),
+        categorySpotAmounts: Map<String, double>.from(categorySpotAmounts),
         categoryExtraFeeIncluded: isOnDemandOrg.value
             ? buildCategoryExtraFeeIncludedForSubmit()
             : null,
         stageIds: selectedStageIds.where((id) => id > 0).toList(),
         stageGroups: Map<String, List<int>>.from(stageGroups),
-        championshipStyle: championshipStyle.value?.apiValue,
+        championshipStyle: championshipStyle.value?.apiValue ??
+            ChampionshipStyle.separateCategory.apiValue,
+        competitionMode: competitionMode.value,
+        googleDriveFolderUrl: googleDriveFolderUrlController.text.trim(),
+        categoryConfigs: configs.isNotEmpty ? configs : null,
         bestSchoolAwardMinParticipants: _parsedBestSchoolAwardMinParticipants(),
         grades: buildGradesForSubmit(),
       );
@@ -2687,10 +3430,14 @@ class CompetitionController extends GetxController {
     CompetitionModel competition, {
     bool isView = false,
   }) async {
-    // Ensure options are loaded before converting IDs to names
-    if (stageOptions.isEmpty || groupOptions.isEmpty) {
+    // Ensure options are loaded before converting IDs to names.
+    // (Prizes/Categories/Stagers are needed to map IDs -> labels and populate checkboxes.)
+    if (categoryOptions.isEmpty ||
+        prizeOptions.isEmpty ||
+        stageOptions.isEmpty ||
+        groupOptions.isEmpty) {
       print('loadCompetitionForEdit: Options not loaded yet, loading now...');
-      await loadOptions();
+      await loadOptions(); // GET: prizes, categories, stages, groups
     }
 
     var competitionToLoad = competition;
@@ -2737,6 +3484,17 @@ class CompetitionController extends GetxController {
     championshipStyle.value =
         ChampionshipStyle.fromApiValue(competition.championshipStyle) ??
         ChampionshipStyle.separateCategory;
+    competitionMode.value =
+        (competition.competitionMode ?? 'OFFLINE').toUpperCase() == 'ONLINE'
+            ? 'ONLINE'
+            : 'OFFLINE';
+    googleDriveFolderUrlController.text =
+        competition.googleDriveFolderUrl?.trim() ?? '';
+    if ((competition.googleDriveServiceAccountEmail ?? '').trim().isNotEmpty) {
+      googleDriveServiceAccountEmail.value =
+          competition.googleDriveServiceAccountEmail!.trim();
+    }
+    googleDriveServerConfigured.value = competition.googleDriveConfigured;
     participantsPerStage.value = competition.participantsPerStage ?? 0;
     minimumMarks.value = competition.minimumMarks ?? 0;
     maximumMarks.value = competition.maximumMarks ?? 0;
@@ -2789,6 +3547,7 @@ class CompetitionController extends GetxController {
       } else {
         categoryAmounts.clear();
       }
+      _loadCategorySpotAmountsFromCompetition(competition);
     } else if (competition.categories != null &&
         competition.categories!.isNotEmpty) {
       // Convert names to IDs
@@ -2809,9 +3568,11 @@ class CompetitionController extends GetxController {
       } else {
         categoryAmounts.clear();
       }
+      _loadCategorySpotAmountsFromCompetition(competition);
     } else {
       selectedCategoryIds.clear();
       categoryAmounts.clear();
+      categorySpotAmounts.clear();
     }
 
     categoryIncludeFee.clear();
@@ -2827,6 +3588,45 @@ class CompetitionController extends GetxController {
           categoryIncludeFee[categoryId.toString()] = entry.value;
         }
       }
+    }
+
+    if (competition.categoryConfigs != null &&
+        competition.categoryConfigs!.isNotEmpty) {
+      categoryConfigDrafts.value = competition.categoryConfigs!
+          .map((c) => CompetitionCategoryConfigModel.fromJson(c.toJson()))
+          .toList();
+    } else if (selectedCategoryIds.isNotEmpty) {
+      // Backfill drafts from flat category selection for older competitions
+      categoryConfigDrafts.value = selectedCategoryIds.map((id) {
+        final name = categoryOptions
+                .firstWhereOrNull((o) => o.id == id)
+                ?.name ??
+            'CATEGORY $id';
+        final amount = categoryAmounts[id.toString()] ?? 0.0;
+        final include = categoryIncludeFee[id.toString()] ?? true;
+        return CompetitionCategoryConfigModel(
+          draftId: 'cat-$id',
+          categoryId: id,
+          categoryName: name,
+          format: 'ASANAS',
+          configured: true,
+          participantsPerStage: competition.participantsPerStage ?? 5,
+          minimumMarks: competition.minimumMarks ?? 1,
+          maximumMarks: competition.maximumMarks ?? 10,
+          skippedAsanaMarks: competition.skippedAsanaMarks ?? 0,
+          feeAmount: amount,
+          includeFeeInRegistration: include,
+          stageAllotment: competition.stageGroupLabels != null
+              ? Map<String, List<String>>.from(
+                  competition.stageGroupLabels!.map(
+                    (k, v) => MapEntry(k, List<String>.from(v)),
+                  ),
+                )
+              : {},
+        );
+      }).toList();
+    } else {
+      categoryConfigDrafts.clear();
     }
     for (final id in selectedCategoryIds) {
       _ensureCategoryIncludeFeeDefault(id);
@@ -2896,6 +3696,16 @@ class CompetitionController extends GetxController {
     }
 
     _loadGradeEntries(competition.grades);
+
+    // If category configs are GRADING but missing grades_json, use competition grades.
+    if (competition.grades != null && competition.grades!.isNotEmpty) {
+      for (final draft in categoryConfigDrafts) {
+        if (draft.isGradingScoring && draft.grades.isEmpty) {
+          draft.grades = List<CompetitionGradeModel>.from(competition.grades!);
+        }
+      }
+      categoryConfigDrafts.refresh();
+    }
 
     // Load brochure URL if available
     if (competition.brochureUrl != null &&
@@ -3208,7 +4018,10 @@ class CompetitionController extends GetxController {
     publishResultNow.value = false;
     resultsPublishTime.value = null;
     spotRegistration.value = false;
-    championshipStyle.value = null;
+    championshipStyle.value = ChampionshipStyle.separateCategory;
+    competitionMode.value = 'OFFLINE';
+    googleDriveFolderUrlController.clear();
+    categoryConfigDrafts.clear();
     participantsPerStage.value = 0;
     minimumMarks.value = 0;
     maximumMarks.value = 0;
@@ -3217,6 +4030,7 @@ class CompetitionController extends GetxController {
     selectedPrizeIds.clear();
     selectedCategoryIds.clear();
     categoryAmounts.clear();
+    categorySpotAmounts.clear();
     categoryIncludeFee.clear();
     selectedStageIds.clear();
     stageGroups.clear();

@@ -6,6 +6,7 @@ class AppConstants {
 
   // Storage Keys
   static const String tokenKey = 'token_key';
+  static const String participantVideoTokenKey = 'participant_video_token';
   static const String userKey = 'user_data';
   static const String roleKey = 'user_role';
   static const String permissionKeysKey = 'permission_keys';
@@ -96,6 +97,7 @@ class EndPoints {
   static String participantRegistrationImport =
       '/participant-registration/import';
   static String juryScoring = '/jury-scoring';
+  static String juryScoringSingle = '/jury-scoring/single';
   static String juryScoringResetCompetitionData =
       '/jury-scoring/reset-competition-data';
 
@@ -131,6 +133,16 @@ class EndPoints {
   static String competitionList = '/competition/list';
   static String competitionUpdate(String id) => '/competition/$id';
   static String competitionById(String id) => '/competition/$id';
+  static String competitionCategoryConfig(String id) =>
+      '/competition/$id/category-config';
+  static String competitionTieBreakerGroups(String id, String categoryId) =>
+      '/competition/$id/categories/$categoryId/tie-breaker/groups';
+  static String competitionTieBreakerStart(String id, String categoryId) =>
+      '/competition/$id/categories/$categoryId/tie-breaker/start';
+  static String competitionCategoryUpgradeApply(String id, String categoryId) =>
+      '/competition/$id/categories/$categoryId/upgrade/apply';
+  static String competitionCategoryUpgradePreview(String id, String categoryId) =>
+      '/competition/$id/categories/$categoryId/upgrade/preview';
   static String competitionDeletionInfo(String id) =>
       '/competition/$id/deletion-info';
   static String competitionBrochure(String id) => '/competition/$id/brochure';
@@ -141,6 +153,23 @@ class EndPoints {
 
   /// Public competitions list (home / unauthenticated)
   static String competitionPublic = '/competition/public';
+  static String competitionGoogleDriveConfig = '/competition/google-drive-config';
+
+  /// Participant video upload (public)
+  static String participantVideoLogin = '/participant-video/login';
+  static String participantVideoMe = '/participant-video/me';
+  static String participantVideoStart = '/participant-video/start';
+  static String participantVideoCount = '/participant-video/count';
+  static String participantVideoUrl = '/participant-video/url';
+  static String participantVideoUpload = '/participant-video/upload';
+
+  /// Participant feedback (public + participant-token auth)
+  static String participantFeedback = '/participant-feedback';
+  static String participantFeedbackMe = '/participant-feedback/me';
+  static String participantFeedbackPublicByCompetition(String competitionId) =>
+      '/participant-feedback/public/competition/$competitionId';
+  static String participantFeedbackImage(String id) =>
+      '/participant-feedback/$id/image';
 
   /// Payment gateway
   static String paymentPackages = '/payment/packages';
@@ -165,12 +194,15 @@ class EndPoints {
   /// COMPETITION OPTIONS
   static String categoryList = '/category';
   static String categoryCreate = '/category';
+  static String categoryById(int id) => '/category/$id';
   static String categoryByCompetition(int competitionId) =>
       '/category/competition/$competitionId';
   static String prizeList = '/prize';
   static String prizeCreate = '/prize';
+  static String prizeById(int id) => '/prize/$id';
   static String stageList = '/stage';
   static String stageCreate = '/stage';
+  static String stageById(int id) => '/stage/$id';
   static String stageByCompetition(int competitionId) =>
       '/stage/competition/$competitionId';
   static String groupList = '/group';
@@ -236,6 +268,12 @@ class EndPoints {
   static String competitionInstitutionsPrint(int competitionId) =>
       '/reports/competition/$competitionId/print/institutions';
 
+  static String competitionMastersPrint(int competitionId) =>
+      '/reports/competition/$competitionId/print/masters';
+
+  static String competitionMastersExcel(int competitionId) =>
+      '/reports/competition/$competitionId/print/masters/excel';
+
   static String competitionParticipantsExcel(int competitionId) =>
       '/reports/competition/$competitionId/print/participants/excel';
 
@@ -244,6 +282,22 @@ class EndPoints {
 
   static String competitionParticipantECertificatePrint(int competitionId) =>
       '/reports/competition/$competitionId/print/participant-e-certificate';
+
+  static String competitionFinancialReport(int competitionId) =>
+      '/reports/competition/$competitionId/financial';
+
+  static String competitionFinancialReportPrint(int competitionId) =>
+      '/reports/competition/$competitionId/print/financial';
+
+  static String competitionCysTransfers(int competitionId) =>
+      '/reports/competition/$competitionId/cys-transfers';
+
+  static String competitionCysTransferById(int competitionId, int transferId) =>
+      '/reports/competition/$competitionId/cys-transfers/$transferId';
+
+  static String competitionCysTransferScreenshot(
+          int competitionId, int transferId) =>
+      '/reports/competition/$competitionId/cys-transfers/$transferId/screenshot';
 
   /// ORGANIZATION / BRANCH SETUP
   static String organizationSetupFoundation = '/organization/setup/foundation';

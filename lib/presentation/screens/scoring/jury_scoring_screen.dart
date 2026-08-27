@@ -438,6 +438,7 @@ class JuryScoringScreen extends StatelessWidget {
                                 ),
                                 Obx(() {
                                   controller.juryAssignment.value;
+                                  controller.selectedCategory.value;
                                   if (controller.currentParticipants.isEmpty) {
                                     return const SizedBox.shrink();
                                   }
@@ -448,6 +449,7 @@ class JuryScoringScreen extends StatelessWidget {
                                       controller.effectiveMinimumMarks;
                                   final maxWhole =
                                       controller.effectiveMaximumMarks;
+                                  final asanaCount = controller.numberOfAsanas;
                                   return Column(
                                     children: [
                                       SizedBox(height: isMobile ? 1 : 24),
@@ -466,7 +468,7 @@ class JuryScoringScreen extends StatelessWidget {
                                       if (!readyToSubmit) ...[
                                         const SizedBox(height: 6),
                                         Text(
-                                          'Please enter scores for all 5 asanas for all participants (whole score $minWhole–$maxWhole, or mark skipped).',
+                                          'Please enter scores for all $asanaCount asanas for all participants (whole score $minWhole–$maxWhole, or mark skipped).',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             fontSize: isMobile ? 11 : 13,
@@ -615,6 +617,19 @@ class JuryScoringScreen extends StatelessWidget {
                 child: Obx(() {
                   final hasScores = controller.hasScoresEntered.value;
                   final hideStageGroup = controller.hideStageAndGroupSelection;
+                  // Explicit Rx reads so group options rebuild when stage changes.
+                  final stageItems = controller.availableStages
+                      .map((s) => s.stageName)
+                      .toList();
+                  final categoryItems = controller.availableCategories
+                      .map((c) => c.categoryName)
+                      .toList();
+                  final groupItems = controller.availableGroups
+                      .map((g) => g.groupName)
+                      .toList();
+                  final selectedStage = controller.selectedStage.value;
+                  final selectedCategory = controller.selectedCategory.value;
+                  final selectedGroup = controller.selectedGroup.value;
                   return isMobile
                       ? Column(
                           children: [
@@ -622,8 +637,8 @@ class JuryScoringScreen extends StatelessWidget {
                               _buildSelectionDropdown(
                                 context,
                                 label: 'STAGE',
-                                value: controller.selectedStage.value,
-                                items: controller.getAvailableStages(),
+                                value: selectedStage,
+                                items: stageItems,
                                 onChanged: hasScores
                                     ? null
                                     : (value) => controller.setSelectedStage(
@@ -637,8 +652,8 @@ class JuryScoringScreen extends StatelessWidget {
                             _buildSelectionDropdown(
                               context,
                               label: 'CATEGORY',
-                              value: controller.selectedCategory.value,
-                              items: controller.getAvailableCategories(),
+                              value: selectedCategory,
+                              items: categoryItems,
                               onChanged: hasScores
                                   ? null
                                   : (value) => controller.setSelectedCategory(
@@ -652,8 +667,8 @@ class JuryScoringScreen extends StatelessWidget {
                               _buildSelectionDropdown(
                                 context,
                                 label: 'GROUPS',
-                                value: controller.selectedGroup.value,
-                                items: controller.getAvailableGroups(),
+                                value: selectedGroup,
+                                items: groupItems,
                                 onChanged: hasScores
                                     ? null
                                     : (value) => controller.setSelectedGroup(
@@ -667,15 +682,20 @@ class JuryScoringScreen extends StatelessWidget {
                             _buildInstitutionDropdown(context, controller),
                           ],
                         )
-                      : Row(
-                          children: [
-                            if (!hideStageGroup) ...[
-                              Expanded(
-                                child: _buildSelectionDropdown(
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final gap = isTablet ? 16.0 : 20.0;
+                            final fieldCount = hideStageGroup ? 2 : 4;
+                            // Keep one row when there is enough width; otherwise wrap.
+                            final useWrap = constraints.maxWidth <
+                                (fieldCount * 180.0 + gap * (fieldCount - 1));
+                            final fields = <Widget>[
+                              if (!hideStageGroup)
+                                _buildSelectionDropdown(
                                   context,
                                   label: 'STAGE',
-                                  value: controller.selectedStage.value,
-                                  items: controller.getAvailableStages(),
+                                  value: selectedStage,
+                                  items: stageItems,
                                   onChanged: hasScores
                                       ? null
                                       : (value) =>
@@ -685,51 +705,71 @@ class JuryScoringScreen extends StatelessWidget {
                                   isMobile: isMobile,
                                   isTablet: isTablet,
                                 ),
-                              ),
-                              SizedBox(width: isTablet ? 16 : 20),
-                            ],
-                            Expanded(
-                              child: _buildSelectionDropdown(
+                              _buildSelectionDropdown(
                                 context,
                                 label: 'CATEGORY',
-                                value: controller.selectedCategory.value,
-                                items: controller.getAvailableCategories(),
+                                value: selectedCategory,
+                                items: categoryItems,
                                 onChanged: hasScores
                                     ? null
-                                    : (value) => controller.setSelectedCategory(
-                                        value ?? '',
-                                      ),
+                                    : (value) =>
+                                          controller.setSelectedCategory(
+                                            value ?? '',
+                                          ),
                                 isMobile: isMobile,
                                 isTablet: isTablet,
                               ),
-                            ),
-                            if (!hideStageGroup) ...[
-                              SizedBox(width: isTablet ? 16 : 20),
-                              Expanded(
-                                child: _buildSelectionDropdown(
+                              if (!hideStageGroup)
+                                _buildSelectionDropdown(
                                   context,
                                   label: 'GROUPS',
-                                  value: controller.selectedGroup.value,
-                                  items: controller.getAvailableGroups(),
+                                  value: selectedGroup,
+                                  items: groupItems,
                                   onChanged: hasScores
                                       ? null
-                                      : (value) => controller.setSelectedGroup(
-                                          value ?? '',
-                                        ),
+                                      : (value) =>
+                                            controller.setSelectedGroup(
+                                              value ?? '',
+                                            ),
                                   isMobile: isMobile,
                                   isTablet: isTablet,
                                 ),
-                              ),
-                            ],
-                            SizedBox(width: isTablet ? 16 : 20),
-                            Expanded(
-                              child: _buildInstitutionDropdown(
+                              _buildInstitutionDropdown(
                                 context,
                                 controller,
                                 dense: true,
                               ),
-                            ),
-                          ],
+                            ];
+
+                            if (useWrap) {
+                              final itemWidth =
+                                  (constraints.maxWidth - gap) / 2;
+                              return Wrap(
+                                spacing: gap,
+                                runSpacing: 12,
+                                children: fields
+                                    .map(
+                                      (f) => SizedBox(
+                                        width: itemWidth.clamp(
+                                          160,
+                                          constraints.maxWidth,
+                                        ),
+                                        child: f,
+                                      ),
+                                    )
+                                    .toList(),
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                for (var i = 0; i < fields.length; i++) ...[
+                                  if (i > 0) SizedBox(width: gap),
+                                  Expanded(child: fields[i]),
+                                ],
+                              ],
+                            );
+                          },
                         );
                 }),
               ),
@@ -768,6 +808,7 @@ class JuryScoringScreen extends StatelessWidget {
 
   Widget _buildSelectionChip(String label, bool isMobile) {
     return Container(
+      constraints: BoxConstraints(maxWidth: isMobile ? 160 : 220),
       padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10, vertical: 4),
       decoration: BoxDecoration(
         color: AppTheme.primaryColor.withOpacity(0.1),
@@ -779,6 +820,8 @@ class JuryScoringScreen extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: isMobile ? 11 : 12,
           fontWeight: FontWeight.w600,
@@ -797,8 +840,15 @@ class JuryScoringScreen extends StatelessWidget {
     required bool isMobile,
     required bool isTablet,
   }) {
+    final textStyle = TextStyle(
+      fontSize: isMobile ? 13 : 15,
+      color: Colors.grey[800],
+    );
     return DropdownButtonFormField<String>(
-      value: value.isEmpty ? null : value,
+      // Force rebuild when options change (fixes empty Groups until page refresh).
+      key: ValueKey('$label-${items.join("|")}-$value'),
+      value: value.isEmpty || !items.contains(value) ? null : value,
+      isExpanded: true,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
@@ -822,29 +872,43 @@ class JuryScoringScreen extends StatelessWidget {
           borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
         ),
         contentPadding: EdgeInsets.symmetric(
-          horizontal: 16,
+          horizontal: isMobile ? 12 : 16,
           vertical: isMobile ? 12 : 16,
         ),
         filled: true,
         fillColor: Colors.white,
       ),
+      selectedItemBuilder: (context) {
+        return items.map((item) {
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              item,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: textStyle,
+            ),
+          );
+        }).toList();
+      },
       items: items.map((item) {
         return DropdownMenuItem<String>(
           value: item,
           child: Text(
             item,
-            style: TextStyle(
-              fontSize: isMobile ? 13 : 15,
-              color: Colors.grey[800],
-            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyle,
           ),
         );
       }).toList(),
       hint: Text(
         'Select $label',
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(color: Colors.grey[500], fontSize: isMobile ? 13 : 15),
       ),
-      style: TextStyle(fontSize: isMobile ? 13 : 15, color: Colors.grey[800]),
+      style: textStyle,
       icon: Icon(Icons.arrow_drop_down, color: AppTheme.primaryColor),
     );
   }
@@ -857,6 +921,7 @@ class JuryScoringScreen extends StatelessWidget {
   ) {
     return Obx(() {
       final currentAsanaNum = controller.currentAsana.value;
+      final asanaCount = controller.numberOfAsanas;
       final hasParticipants = controller.currentParticipants.isNotEmpty;
       return Card(
         elevation: 2,
@@ -906,9 +971,11 @@ class JuryScoringScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Center(
-                          child: Text(
-                            'ASANA $currentAsanaNum',
-                            style: TextStyle(
+                          child:                             Text(
+                              controller.tieBreakerMode.value
+                                  ? controller.asanaDisplayName(currentAsanaNum)
+                                  : 'ASANA $currentAsanaNum / $asanaCount',
+                              style: TextStyle(
                               fontSize: isMobile ? 14 : 18,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.primaryColor,
@@ -1099,6 +1166,8 @@ class JuryScoringScreen extends StatelessWidget {
                             final wholeOptions =
                                 controller.wholeScoreValueOptions;
                             final minWhole = controller.effectiveMinimumMarks;
+                            final maxWhole = controller.effectiveMaximumMarks;
+                            final hideDecimals = wholeValue >= maxWhole;
 
                             return Column(
                               children: [
@@ -1133,29 +1202,33 @@ class JuryScoringScreen extends StatelessWidget {
                                               participantId,
                                               asanaNum,
                                               value,
-                                              decimalValue,
+                                              value >= maxWhole
+                                                  ? 0
+                                                  : decimalValue,
                                             );
                                           },
                                           isMobile: isMobile,
                                         ),
-                                        const SizedBox(height: 6),
-                                        _buildScoreSlider(
-                                          label: '',
-                                          values: [0, 25, 50, 75],
-                                          currentValue: decimalValue,
-                                          onValueChanged: (value) {
-                                            controller.setAsanaScore(
-                                              participantId,
-                                              asanaNum,
-                                              wholeValue > 0
-                                                  ? wholeValue
-                                                  : minWhole,
-                                              value,
-                                            );
-                                          },
-                                          isMobile: isMobile,
-                                          isDecimal: true,
-                                        ),
+                                        if (!hideDecimals) ...[
+                                          const SizedBox(height: 6),
+                                          _buildScoreSlider(
+                                            label: '',
+                                            values: [0, 25, 50, 75],
+                                            currentValue: decimalValue,
+                                            onValueChanged: (value) {
+                                              controller.setAsanaScore(
+                                                participantId,
+                                                asanaNum,
+                                                wholeValue > 0
+                                                    ? wholeValue
+                                                    : minWhole,
+                                                value,
+                                              );
+                                            },
+                                            isMobile: isMobile,
+                                            isDecimal: true,
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -1243,6 +1316,8 @@ class JuryScoringScreen extends StatelessWidget {
                               final wholeOptions =
                                   controller.wholeScoreValueOptions;
                               final minWhole = controller.effectiveMinimumMarks;
+                              final maxWhole = controller.effectiveMaximumMarks;
+                              final hideDecimals = wholeValue >= maxWhole;
 
                               return Column(
                                 children: [
@@ -1277,29 +1352,33 @@ class JuryScoringScreen extends StatelessWidget {
                                         participantId,
                                         asanaNum,
                                         value,
-                                        decimalValue,
+                                        value >= maxWhole ? 0 : decimalValue,
                                       );
                                     },
                                     isMobile: isMobile,
                                     isTablet: isTablet,
                                   ),
-                                  const SizedBox(height: 10),
-                                  _buildScoreSlider(
-                                    label: '',
-                                    values: [0, 25, 50, 75],
-                                    currentValue: decimalValue,
-                                    onValueChanged: (value) {
-                                      controller.setAsanaScore(
-                                        participantId,
-                                        asanaNum,
-                                        wholeValue > 0 ? wholeValue : minWhole,
-                                        value,
-                                      );
-                                    },
-                                    isMobile: isMobile,
-                                    isTablet: isTablet,
-                                    isDecimal: true,
-                                  ),
+                                  if (!hideDecimals) ...[
+                                    const SizedBox(height: 10),
+                                    _buildScoreSlider(
+                                      label: '',
+                                      values: [0, 25, 50, 75],
+                                      currentValue: decimalValue,
+                                      onValueChanged: (value) {
+                                        controller.setAsanaScore(
+                                          participantId,
+                                          asanaNum,
+                                          wholeValue > 0
+                                              ? wholeValue
+                                              : minWhole,
+                                          value,
+                                        );
+                                      },
+                                      isMobile: isMobile,
+                                      isTablet: isTablet,
+                                      isDecimal: true,
+                                    ),
+                                  ],
                                         ],
                                       ),
                                     ),

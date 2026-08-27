@@ -18,6 +18,7 @@ import '../../widgets/buttons.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../data/models/district_model.dart';
 import '../../../core/utils/date_utils.dart' as app_date_utils;
+import '../../../core/utils/registration_category_options.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/storage_service.dart';
 import '../../../core/constants/app_constants.dart';
@@ -66,7 +67,7 @@ HomeCompetitionModel? _homeCompetitionForRegistration(
   );
 }
 
-List<String> _categoriesForRegistration(
+List<RegistrationCategoryOption> _categoryOptionsForRegistration(
   ParticipantController participantController,
   CompetitionController competitionController,
 ) {
@@ -74,22 +75,104 @@ List<String> _categoriesForRegistration(
     participantController,
     competitionController,
   );
-  if (competition?.categories != null && competition!.categories!.isNotEmpty) {
-    return competition.categories!;
-  }
-
-  final id = participantController.selectedEventId.value;
-  final home = competitionController.homeCompetitions.firstWhereOrNull(
-    (c) => c.id?.toString() == id,
+  final home = _homeCompetitionForRegistration(
+    participantController,
+    competitionController,
   );
-  return home?.categories ?? const [];
+  return buildRegistrationCategoryOptions(
+    configs: competition?.categoryConfigs,
+    categoryModes: home?.categoryModes,
+    categoryNames: (competition?.categories != null &&
+            competition!.categories!.isNotEmpty)
+        ? competition.categories
+        : home?.categories,
+    competitionMode: competition?.competitionMode,
+  );
+}
+
+String? _selectedCategoryValueKey(
+  ParticipantController controller,
+  List<RegistrationCategoryOption> options,
+) {
+  if (controller.selectedCategories.isEmpty || options.isEmpty) return null;
+  final name = controller.selectedCategories.first.trim();
+  final mode = controller.selectedCategoryMode.value;
+  final match = options.firstWhereOrNull(
+    (o) =>
+        o.categoryName.trim().toLowerCase() == name.toLowerCase() &&
+        (mode.isEmpty || o.mode == mode),
+  );
+  return match?.valueKey;
+}
+
+void _applyRegistrationCategorySelection(
+  ParticipantController controller,
+  RegistrationCategoryOption option,
+) {
+  controller.selectedCategories.value = [option.categoryName];
+  controller.selectedCategoryMode.value = option.mode;
+  controller.standard.value = '';
+  controller.selectedStage.value = '';
+  controller.validateRegistrationFormOnFieldChange();
 }
 
 List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
   CompetitionModel? competition,
-  CompetitionController competitionController,
-) {
+  CompetitionController competitionController, {
+  String? categoryName,
+  String? categoryMode,
+}) {
   if (competition == null) return const [];
+
+  // Prefer groups configured for the selected category (stage allotment).
+  final selectedCategory = categoryName?.trim() ?? '';
+  if (selectedCategory.isNotEmpty &&
+      competition.categoryConfigs != null &&
+      competition.categoryConfigs!.isNotEmpty) {
+    final cfg = findCategoryConfig(
+      configs: competition.categoryConfigs!,
+      categoryName: selectedCategory,
+      mode: categoryMode,
+    );
+    if (cfg != null) {
+      final fromAllotment = <({String groupName, String stageName})>[];
+      if (cfg.stageAllotment.isNotEmpty) {
+        final stages = cfg.stageAllotment.keys.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        for (final stageName in stages) {
+          final groups = List<String>.from(
+            cfg.stageAllotment[stageName] ?? const [],
+          )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          for (final groupName in groups) {
+            if (groupName.trim().isEmpty) continue;
+            fromAllotment.add((groupName: groupName, stageName: stageName));
+          }
+        }
+        if (fromAllotment.isNotEmpty) return fromAllotment;
+      }
+
+      if (cfg.selectedGroups.isNotEmpty) {
+        final stageByGroup = <String, String>{};
+        final labels = competition.stageGroupLabels;
+        if (labels != null) {
+          for (final e in labels.entries) {
+            for (final g in e.value) {
+              stageByGroup[g.trim().toLowerCase()] = e.key;
+            }
+          }
+        }
+        final groups = List<String>.from(cfg.selectedGroups)
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        for (final groupName in groups) {
+          if (groupName.trim().isEmpty) continue;
+          final stageName =
+              stageByGroup[groupName.trim().toLowerCase()] ?? 'Stage';
+          fromAllotment.add((groupName: groupName, stageName: stageName));
+        }
+        if (fromAllotment.isNotEmpty) return fromAllotment;
+      }
+    }
+  }
 
   final entries = <({String groupName, String stageName})>[];
 
@@ -433,36 +516,82 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                       ],
                                     ),
                                     // SizedBox(height: isMobile ? 20 : 10),
-                                    _buildInstitutionSection(
+                                    _buildRegistrationCategoryField(
                                       context,
                                       participantController,
                                       isMobile,
                                       isTablet,
                                     ),
-                                    SizedBox(height: isMobile ? 20 : 24),
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: _buildYogaTeacherNameField(
+                                    Obx(() {
+                                      if (!participantController
+                                          .isInstitutionalRegistrationCategory) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          SizedBox(height: isMobile ? 20 : 24),
+                                          _buildInstitutionSection(
                                             context,
                                             participantController,
                                             isMobile,
                                             isTablet,
                                           ),
-                                        ),
-                                        SizedBox(width: isTablet ? 12 : 16),
-                                        Expanded(
-                                          child: _buildYogaTeacherCellField(
+                                          SizedBox(height: isMobile ? 20 : 24),
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: _buildYogaTeacherNameField(
+                                                  context,
+                                                  participantController,
+                                                  isMobile,
+                                                  isTablet,
+                                                ),
+                                              ),
+                                              SizedBox(
+                                                width: isTablet ? 12 : 16,
+                                              ),
+                                              Expanded(
+                                                child: _buildYogaTeacherCellField(
+                                                  context,
+                                                  participantController,
+                                                  isMobile,
+                                                  isTablet,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      );
+                                    }),
+                                    Obx(() {
+                                      if (participantController
+                                          .isInstitutionalRegistrationCategory) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      if (participantController
+                                          .isViewMode
+                                          .value) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          SizedBox(height: isMobile ? 20 : 24),
+                                          _buildRegistrationTermsAndPaymentSection(
                                             context,
                                             participantController,
+                                            competitionController,
                                             isMobile,
-                                            isTablet,
                                           ),
-                                        ),
-                                      ],
-                                    ),
+                                        ],
+                                      );
+                                    }),
                                   ],
                                 ),
                               ),
@@ -507,63 +636,66 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                             ],
                           ),
                     if (isMobile) ...[
-                      // SizedBox(height: isMobile ? 20 : 10),
-                      _buildInstitutionSection(
-                        context,
-                        participantController,
-                        isMobile,
-                        isTablet,
-                      ),
                       SizedBox(height: isMobile ? 20 : 24),
-                      _buildYogaTeacherNameField(
+                      _buildRegistrationCategoryField(
                         context,
                         participantController,
                         isMobile,
                         isTablet,
                       ),
-                      SizedBox(height: isMobile ? 20 : 24),
-                      _buildYogaTeacherCellField(
-                        context,
-                        participantController,
-                        isMobile,
-                        isTablet,
-                      ),
+                      Obx(() {
+                        if (!participantController
+                            .isInstitutionalRegistrationCategory) {
+                          return const SizedBox.shrink();
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildInstitutionSection(
+                              context,
+                              participantController,
+                              isMobile,
+                              isTablet,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildYogaTeacherNameField(
+                              context,
+                              participantController,
+                              isMobile,
+                              isTablet,
+                            ),
+                            SizedBox(height: isMobile ? 20 : 24),
+                            _buildYogaTeacherCellField(
+                              context,
+                              participantController,
+                              isMobile,
+                              isTablet,
+                            ),
+                          ],
+                        );
+                      }),
                     ],
-                    SizedBox(height: isMobile ? 24 : 32),
-
-                    if (!participantController.isViewMode.value &&
-                        !participantController.isEditMode) ...[
-                      RegistrationTermsSection(
-                        controller: participantController,
-                        isMobile: isMobile,
-                      ),
-                      SizedBox(height: isMobile ? 20 : 24),
-                    ],
-
-                    if (!participantController.isViewMode.value) ...[
-                      Obx(
-                        () => RegistrationPaymentSection(
-                          participantController: participantController,
-                          homeCompetition: _homeCompetitionForRegistration(
+                    Obx(() {
+                      if (!isMobile &&
+                          !participantController
+                              .isInstitutionalRegistrationCategory) {
+                        return const SizedBox.shrink();
+                      }
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(height: isMobile ? 24 : 32),
+                          _buildRegistrationTermsAndPaymentSection(
+                            context,
                             participantController,
                             competitionController,
+                            isMobile,
                           ),
-                          competitionController: competitionController,
-                          categoryId:
-                              participantController
-                                  .selectedCategories
-                                  .isNotEmpty
-                              ? competitionController.getCategoryIdByName(
-                                  participantController
-                                      .selectedCategories
-                                      .first,
-                                )
-                              : null,
-                          isMobile: isMobile,
-                        ),
-                      ),
-                      SizedBox(height: isMobile ? 24 : 32),
-                    ],
+                        ],
+                      );
+                    }),
 
                     // Error Message (only show when not in list view)
                     Obx(() {
@@ -1204,6 +1336,105 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildRegistrationTermsAndPaymentSection(
+    BuildContext context,
+    ParticipantController participantController,
+    CompetitionController competitionController,
+    bool isMobile,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!participantController.isViewMode.value &&
+            !participantController.isEditMode) ...[
+          RegistrationTermsSection(
+            controller: participantController,
+            isMobile: isMobile,
+          ),
+          SizedBox(height: isMobile ? 20 : 24),
+        ],
+        if (!participantController.isViewMode.value) ...[
+          Obx(
+            () => RegistrationPaymentSection(
+              participantController: participantController,
+              homeCompetition: _homeCompetitionForRegistration(
+                participantController,
+                competitionController,
+              ),
+              competitionController: competitionController,
+              categoryId: participantController.selectedCategories.isNotEmpty
+                  ? competitionController.getCategoryIdByName(
+                      participantController.selectedCategories.first,
+                    )
+                  : null,
+              isMobile: isMobile,
+            ),
+          ),
+          SizedBox(height: isMobile ? 24 : 32),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildRegistrationCategoryField(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(label: 'Registration Type :', bottomSpacing: 8),
+        Obx(
+          () => Row(
+            children: [
+              Expanded(
+                child: RadioListTile<String>(
+                  title: Text(
+                    'Institutional Category',
+                    style: TextStyle(fontSize: isMobile ? 13 : 14),
+                  ),
+                  value: 'INSTITUTIONAL',
+                  groupValue: controller.registrationCategory.value,
+                  onChanged: !controller.isViewMode.value
+                      ? (value) {
+                          if (value != null) {
+                            controller.setRegistrationCategory(value);
+                          }
+                        }
+                      : null,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+              Expanded(
+                child: RadioListTile<String>(
+                  title: Text(
+                    'Open Category',
+                    style: TextStyle(fontSize: isMobile ? 13 : 14),
+                  ),
+                  value: 'OPEN',
+                  groupValue: controller.registrationCategory.value,
+                  onChanged: !controller.isViewMode.value
+                      ? (value) {
+                          if (value != null) {
+                            controller.setRegistrationCategory(value);
+                          }
+                        }
+                      : null,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildGenderField(
     BuildContext context,
     ParticipantController controller,
@@ -1408,16 +1639,18 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             return const LinearProgressIndicator(minHeight: 2);
           }
 
-          final availableCategories = _categoriesForRegistration(
+          final availableCategories = _categoryOptionsForRegistration(
             controller,
             competitionController,
+          );
+          final selectedValue = _selectedCategoryValueKey(
+            controller,
+            availableCategories,
           );
 
           return DropdownButtonFormField<String>(
             autovalidateMode: AutovalidateMode.onUserInteraction,
-            value: controller.selectedCategories.isNotEmpty
-                ? controller.selectedCategories.first
-                : null,
+            value: selectedValue,
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -1432,17 +1665,20 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                   : Colors.white,
             ),
             hint: const Text('Select Category'),
-            items: availableCategories.map((category) {
+            items: availableCategories.map((option) {
               return DropdownMenuItem<String>(
-                value: category,
-                child: Text(category),
+                value: option.valueKey,
+                child: Text(
+                  option.displayLabel,
+                  overflow: TextOverflow.ellipsis,
+                ),
               );
             }).toList(),
             onChanged: !controller.isViewMode.value
                 ? (value) {
-                    if (value != null) {
-                      controller.selectedCategories.value = [value];
-                      controller.validateRegistrationFormOnFieldChange();
+                    final option = RegistrationCategoryOption.tryParse(value);
+                    if (option != null) {
+                      _applyRegistrationCategorySelection(controller, option);
                     }
                   }
                 : null,
@@ -1474,6 +1710,11 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         FormLabelWithHint(label: 'Select Group :', bottomSpacing: 8),
         Obx(() {
           final _ = competitionController.competitions.length;
+          // Rebuild when category changes so groups reload from that config.
+          final selectedCategory = controller.selectedCategories.isNotEmpty
+              ? controller.selectedCategories.first
+              : '';
+          final selectedCategoryMode = controller.selectedCategoryMode.value;
           if (competitionController.isLoadingRegistrationCompetition.value) {
             return const LinearProgressIndicator(minHeight: 2);
           }
@@ -1486,6 +1727,8 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           final groupStageEntries = _groupStageEntriesForRegistration(
             selectedCompetition,
             competitionController,
+            categoryName: selectedCategory,
+            categoryMode: selectedCategoryMode,
           );
 
           final allGroupsWithStage = groupStageEntries
@@ -1495,7 +1738,6 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           // Find current value - match by formatted string or group name
           String? currentValue;
           if (controller.standard.value.isNotEmpty) {
-            // First try to find exact match with formatted string
             final match = allGroupsWithStage.firstWhereOrNull(
               (formatted) =>
                   formatted.startsWith('${controller.standard.value} (GROUP'),
@@ -1503,7 +1745,6 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             if (match != null) {
               currentValue = match;
             } else {
-              // If not found, try to match with just the group name
               final matchByName = allGroupsWithStage.firstWhereOrNull(
                 (formatted) =>
                     formatted.split(' (GROUP').first.trim() ==
@@ -1514,6 +1755,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           }
 
           return DropdownButtonFormField<String>(
+            key: ValueKey(
+              'group-for-category-$selectedCategory-$selectedCategoryMode',
+            ),
             autovalidateMode: AutovalidateMode.onUserInteraction,
             value: currentValue,
             decoration: InputDecoration(
@@ -1525,27 +1769,33 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                 vertical: 12,
               ),
             ),
-            hint: const Text('Select Group'),
+            hint: Text(
+              selectedCategory.isEmpty
+                  ? 'Select category first'
+                  : (allGroupsWithStage.isEmpty
+                      ? 'No groups for this category'
+                      : 'Select Group'),
+            ),
             items: allGroupsWithStage.map((formattedGroup) {
               return DropdownMenuItem<String>(
                 value: formattedGroup,
                 child: Text(formattedGroup),
               );
             }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                // Extract just the group name (before " (GROUP")
-                final groupName = value.split(' (GROUP').first.trim();
-                // Extract stage name (between "GROUP " and ")"
-                final stagePart = value
-                    .split('GROUP ')
-                    .last
-                    .replaceAll(')', '');
-                controller.standard.value = groupName;
-                controller.selectedStage.value = stagePart;
-                controller.validateRegistrationFormOnFieldChange();
-              }
-            },
+            onChanged: allGroupsWithStage.isEmpty
+                ? null
+                : (value) {
+                    if (value != null) {
+                      final groupName = value.split(' (GROUP').first.trim();
+                      final stagePart = value
+                          .split('GROUP ')
+                          .last
+                          .replaceAll(')', '');
+                      controller.standard.value = groupName;
+                      controller.selectedStage.value = stagePart;
+                      controller.validateRegistrationFormOnFieldChange();
+                    }
+                  },
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Please select a group';

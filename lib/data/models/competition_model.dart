@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'category_config_model.dart';
 import 'competition_grade_model.dart';
 
 class CompetitionModel {
@@ -31,6 +32,8 @@ class CompetitionModel {
   final List<int>? categoryIds; // e.g., [1, 2, 3] - for API submission
   final Map<String, double>?
   categoryAmounts; // e.g., {"1": 500.0, "2": 600.0} - key is category ID as string
+  /// Spot registration fee per category (same key style as [categoryAmounts]).
+  final Map<String, double>? categorySpotAmounts;
   /// Per-category: when true, amount already includes gateway/platform fees.
   final Map<String, bool>? categoryExtraFeeIncluded;
   final List<String>? stages; // e.g., ["A", "B", "C"] - for display/parsing
@@ -43,6 +46,14 @@ class CompetitionModel {
   final String? registrationUrl;
   /// SEPARATE_CATEGORY or FROM_FIRST_PLACE_WINNERS
   final String? championshipStyle;
+  /// ONLINE or OFFLINE
+  final String? competitionMode;
+  /// Organizer Google Drive folder link for participant video uploads.
+  final String? googleDriveFolderUrl;
+  final String? googleDriveFolderId;
+  final String? googleDriveServiceAccountEmail;
+  final bool googleDriveConfigured;
+  final List<CompetitionCategoryConfigModel>? categoryConfigs;
   final List<CompetitionGradeModel>? grades;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -73,6 +84,7 @@ class CompetitionModel {
     this.categories,
     this.categoryIds,
     this.categoryAmounts,
+    this.categorySpotAmounts,
     this.categoryExtraFeeIncluded,
     this.stages,
     this.stageIds,
@@ -81,6 +93,12 @@ class CompetitionModel {
     this.brochureUrl,
     this.registrationUrl,
     this.championshipStyle,
+    this.competitionMode,
+    this.googleDriveFolderUrl,
+    this.googleDriveFolderId,
+    this.googleDriveServiceAccountEmail,
+    this.googleDriveConfigured = false,
+    this.categoryConfigs,
     this.grades,
     this.createdAt,
     this.updatedAt,
@@ -396,6 +414,29 @@ class CompetitionModel {
               ),
             )
           : null,
+      categorySpotAmounts: json['categorySpotAmounts'] != null
+          ? Map<String, double>.from(
+              (json['categorySpotAmounts'] as Map).map(
+                (key, value) => MapEntry(
+                  key.toString(),
+                  (value is num)
+                      ? value.toDouble()
+                      : double.tryParse(value.toString()) ?? 0.0,
+                ),
+              ),
+            )
+          : json['categorySpotAmountsById'] != null
+          ? Map<String, double>.from(
+              (json['categorySpotAmountsById'] as Map).map(
+                (key, value) => MapEntry(
+                  key.toString(),
+                  (value is num)
+                      ? value.toDouble()
+                      : double.tryParse(value.toString()) ?? 0.0,
+                ),
+              ),
+            )
+          : null,
       categoryExtraFeeIncluded: parseCategoryExtraFeeIncludedMap(
         json['categoryExtraFeeIncluded'] ??
             json['categoryExtraFeeIncludedById'] ??
@@ -413,6 +454,29 @@ class CompetitionModel {
       championshipStyle:
           json['championshipStyle']?.toString() ??
           json['championship_style']?.toString(),
+      competitionMode:
+          json['competitionMode']?.toString() ??
+          json['competition_mode']?.toString() ??
+          'OFFLINE',
+      googleDriveFolderUrl:
+          json['googleDriveFolderUrl']?.toString() ??
+          json['google_drive_folder_url']?.toString(),
+      googleDriveFolderId:
+          json['googleDriveFolderId']?.toString() ??
+          json['google_drive_folder_id']?.toString(),
+      googleDriveServiceAccountEmail:
+          json['googleDriveServiceAccountEmail']?.toString(),
+      googleDriveConfigured: parseBool(json['googleDriveConfigured']),
+      categoryConfigs: json['categoryConfigs'] != null
+          ? (json['categoryConfigs'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) => CompetitionCategoryConfigModel.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : null,
       grades: json['grades'] != null
           ? (json['grades'] as List)
                 .whereType<Map>()
@@ -477,6 +541,8 @@ class CompetitionModel {
         'categoryIds': categoryIds,
       if (categoryAmounts != null && categoryAmounts!.isNotEmpty)
         'categoryAmounts': categoryAmounts,
+      if (categorySpotAmounts != null && categorySpotAmounts!.isNotEmpty)
+        'categorySpotAmounts': categorySpotAmounts,
       if (categoryExtraFeeIncluded != null &&
           categoryExtraFeeIncluded!.isNotEmpty)
         'categoryExtraFeeIncluded': categoryExtraFeeIncluded,
@@ -485,6 +551,12 @@ class CompetitionModel {
         'stageGroups': stageGroups,
       if (championshipStyle != null && championshipStyle!.trim().isNotEmpty)
         'championshipStyle': championshipStyle!.trim(),
+      if (competitionMode != null && competitionMode!.trim().isNotEmpty)
+        'competitionMode': competitionMode!.trim(),
+      'googleDriveFolderUrl': googleDriveFolderUrl?.trim() ?? '',
+      if (categoryConfigs != null && categoryConfigs!.isNotEmpty)
+        'categoryConfigs':
+            categoryConfigs!.map((c) => c.toJson()).toList(),
       'grades': (grades ?? const <CompetitionGradeModel>[])
           .map((grade) => grade.toJson())
           .toList(),
@@ -527,6 +599,7 @@ class CompetitionModel {
     List<String>? categories,
     List<int>? categoryIds,
     Map<String, double>? categoryAmounts,
+    Map<String, double>? categorySpotAmounts,
     Map<String, bool>? categoryExtraFeeIncluded,
     List<String>? stages,
     List<int>? stageIds,
@@ -535,6 +608,12 @@ class CompetitionModel {
     String? brochureUrl,
     String? registrationUrl,
     String? championshipStyle,
+    String? competitionMode,
+    String? googleDriveFolderUrl,
+    String? googleDriveFolderId,
+    String? googleDriveServiceAccountEmail,
+    bool? googleDriveConfigured,
+    List<CompetitionCategoryConfigModel>? categoryConfigs,
     List<CompetitionGradeModel>? grades,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -566,6 +645,7 @@ class CompetitionModel {
       categories: categories ?? this.categories,
       categoryIds: categoryIds ?? this.categoryIds,
       categoryAmounts: categoryAmounts ?? this.categoryAmounts,
+      categorySpotAmounts: categorySpotAmounts ?? this.categorySpotAmounts,
       categoryExtraFeeIncluded:
           categoryExtraFeeIncluded ?? this.categoryExtraFeeIncluded,
       stages: stages ?? this.stages,
@@ -575,6 +655,14 @@ class CompetitionModel {
       brochureUrl: brochureUrl ?? this.brochureUrl,
       registrationUrl: registrationUrl ?? this.registrationUrl,
       championshipStyle: championshipStyle ?? this.championshipStyle,
+      competitionMode: competitionMode ?? this.competitionMode,
+      googleDriveFolderUrl: googleDriveFolderUrl ?? this.googleDriveFolderUrl,
+      googleDriveFolderId: googleDriveFolderId ?? this.googleDriveFolderId,
+      googleDriveServiceAccountEmail:
+          googleDriveServiceAccountEmail ?? this.googleDriveServiceAccountEmail,
+      googleDriveConfigured:
+          googleDriveConfigured ?? this.googleDriveConfigured,
+      categoryConfigs: categoryConfigs ?? this.categoryConfigs,
       grades: grades ?? this.grades,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -666,6 +754,8 @@ class HomeCompetitionModel {
   final String? displayAdFrom;
   final List<String> categories;
   final Map<String, double> categoryAmounts;
+  /// Per-category Online/Offline rows from the public competition API.
+  final List<CategoryModeSummary> categoryModes;
   final Map<String, bool> categoryExtraFeeIncluded;
   final String? brochureUrl;
   final String? brochureFilePath;
@@ -693,6 +783,7 @@ class HomeCompetitionModel {
     this.displayAdFrom,
     this.categories = const [],
     this.categoryAmounts = const {},
+    this.categoryModes = const [],
     this.categoryExtraFeeIncluded = const {},
     this.brochureUrl,
     this.brochureFilePath,
@@ -745,6 +836,7 @@ class HomeCompetitionModel {
           ? List<String>.from(json['categories'])
           : [],
       categoryAmounts: amounts,
+      categoryModes: CategoryModeSummary.listFromJson(json['categoryModes']),
       categoryExtraFeeIncluded: CompetitionModel.parseCategoryExtraFeeIncludedMap(
         json['categoryExtraFeeIncluded'] ??
             json['categoryExtraFeeIncludedById'] ??
@@ -829,4 +921,49 @@ class HomeCompetitionModel {
 
   /// Alias used by competition cards navigating to the public participants list.
   bool get areResultsAvailable => areCertificatesAvailable;
+}
+
+class CategoryModeSummary {
+  final String categoryName;
+  final String mode;
+  final double feeAmount;
+  final double spotFeeAmount;
+
+  const CategoryModeSummary({
+    required this.categoryName,
+    required this.mode,
+    this.feeAmount = 0,
+    this.spotFeeAmount = 0,
+  });
+
+  bool get isOnline => mode.toUpperCase() == 'ONLINE';
+
+  double get displayFee {
+    if (isOnline) return feeAmount;
+    return spotFeeAmount > 0 ? spotFeeAmount : feeAmount;
+  }
+
+  factory CategoryModeSummary.fromJson(Map<String, dynamic> json) {
+    double parseAmount(dynamic value) {
+      if (value is int) return value.toDouble();
+      if (value is double) return value;
+      return double.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    return CategoryModeSummary(
+      categoryName: json['categoryName']?.toString() ?? '',
+      mode: json['mode']?.toString() ?? 'OFFLINE',
+      feeAmount: parseAmount(json['feeAmount']),
+      spotFeeAmount: parseAmount(json['spotFeeAmount']),
+    );
+  }
+
+  static List<CategoryModeSummary> listFromJson(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => CategoryModeSummary.fromJson(Map<String, dynamic>.from(e)))
+        .where((e) => e.categoryName.trim().isNotEmpty)
+        .toList();
+  }
 }

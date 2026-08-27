@@ -2,11 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/participant_e_certificate_download.dart';
 import '../../../core/utils/participant_receipt_image_download.dart';
+import '../../../data/models/participant_feedback_model.dart';
 import '../../../data/models/participant_model.dart';
 import '../../../data/repositories/competition_repository.dart';
+import '../../../data/repositories/participant_feedback_repository.dart';
 import '../../../data/repositories/participant_repository.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/pinned_scroll_views.dart';
@@ -34,11 +37,14 @@ class _PublicCompetitionParticipantsScreenState
     extends State<PublicCompetitionParticipantsScreen> {
   final ParticipantRepository _repository = ParticipantRepository();
   final CompetitionRepository _competitionRepository = CompetitionRepository();
+  final ParticipantFeedbackRepository _feedbackRepository =
+      ParticipantFeedbackRepository();
   final TextEditingController _searchController = TextEditingController();
 
   static const int _pageSize = 10;
 
   List<ParticipantModel> _participants = [];
+  Map<int, ParticipantFeedbackModel> _publicFeedbackByRegistrationId = {};
   bool _loading = true;
   String? _error;
   String _searchQuery = '';
@@ -57,7 +63,23 @@ class _PublicCompetitionParticipantsScreenState
     super.initState();
     _certificatesReleased = widget.isPastCompetition;
     _loadCompetitionMeta();
+    _loadPublicFeedback();
     _loadParticipants();
+  }
+
+  Future<void> _loadPublicFeedback() async {
+    final response = await _feedbackRepository.listPublicByCompetition(
+      widget.competitionId,
+    );
+    if (!mounted || !response.success || response.data == null) return;
+    final map = <int, ParticipantFeedbackModel>{};
+    for (final item in response.data!) {
+      final id = item.registrationId;
+      if (id != null) {
+        map[id] = item;
+      }
+    }
+    setState(() => _publicFeedbackByRegistrationId = map);
   }
 
   Future<void> _loadCompetitionMeta() async {
@@ -191,6 +213,11 @@ class _PublicCompetitionParticipantsScreenState
       optForECertificate:
           parseBool(reg['optForECertificate']) ||
           parseBool(reg['opt_for_e_certificate']),
+      certificateAvailable: (reg.containsKey('certificateAvailable') ||
+              reg.containsKey('certificate_available'))
+          ? parseBool(reg['certificateAvailable']) ||
+              parseBool(reg['certificate_available'])
+          : null,
       stageId: parseId(reg['stageId']),
       categoryId: parseId(reg['categoryId']),
       groupId: parseId(reg['groupId']),
@@ -232,8 +259,14 @@ class _PublicCompetitionParticipantsScreenState
   }
 
   bool _canDownloadCert(ParticipantModel p) {
-    return _certificatesReleased &&
-        p.optForECertificate &&
+    if (p.certificateAvailable == true) {
+      return p.categoryId != null;
+    }
+    if (p.certificateAvailable == false) {
+      return false;
+    }
+    return p.optForECertificate &&
+        _certificatesReleased &&
         p.stageId != null &&
         p.categoryId != null;
   }
@@ -249,8 +282,11 @@ class _PublicCompetitionParticipantsScreenState
       appBar: const HomeLandingAppBar(),
       body: RefreshIndicator(
         onRefresh: () async {
-          await _loadCompetitionMeta();
-          await _loadParticipants(page: _currentPage);
+          await Future.wait([
+            _loadCompetitionMeta(),
+            _loadPublicFeedback(),
+            _loadParticipants(page: _currentPage),
+          ]);
         },
         child: PinnedVerticalScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -540,9 +576,14 @@ class _PublicCompetitionParticipantsScreenState
           );
         }
         final p = _participants[index - 1];
+        final registrationId = int.tryParse(p.id ?? '');
+        final feedback = registrationId == null
+            ? null
+            : _publicFeedbackByRegistrationId[registrationId];
         return _ParticipantTile(
           participant: p,
-          showCertificateDownload: _certificatesReleased,
+          publicFeedback: feedback,
+          showCertificateDownload: _canDownloadCert(p),
           downloadingCert: _downloadingCertId == int.tryParse(p.id ?? ''),
           downloadingDetails:
               _downloadingDetailsId == int.tryParse(p.id ?? ''),
@@ -560,6 +601,7 @@ class _PublicCompetitionParticipantsScreenState
 
 class _ParticipantTile extends StatelessWidget {
   final ParticipantModel participant;
+  final ParticipantFeedbackModel? publicFeedback;
   final bool showCertificateDownload;
   final bool downloadingCert;
   final bool downloadingDetails;
@@ -568,6 +610,7 @@ class _ParticipantTile extends StatelessWidget {
 
   const _ParticipantTile({
     required this.participant,
+    this.publicFeedback,
     required this.showCertificateDownload,
     required this.downloadingCert,
     required this.downloadingDetails,
@@ -577,6 +620,97 @@ class _ParticipantTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final feedbackText = publicFeedback?.reviewText.trim() ?? '';
+    final feedbackImageUrl = publicFeedback?.absoluteImageUrl(BaseUrl.baseUrl);
+    final hasFeedback =
+        feedbackText.isNotEmpty || (feedbackImageUrl?.isNotEmpty ?? false);
+    final isNarrow = MediaQuery.sizeOf(context).width < 720;
+
+    final identity = Expanded(
+      flex: 2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            participant.participantName,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primaryColor,
+            ),
+          ),
+          if (participant.registrationNo != null &&
+              participant.registrationNo!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Reg: ${participant.registrationNo}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            [
+              if (participant.category.isNotEmpty) participant.category,
+              if (participant.standard.isNotEmpty) participant.standard,
+              if (participant.schoolName.isNotEmpty) participant.schoolName,
+            ].join(' · '),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+          ),
+          if (hasFeedback && isNarrow) ...[
+            const SizedBox(height: 10),
+            _PublicFeedbackPreview(
+              participantName: participant.participantName,
+              reviewText: feedbackText,
+              imageUrl: feedbackImageUrl,
+              compact: true,
+            ),
+          ],
+        ],
+      ),
+    );
+
+    final actions = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (onDownloadDetails != null)
+          downloadingDetails
+              ? const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : _buildDownloadAction(
+                  label: 'Download receipt',
+                  color: Colors.blue.shade800,
+                  onPressed: onDownloadDetails!,
+                ),
+        if (onDownloadDetails != null &&
+            showCertificateDownload &&
+            onDownloadCert != null)
+          const SizedBox(height: 8),
+        if (showCertificateDownload && onDownloadCert != null)
+          downloadingCert
+              ? const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : _buildDownloadAction(
+                  label: 'Certificate',
+                  color: AppTheme.primaryColor,
+                  onPressed: onDownloadCert!,
+                ),
+      ],
+    );
+
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -598,80 +732,21 @@ class _ParticipantTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    participant.participantName,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                  if (participant.registrationNo != null &&
-                      participant.registrationNo!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Reg: ${participant.registrationNo}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(
-                    [
-                      if (participant.category.isNotEmpty) participant.category,
-                      if (participant.standard.isNotEmpty) participant.standard,
-                      if (participant.schoolName.isNotEmpty)
-                        participant.schoolName,
-                    ].join(' · '),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
-                  ),
-                ],
+            identity,
+            if (hasFeedback && !isNarrow) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
+                child: _PublicFeedbackPreview(
+                  participantName: participant.participantName,
+                  reviewText: feedbackText,
+                  imageUrl: feedbackImageUrl,
+                  compact: false,
+                ),
               ),
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (onDownloadDetails != null)
-                  downloadingDetails
-                      ? const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : _buildDownloadAction(
-                          label: 'Download receipt',
-                          color: Colors.blue.shade800,
-                          onPressed: onDownloadDetails!,
-                        ),
-                if (onDownloadDetails != null &&
-                    showCertificateDownload &&
-                    onDownloadCert != null)
-                  const SizedBox(height: 8),
-                if (showCertificateDownload && onDownloadCert != null)
-                  downloadingCert
-                      ? const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : _buildDownloadAction(
-                          label: 'Certificate',
-                          color: AppTheme.primaryColor,
-                          onPressed: onDownloadCert!,
-                        ),
-              ],
-            ),
+            ],
+            const SizedBox(width: 8),
+            actions,
           ],
         ),
       ),
@@ -699,6 +774,196 @@ class _ParticipantTile extends StatelessWidget {
         minimumSize: Size.zero,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         alignment: Alignment.centerRight,
+      ),
+    );
+  }
+}
+
+class _PublicFeedbackPreview extends StatelessWidget {
+  final String participantName;
+  final String reviewText;
+  final String? imageUrl;
+  final bool compact;
+
+  const _PublicFeedbackPreview({
+    required this.participantName,
+    required this.reviewText,
+    this.imageUrl,
+    this.compact = false,
+  });
+
+  void _showFeedback(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          titlePadding: const EdgeInsets.fromLTRB(20, 18, 8, 0),
+          contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Feedback',
+                  style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                icon: const Icon(Icons.close),
+                tooltip: 'Close',
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (participantName.trim().isNotEmpty)
+                    Text(
+                      participantName,
+                      style: Theme.of(dialogContext).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  if (imageUrl != null && imageUrl!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 160,
+                          alignment: Alignment.center,
+                          color: Colors.grey.shade100,
+                          child: Icon(
+                            Icons.image_outlined,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (reviewText.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      reviewText,
+                      style: Theme.of(dialogContext).textTheme.bodyMedium
+                          ?.copyWith(height: 1.45, color: Colors.grey[800]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showThumb = !compact && imageUrl != null && imageUrl!.isNotEmpty;
+
+    return Material(
+      color: const Color(0xFFF3F7F2),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: () => _showFeedback(context),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(compact ? 8 : 10, 6, 2, 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppTheme.primaryColor.withOpacity(0.18)),
+          ),
+          child: Row(
+            children: [
+              if (showThumb) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    imageUrl!,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 44,
+                      height: 44,
+                      color: Colors.grey.shade200,
+                      child: Icon(Icons.image_outlined, color: Colors.grey[500]),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: compact
+                    ? Text(
+                        'View feedback',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppTheme.primaryColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Feedback',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: AppTheme.primaryColor,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          if (reviewText.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              reviewText,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Colors.grey[800],
+                                    height: 1.35,
+                                  ),
+                            ),
+                          ],
+                        ],
+                      ),
+              ),
+              IconButton(
+                onPressed: () => _showFeedback(context),
+                tooltip: 'View feedback',
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                icon: Icon(
+                  Icons.visibility_outlined,
+                  size: 18,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

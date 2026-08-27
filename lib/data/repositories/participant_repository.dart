@@ -972,11 +972,11 @@ class ParticipantRepository {
       };
 
       print('=== Submitting Asana Score ===');
-      print('Endpoint: ${EndPoints.juryScoring}');
+      print('Endpoint: ${EndPoints.juryScoringSingle}');
       print('Request Body: $requestBody');
 
       final response = await _apiService.getResponse<dynamic>(
-        url: EndPoints.juryScoring,
+        url: EndPoints.juryScoringSingle,
         apiType: APIType.aPost,
         body: requestBody,
         fromJson: (json) => json,

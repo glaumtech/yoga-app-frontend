@@ -48,6 +48,20 @@ class ReportsParticipantsTabLogic {
     return s == 'true' || s == '1' || s == 'yes';
   }
 
+  static bool rowCertificateAvailable(Map<String, dynamic> row) {
+    if (!row.containsKey('certificateAvailable') &&
+        !row.containsKey('certificate_available')) {
+      return true;
+    }
+    Object? v = row['certificateAvailable'];
+    v ??= row['certificate_available'];
+    if (v == null) return false;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 'yes';
+  }
+
   static Future<void> downloadReportPdfBytes(
     Uint8List bytes,
     String filename,
@@ -101,7 +115,6 @@ class ReportsParticipantsTabLogic {
 
     if (competitionId == null ||
         participantRegistrationId == null ||
-        stageId == null ||
         categoryId == null) {
       Get.snackbar(
         'Error',

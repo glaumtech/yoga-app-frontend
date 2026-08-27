@@ -23,6 +23,10 @@ class SessionExpiryHandler {
         requestUrl == EndPoints.resetPassword;
   }
 
+  static bool _isParticipantVideoRequest(String requestUrl) {
+    return requestUrl.contains('/participant-video');
+  }
+
   /// Payment gateway errors (e.g. invalid Razorpay keys) must not sign the user out.
   static bool _isPaymentRequest(String requestUrl) {
     return requestUrl.contains('/api/create-order') ||
@@ -90,6 +94,7 @@ class SessionExpiryHandler {
     if (_isHandling ||
         _isAuthRequest(requestUrl) ||
         _isPaymentRequest(requestUrl) ||
+        _isParticipantVideoRequest(requestUrl) ||
         !_hasStoredSession()) {
       return;
     }

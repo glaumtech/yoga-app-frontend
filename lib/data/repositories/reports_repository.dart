@@ -1,8 +1,10 @@
 import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/api_response.dart';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../../core/utils/storage_service.dart';
 
 class ReportsRepository {
@@ -559,16 +561,20 @@ class ReportsRepository {
   Future<ApiResponse<Uint8List>> getParticipantECertificatePdf(
     int competitionId, {
     required int participantRegistrationId,
-    required int stageId,
-    required int categoryId,
+    int? stageId,
+    int? categoryId,
     int? groupId,
   }) async {
     try {
       final params = <String>[
         'participantRegistrationId=$participantRegistrationId',
-        'stageId=$stageId',
-        'categoryId=$categoryId',
       ];
+      if (stageId != null) {
+        params.add('stageId=$stageId');
+      }
+      if (categoryId != null) {
+        params.add('categoryId=$categoryId');
+      }
       if (groupId != null) {
         params.add('groupId=$groupId');
       }
@@ -599,10 +605,12 @@ class ReportsRepository {
         );
       }
 
+      final errorBody = utf8.decode(response.bodyBytes, allowMalformed: true).trim();
       return ApiResponse(
         success: false,
-        message:
-            'Failed to download e-certificate (status ${response.statusCode})',
+        message: errorBody.isNotEmpty
+            ? errorBody
+            : 'Failed to download e-certificate (status ${response.statusCode})',
         statusCode: response.statusCode,
       );
     } catch (e) {
@@ -672,6 +680,123 @@ class ReportsRepository {
       return ApiResponse(
         success: false,
         message: 'Error generating Institutions PDF: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
+  }
+
+  Future<ApiResponse<Uint8List>> getCompetitionMastersPrintPdf(
+    int competitionId, {
+    bool sortDesc = true,
+    String? search,
+    String? title,
+  }) async {
+    try {
+      final params = <String>[
+        'sortDesc=$sortDesc',
+      ];
+      if (search != null && search.trim().isNotEmpty) {
+        params.add('search=${Uri.encodeQueryComponent(search.trim())}');
+      }
+      if (title != null && title.trim().isNotEmpty) {
+        params.add('title=${Uri.encodeQueryComponent(title.trim())}');
+      }
+      final q = '?${params.join('&')}';
+
+      final path = EndPoints.competitionMastersPrint(competitionId);
+      final url = BaseUrl.baseUrl + path + q;
+      final uri = Uri.parse(url);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept': 'application/pdf',
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to generate Masters PDF (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error generating Masters PDF: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
+  }
+
+  Future<ApiResponse<Uint8List>> getCompetitionMastersExcel(
+    int competitionId, {
+    bool sortDesc = true,
+    String? search,
+    String? title,
+  }) async {
+    try {
+      final params = <String>[
+        'sortDesc=$sortDesc',
+      ];
+      if (search != null && search.trim().isNotEmpty) {
+        params.add('search=${Uri.encodeQueryComponent(search.trim())}');
+      }
+      if (title != null && title.trim().isNotEmpty) {
+        params.add('title=${Uri.encodeQueryComponent(title.trim())}');
+      }
+      final q = '?${params.join('&')}';
+
+      final path = EndPoints.competitionMastersExcel(competitionId);
+      final url = BaseUrl.baseUrl + path + q;
+      final uri = Uri.parse(url);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept':
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to generate Masters Excel (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error generating Masters Excel: ${e.toString()}',
         statusCode: 0,
       );
     }
@@ -898,5 +1023,190 @@ class ReportsRepository {
         statusCode: 0,
       );
     }
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> getCompetitionFinancialReport(
+    int competitionId,
+  ) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionFinancialReport(competitionId),
+      apiType: APIType.aGet,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load financial report',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Uint8List>> getCompetitionFinancialReportPrintPdf(
+    int competitionId,
+  ) async {
+    try {
+      final path = EndPoints.competitionFinancialReportPrint(competitionId);
+      final url = BaseUrl.baseUrl + path;
+      final uri = Uri.parse(url);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept': 'application/pdf',
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to generate Financial Report PDF (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error generating Financial Report PDF: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> createCysTransfer({
+    required int competitionId,
+    required double amount,
+    String? referenceNumber,
+    String? transferDate,
+    Uint8List? screenshotBytes,
+    String? screenshotFilename,
+  }) async {
+    final fields = <String, String>{
+      'amount': amount.toStringAsFixed(2),
+      if (referenceNumber != null && referenceNumber.trim().isNotEmpty)
+        'referenceNumber': referenceNumber.trim(),
+      if (transferDate != null && transferDate.trim().isNotEmpty)
+        'transferDate': transferDate.trim(),
+    };
+    http.MultipartFile? file;
+    if (screenshotBytes != null && screenshotBytes.isNotEmpty) {
+      final name = screenshotFilename ?? 'screenshot.jpg';
+      file = http.MultipartFile.fromBytes(
+        'screenshot',
+        screenshotBytes,
+        filename: name,
+        contentType: _imageMediaType(name),
+      );
+    }
+    final response = await _apiService.postMultipart<Map<String, dynamic>>(
+      url: EndPoints.competitionCysTransfers(competitionId),
+      fields: fields,
+      file: file,
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success) {
+      return ApiResponse(success: true, data: response.data, message: response.message);
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to save transfer',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> updateCysTransfer({
+    required int competitionId,
+    required int transferId,
+    double? amount,
+    String? referenceNumber,
+    String? transferDate,
+    bool clearScreenshot = false,
+    Uint8List? screenshotBytes,
+    String? screenshotFilename,
+  }) async {
+    final fields = <String, String>{
+      if (amount != null) 'amount': amount.toStringAsFixed(2),
+      if (referenceNumber != null) 'referenceNumber': referenceNumber,
+      if (transferDate != null) 'transferDate': transferDate,
+      'clearScreenshot': clearScreenshot.toString(),
+    };
+    http.MultipartFile? file;
+    if (screenshotBytes != null && screenshotBytes.isNotEmpty) {
+      final name = screenshotFilename ?? 'screenshot.jpg';
+      file = http.MultipartFile.fromBytes(
+        'screenshot',
+        screenshotBytes,
+        filename: name,
+        contentType: _imageMediaType(name),
+      );
+    }
+    final response = await _apiService.postMultipart<Map<String, dynamic>>(
+      url: EndPoints.competitionCysTransferById(competitionId, transferId),
+      fields: fields,
+      file: file,
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success) {
+      return ApiResponse(success: true, data: response.data, message: response.message);
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to update transfer',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<void>> deleteCysTransfer({
+    required int competitionId,
+    required int transferId,
+  }) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionCysTransferById(competitionId, transferId),
+      apiType: APIType.aDelete,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+    if (response.success) {
+      return ApiResponse(success: true, message: response.message);
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to delete transfer',
+      statusCode: response.statusCode,
+    );
+  }
+
+  String cysTransferScreenshotUrl(int competitionId, int transferId) {
+    return BaseUrl.baseUrl +
+        EndPoints.competitionCysTransferScreenshot(competitionId, transferId);
+  }
+
+  MediaType _imageMediaType(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.png')) return MediaType('image', 'png');
+    if (lower.endsWith('.webp')) return MediaType('image', 'webp');
+    if (lower.endsWith('.gif')) return MediaType('image', 'gif');
+    return MediaType('image', 'jpeg');
   }
 }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 import '../controllers/auth_controller.dart';
+import '../controllers/competition_controller.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/storage_service.dart';
@@ -42,8 +43,12 @@ class AdminSidebar extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            // Header Section
-            Container(
+            // Header Section — tap logo/title to return to dashboard
+            InkWell(
+              onTap: permissionStore.canAccessAdminDashboard()
+                  ? () => context.go(AppRoutes.adminDashboard)
+                  : null,
+              child: Container(
               padding: EdgeInsets.all(isMobile ? 16 : (isTablet ? 12 : 16)),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.1),
@@ -157,12 +162,24 @@ class AdminSidebar extends StatelessWidget {
                       ],
                     ),
             ),
+            ),
 
             // Menu Items
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
+                  if (permissionStore.canAccessAdminDashboard())
+                    _buildMenuItem(
+                      context,
+                      title: 'DASHBOARD',
+                      icon: Icons.dashboard,
+                      route: AppRoutes.adminDashboard,
+                      currentLocation: currentLocation,
+                      onTap: () {
+                        context.go(AppRoutes.adminDashboard);
+                      },
+                    ),
                   if (permissionStore.has('MENU_COMPETITIONS'))
                     _buildMenuItem(
                       context,
@@ -171,6 +188,12 @@ class AdminSidebar extends StatelessWidget {
                       route: AppRoutes.createCompetition,
                       currentLocation: currentLocation,
                       onTap: () {
+                        final competitionController =
+                            Get.isRegistered<CompetitionController>()
+                            ? Get.find<CompetitionController>()
+                            : Get.put(CompetitionController());
+                        // Force refresh master option GET APIs on menu click.
+                        competitionController.loadOptions();
                         context.go(AppRoutes.createCompetition);
                       },
                     ),
@@ -275,6 +298,9 @@ class AdminSidebar extends StatelessWidget {
     // Check if this menu item is active
     final isActive =
         currentLocation == route ||
+        (route == AppRoutes.adminDashboard &&
+            (currentLocation == AppRoutes.adminDashboard ||
+                currentLocation.startsWith('${AppRoutes.adminDashboard}/'))) ||
         (route == AppRoutes.userManagement &&
             currentLocation.contains('/users')) ||
         (route == AppRoutes.participantManagement &&

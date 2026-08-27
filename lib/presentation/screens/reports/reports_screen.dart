@@ -15,6 +15,7 @@ import '../../controllers/reports_participants_list_preset.dart';
 import 'reports_users_tab.dart';
 import 'reports_participants_tab.dart';
 import 'reports_registered_participants_tab.dart';
+import 'reports_financial_tab.dart';
 import 'reports_registered_participants_popup.dart';
 import 'reports_institutions_details_popup.dart';
 import 'reports_masters_details_popup.dart';
@@ -44,7 +45,7 @@ class _ReportTabItem {
 }
 
 class _ReportsScreenState extends State<ReportsScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final ReportsController controller;
   final ReportsRepository _printRepository = ReportsRepository();
   TabController? _tabController;
@@ -60,7 +61,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       if (tabId == null || !mounted) return;
       _pendingReportTabId = tabId;
       controller.navigateToReportTabId.value = null;
-      _applyPendingTabNavigation();
+      _schedulePendingTabNavigation();
     });
     // Refresh competition list (/competition/list) + report summary on every
     // navigation to Reports (GetX controller may be reused across visits).
@@ -74,6 +75,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   void dispose() {
     _tabNavWorker?.dispose();
     _tabController?.dispose();
+    _tabController = null;
     super.dispose();
   }
 
@@ -81,12 +83,27 @@ class _ReportsScreenState extends State<ReportsScreen>
     if (length <= 0) return;
     final previousIndex = _tabController?.index ?? 0;
     if (_tabController != null && _tabController!.length == length) return;
-    _tabController?.dispose();
+
+    // Keep the old controller alive until after this frame so TabBar/TabBarView
+    // do not touch a disposed controller mid-rebuild.
+    final oldController = _tabController;
     _tabController = TabController(
       length: length,
       vsync: this,
       initialIndex: previousIndex.clamp(0, length - 1),
     );
+    if (oldController != null) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        oldController.dispose();
+      });
+    }
+  }
+
+  void _schedulePendingTabNavigation() {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _applyPendingTabNavigation();
+    });
   }
 
   void _applyPendingTabNavigation() {
@@ -180,6 +197,11 @@ class _ReportsScreenState extends State<ReportsScreen>
         id: 'scores',
         label: 'Score of participants',
         child: const ReportsParticipantsTab(),
+      ),
+      _ReportTabItem(
+        id: 'financial',
+        label: 'Financial report',
+        child: const ReportsFinancialTab(),
       ),
     ];
   }
@@ -295,7 +317,7 @@ class _ReportsScreenState extends State<ReportsScreen>
         }
 
         _ensureTabController(tabs.length);
-        _applyPendingTabNavigation();
+        _schedulePendingTabNavigation();
         final tabController = _tabController!;
 
         return Column(
@@ -1224,24 +1246,152 @@ class _ReportsScreenState extends State<ReportsScreen>
       );
     }
 
-    // Group blocks by stage so mobile UI can use tabs per stage.
-    final stageNames =
-        blocks
-            .map((b) => ((b as Map)['stageName'] ?? '').toString().trim())
-            .where((s) => s.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final allBlocks = blocks
+        .map((b) => (b as Map).cast<String, dynamic>())
+        .toList();
+    final onlineBlocks = allBlocks
+        .where((b) => _prizeWinnerMode(b) == 'ONLINE')
+        .toList();
+    final offlineBlocks = allBlocks
+        .where((b) => _prizeWinnerMode(b) != 'ONLINE')
+        .toList();
+    final showModeTabs = onlineBlocks.isNotEmpty && offlineBlocks.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _sectionTitle('Prize Winners (Category Wise)')),
+            IconButton(
+              tooltip: 'Print Prize Winners',
+              icon: Icon(Icons.print, color: AppTheme.primaryColor),
+              onPressed: _printPrizeWinnersPdf,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (showModeTabs)
+          DefaultTabController(
+            length: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _prizeWinnersTabBar(
+                  isMobile: isMobile,
+                  labels: const ['Online', 'Offline'],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: isMobile ? 760 : 580,
+                  child: TabBarView(
+                    children: [
+                      _buildPrizeWinnersModePane(
+                        onlineBlocks,
+                        isMobile,
+                        bounded: true,
+                      ),
+                      _buildPrizeWinnersModePane(
+                        offlineBlocks,
+                        isMobile,
+                        bounded: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          _buildPrizeWinnersModePane(
+            onlineBlocks.isNotEmpty ? onlineBlocks : offlineBlocks,
+            isMobile,
+            bounded: false,
+          ),
+      ],
+    );
+  }
+
+  String _prizeWinnerMode(Map<String, dynamic> block) {
+    final raw = (block['mode'] ?? block['competitionMode'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
+    return raw == 'ONLINE' ? 'ONLINE' : 'OFFLINE';
+  }
+
+  Widget _prizeWinnersTabBar({
+    required bool isMobile,
+    required List<String> labels,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: TabBar(
+        isScrollable: true,
+        dividerColor: Colors.transparent,
+        labelPadding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 10 : 12,
+        ),
+        labelColor: Colors.white,
+        unselectedLabelColor: Colors.grey[800],
+        labelStyle: TextStyle(
+          fontWeight: FontWeight.w800,
+          fontSize: isMobile ? 12 : 13,
+        ),
+        unselectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: isMobile ? 12 : 13,
+        ),
+        indicator: BoxDecoration(
+          color: AppTheme.primaryColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        tabs: labels
+            .map(
+              (label) => Tab(
+                height: isMobile ? 30 : 34,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(label),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildPrizeWinnersModePane(
+    List<Map<String, dynamic>> blocks,
+    bool isMobile, {
+    required bool bounded,
+  }) {
+    if (blocks.isEmpty) {
+      return _buildInfoCard(
+        'No prize winners for this mode yet.',
+        icon: Icons.emoji_events_outlined,
+      );
+    }
+
+    final stageNames = blocks
+        .map((b) => (b['stageName'] ?? '').toString().trim())
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     final Map<String, List<Map<String, dynamic>>> blocksByStage = {};
-    for (final b in blocks) {
-      final m = (b as Map).cast<String, dynamic>();
+    for (final m in blocks) {
       final stage = (m['stageName'] ?? '').toString().trim();
       final key = stage.isNotEmpty ? stage : 'Stage';
       blocksByStage.putIfAbsent(key, () => []).add(m);
     }
 
-    // Stable ordering inside each stage: categoryName then stageName then groupName.
     for (final e in blocksByStage.entries) {
       e.value.sort((a, b) {
         final ac = (a['categoryName'] ?? '').toString();
@@ -1258,107 +1408,76 @@ class _ReportsScreenState extends State<ReportsScreen>
       });
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    Widget stageView(String stage) {
+      final stageBlocks = blocksByStage[stage] ?? const <Map<String, dynamic>>[];
+      return ListView(
+        padding: EdgeInsets.zero,
+        shrinkWrap: !bounded,
+        physics: bounded
+            ? null
+            : const NeverScrollableScrollPhysics(),
+        children: stageBlocks
+            .map((block) => _buildPrizeWinnersBlock(block, isMobile))
+            .toList(),
+      );
+    }
+
+    if (stageNames.length >= 2) {
+      final tabs = DefaultTabController(
+        length: stageNames.length,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: _sectionTitle('Prize Winners (Category Wise)')),
-            IconButton(
-              tooltip: 'Print Prize Winners',
-              icon: Icon(Icons.print, color: AppTheme.primaryColor),
-              onPressed: _printPrizeWinnersPdf,
+            _prizeWinnersTabBar(
+              isMobile: isMobile,
+              labels: stageNames.map((s) => 'Stage $s').toList(),
             ),
+            const SizedBox(height: 10),
+            if (bounded)
+              Expanded(
+                child: TabBarView(
+                  children: stageNames.map(stageView).toList(),
+                ),
+              )
+            else
+              SizedBox(
+                height: isMobile ? 700 : 520,
+                child: TabBarView(
+                  children: stageNames.map(stageView).toList(),
+                ),
+              ),
           ],
         ),
-        const SizedBox(height: 10),
-        if (stageNames.length >= 2)
-          DefaultTabController(
-            length: stageNames.length,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: TabBar(
-                    isScrollable: true,
-                    dividerColor: Colors.transparent,
-                    labelPadding: EdgeInsets.symmetric(
-                      horizontal: isMobile ? 10 : 12,
-                    ),
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.grey[800],
-                    labelStyle: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: isMobile ? 12 : 13,
-                    ),
-                    unselectedLabelStyle: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: isMobile ? 12 : 13,
-                    ),
-                    indicator: BoxDecoration(
-                      color: AppTheme.primaryColor,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    tabs: stageNames
-                        .map(
-                          (s) => Tab(
-                            height: isMobile ? 30 : 34,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: Text('Stage $s'),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // In a ListView already; use a fixed height for TabBarView.
-                SizedBox(
-                  height: isMobile ? 700 : 520,
-                  child: TabBarView(
-                    children: stageNames.map((stage) {
-                      final stageBlocks =
-                          blocksByStage[stage]?.cast<Map<String, dynamic>>() ??
-                          const <Map<String, dynamic>>[];
-                      return ListView(
-                        padding: EdgeInsets.zero,
-                        children: stageBlocks
-                            .map(
-                              (block) =>
-                                  _buildPrizeWinnersBlock(block, isMobile),
-                            )
-                            .toList(),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          ...blocksByStage.values
-              .expand((list) => list)
-              .map((block) => _buildPrizeWinnersBlock(block, isMobile)),
-      ],
+      );
+      return tabs;
+    }
+
+    final allBlocks = blocksByStage.values.expand((list) => list).toList();
+    if (bounded) {
+      return ListView(
+        padding: EdgeInsets.zero,
+        children: allBlocks
+            .map((block) => _buildPrizeWinnersBlock(block, isMobile))
+            .toList(),
+      );
+    }
+    return Column(
+      children: allBlocks
+          .map((block) => _buildPrizeWinnersBlock(block, isMobile))
+          .toList(),
     );
   }
 
   Widget _buildPrizeWinnersBlock(Map<String, dynamic> block, bool isMobile) {
     final stageName = (block['stageName'] ?? '').toString();
     final categoryName = (block['categoryName'] ?? '').toString();
+    final modeLabel =
+        _prizeWinnerMode(block) == 'ONLINE' ? 'Online' : 'Offline';
     final winners = (block['winners'] as List?)?.cast() ?? [];
 
     final title =
         '${categoryName.isNotEmpty ? categoryName : 'Category'}'
+        '  •  $modeLabel'
         '  •  ${stageName.isNotEmpty ? 'Stage $stageName' : 'Stage'}';
 
     String _normSex(dynamic v) {
@@ -1383,7 +1502,10 @@ class _ReportsScreenState extends State<ReportsScreen>
       return _normSex(m['sex'] ?? m['gender']) == 'FEMALE';
     }).toList();
 
+    final prizesCommon = block['prizesCommon'] == true;
+    // Common prizes = one overall list (do not split into BOYS / GIRLS).
     final bool canSplitBySex =
+        !prizesCommon &&
         winners.isNotEmpty &&
         (maleWinners.isNotEmpty || femaleWinners.isNotEmpty);
 
@@ -1403,6 +1525,38 @@ class _ReportsScreenState extends State<ReportsScreen>
           final winnerGroupName = (m['groupName'] ?? '').toString();
           final totalScore = (m['totalScore'] ?? m['avgScore'] ?? 0).toString();
           final gradeName = (m['gradeName'] ?? '').toString().trim();
+          final pendingTieBreaker = m['pendingTieBreaker'] == true;
+          final prizeTied = m['prizeTied'] == true;
+          final tbScore = m['tieBreakerScore'];
+          final awardIsGrade =
+              m['awardIsGrade'] == true ||
+              (block['scoringMethod'] ?? '')
+                  .toString()
+                  .toUpperCase()
+                  .contains('GRAD');
+          // Prefer short grade letter on badge when backend sends "Grade A".
+          final badgeLabel = () {
+            if (awardIsGrade && gradeName.isNotEmpty) return gradeName;
+            if (prizeName.isNotEmpty) return prizeName;
+            return 'Rank';
+          }();
+          final awardLabel = awardIsGrade ? 'GRADE' : 'PRIZE';
+          final awardValue = () {
+            if (awardIsGrade) {
+              if (gradeName.isNotEmpty) return gradeName;
+              if (prizeName.isNotEmpty) {
+                final p = prizeName.trim();
+                final lower = p.toLowerCase();
+                if (lower.startsWith('grade ')) {
+                  return p.substring(6).trim();
+                }
+                return p;
+              }
+              return badgeLabel;
+            }
+            if (prizeName.isNotEmpty) return prizeName;
+            return badgeLabel;
+          }();
 
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
@@ -1425,7 +1579,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    prizeName.isNotEmpty ? prizeName : 'Rank',
+                    badgeLabel,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -1477,6 +1631,42 @@ class _ReportsScreenState extends State<ReportsScreen>
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                      if (pendingTieBreaker)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Same total — complete Tie Breaker to set 1st / 2nd',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.orange.shade800,
+                            ),
+                          ),
+                        )
+                      else if (prizeTied)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Tied on total marks',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        )
+                      else if (tbScore is num && tbScore > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'TB: $tbScore',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1506,30 +1696,28 @@ class _ReportsScreenState extends State<ReportsScreen>
                         ),
                       ],
                     ),
-                    if (gradeName.isNotEmpty) ...[
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            'GRADE',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.grey[700],
-                            ),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          awardLabel,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey[700],
                           ),
-                          Text(
-                            gradeName,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.grey[800],
-                            ),
+                        ),
+                        Text(
+                          awardValue,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.primaryColor,
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ],
                 ),
                 SizedBox(width: isMobile ? 20 : 28),

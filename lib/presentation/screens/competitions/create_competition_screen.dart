@@ -6,7 +6,6 @@ import 'package:pdfx/pdfx.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import '../../../core/constants/championship_style.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/permission_store.dart';
@@ -21,7 +20,6 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../models/competition_grade_entry.dart';
 import '../../widgets/admin_sidebar_layout.dart';
-import '../../widgets/form_title.dart';
 import '../../widgets/toggle_button_group.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/form_label_with_hint.dart';
@@ -30,13 +28,38 @@ import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/subscription/subscription_plan_picker.dart';
 import '../../../data/models/subscription_package_model.dart';
 import 'competitions_list_screen.dart';
+import 'widgets/add_category_dialog.dart';
+import 'widgets/category_asanas_config_wizard.dart';
+import 'widgets/tie_breaker_dialog.dart';
+import 'widgets/apply_upgrade_dialog.dart';
+import '../../../data/models/category_config_model.dart';
 
-class CreateCompetitionScreen extends StatelessWidget {
+class CreateCompetitionScreen extends StatefulWidget {
   const CreateCompetitionScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  State<CreateCompetitionScreen> createState() =>
+      _CreateCompetitionScreenState();
+}
+
+class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // CompetitionController is kept alive across routes, so onInit/loadOptions
+    // may not run again. Refresh prizes/categories/stages whenever this screen opens.
     final controller = Get.put(CompetitionController());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      controller.loadOptions();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
     final firstCompetitionGate =
         Get.isRegistered<FirstCompetitionGateService>()
         ? Get.find<FirstCompetitionGateService>()
@@ -120,8 +143,8 @@ class CreateCompetitionScreen extends StatelessWidget {
               if (!mandatory)
                 Padding(
                   padding: EdgeInsets.only(
-                    top: isMobile ? 8 : 10,
-                    bottom: 0,
+                    top: isMobile ? 10 : 14,
+                    bottom: 4,
                     left: isMobile ? 16 : 24,
                     right: isMobile ? 16 : 24,
                   ),
@@ -130,17 +153,20 @@ class CreateCompetitionScreen extends StatelessWidget {
                       options: [
                         ToggleButtonOption(
                           label: controller.isViewMode.value
-                              ? ' VIEW'
+                              ? 'View'
                               : controller.isEditMode.value
-                              ? ' EDIT'
-                              : ' CREATE',
+                              ? 'Edit'
+                              : 'Create',
                           icon: controller.isViewMode.value
-                              ? Icons.visibility
+                              ? Icons.visibility_outlined
                               : controller.isEditMode.value
-                              ? Icons.edit
-                              : Icons.add,
+                              ? Icons.edit_outlined
+                              : Icons.add_rounded,
                         ),
-                        const ToggleButtonOption(label: '≡ LIST'),
+                        const ToggleButtonOption(
+                          label: 'List',
+                          icon: Icons.list_alt_rounded,
+                        ),
                       ],
                       selectedIndex: controller.isListView.value ? 1 : 0,
                       onTap: (index) => controller.toggleViewMode(index == 1),
@@ -152,7 +178,12 @@ class CreateCompetitionScreen extends StatelessWidget {
                   () => controller.isListView.value && !mandatory
                       ? const CompetitionsListScreen()
                       : PinnedVerticalScrollView(
-                          padding: EdgeInsets.all(isMobile ? 16 : 10),
+                          padding: EdgeInsets.fromLTRB(
+                            isMobile ? 12 : 20,
+                            isMobile ? 8 : 12,
+                            isMobile ? 12 : 20,
+                            isMobile ? 16 : 24,
+                          ),
                           child: Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(
@@ -228,12 +259,28 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isMobile,
     bool isTablet,
   ) {
-    return Card(
-      elevation: 4,
-      margin: EdgeInsets.symmetric(horizontal: isMobile ? 0 : 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    final horizontalPad = isMobile ? 0.0 : 4.0;
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: horizontalPad),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.045),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24)),
+        padding: EdgeInsets.fromLTRB(
+          isMobile ? 14 : (isTablet ? 20 : 28),
+          isMobile ? 16 : 22,
+          isMobile ? 14 : (isTablet ? 20 : 28),
+          isMobile ? 16 : 22,
+        ),
         child: Obx(() {
           final _ = controller.formKeyRevision.value;
           return Form(
@@ -241,18 +288,7 @@ class CreateCompetitionScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title
-                Obx(
-                  () => FormTitle(
-                    text: controller.isViewMode.value
-                        ? 'VIEW COMPETITION'
-                        : controller.isEditMode.value
-                        ? 'EDIT COMPETITION'
-                        : 'CREATE COMPETITION',
-                    isMobile: isMobile,
-                    isTablet: isTablet,
-                  ),
-                ),
+                _buildCompetitionFormHeader(controller, isMobile, isTablet),
 
                 // Left: all form fields | Right: brochure + registration QR (desktop/tablet)
                 if (isMobile)
@@ -307,12 +343,12 @@ class CreateCompetitionScreen extends StatelessWidget {
                   }
                   final showBuyNow = controller.shouldShowSubscriptionBuyNow;
                   return Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.only(top: 8, bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFECACA)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -320,12 +356,16 @@ class CreateCompetitionScreen extends StatelessWidget {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.error_outline, color: Colors.red),
-                            const SizedBox(width: 8),
+                            const Icon(Icons.error_outline_rounded,
+                                color: Color(0xFFDC2626)),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 controller.errorMessage.value,
-                                style: TextStyle(color: Colors.red[700]),
+                                style: const TextStyle(
+                                  color: Color(0xFFB91C1C),
+                                  height: 1.35,
+                                ),
                               ),
                             ),
                           ],
@@ -334,7 +374,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                           const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerRight,
-                            child: ElevatedButton.icon(
+                            child: FilledButton.icon(
                               onPressed: controller
                                       .isProcessingSubscriptionPayment.value
                                   ? null
@@ -344,7 +384,7 @@ class CreateCompetitionScreen extends StatelessWidget {
                                     },
                               icon: const Icon(Icons.shopping_cart_outlined),
                               label: const Text('Buy credits'),
-                              style: ElevatedButton.styleFrom(
+                              style: FilledButton.styleFrom(
                                 backgroundColor: AppTheme.primaryColor,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
@@ -381,188 +421,50 @@ class CreateCompetitionScreen extends StatelessWidget {
                   controller.onDemandPlatformFeePercent.value;
                   final total = controller.calculateCompetitionMaintenanceTotal();
                   if (total <= 0) return const SizedBox.shrink();
-                  return Padding(
-                    padding: EdgeInsets.only(
+                  return Container(
+                    width: double.infinity,
+                    margin: EdgeInsets.only(
                       top: isMobile ? 8 : 12,
-                      bottom: isMobile ? 8 : 12,
+                      bottom: isMobile ? 4 : 8,
                     ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Total payable: ₹${total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.22),
                       ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.payments_outlined,
+                            size: 18, color: AppTheme.primaryColor),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Total payable: ₹${total.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color.lerp(
+                                      AppTheme.primaryColor, Colors.black, 0.25) ??
+                                  AppTheme.primaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 }),
 
-                // Submit and Cancel Buttons
-                Obx(
-                  () => controller.isEditMode.value
-                      ? SizedBox(height: isMobile ? 24 : 32)
-                      : SizedBox(height: isMobile ? 24 : 32),
-                ),
-                Obx(
-                  () => controller.isViewMode.value
-                      ? (isMobile
-                            ? Column(
-                                children: [
-                                  cancelButton(
-                                    onPressed: () {
-                                      controller.clearForm();
-                                      controller.toggleViewMode(true);
-                                    },
-                                    isFullWidth: true,
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  cancelButton(
-                                    onPressed: () {
-                                      controller.clearForm();
-                                      controller.toggleViewMode(true);
-                                    },
-                                    width: 200,
-                                  ),
-                                ],
-                              ))
-                      : controller.isEditMode.value
-                      ? (isMobile
-                            ? Column(
-                                children: [
-                                  saveButton(
-                                    onPressed: () async {
-                                      await controller.updateCompetition();
-                                    },
-                                    isLoading: controller.isLoading,
-                                    text: 'UPDATE',
-                                    isFullWidth: true,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  cancelButton(
-                                    onPressed: () {
-                                      controller.clearForm();
-                                      controller.toggleViewMode(true);
-                                    },
-                                    isFullWidth: true,
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  saveButton(
-                                    onPressed: () async {
-                                      await controller.updateCompetition();
-                                    },
-                                    isLoading: controller.isLoading,
-                                    text: 'UPDATE',
-                                    width: 200,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  cancelButton(
-                                    onPressed: () {
-                                      controller.clearForm();
-                                      controller.toggleViewMode(true);
-                                    },
-                                    width: 200,
-                                  ),
-                                ],
-                              ))
-                      : (isMobile
-                            ? Column(
-                                children: [
-                                  saveButton(
-                                    onPressed: () async {
-                                      final ok = await controller
-                                          .createCompetition();
-                                      if (ok && context.mounted) {
-                                        final permissionStore =
-                                            Get.isRegistered<PermissionStore>()
-                                            ? Get.find<PermissionStore>()
-                                            : Get.put(PermissionStore());
-                                        final saved = controller
-                                            .lastSavedCompetitionForQr
-                                            .value;
-                                        if (permissionStore.has(
-                                              'SHOW_COMP_QR_CODE_ON_ADMIN',
-                                            ) &&
-                                            saved != null) {
-                                          await showCompetitionRegistrationQrDialog(
-                                            context,
-                                            saved,
-                                          );
-                                        }
-                                        controller
-                                            .clearLastSavedCompetitionForQr();
-                                      }
-                                    },
-                                    isLoading: controller.isLoading,
-                                    text: controller.createCompetitionButtonLabel,
-                                    isFullWidth: true,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  cancelButton(
-                                    onPressed: () {
-                                      controller.clearForm();
-                                      controller.toggleViewMode(true);
-                                    },
-                                    isFullWidth: true,
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  saveButton(
-                                    onPressed: () async {
-                                      final ok = await controller
-                                          .createCompetition();
-                                      if (ok && context.mounted) {
-                                        final permissionStore =
-                                            Get.isRegistered<PermissionStore>()
-                                            ? Get.find<PermissionStore>()
-                                            : Get.put(PermissionStore());
-                                        final saved = controller
-                                            .lastSavedCompetitionForQr
-                                            .value;
-                                        if (permissionStore.has(
-                                              'SHOW_COMP_QR_CODE_ON_ADMIN',
-                                            ) &&
-                                            saved != null) {
-                                          await showCompetitionRegistrationQrDialog(
-                                            context,
-                                            saved,
-                                          );
-                                        }
-                                        controller
-                                            .clearLastSavedCompetitionForQr();
-                                      }
-                                    },
-                                    isLoading: controller.isLoading,
-                                    text: controller.createCompetitionButtonLabel,
-                                    width: controller
-                                            .requiresPrepaidCompetitionPayment
-                                        ? 300
-                                        : 200,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  cancelButton(
-                                    onPressed: () {
-                                      controller.clearForm();
-                                      controller.toggleViewMode(true);
-                                    },
-                                    width: 200,
-                                  ),
-                                ],
-                              )),
-                ),
-                SizedBox(height: isMobile ? 16 : 24),
+                SizedBox(height: isMobile ? 20 : 28),
+                const Divider(height: 1, color: AppColors.divider),
+                SizedBox(height: isMobile ? 16 : 20),
+                _buildFormActions(context, controller, isMobile),
+                SizedBox(height: isMobile ? 8 : 12),
               ],
             ),
           );
@@ -571,283 +473,1081 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildCompetitionFormHeader(
+    CompetitionController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Obx(() {
+      final isView = controller.isViewMode.value;
+      final isEdit = controller.isEditMode.value;
+      final title = isView
+          ? 'View competition'
+          : isEdit
+              ? 'Edit competition'
+              : 'Create competition';
+      final icon = isView
+          ? Icons.visibility_outlined
+          : isEdit
+              ? Icons.edit_outlined
+              : Icons.emoji_events_outlined;
+      final chipLabel = isView ? 'View' : isEdit ? 'Edit' : 'Create';
+
+      return Padding(
+        padding: EdgeInsets.only(bottom: isMobile ? 20 : 28),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: isMobile ? 44 : 52,
+              height: isMobile ? 44 : 52,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: AppTheme.primaryColor, size: isMobile ? 22 : 26),
+            ),
+            SizedBox(width: isMobile ? 12 : 16),
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: isMobile ? 20 : (isTablet ? 22 : 24),
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: AppColors.textPrimary,
+                        height: 1.15,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      chipLabel,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Color.lerp(
+                              AppTheme.primaryColor,
+                              Colors.black,
+                              0.28,
+                            ) ??
+                            AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildFormActions(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+  ) {
+    return Obx(() {
+      if (controller.isViewMode.value) {
+        final btn = cancelButton(
+          onPressed: () {
+            controller.clearForm();
+            controller.toggleViewMode(true);
+          },
+          isFullWidth: isMobile,
+          width: isMobile ? null : 200,
+        );
+        return isMobile
+            ? btn
+            : Row(mainAxisAlignment: MainAxisAlignment.end, children: [btn]);
+      }
+
+      final primary = controller.isEditMode.value
+          ? saveButton(
+              onPressed: () async {
+                await controller.updateCompetition();
+              },
+              isLoading: controller.isLoading,
+              text: 'Save changes',
+              isFullWidth: isMobile,
+              width: isMobile ? null : 200,
+            )
+          : saveButton(
+              onPressed: () async {
+                final ok = await controller.createCompetition();
+                if (ok && context.mounted) {
+                  final permissionStore = Get.isRegistered<PermissionStore>()
+                      ? Get.find<PermissionStore>()
+                      : Get.put(PermissionStore());
+                  final saved = controller.lastSavedCompetitionForQr.value;
+                  if (permissionStore.has('SHOW_COMP_QR_CODE_ON_ADMIN') &&
+                      saved != null) {
+                    await showCompetitionRegistrationQrDialog(context, saved);
+                  }
+                  controller.clearLastSavedCompetitionForQr();
+                }
+              },
+              isLoading: controller.isLoading,
+              text: controller.createCompetitionButtonLabel,
+              isFullWidth: isMobile,
+              width: isMobile
+                  ? null
+                  : (controller.requiresPrepaidCompetitionPayment ? 300 : 200),
+            );
+
+      final cancel = cancelButton(
+        onPressed: () {
+          controller.clearForm();
+          controller.toggleViewMode(true);
+        },
+        isFullWidth: isMobile,
+        width: isMobile ? null : 200,
+      );
+
+      if (isMobile) {
+        return Column(
+          children: [
+            primary,
+            const SizedBox(height: 12),
+            cancel,
+          ],
+        );
+      }
+
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          cancel,
+          const SizedBox(width: 12),
+          primary,
+        ],
+      );
+    });
+  }
+
   Widget _buildMainFormFieldsColumn(
     BuildContext context,
     CompetitionController controller,
     bool isMobile,
     bool isTablet,
   ) {
-    final gap = SizedBox(height: isMobile ? 20 : 24);
+    final gap = SizedBox(height: isMobile ? 14 : 18);
     final gapSm = SizedBox(width: isTablet ? 12 : 16);
+    final fieldGap = SizedBox(height: isMobile ? 14 : 16);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildTextField(
-          context,
-          controller,
-          label: 'COMPETITION NAME :',
-          textController: controller.competitionNameController,
-          isRequired: true,
-          isMobile: isMobile,
-          isTablet: isTablet,
-        ),
-        gap,
-        _buildTextField(
-          context,
-          controller,
-          label: 'DESCRIPTION :',
-          textController: controller.descriptionController,
-          isRequired: true,
-          maxLines: 2,
-          isMobile: isMobile,
-          isTablet: isTablet,
-          minTrimmedLength: CompetitionController.descriptionMinLength,
-          minLengthMessage: CompetitionController.descriptionMinLengthMessage,
-          lengthWarningTouched: controller.descriptionTouched,
-          lengthWarningText: controller.descriptionText,
-          onLengthWarningChanged: (value) {
-            controller.markDescriptionTouched();
-            controller.descriptionText.value = value;
-          },
-        ),
-        gap,
-        _buildTextField(
-          context,
-          controller,
-          label: 'ADDRESS :',
-          textController: controller.addressController,
-          isRequired: true,
-          maxLines: 2,
-          isMobile: isMobile,
-          isTablet: isTablet,
-          minTrimmedLength: CompetitionController.addressMinLength,
-          minLengthMessage: CompetitionController.addressMinLengthMessage,
-          lengthWarningTouched: controller.addressTouched,
-          lengthWarningText: controller.addressText,
-          onLengthWarningChanged: (value) {
-            controller.markAddressTouched();
-            controller.addressText.value = value;
-          },
-        ),
-        gap,
-        if (isMobile)
-          Column(
+        _buildSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildDateField(
-                context,
-                controller,
-                label: 'EVENT START DATE :',
-                isStartDate: true,
-                isDisplayAd: false,
+              _formSectionHeader(
+                icon: Icons.info_outline_rounded,
+                title: 'Basic details',
                 isMobile: isMobile,
-                isTablet: isTablet,
               ),
-              gap,
-              _buildDateField(
+              fieldGap,
+              _buildTextField(
                 context,
                 controller,
-                label: 'EVENT END DATE :',
-                isStartDate: false,
-                isDisplayAd: false,
-                isMobile: isMobile,
-                isTablet: isTablet,
-              ),
-              gap,
-              _buildDateField(
-                context,
-                controller,
-                label: 'DISPLAY AD FROM :',
-                isStartDate: false,
-                isDisplayAd: true,
+                label: 'Competition name',
+                textController: controller.competitionNameController,
+                fieldKey: controller.competitionNameFieldKey,
+                focusNode: controller.competitionNameFocusNode,
                 isRequired: true,
                 isMobile: isMobile,
                 isTablet: isTablet,
               ),
-            ],
-          )
-        else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _buildDateField(
-                  context,
-                  controller,
-                  label: 'EVENT START DATE :',
-                  isStartDate: true,
-                  isDisplayAd: false,
-                  isMobile: isMobile,
-                  isTablet: isTablet,
-                ),
+              fieldGap,
+              _buildTextField(
+                context,
+                controller,
+                label: 'Description',
+                textController: controller.descriptionController,
+                fieldKey: controller.descriptionFieldKey,
+                focusNode: controller.descriptionFocusNode,
+                isRequired: true,
+                maxLines: 3,
+                isMobile: isMobile,
+                isTablet: isTablet,
+                minTrimmedLength: CompetitionController.descriptionMinLength,
+                minLengthMessage: CompetitionController.descriptionMinLengthMessage,
+                lengthWarningTouched: controller.descriptionTouched,
+                lengthWarningText: controller.descriptionText,
+                onLengthWarningChanged: (value) {
+                  controller.markDescriptionTouched();
+                  controller.descriptionText.value = value;
+                },
               ),
-              gapSm,
-              Expanded(
-                child: _buildDateField(
-                  context,
-                  controller,
-                  label: 'EVENT END DATE :',
-                  isStartDate: false,
-                  isDisplayAd: false,
-                  isMobile: isMobile,
-                  isTablet: isTablet,
-                ),
-              ),
-              gapSm,
-              Expanded(
-                child: _buildDateField(
-                  context,
-                  controller,
-                  label: 'DISPLAY AD FROM :',
-                  isStartDate: false,
-                  isDisplayAd: true,
-                  isRequired: true,
-                  isMobile: isMobile,
-                  isTablet: isTablet,
-                ),
+              fieldGap,
+              _buildTextField(
+                context,
+                controller,
+                label: 'Address / venue details',
+                textController: controller.addressController,
+                fieldKey: controller.addressFieldKey,
+                focusNode: controller.addressFocusNode,
+                isRequired: true,
+                maxLines: 2,
+                isMobile: isMobile,
+                isTablet: isTablet,
+                minTrimmedLength: CompetitionController.addressMinLength,
+                minLengthMessage: CompetitionController.addressMinLengthMessage,
+                lengthWarningTouched: controller.addressTouched,
+                lengthWarningText: controller.addressText,
+                onLengthWarningChanged: (value) {
+                  controller.markAddressTouched();
+                  controller.addressText.value = value;
+                },
               ),
             ],
           ),
+        ),
         gap,
-        if (isMobile)
-          Column(
+        _buildSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTimeField(
-                context,
-                controller,
-                label: 'EVENT START TIME :',
-                isStartTime: true,
-                isRequired: false,
-                isMobile: isMobile,
-                isTablet: isTablet,
-              ),
-              gap,
-              _buildTimeField(
-                context,
-                controller,
-                label: 'EVENT END TIME :',
-                isStartTime: false,
-                isRequired: true,
-                isMobile: isMobile,
-                isTablet: isTablet,
-              ),
-              gap,
-              _buildPublishResultNowField(
-                context,
-                controller,
+              _formSectionHeader(
+                icon: Icons.calendar_month_rounded,
+                title: 'Schedule & publishing',
                 isMobile: isMobile,
               ),
-            ],
-          )
-        else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _buildTimeField(
+              fieldGap,
+              if (isMobile)
+                Column(
+                  children: [
+                    _buildDateField(
                       context,
                       controller,
-                      label: 'EVENT START TIME :',
+                      label: 'Event start date',
+                      isStartDate: true,
+                      isDisplayAd: false,
+                      isMobile: isMobile,
+                      isTablet: isTablet,
+                    ),
+                    fieldGap,
+                    _buildDateField(
+                      context,
+                      controller,
+                      label: 'Event end date',
+                      isStartDate: false,
+                      isDisplayAd: false,
+                      isMobile: isMobile,
+                      isTablet: isTablet,
+                    ),
+                    fieldGap,
+                    _buildDateField(
+                      context,
+                      controller,
+                      label: 'Display ad from',
+                      isStartDate: false,
+                      isDisplayAd: true,
+                      isRequired: true,
+                      isMobile: isMobile,
+                      isTablet: isTablet,
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildDateField(
+                        context,
+                        controller,
+                        label: 'Event start date',
+                        isStartDate: true,
+                        isDisplayAd: false,
+                        isMobile: isMobile,
+                        isTablet: isTablet,
+                      ),
+                    ),
+                    gapSm,
+                    Expanded(
+                      child: _buildDateField(
+                        context,
+                        controller,
+                        label: 'Event end date',
+                        isStartDate: false,
+                        isDisplayAd: false,
+                        isMobile: isMobile,
+                        isTablet: isTablet,
+                      ),
+                    ),
+                    gapSm,
+                    Expanded(
+                      child: _buildDateField(
+                        context,
+                        controller,
+                        label: 'Display ad from',
+                        isStartDate: false,
+                        isDisplayAd: true,
+                        isRequired: true,
+                        isMobile: isMobile,
+                        isTablet: isTablet,
+                      ),
+                    ),
+                  ],
+                ),
+              fieldGap,
+              if (isMobile)
+                Column(
+                  children: [
+                    _buildTimeField(
+                      context,
+                      controller,
+                      label: 'Event start time',
                       isStartTime: true,
                       isRequired: false,
                       isMobile: isMobile,
                       isTablet: isTablet,
                     ),
-                  ),
-                  gapSm,
-                  Expanded(
-                    child: _buildTimeField(
+                    fieldGap,
+                    _buildTimeField(
                       context,
                       controller,
-                      label: 'EVENT END TIME :',
+                      label: 'Event end time',
                       isStartTime: false,
                       isRequired: true,
                       isMobile: isMobile,
                       isTablet: isTablet,
                     ),
-                  ),
-                ],
-              ),
-              gap,
-              _buildPublishResultNowField(
-                context,
-                controller,
-                isMobile: isMobile,
-              ),
+                    fieldGap,
+                    _buildPublishResultNowField(
+                      context,
+                      controller,
+                      isMobile: isMobile,
+                    ),
+                  ],
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildTimeField(
+                            context,
+                            controller,
+                            label: 'Event start time',
+                            isStartTime: true,
+                            isRequired: false,
+                            isMobile: isMobile,
+                            isTablet: isTablet,
+                          ),
+                        ),
+                        gapSm,
+                        Expanded(
+                          child: _buildTimeField(
+                            context,
+                            controller,
+                            label: 'Event end time',
+                            isStartTime: false,
+                            isRequired: true,
+                            isMobile: isMobile,
+                            isTablet: isTablet,
+                          ),
+                        ),
+                      ],
+                    ),
+                    fieldGap,
+                    _buildPublishResultNowField(
+                      context,
+                      controller,
+                      isMobile: isMobile,
+                    ),
+                  ],
+                ),
             ],
           ),
+        ),
         gap,
-        if (isMobile)
-          Column(
+        _buildSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildParticipantsPerStageField(
+              _formSectionHeader(
+                icon: Icons.school_outlined,
+                title: 'Best school award',
+                isMobile: isMobile,
+              ),
+              fieldGap,
+              _buildBestSchoolAwardField(
                 context,
                 controller,
                 isMobile,
                 isTablet,
+                showOuterLabel: false,
               ),
-              gap,
-              _buildMarksField(context, controller, isMobile, isTablet),
             ],
-          )
-        else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 1,
-                child: _buildParticipantsPerStageField(
-                  context,
-                  controller,
-                  isMobile,
-                  isTablet,
+          ),
+        ),
+        gap,
+        _buildSectionCard(
+          key: controller.categoriesSectionKey,
+          child: _buildCategoryCardsSection(
+            context,
+            controller,
+            isMobile,
+            isTablet,
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _formSectionHeader({
+    required IconData icon,
+    required String title,
+    required bool isMobile,
+  }) {
+    final primary = AppTheme.primaryColor;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: isMobile ? 14.5 : 15.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.15,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionCard({Key? key, required Widget child}) {
+    return Container(
+      key: key,
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildCategoryCardsSection(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    final readOnly = controller.isViewMode.value;
+    final primary = AppTheme.primaryColor;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.layers_rounded, size: 20, color: primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: const Text(
+                'Categories',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                  color: AppColors.textPrimary,
                 ),
               ),
-              gapSm,
-              Expanded(
-                flex: 2,
-                child: _buildMarksField(
-                  context,
-                  controller,
-                  isMobile,
-                  isTablet,
+            ),
+            if (!readOnly)
+              FilledButton.icon(
+                onPressed: () => _onAddCategory(context, controller),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Add Category'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Obx(() {
+          final drafts = controller.categoryConfigDrafts.toList();
+          if (drafts.isEmpty) {
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    primary.withValues(alpha: 0.06),
+                    AppColors.surfaceAlt,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: primary.withValues(alpha: 0.18)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Icon(
+                      Icons.category_outlined,
+                      size: 28,
+                      color: primary,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'No categories yet',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Add Common, Champions, Special Groups, or a Challenge\nwith Online or Offline mode.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.4,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  if (!readOnly) ...[
+                    const SizedBox(height: 18),
+                    OutlinedButton.icon(
+                      onPressed: () => _onAddCategory(context, controller),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Add your first category'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: primary,
+                        side: BorderSide(color: primary.withValues(alpha: 0.45)),
+                        backgroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }
+
+          final hasActions = drafts.any(
+            (c) =>
+                c.configured &&
+                (c.tieBreakerEnabled || _isUpgradeEnabled(c)),
+          );
+
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: drafts.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: isMobile ? 1 : 2,
+              // Tall enough for wrapped fee chips, 2-line summary, and
+              // Tie Breaker / Apply Upgrade actions without Column overflow.
+              mainAxisExtent: hasActions ? 248 : 204,
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+            ),
+            itemBuilder: (context, index) {
+              final cat = drafts[index];
+              return _buildCategoryCard(context, controller, cat, readOnly);
+            },
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildCategoryCard(
+    BuildContext context,
+    CompetitionController controller,
+    CompetitionCategoryConfigModel cat,
+    bool readOnly,
+  ) {
+    final primary = AppTheme.primaryColor;
+    final accent = cat.isChallenge
+        ? const Color(0xFF0284C7)
+        : (cat.configured ? primary : const Color(0xFFD97706));
+
+    Color formatBg;
+    Color formatFg;
+    if (cat.isChallenge) {
+      formatBg = const Color(0xFFE0F2FE);
+      formatFg = const Color(0xFF0369A1);
+    } else if (cat.configured) {
+      formatBg = primary.withValues(alpha: 0.12);
+      formatFg = Color.lerp(primary, Colors.black, 0.35) ?? primary;
+    } else {
+      formatBg = const Color(0xFFFFF7ED);
+      formatFg = const Color(0xFFC2410C);
+    }
+
+    final modeBg = cat.isOnlineMode
+        ? const Color(0xFFEFF6FF)
+        : const Color(0xFFF3F4F6);
+    final modeFg = cat.isOnlineMode
+        ? const Color(0xFF1D4ED8)
+        : const Color(0xFF4B5563);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _onCategoryCardTap(context, controller, cat),
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.borderLight),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 4, color: accent),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                cat.categoryName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                  letterSpacing: 0.2,
+                                  color: AppColors.textPrimary,
+                                  height: 1.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (!readOnly)
+                              IconButton(
+                                onPressed: () =>
+                                    controller.removeCategoryDraft(cat.draftId),
+                                icon: const Icon(Icons.delete_outline_rounded),
+                                iconSize: 18,
+                                color: const Color(0xFFEF4444),
+                                tooltip: 'Remove category',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _categoryMetaChip(
+                              icon: cat.isChallenge
+                                  ? Icons.bolt_rounded
+                                  : Icons.self_improvement_rounded,
+                              label: cat.statusLabel,
+                              background: formatBg,
+                              foreground: formatFg,
+                            ),
+                            _categoryMetaChip(
+                              icon: cat.isOnlineMode
+                                  ? Icons.cloud_outlined
+                                  : Icons.storefront_outlined,
+                              label: cat.modeLabel,
+                              background: modeBg,
+                              foreground: modeFg,
+                            ),
+                            _categoryMetaChip(
+                              icon: Icons.payments_outlined,
+                              label: cat.feeSummaryLabel,
+                              background: AppColors.surfaceAlt,
+                              foreground: AppColors.textSecondary,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          cat.contentSummary,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            height: 1.35,
+                            color: AppColors.textMuted,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (cat.configured &&
+                            (cat.tieBreakerEnabled ||
+                                _isUpgradeEnabled(cat))) ...[
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              if (cat.tieBreakerEnabled)
+                                _categoryActionChip(
+                                  label: 'Tie Breaker',
+                                  icon: Icons.balance_rounded,
+                                  onTap: () => _openTieBreaker(
+                                    context,
+                                    controller,
+                                    cat,
+                                  ),
+                                ),
+                              if (cat.tieBreakerEnabled &&
+                                  _isUpgradeEnabled(cat))
+                                _categoryActionChip(
+                                  label: 'Apply Upgrade',
+                                  icon: Icons.arrow_upward_rounded,
+                                  onTap: () => _applyCategoryUpgrade(
+                                    context,
+                                    controller,
+                                    cat,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: primary.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  cat.isChallenge
+                                      ? 'Open challenge settings'
+                                      : 'Configure rules & asanas',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: primary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 16,
+                                color: primary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _categoryMetaChip({
+    required IconData icon,
+    required String label,
+    required Color background,
+    required Color foreground,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: foreground),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: foreground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _onAddCategory(
+    BuildContext context,
+    CompetitionController controller,
+  ) async {
+    final existingCategories = controller.categoryConfigDrafts
+        .where((c) => c.categoryName.trim().isNotEmpty)
+        .map(
+          (c) => ExistingCategoryEntry(
+            name: c.categoryName,
+            mode: c.mode,
+          ),
+        )
+        .toList();
+    final result = await AddCategoryDialog.show(
+      context,
+      existingCategories: existingCategories,
+    );
+    if (result == null || !context.mounted) return;
+    final format = (result['format'] ?? 'ASANAS').toUpperCase();
+    final mode = (result['mode'] ?? 'OFFLINE').toUpperCase() == 'ONLINE'
+        ? 'ONLINE'
+        : 'OFFLINE';
+    final name = (result['name'] ?? '').trim().toUpperCase();
+    if (name.isEmpty) return;
+
+    final draft = await controller.createCategoryDraftPersisted(
+      name: name,
+      format: format,
+      mode: mode,
+    );
+    if (draft == null || !context.mounted) return;
+
+    await _openAsanasWizard(context, controller, draft);
+  }
+
+  Future<void> _onCategoryCardTap(
+    BuildContext context,
+    CompetitionController controller,
+    CompetitionCategoryConfigModel cat,
+  ) async {
+    await _openAsanasWizard(context, controller, cat);
+  }
+
+  Future<void> _openTieBreaker(
+    BuildContext context,
+    CompetitionController controller,
+    CompetitionCategoryConfigModel cat,
+  ) async {
+    final competitionId =
+        int.tryParse(controller.competitionToEdit.value?.id ?? '');
+    final categoryId = cat.categoryId;
+    if (competitionId == null || categoryId == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Tie Breaker'),
+          content: const Text(
+            'Save the competition and category first, then run Tie Breaker after scoring.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    await TieBreakerDialog.show(
+      context,
+      competitionId: competitionId,
+      categoryId: categoryId,
+      categoryName: cat.categoryName,
+    );
+  }
+
+  bool _isUpgradeEnabled(CompetitionCategoryConfigModel cat) {
+    final hasTop = cat.upgradeTop != null && cat.upgradeTop! > 0;
+    final hasTarget = cat.upgradeToCategoryId != null ||
+        (cat.upgradeToCategoryName?.trim().isNotEmpty ?? false);
+    return hasTop && hasTarget;
+  }
+
+  Widget _categoryActionChip({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final primary = AppTheme.primaryColor;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: primary.withValues(alpha: 0.28)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: primary),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color.lerp(primary, Colors.black, 0.25) ?? primary,
                 ),
               ),
             ],
           ),
-        gap,
-        _buildChampionshipStyleField(context, controller, isMobile, isTablet),
-        gap,
-        _buildBestSchoolAwardField(context, controller, isMobile, isTablet),
-        gap,
-        _buildPrizesField(context, controller, isMobile, isTablet),
-        gap,
-        _buildCategoriesField(context, controller, isMobile, isTablet),
-        gap,
-        _buildStagesField(context, controller, isMobile, isTablet),
-        gap,
-        _buildGradesField(context, controller, isMobile, isTablet),
-        gap,
-        Obx(
-          () => controller.selectedStages.isNotEmpty
-              ? Column(
-                  children: [
-                    _buildStageGroupsDisplay(
-                      context,
-                      controller,
-                      isMobile,
-                      isTablet,
-                    ),
-                    gap,
-                  ],
-                )
-              : const SizedBox.shrink(),
         ),
-      ],
+      ),
     );
+  }
+
+  Future<void> _applyCategoryUpgrade(
+    BuildContext context,
+    CompetitionController controller,
+    CompetitionCategoryConfigModel cat,
+  ) async {
+    final competitionId =
+        int.tryParse(controller.competitionToEdit.value?.id ?? '');
+    final categoryId = cat.categoryId;
+    if (competitionId == null || categoryId == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Apply Upgrade'),
+          content: const Text(
+            'Save the competition and category first, then apply upgrade after scoring / tie breaker.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    await ApplyUpgradeDialog.show(
+      context,
+      competitionId: competitionId,
+      categoryId: categoryId,
+      categoryName: cat.categoryName,
+    );
+  }
+
+  Future<void> _openAsanasWizard(
+    BuildContext context,
+    CompetitionController controller,
+    CompetitionCategoryConfigModel cat,
+  ) async {
+    final others = controller.categoryConfigDrafts
+        .where((c) => c.draftId != cat.draftId)
+        .map((c) => c.categoryName)
+        .toList();
+    final saved = await CategoryAsanasConfigWizard.show(
+      context,
+      config: cat,
+      otherCategoryNames: others,
+      readOnly: controller.isViewMode.value,
+      competitionController: controller,
+    );
+    if (saved != null) {
+      controller.upsertCategoryDraft(saved);
+    }
   }
 
   Widget _buildSubscriptionTopUpSection(
@@ -1255,6 +1955,8 @@ class CreateCompetitionScreen extends StatelessWidget {
     CompetitionController competitionController, {
     required String label,
     required TextEditingController textController,
+    Key? fieldKey,
+    FocusNode? focusNode,
     bool isRequired = false,
     int maxLines = 1,
     bool isMobile = false,
@@ -1267,27 +1969,46 @@ class CreateCompetitionScreen extends StatelessWidget {
     ValueChanged<String>? onLengthWarningChanged,
   }) {
     return Column(
+      key: fieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FormLabelWithHint(label: label),
+        FormLabelWithHint(
+          label: label,
+          labelStyle: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: isMobile ? 13 : 13.5,
+            height: 1.2,
+            color: AppColors.textSecondary,
+          ),
+          bottomSpacing: 8,
+        ),
         Obx(
           () => TextFormField(
             controller: textController,
+            focusNode: focusNode,
             maxLines: maxLines,
             textAlign: textAlign,
             readOnly: competitionController.isViewMode.value,
             onChanged: onLengthWarningChanged,
             decoration: InputDecoration(
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
               ),
               filled: true,
               fillColor: competitionController.isViewMode.value
                   ? Colors.grey[200]
-                  : Colors.grey[50],
+                  : Colors.white,
               contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: isMobile ? 12 : 16,
+                horizontal: 14,
+                vertical: isMobile ? 12 : 14,
               ),
               isDense: isMobile,
               errorStyle: minTrimmedLength != null
@@ -1361,7 +2082,31 @@ class CreateCompetitionScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildBrochureUpload(context, controller, isMobile, isTablet),
+        _buildSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _formSectionHeader(
+                icon: Icons.picture_as_pdf_outlined,
+                title: 'Brochure',
+                isMobile: isMobile,
+              ),
+              SizedBox(height: isMobile ? 14 : 16),
+              _buildBrochureUpload(
+                context,
+                controller,
+                isMobile,
+                isTablet,
+                showOuterLabel: false,
+              ),
+              SizedBox(height: isMobile ? 16 : 18),
+              _buildGoogleDriveFolderField(
+                controller,
+                isMobile,
+              ),
+            ],
+          ),
+        ),
         Obx(() {
           final permissionStore = Get.isRegistered<PermissionStore>()
               ? Get.find<PermissionStore>()
@@ -1374,10 +2119,12 @@ class CreateCompetitionScreen extends StatelessWidget {
               comp!.id!.isNotEmpty;
           if (!showQr) return const SizedBox.shrink();
           return Padding(
-            padding: EdgeInsets.only(top: isMobile ? 20 : 24),
-            child: CompetitionRegistrationQrPanel(
-              competition: comp,
-              compact: true,
+            padding: EdgeInsets.only(top: isMobile ? 14 : 18),
+            child: _buildSectionCard(
+              child: CompetitionRegistrationQrPanel(
+                competition: comp,
+                compact: true,
+              ),
             ),
           );
         }),
@@ -1385,16 +2132,91 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildGoogleDriveFolderField(
+    CompetitionController controller,
+    bool isMobile,
+  ) {
+    return Obx(() {
+      final email = controller.googleDriveServiceAccountEmail.value.trim();
+      final serverReason = controller.googleDriveServerReason.value.trim();
+      final String hint;
+      if (!controller.googleDriveServerConfigured.value &&
+          serverReason.isNotEmpty) {
+        hint = serverReason;
+      } else if (email.isEmpty) {
+        hint =
+            'Share this folder with the app Google service account as Editor, then paste the folder link.';
+      } else {
+        hint =
+            'Share this folder with $email as Editor, then paste the folder link.';
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FormLabelWithHint(
+            label: 'Google Drive folder URL',
+            hintText: hint,
+            labelStyle: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: isMobile ? 13 : 13.5,
+              height: 1.2,
+              color: AppColors.textSecondary,
+            ),
+            hintStyle: TextStyle(
+              fontSize: isMobile ? 11 : 12,
+              color: AppColors.textMuted,
+              height: 1.35,
+            ),
+            bottomSpacing: 8,
+          ),
+          TextFormField(
+            controller: controller.googleDriveFolderUrlController,
+            readOnly: controller.isViewMode.value,
+            decoration: InputDecoration(
+              hintText: 'https://drive.google.com/drive/folders/...',
+              hintStyle: TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted.withValues(alpha: 0.8),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
+              ),
+              filled: true,
+              fillColor: controller.isViewMode.value
+                  ? Colors.grey[200]
+                  : Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: isMobile ? 12 : 14,
+              ),
+              isDense: isMobile,
+            ),
+          ),
+        ],
+      );
+    });
+  }
+
   Widget _buildBrochureUpload(
     BuildContext context,
     CompetitionController controller,
     bool isMobile,
-    bool isTablet,
-  ) {
+    bool isTablet, {
+    bool showOuterLabel = true,
+  }) {
     return Column(
+      key: controller.brochureSectionKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const FormLabelWithHint(label: 'UPLOAD BROCHURE :'),
+        if (showOuterLabel) const FormLabelWithHint(label: 'Upload brochure'),
         FormField<bool>(
           initialValue:
               controller.brochureFile.value != null ||
@@ -1426,12 +2248,13 @@ class CreateCompetitionScreen extends StatelessWidget {
                 Obx(
                   () => controller.isViewMode.value
                       ? const SizedBox.shrink()
-                      : const SizedBox(height: 8),
+                      : const SizedBox(height: 10),
                 ),
                 Obx(
                   () => controller.isViewMode.value
                       ? const SizedBox.shrink()
-                      : Center(
+                      : SizedBox(
+                          width: double.infinity,
                           child: OutlinedButton.icon(
                             onPressed: () async {
                               await controller.pickBrochure();
@@ -1443,26 +2266,33 @@ class CreateCompetitionScreen extends StatelessWidget {
                               field.didChange(hasBrochure);
                               field.validate();
                             },
-                            icon: const Icon(Icons.upload_file, size: 18),
-                            label: const Text('BROWSE'),
+                            icon: const Icon(Icons.upload_file_rounded, size: 18),
+                            label: const Text('Choose file'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppTheme.primaryColor,
-                              side: BorderSide(color: AppTheme.primaryColor),
+                              side: BorderSide(
+                                color:
+                                    AppTheme.primaryColor.withValues(alpha: 0.55),
+                              ),
+                              backgroundColor: Colors.white,
                               padding: EdgeInsets.symmetric(
                                 horizontal: isMobile ? 12 : 16,
-                                vertical: isMobile ? 10 : 12,
+                                vertical: isMobile ? 12 : 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                           ),
                         ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.only(top: 10),
                   child: Text(
                     CompetitionController.brochureUploadNotes,
                     style: TextStyle(
                       fontSize: isMobile ? 11 : 12,
-                      color: Colors.grey[600],
+                      color: AppColors.textMuted,
                       height: 1.4,
                     ),
                   ),
@@ -1476,11 +2306,11 @@ class CreateCompetitionScreen extends StatelessWidget {
                           controller.competitionToEdit.value?.id != null);
                   return shouldShowError
                       ? Padding(
-                          padding: const EdgeInsets.only(top: 8, left: 12),
+                          padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             field.errorText!,
-                            style: TextStyle(
-                              color: Colors.red[700],
+                            style: const TextStyle(
+                              color: Color(0xFFB91C1C),
                               fontSize: 12,
                             ),
                           ),
@@ -1948,8 +2778,14 @@ class CreateCompetitionScreen extends StatelessWidget {
       isStartDate: isStartDate,
       isDisplayAd: isDisplayAd,
     );
+    final sectionKey = isDisplayAd
+        ? controller.displayAdFromFieldKey
+        : isStartDate
+        ? controller.eventStartDateFieldKey
+        : controller.eventEndDateFieldKey;
 
     return Column(
+      key: sectionKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: label, bottomSpacing: 0),
@@ -2201,6 +3037,9 @@ class CreateCompetitionScreen extends StatelessWidget {
     }
 
     return Column(
+      key: isResultsPublishTime
+          ? controller.resultsPublishTimeFieldKey
+          : (isStartTime ? null : controller.eventEndTimeFieldKey),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(
@@ -2633,6 +3472,7 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.participantsPerStageFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'PARTICIPANTS PER STAGE :'),
@@ -2709,6 +3549,7 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.prizesSectionKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'PRIZES :'),
@@ -2818,156 +3659,91 @@ class CreateCompetitionScreen extends StatelessWidget {
     BuildContext context,
     CompetitionController controller,
     bool isMobile,
-    bool isTablet,
-  ) {
+    bool isTablet, {
+    bool showOuterLabel = true,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FormLabelWithHint(
-          label: 'BEST SCHOOL AWARD :',
-          hintText:
-              'Optional. Schools with at least this many registered participants appear in Reports as Best School Award winners.',
-          hintSpacing: isMobile ? 6 : 4,
-          bottomSpacing: isMobile ? 10 : 8,
-        ),
-        _optionSectionCard(
+        if (showOuterLabel)
+          FormLabelWithHint(
+            label: 'Best school award',
+            hintText:
+                'Optional. Schools with at least this many registered participants appear in Reports as Best School Award winners.',
+            hintSpacing: isMobile ? 6 : 4,
+            bottomSpacing: isMobile ? 10 : 8,
+          ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
           child: Obx(() {
             final readOnly = controller.isViewMode.value;
+            final labelStyle = TextStyle(
+              fontSize: isMobile ? 13.5 : 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            );
+
+            final inputField = SizedBox(
+              width: isMobile ? 72 : 84,
+              child: TextFormField(
+                controller: controller.bestSchoolAwardMinParticipantsController,
+                readOnly: readOnly,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  hintText: 'e.g. 15',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  filled: true,
+                  fillColor: readOnly ? Colors.grey[200] : AppColors.inputFill,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: isMobile ? 12 : 14,
+                  ),
+                  isDense: isMobile,
+                ),
+              ),
+            );
+
+            if (isMobile) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Show award for schools with at least',
+                    style: labelStyle,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      inputField,
+                      const SizedBox(width: 8),
+                      Text('participants', style: labelStyle),
+                    ],
+                  ),
+                ],
+              );
+            }
+
             return Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  'Best School Award above:',
-                  style: TextStyle(
-                    fontSize: isMobile ? 14 : 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
+                  'Show award for schools with at least',
+                  style: labelStyle,
                 ),
                 const SizedBox(width: 10),
-                SizedBox(
-                  width: isMobile ? 72 : 84,
-                  child: TextFormField(
-                    controller:
-                        controller.bestSchoolAwardMinParticipantsController,
-                    readOnly: readOnly,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: InputDecoration(
-                      hintText: 'e.g. 15',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      filled: true,
-                      fillColor: readOnly ? Colors.grey[200] : Colors.white,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: isMobile ? 12 : 14,
-                      ),
-                      isDense: isMobile,
-                    ),
-                  ),
-                ),
+                inputField,
                 const SizedBox(width: 8),
-                Text(
-                  'participants',
-                  style: TextStyle(
-                    fontSize: isMobile ? 14 : 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildChampionshipStyleField(
-    BuildContext context,
-    CompetitionController controller,
-    bool isMobile,
-    bool isTablet,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FormLabelWithHint(
-          label: 'CHAMPIONS / CHAMPIONSHIP STYLE :',
-          hintText:
-              'Choose whether Champions is a separate registration category or filled from 1st-place winners (boys & girls) in other categories.',
-          hintSpacing: isMobile ? 6 : 4,
-          bottomSpacing: isMobile ? 10 : 8,
-        ),
-        _optionSectionCard(
-          child: Obx(() {
-            final selected = controller.championshipStyle.value;
-            final readOnly = controller.isViewMode.value;
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...ChampionshipStyle.values.map((style) {
-                  return RadioListTile<ChampionshipStyle>(
-                    value: style,
-                    groupValue: selected,
-                    onChanged: readOnly
-                        ? null
-                        : (value) {
-                            if (value != null) {
-                              controller.setChampionshipStyle(value);
-                            }
-                          },
-                    activeColor: AppTheme.primaryColor,
-                    title: Text(
-                      style.label,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: Text(
-                      style.description,
-                      style: TextStyle(
-                        fontSize: isMobile ? 12 : 13,
-                        color: Colors.grey[700],
-                        height: isMobile ? 1.35 : 1.3,
-                      ),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 0,
-                      vertical: isMobile ? 4 : 0,
-                    ),
-                    dense: !isMobile,
-                  );
-                }),
-                if (controller.hasAttemptedSubmit.value &&
-                    selected == null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Please select a championship style',
-                    style: TextStyle(color: Colors.red[700], fontSize: 12),
-                  ),
-                ],
-                if (selected == ChampionshipStyle.fromFirstPlaceWinners) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.shade200),
-                    ),
-                    child: Text(
-                      'Champions category is not selectable for this competition. '
-                      'It will be populated from 1st-place winners in Common/Special categories (boys and girls).',
-                      style: TextStyle(
-                        fontSize: isMobile ? 12 : 13,
-                        color: Colors.orange.shade900,
-                      ),
-                    ),
-                  ),
-                ],
+                Text('participants', style: labelStyle),
               ],
             );
           }),
@@ -2983,6 +3759,7 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.categoriesSectionKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'CATEGORIES :'),
@@ -3278,6 +4055,7 @@ class CreateCompetitionScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.stagesSectionKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'STAGES :'),
@@ -3379,12 +4157,9 @@ class CreateCompetitionScreen extends StatelessWidget {
     BuildContext context,
     CompetitionController controller,
     bool isMobile,
-    bool isTablet,
   ) {
-    final gradeNameWidth = isMobile ? null : (isTablet ? 152.0 : 168.0);
-    final markFieldWidth = isMobile ? 96.0 : 112.0;
-
     return Column(
+      key: controller.gradesSectionKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(
@@ -3397,136 +4172,65 @@ class CreateCompetitionScreen extends StatelessWidget {
         _optionSectionCard(
           child: Obx(() {
             final readOnly = controller.isViewMode.value;
-            final entries = controller.gradeEntries;
+            final entries = controller.gradeEntries
+                .where((e) => e.nameController.text.trim().isNotEmpty)
+                .toList();
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (entries.isEmpty && readOnly)
+                if (entries.isEmpty)
                   Text(
-                    'No grades configured',
+                    readOnly ? 'No grades configured' : 'No grades added yet',
                     style: TextStyle(
                       fontSize: isMobile ? 14 : 15,
                       color: Colors.grey[600],
                     ),
-                  ),
-                ...List.generate(entries.length, (index) {
-                  final entry = entries[index];
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: index < entries.length - 1 ? 12 : 0),
-                    child: isMobile
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildGradeNameField(
-                                entry: entry,
-                                readOnly: readOnly,
-                                isMobile: isMobile,
-                                width: gradeNameWidth,
+                  )
+                else
+                  Wrap(
+                    spacing: isMobile ? 8 : 10,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      for (final entry in entries)
+                        Tooltip(
+                          message: _gradeRangeTooltip(entry),
+                          waitDuration: const Duration(milliseconds: 250),
+                          child: Chip(
+                            label: Text(
+                              entry.nameController.text.trim(),
+                              style: TextStyle(
+                                fontSize: isMobile ? 13 : 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primaryColor,
                               ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildGradeMarkField(
-                                      controller: entry.minMarkController,
-                                      label: 'Min',
-                                      readOnly: readOnly,
-                                      isMobile: isMobile,
-                                      width: markFieldWidth,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    child: Text(
-                                      'to',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[700],
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _buildGradeMarkField(
-                                      controller: entry.maxMarkController,
-                                      label: 'Max',
-                                      readOnly: readOnly,
-                                      isMobile: isMobile,
-                                      width: markFieldWidth,
-                                    ),
-                                  ),
-                                  if (!readOnly) ...[
-                                    const SizedBox(width: 4),
-                                    IconButton(
-                                      onPressed: () =>
-                                          controller.removeGradeEntry(index),
-                                      icon: Icon(
-                                        Icons.delete_outline,
-                                        color: Colors.red[700],
-                                      ),
-                                      tooltip: 'Remove grade',
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          )
-                        : Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              _buildGradeNameField(
-                                entry: entry,
-                                readOnly: readOnly,
-                                isMobile: isMobile,
-                                width: gradeNameWidth,
-                              ),
-                              const SizedBox(width: 12),
-                              _buildGradeMarkField(
-                                controller: entry.minMarkController,
-                                label: 'Min',
-                                readOnly: readOnly,
-                                isMobile: isMobile,
-                                width: markFieldWidth,
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                child: Text(
-                                  'to',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[700],
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              _buildGradeMarkField(
-                                controller: entry.maxMarkController,
-                                label: 'Max',
-                                readOnly: readOnly,
-                                isMobile: isMobile,
-                                width: markFieldWidth,
-                              ),
-                              if (!readOnly)
-                                IconButton(
-                                  onPressed: () =>
-                                      controller.removeGradeEntry(index),
-                                  icon: Icon(
-                                    Icons.delete_outline,
-                                    color: Colors.red[700],
-                                  ),
-                                  tooltip: 'Remove grade',
-                                ),
-                            ],
+                            ),
+                            backgroundColor:
+                                AppTheme.primaryColor.withOpacity(0.10),
+                            side: BorderSide(
+                              color: AppTheme.primaryColor.withOpacity(0.35),
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 4 : 6,
+                              vertical: 0,
+                            ),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
                           ),
-                  );
-                }),
+                        ),
+                    ],
+                  ),
                 if (!readOnly) ...[
-                  if (entries.isNotEmpty) const SizedBox(height: 12),
+                  SizedBox(height: entries.isEmpty ? 10 : 12),
                   OutlinedButton.icon(
-                    onPressed: controller.addGradeEntry,
+                    onPressed: () =>
+                        _showGradesDialog(context, controller, isMobile),
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add More'),
+                    label: Text(
+                      entries.isEmpty ? 'Add grade' : 'Edit grades',
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.primaryColor,
                       side: BorderSide(color: AppTheme.primaryColor),
@@ -3545,15 +4249,298 @@ class CreateCompetitionScreen extends StatelessWidget {
     );
   }
 
+  String _gradeRangeTooltip(CompetitionGradeEntry entry) {
+    final min = entry.minMarkController.text.trim();
+    final max = entry.maxMarkController.text.trim();
+    if (min.isEmpty && max.isEmpty) return 'No mark range set';
+    if (min.isEmpty) return 'Max: $max';
+    if (max.isEmpty) return 'Min: $min';
+    return 'Min: $min  Max: $max';
+  }
+
+  void _showGradesDialog(
+    BuildContext context,
+    CompetitionController controller,
+    bool isMobile,
+  ) {
+    final drafts = controller.gradeEntries
+        .map(
+          (e) => CompetitionGradeEntry(
+            gradeName: e.nameController.text,
+            markRangeMin: e.minMarkController.text,
+            markRangeMax: e.maxMarkController.text,
+          ),
+        )
+        .toList();
+    if (drafts.isEmpty) {
+      drafts.add(CompetitionGradeEntry());
+    }
+
+    var saved = false;
+    String? errorText;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final markFieldWidth = isMobile ? 88.0 : 100.0;
+
+            return PopScope(
+              onPopInvokedWithResult: (didPop, _) {
+                if (didPop && !saved) {
+                  for (final draft in drafts) {
+                    draft.dispose();
+                  }
+                }
+              },
+              child: AlertDialog(
+                title: Text(
+                  controller.gradeEntries.isEmpty
+                      ? 'Add Grades'
+                      : 'Edit Grades',
+                ),
+                content: SizedBox(
+                  width: isMobile ? double.maxFinite : 520,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add grade names with mark ranges (e.g. A+ for 90–100).',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ...List.generate(drafts.length, (index) {
+                          final entry = drafts[index];
+                          void refreshAddMore() => setDialogState(() {});
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              bottom: index < drafts.length - 1 ? 12 : 0,
+                            ),
+                            child: isMobile
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildGradeNameField(
+                                        entry: entry,
+                                        isMobile: isMobile,
+                                        onChanged: (_) => refreshAddMore(),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _buildGradeMarkField(
+                                              controller:
+                                                  entry.minMarkController,
+                                              label: 'Min',
+                                              isMobile: isMobile,
+                                              width: markFieldWidth,
+                                              onChanged: (_) =>
+                                                  refreshAddMore(),
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                            ),
+                                            child: Text(
+                                              'to',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey[700],
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: _buildGradeMarkField(
+                                              controller:
+                                                  entry.maxMarkController,
+                                              label: 'Max',
+                                              isMobile: isMobile,
+                                              width: markFieldWidth,
+                                              onChanged: (_) =>
+                                                  refreshAddMore(),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            onPressed: () {
+                                              setDialogState(() {
+                                                drafts[index].dispose();
+                                                drafts.removeAt(index);
+                                                if (drafts.isEmpty) {
+                                                  drafts.add(
+                                                    CompetitionGradeEntry(),
+                                                  );
+                                                }
+                                              });
+                                            },
+                                            icon: Icon(
+                                              Icons.delete_outline,
+                                              color: Colors.red[700],
+                                            ),
+                                            tooltip: 'Remove grade',
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: _buildGradeNameField(
+                                          entry: entry,
+                                          isMobile: isMobile,
+                                          onChanged: (_) => refreshAddMore(),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      _buildGradeMarkField(
+                                        controller: entry.minMarkController,
+                                        label: 'Min',
+                                        isMobile: isMobile,
+                                        width: markFieldWidth,
+                                        onChanged: (_) => refreshAddMore(),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                        ),
+                                        child: Text(
+                                          'to',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[700],
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      _buildGradeMarkField(
+                                        controller: entry.maxMarkController,
+                                        label: 'Max',
+                                        isMobile: isMobile,
+                                        width: markFieldWidth,
+                                        onChanged: (_) => refreshAddMore(),
+                                      ),
+                                      IconButton(
+                                        onPressed: () {
+                                          setDialogState(() {
+                                            drafts[index].dispose();
+                                            drafts.removeAt(index);
+                                            if (drafts.isEmpty) {
+                                              drafts.add(
+                                                CompetitionGradeEntry(),
+                                              );
+                                            }
+                                          });
+                                        },
+                                        icon: Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.red[700],
+                                        ),
+                                        tooltip: 'Remove grade',
+                                      ),
+                                    ],
+                                  ),
+                          );
+                        }),
+                        const SizedBox(height: 12),
+                        Builder(
+                          builder: (_) {
+                            final canAddMore = drafts.isNotEmpty &&
+                                drafts.every((entry) => entry.isComplete);
+                            return OutlinedButton.icon(
+                              onPressed: canAddMore
+                                  ? () {
+                                      setDialogState(() {
+                                        drafts.add(CompetitionGradeEntry());
+                                      });
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Add More'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppTheme.primaryColor,
+                                disabledForegroundColor: Colors.grey[500],
+                                side: BorderSide(
+                                  color: canAddMore
+                                      ? AppTheme.primaryColor
+                                      : Colors.grey.shade400,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        if (errorText != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            errorText!,
+                            style: TextStyle(
+                              color: Colors.red[700],
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      final validationError =
+                          controller.validateGradeEntries(drafts);
+                      if (validationError != null) {
+                        setDialogState(() => errorText = validationError);
+                        return;
+                      }
+
+                      final toKeep = drafts
+                          .where((entry) => entry.hasAnyInput)
+                          .toList();
+                      for (final draft in drafts) {
+                        if (!toKeep.contains(draft)) {
+                          draft.dispose();
+                        }
+                      }
+
+                      saved = true;
+                      controller.replaceGradeEntries(toKeep);
+                      Navigator.pop(dialogContext);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildGradeNameField({
     required CompetitionGradeEntry entry,
-    required bool readOnly,
     required bool isMobile,
-    double? width,
+    ValueChanged<String>? onChanged,
   }) {
-    final field = TextFormField(
+    return TextFormField(
       controller: entry.nameController,
-      readOnly: readOnly,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: 'Grade name',
         hintText: 'e.g. A+',
@@ -3561,7 +4548,7 @@ class CreateCompetitionScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         filled: true,
-        fillColor: readOnly ? Colors.grey[200] : Colors.white,
+        fillColor: Colors.white,
         contentPadding: EdgeInsets.symmetric(
           horizontal: 12,
           vertical: isMobile ? 12 : 14,
@@ -3569,33 +4556,30 @@ class CreateCompetitionScreen extends StatelessWidget {
         isDense: isMobile,
       ),
     );
-
-    if (width == null) return field;
-    return SizedBox(width: width, child: field);
   }
 
   Widget _buildGradeMarkField({
     required TextEditingController controller,
     required String label,
-    required bool readOnly,
     required bool isMobile,
     required double width,
+    ValueChanged<String>? onChanged,
   }) {
     return SizedBox(
       width: width,
       child: TextFormField(
         controller: controller,
-        readOnly: readOnly,
+        onChanged: onChanged,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         decoration: InputDecoration(
           labelText: label,
-          hintText: '0-100',
+          hintText: '0-999',
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
           ),
           filled: true,
-          fillColor: readOnly ? Colors.grey[200] : Colors.white,
+          fillColor: Colors.white,
           contentPadding: EdgeInsets.symmetric(
             horizontal: 12,
             vertical: isMobile ? 12 : 14,

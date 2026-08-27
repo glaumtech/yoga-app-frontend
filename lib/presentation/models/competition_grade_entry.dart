@@ -7,10 +7,15 @@ class CompetitionGradeEntry {
     String gradeName = '',
     String markRangeMin = '',
     String markRangeMax = '',
-  })  : nameController = TextEditingController(text: gradeName),
+    String? rowId,
+  })  : rowId = rowId ?? 'grade-${DateTime.now().microsecondsSinceEpoch}-${_nextRowId++}',
+        nameController = TextEditingController(text: gradeName),
         minMarkController = TextEditingController(text: markRangeMin),
         maxMarkController = TextEditingController(text: markRangeMax);
 
+  static int _nextRowId = 0;
+
+  final String rowId;
   final TextEditingController nameController;
   final TextEditingController minMarkController;
   final TextEditingController maxMarkController;

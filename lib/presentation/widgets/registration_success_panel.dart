@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/participant_receipt_image_download.dart';
 import '../../data/models/participant_model.dart';
 import '../controllers/participant_controller.dart';
+import 'online_participant_login_qr_panel.dart';
 import 'participant_payment_receipt_view.dart';
 
 /// Post-registration confirmation styled as a payment success screen.
@@ -54,6 +55,10 @@ class _RegistrationSuccessPanelState extends State<RegistrationSuccessPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (hasParticipant && participant!.isOnlineCategory) ...[
+                    OnlineParticipantLoginQrPanel(participant: participant!),
+                    const SizedBox(height: 16),
+                  ],
                   _actionButton(
                     label: 'Download Receipt',
                     backgroundColor: RegistrationSuccessPanel._receiptBlue,

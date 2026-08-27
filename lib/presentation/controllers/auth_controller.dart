@@ -362,21 +362,18 @@ class AuthController extends GetxController {
                     if (needsFirstCompetition) {
                       context.go(AppRoutes.createCompetition);
                     } else {
-                      context.go(AppRoutes.home);
+                      _navigateAfterAdminLogin(context);
                     }
                   }
                 } else {
-                  // Navigate to home for other user types
-                  context.go(AppRoutes.home);
+                  _navigateAfterAdminLogin(context);
                 }
               } else {
-                // Fallback to home if user data not available
-                context.go(AppRoutes.home);
+                _navigateAfterAdminLogin(context);
               }
             } catch (e) {
               print('Error checking user type: $e');
-              // Fallback to home on error
-              context.go(AppRoutes.home);
+              _navigateAfterAdminLogin(context);
             }
           }
         } else {
@@ -390,6 +387,17 @@ class AuthController extends GetxController {
       } finally {
         isLoading.value = false;
       }
+    }
+  }
+
+  void _navigateAfterAdminLogin(BuildContext context) {
+    final permissionStore = Get.isRegistered<PermissionStore>()
+        ? Get.find<PermissionStore>()
+        : Get.put(PermissionStore());
+    if (permissionStore.canAccessAdminDashboard()) {
+      context.go(AppRoutes.adminDashboard);
+    } else {
+      context.go(AppRoutes.home);
     }
   }
 

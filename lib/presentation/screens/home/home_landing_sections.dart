@@ -49,10 +49,94 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(70);
 
+  List<_LandingNavItem> _navItems(BuildContext context) {
+    return [
+      _LandingNavItem(
+        label: 'Home',
+        icon: Icons.home_outlined,
+        onTap: () => context.go(AppRoutes.home),
+      ),
+      _LandingNavItem(
+        label: 'Competitions',
+        icon: Icons.emoji_events_outlined,
+        onTap: () => context.push(AppRoutes.competitions),
+      ),
+      _LandingNavItem(
+        label: 'Results',
+        icon: Icons.leaderboard_outlined,
+        onTap: () => context.push(
+          AppRoutes.competitionsList(status: 'completed'),
+        ),
+      ),
+      _LandingNavItem(
+        label: 'About Us',
+        icon: Icons.info_outline,
+        onTap: () => context.push(AppRoutes.about),
+      ),
+      _LandingNavItem(
+        label: 'Contact Us',
+        icon: Icons.mail_outline,
+        onTap: () => context.push(AppRoutes.contact),
+      ),
+      _LandingNavItem(
+        label: 'Online Participant login',
+        icon: Icons.videocam_outlined,
+        onTap: () => context.push(AppRoutes.participantVideoUpload),
+      ),
+    ];
+  }
+
+  void _openMobileNav(BuildContext context) {
+    final items = _navItems(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                ...items.map(
+                  (item) => ListTile(
+                    leading: Icon(item.icon, color: AppTheme.primaryColor),
+                    title: Text(
+                      item.label,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      item.onTap();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= HomeLayout.tablet;
+    final navItems = _navItems(context);
 
     return Container(
       decoration: BoxDecoration(
@@ -78,30 +162,23 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
               _Logo(onTap: () => context.go(AppRoutes.home)),
               if (isWide) ...[
                 const SizedBox(width: 16),
-                _NavLink(
-                  label: 'Home',
-                  onTap: () => context.go(AppRoutes.home),
-                ),
-                _NavLink(
-                  label: 'Competitions',
-                  onTap: () => context.push(AppRoutes.competitions),
-                ),
-                _NavLink(
-                  label: 'Results',
-                  onTap: () => context.push(
-                    AppRoutes.competitionsList(status: 'completed'),
-                  ),
-                ),
-                _NavLink(
-                  label: 'About Us',
-                  onTap: () => context.push(AppRoutes.about),
-                ),
-                _NavLink(
-                  label: 'Contact Us',
-                  onTap: () => context.push(AppRoutes.contact),
+                ...navItems.map(
+                  (item) => _NavLink(label: item.label, onTap: item.onTap),
                 ),
               ],
               const Spacer(),
+              if (!isWide)
+                IconButton(
+                  onPressed: () => _openMobileNav(context),
+                  tooltip: 'Menu',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.primaryColor,
+                    padding: const EdgeInsets.all(10),
+                  ),
+                  icon: const Icon(Icons.menu, size: 22),
+                ),
+              if (!isWide) const SizedBox(width: 8),
               _buildAuthActions(isWide),
             ],
           ),
@@ -497,6 +574,18 @@ class _Logo extends StatelessWidget {
       child: icon,
     );
   }
+}
+
+class _LandingNavItem {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _LandingNavItem({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 }
 
 class _NavLink extends StatelessWidget {

@@ -28,13 +28,16 @@ import '../presentation/screens/users/users_list_screen.dart';
 import '../presentation/screens/competitions/create_competition_screen.dart';
 import '../presentation/screens/participants/participant_management_screen.dart';
 import '../presentation/screens/participants/user_competition_registration_screen.dart';
+import '../presentation/screens/participants/participant_video_upload_screen.dart';
 import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../presentation/screens/organization_setup/organization_setup_screen.dart';
 import '../presentation/screens/organization_update/organization_update_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/navigation/root_navigator_key.dart';
 import '../core/utils/organization_mandatory_checker.dart';
+import '../core/utils/permission_store.dart';
 import '../core/utils/storage_service.dart';
+import '../core/utils/online_participant_login_url.dart';
 
 import '../data/models/user_management_model.dart';
 
@@ -74,7 +77,7 @@ class AppRouter {
 
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: kIsWeb ? AppRoutes.home : AppRoutes.splash,
+    initialLocation: kIsWeb ? flutterWebInitialLocation() : AppRoutes.splash,
     debugLogDiagnostics: kDebugMode,
     errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(title: const Text('Page not found')),
@@ -206,16 +209,7 @@ class AppRouter {
           if (location == AppRoutes.adminDashboard ||
               location.startsWith(AppRoutes.adminDashboard)) {
             // Allow dashboard for any admin menu permission
-            requiredKeys = const [
-              'MENU_DASHBOARD',
-              'MENU_COMPETITIONS',
-              'MENU_USERS',
-              'MENU_PARTICIPANTS',
-              'MENU_INSTITUTIONS',
-              'MENU_REPORTS',
-              'MENU_SETTINGS',
-              'MENU_SPONSORS',
-            ];
+            requiredKeys = PermissionStore.adminDashboardAccessKeys;
           } else if (location == AppRoutes.createCompetition ||
               location.startsWith('/admin/competitions')) {
             if (_requiresFirstCompetition() && _isBranchAdminFromStorage()) {
@@ -367,6 +361,20 @@ class AppRouter {
             competitionId: competitionId,
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutes.participantVideoUploadWithRegNo,
+        name: 'participant-video-upload-regno',
+        builder: (context, state) => ParticipantVideoUploadScreen(
+          registrationNo: registrationNoFromGoRouterState(state),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.participantVideoUpload,
+        name: 'participant-video-upload',
+        builder: (context, state) => ParticipantVideoUploadScreen(
+          registrationNo: registrationNoFromGoRouterState(state),
+        ),
       ),
 
       // Admin

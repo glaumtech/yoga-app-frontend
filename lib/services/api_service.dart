@@ -32,7 +32,7 @@ class APIService {
           url == EndPoints.forgotPassword ||
           url == EndPoints.verifyOtp ||
           url == EndPoints.resetPassword;
-      if (!isAuthEndpoint) {
+      if (!isAuthEndpoint && !_hasAuthorization(headers)) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
           if (token != null && token.isNotEmpty) {
@@ -42,7 +42,7 @@ class APIService {
         } catch (e) {
           log('Error getting token: $e');
         }
-      } else {
+      } else if (isAuthEndpoint) {
         log('----Skipping token for auth endpoint: $url');
       }
       log('----BODY---$body');
@@ -383,9 +383,10 @@ class APIService {
   Future<ApiResponse<T>> postMultipart<T>({
     required String url,
     required Map<String, String> fields,
-    required http.MultipartFile file,
+    http.MultipartFile? file,
     Map<String, String>? header,
     T Function(dynamic)? fromJson,
+    Duration? timeout,
   }) async {
     try {
       Map<String, String> headers = header ?? {};
@@ -399,7 +400,7 @@ class APIService {
           url == EndPoints.forgotPassword ||
           url == EndPoints.verifyOtp ||
           url == EndPoints.resetPassword;
-      if (!isAuthEndpoint) {
+      if (!isAuthEndpoint && !_hasAuthorization(headers)) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
           if (token != null && token.isNotEmpty) {
@@ -409,7 +410,7 @@ class APIService {
         } catch (e) {
           log('Error getting token: $e');
         }
-      } else {
+      } else if (isAuthEndpoint) {
         log('----Skipping token for auth endpoint: $url');
       }
 
@@ -425,14 +426,19 @@ class APIService {
       // Add fields
       request.fields.addAll(fields);
 
-      // Add file
-      request.files.add(file);
+      if (file != null) {
+        request.files.add(file);
+      }
 
       log('----FIELDS---$fields');
-      log('----FILE---${file.filename} (${file.length} bytes)');
+      if (file != null) {
+        log('----FILE---${file.filename} (${file.length} bytes)');
+      }
 
       // Send request
-      final streamedResponse = await request.send().timeout(BaseUrl.apiTimeout);
+      final streamedResponse = await request.send().timeout(
+        timeout ?? BaseUrl.apiTimeout,
+      );
 
       // Get response
       final response = await http.Response.fromStream(streamedResponse);
@@ -484,7 +490,7 @@ class APIService {
           url == EndPoints.forgotPassword ||
           url == EndPoints.verifyOtp ||
           url == EndPoints.resetPassword;
-      if (!isAuthEndpoint) {
+      if (!isAuthEndpoint && !_hasAuthorization(headers)) {
         try {
           final token = StorageService.getString(AppConstants.tokenKey);
           if (token != null && token.isNotEmpty) {
@@ -494,7 +500,7 @@ class APIService {
         } catch (e) {
           log('Error getting token: $e');
         }
-      } else {
+      } else if (isAuthEndpoint) {
         log('----Skipping token for auth endpoint: $url');
       }
 
@@ -550,6 +556,10 @@ class APIService {
         statusCode: 0,
       );
     }
+  }
+
+  bool _hasAuthorization(Map<String, String> headers) {
+    return headers.keys.any((key) => key.toLowerCase() == 'authorization');
   }
 }
 

@@ -1,20 +1,24 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'pinned_scroll_views.dart';
 
-/// Horizontal scroll wrapper with a visible scrollbar when content overflows.
+/// Horizontal scroll wrapper with a scrollbar pinned to the visible viewport
+/// when height is bounded (so it stays visible without scrolling to the bottom).
 class HorizontalScrollTable extends StatefulWidget {
   final Widget child;
   final double minWidth;
   final EdgeInsetsGeometry padding;
+  final bool enableVerticalScroll;
 
   const HorizontalScrollTable({
     super.key,
     required this.child,
     required this.minWidth,
     this.padding = EdgeInsets.zero,
+    this.enableVerticalScroll = true,
   });
 
   @override
@@ -36,6 +40,46 @@ class _HorizontalScrollTableState extends State<HorizontalScrollTable> {
     super.dispose();
   }
 
+  Widget _buildHorizontalBody(double contentWidth) {
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        dragDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.trackpad,
+        },
+      ),
+      child: SingleChildScrollView(
+        controller: _horizontalScrollController,
+        scrollDirection: Axis.horizontal,
+        primary: false,
+        child: Padding(
+          padding: widget.padding,
+          child: SizedBox(
+            width: contentWidth,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinnedHorizontalBar({
+    required double viewportWidth,
+    required bool visible,
+  }) {
+    if (!visible) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: kPinnedScrollbarAreaGap),
+      child: PinnedHorizontalScrollBar(
+        controller: _horizontalScrollController,
+        viewportWidth: viewportWidth,
+        visible: true,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -53,22 +97,43 @@ class _HorizontalScrollTableState extends State<HorizontalScrollTable> {
         final contentWidth = math.max(widget.minWidth, availableWidth);
         final needsHorizontalScroll = contentWidth > availableWidth + 1;
 
-        return Scrollbar(
-          controller: _horizontalScrollController,
-          thumbVisibility: needsHorizontalScroll,
-          notificationPredicate: (notification) =>
-              notification.metrics.axis == Axis.horizontal,
-          child: SingleChildScrollView(
-            controller: _horizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            child: Padding(
-              padding: widget.padding,
-              child: SizedBox(
-                width: contentWidth,
-                child: widget.child,
+        final hasBoundedHeight = constraints.hasBoundedHeight &&
+            constraints.maxHeight.isFinite &&
+            constraints.maxHeight > 0;
+
+        final horizontalBody = _buildHorizontalBody(contentWidth);
+
+        // Bounded height: keep the horizontal bar pinned to the viewport bottom
+        // so users do not need to scroll vertically to find it.
+        if (hasBoundedHeight && widget.enableVerticalScroll) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: PinnedVerticalScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: horizontalBody,
+                ),
               ),
+              _buildPinnedHorizontalBar(
+                viewportWidth: availableWidth,
+                visible: needsHorizontalScroll,
+              ),
+            ],
+          );
+        }
+
+        // Unbounded height (e.g. nested in another scroller): bar follows content.
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            horizontalBody,
+            _buildPinnedHorizontalBar(
+              viewportWidth: availableWidth,
+              visible: needsHorizontalScroll,
             ),
-          ),
+          ],
         );
       },
     );
@@ -113,8 +178,8 @@ class ResponsiveAdminTable extends StatelessWidget {
     return fixedTotal + (flexTotal * minFlexColumnWidth) + columnWidths.length;
   }
 
-  /// Wraps [table] so [RefreshIndicator] can pull-to-refresh without nesting
-  /// vertical and horizontal scroll views inside the table widget.
+  /// Wraps [table] so [RefreshIndicator] can pull-to-refresh and the table
+  /// receives a bounded height (needed to pin the horizontal scrollbar).
   static Widget refreshable({
     required Future<void> Function() onRefresh,
     required Widget table,
@@ -123,14 +188,10 @@ class ResponsiveAdminTable extends StatelessWidget {
       builder: (context, constraints) {
         return RefreshIndicator(
           onRefresh: onRefresh,
-          child: PinnedVerticalScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight,
-              ),
-              child: table,
-            ),
+          child: SizedBox(
+            height: constraints.maxHeight,
+            width: constraints.maxWidth,
+            child: table,
           ),
         );
       },

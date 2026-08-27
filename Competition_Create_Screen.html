@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yogasana Admin - Create Competition</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            teal: {
+              50: '#E8F5E9',
+              100: '#C8E6C9',
+              200: '#A5D6A7',
+              300: '#81C784',
+              400: '#66BB6A',
+              500: '#4CAF50',
+              600: '#43A047',
+              700: '#388E3C',
+              800: '#2E7D32',
+              900: '#1B5E20',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- React & React DOM -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    /* Custom scrollbar for dense admin forms */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 antialiased min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // Helper SVG Icons
+    const Icon = ({ name, size = 18, className = "" }) => {
+      return <i data-lucide={name} className={`inline-block ${className}`} style={{ width: size, height: size }}></i>;
+    };
+
+    function App() {
+      // Control options & screen state
+      const [viewMode, setViewMode] = useState('filled'); // 'empty' | 'filled'
+      const [showDevAnnotations, setShowDevAnnotations] = useState(true);
+      const [isMobileView, setIsMobileView] = useState(false);
+
+      // Modals
+      const [showModeChooser, setShowModeChooser] = useState(false);
+      const [modeChooserContext, setModeChooserContext] = useState('add'); // 'add' | 'configure'
+      const [addCategoryStep, setAddCategoryStep] = useState('format'); // 'format' | 'name'
+      const [pendingCategoryFormat, setPendingCategoryFormat] = useState(null); // 'asanas' | 'challenge'
+      const [newCategoryName, setNewCategoryName] = useState('');
+      const [selectedCategoryForConfig, setSelectedCategoryForConfig] = useState('COMMON');
+      const [showAsanasConfig, setShowAsanasConfig] = useState(false);
+      const [showChallengeAlert, setShowChallengeAlert] = useState(false);
+      const [configWizardStep, setConfigWizardStep] = useState(1);
+
+      const CONFIG_WIZARD_STEPS = [
+        { id: 1, label: 'Stages', short: 'Stages' },
+        { id: 2, label: 'Group Types', short: 'Groups' },
+        { id: 3, label: 'Stage Allotment', short: 'Allot' },
+        { id: 4, label: 'Participants & Marks', short: 'Marks' },
+        { id: 5, label: 'Juries', short: 'Juries' },
+        { id: 6, label: 'Asanas', short: 'Asanas' },
+        { id: 7, label: 'Bend Types', short: 'Bends' },
+        { id: 8, label: 'Prizes', short: 'Prizes' },
+        { id: 9, label: 'Scoring', short: 'Scoring' },
+        { id: 10, label: 'Viva Voce', short: 'Viva' },
+        { id: 11, label: 'Compliments', short: 'Gifts' },
+        { id: 12, label: 'Fees', short: 'Fees' }
+      ];
+      const TOTAL_CONFIG_STEPS = CONFIG_WIZARD_STEPS.length;
+
+      // Form State - Screen 1
+      const [compName, setCompName] = useState('12th National Yogasana Sports Championship 2026');
+      const [description, setDescription] = useState('Annual state-level and national yoga competition featuring traditional, rhythmic, and artistic yoga asanas.');
+      const [address, setAddress] = useState('Indoor Sports Complex, Stadium Road, Zone 4, New Delhi - 110001');
+      
+      const [startDate, setStartDate] = useState('2026-08-15');
+      const [endDate, setEndDate] = useState('2026-08-17');
+      const [displayAdFrom, setDisplayAdFrom] = useState('2026-08-01');
+      const [startTime, setStartTime] = useState('08:00');
+      const [endTime, setEndTime] = useState('18:00');
+      const [publishNow, setPublishNow] = useState(false);
+      const [publishTime, setPublishTime] = useState('2026-08-17T19:00');
+
+      const [bestSchoolMin, setBestSchoolMin] = useState(15);
+      const [compMode, setCompMode] = useState('offline'); // 'online' | 'offline' (Single mode selection)
+
+      // Categories State
+      const [categories, setCategories] = useState([
+        { id: '1', name: 'COMMON', format: 'asanas', summary: 'Boys top 3 · Girls top 3 · Others top 1', status: 'Asanas', badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+        { id: '2', name: 'SPECIAL', format: 'asanas', summary: 'Boys top 3 · Girls top 3 · Others top 1', status: 'Not configured', badgeColor: 'bg-amber-100 text-amber-800 border-amber-300' },
+        { id: '3', name: 'ONE ASANA CHALLENGE', format: 'challenge', summary: 'Open for all age groups', status: 'Challenge', badgeColor: 'bg-sky-100 text-sky-800 border-sky-300' }
+      ]);
+
+      // Screen 4 Asanas Config Detailed Form State
+      const [stageNaming, setStageNaming] = useState('alphabet'); // 'alphabet' | 'stages' | 'other'
+      const [stageCount, setStageCount] = useState(4);
+      const [groupType, setGroupType] = useState('Study'); // 'Study' | 'Age' | 'Level'
+      
+      const [selectedStudyGroups, setSelectedStudyGroups] = useState(['LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V']);
+      const [selectedAgeGroups, setSelectedAgeGroups] = useState(['5-8 yrs', '9-12 yrs', '13-16 yrs']);
+      const [selectedLevels, setSelectedLevels] = useState(['Level 1', 'Level 2']);
+      const [studyGroupOptions, setStudyGroupOptions] = useState(['LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'UG', 'PG', 'Diploma']);
+      const [ageGroupOptions, setAgeGroupOptions] = useState(['Below 5 yrs', '5-8 yrs', '9-12 yrs', '13-16 yrs', '17-25 yrs', '26-35 yrs', 'Above 35 yrs']);
+      const [levelGroupOptions, setLevelGroupOptions] = useState(['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5']);
+
+      const [allotments, setAllotments] = useState({
+        'Stage A': ['I', 'II', 'III'],
+        'Stage B': ['IV', 'V'],
+        'Stage C': ['LKG', 'UKG'],
+        'Stage D': []
+      });
+
+      const [participantsPerStage, setParticipantsPerStage] = useState('5');
+      const [minMarks, setMinMarks] = useState('10');
+      const [maxMarks, setMaxMarks] = useState('100');
+      const [skippedAsanaEnabled, setSkippedAsanaEnabled] = useState(true);
+      const [skippedAsanaCount, setSkippedAsanaCount] = useState('1');
+      const [juriesPerStage, setJuriesPerStage] = useState('3');
+
+      const [compulsoryAsanas, setCompulsoryAsanas] = useState('4');
+      const [ownChoiceAsanas, setOwnChoiceAsanas] = useState('2');
+      const [eachAsanaTime, setEachAsanaTime] = useState('1');
+
+      const [bendTypes, setBendTypes] = useState({
+        forward: true,
+        backward: true,
+        handBalance: true,
+        legBalance: false,
+        twisting: true
+      });
+
+      const [prizesTop, setPrizesTop] = useState({ boys: '3', girls: '3', others: '1' });
+      const [scoringMethod, setScoringMethod] = useState('Marks'); // NONE | Marks | Grading | Timed | Timed + Scoring
+      const [upgradeTop, setUpgradeTop] = useState('3');
+      const [upgradeToCategory, setUpgradeToCategory] = useState('SPECIAL');
+
+      const [minTime, setMinTime] = useState('01:00');
+      const [maxTime, setMaxTime] = useState('03:00');
+
+      const [vivaVoceQuestions, setVivaVoceQuestions] = useState([
+        { id: 1, question: 'Define Asana according to Patanjali Yoga Sutras.', answer: 'Sthira Sukham Asanam.', minMarks: '2', maxMarks: '5' }
+      ]);
+
+      const [topCompliments, setTopCompliments] = useState(['e-Certificate', 'Certificate', 'Medal', 'Trophy']);
+      const [nonTopCompliments, setNonTopCompliments] = useState(['e-Certificate', 'Certificate']);
+
+      const [feeAmount, setFeeAmount] = useState('500');
+      const [includeFeeInRegistration, setIncludeFeeInRegistration] = useState(true);
+
+      // Re-render icons on state update
+      useEffect(() => {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }, [viewMode, showModeChooser, showAsanasConfig, showChallengeAlert, isMobileView, vivaVoceQuestions, stageCount, stageNaming, configWizardStep, studyGroupOptions, ageGroupOptions, levelGroupOptions, addCategoryStep]);
+
+      // Stage Chips Generator
+      const generatedStages = useMemo(() => {
+        const count = Math.max(1, Math.min(26, parseInt(stageCount) || 1));
+        const list = [];
+        for (let i = 0; i < count; i++) {
+          if (stageNaming === 'alphabet') {
+            list.push(`Stage ${String.fromCharCode(65 + i)}`);
+          } else if (stageNaming === 'stages') {
+            list.push(`Stage ${i + 1}`);
+          } else {
+            list.push(`Zone ${i + 1}`);
+          }
+        }
+        return list;
+      }, [stageNaming, stageCount]);
+
+      const openCategoryConfig = (cat) => {
+        setSelectedCategoryForConfig(cat.name);
+        if (cat.format === 'challenge') {
+          setShowChallengeAlert(true);
+        } else {
+          setConfigWizardStep(1);
+          setShowAsanasConfig(true);
+        }
+      };
+
+      // Add Category: format first, then name
+      const handleAddCategory = () => {
+        setModeChooserContext('add');
+        setAddCategoryStep('format');
+        setPendingCategoryFormat(null);
+        setNewCategoryName('');
+        setShowModeChooser(true);
+      };
+
+      // Existing category: skip format chooser, open config directly
+      const handleCategoryCardClick = (cat) => {
+        openCategoryConfig(cat);
+      };
+
+      const handleDeleteCategory = (id, e) => {
+        e.stopPropagation();
+        setCategories(categories.filter(cat => cat.id !== id));
+      };
+
+      const handleSelectMode = (mode) => {
+        if (modeChooserContext === 'add') {
+          setPendingCategoryFormat(mode);
+          setAddCategoryStep('name');
+          return;
+        }
+        setShowModeChooser(false);
+        if (mode === 'asanas') {
+          setConfigWizardStep(1);
+          setShowAsanasConfig(true);
+        } else if (mode === 'challenge') {
+          setShowChallengeAlert(true);
+        }
+      };
+
+      const handleConfirmNewCategory = () => {
+        const trimmed = newCategoryName.trim();
+        if (!trimmed) {
+          alert('Please enter a category name.');
+          return;
+        }
+        const format = pendingCategoryFormat || 'asanas';
+        const newCat = {
+          id: Date.now().toString(),
+          name: trimmed.toUpperCase(),
+          format,
+          summary: format === 'challenge' ? 'Open for all age groups' : 'Boys top 3 · Girls top 3 · Others top 1',
+          status: format === 'challenge' ? 'Challenge' : 'Not configured',
+          badgeColor: format === 'challenge'
+            ? 'bg-sky-100 text-sky-800 border-sky-300'
+            : 'bg-amber-100 text-amber-800 border-amber-300'
+        };
+        setCategories([...categories, newCat]);
+        setShowModeChooser(false);
+        setAddCategoryStep('format');
+        setNewCategoryName('');
+        setPendingCategoryFormat(null);
+        setViewMode('filled');
+        openCategoryConfig(newCat);
+      };
+
+      const handleCloseModeChooser = () => {
+        setShowModeChooser(false);
+        setAddCategoryStep('format');
+        setPendingCategoryFormat(null);
+        setNewCategoryName('');
+      };
+
+      const handleConfigWizardNext = () => {
+        setConfigWizardStep((s) => Math.min(TOTAL_CONFIG_STEPS, s + 1));
+      };
+
+      const handleConfigWizardPrev = () => {
+        setConfigWizardStep((s) => Math.max(1, s - 1));
+      };
+
+      const handleAddGroupChip = () => {
+        const label = prompt(
+          groupType === 'Study' ? 'Add study class / group:' :
+          groupType === 'Age' ? 'Add age range (e.g. 40-50 yrs):' :
+          'Add difficulty level:'
+        );
+        if (!label || !label.trim()) return;
+        const value = label.trim();
+        if (groupType === 'Study') {
+          if (!studyGroupOptions.includes(value)) setStudyGroupOptions([...studyGroupOptions, value]);
+          if (!selectedStudyGroups.includes(value)) setSelectedStudyGroups([...selectedStudyGroups, value]);
+        } else if (groupType === 'Age') {
+          if (!ageGroupOptions.includes(value)) setAgeGroupOptions([...ageGroupOptions, value]);
+          if (!selectedAgeGroups.includes(value)) setSelectedAgeGroups([...selectedAgeGroups, value]);
+        } else {
+          if (!levelGroupOptions.includes(value)) setLevelGroupOptions([...levelGroupOptions, value]);
+          if (!selectedLevels.includes(value)) setSelectedLevels([...selectedLevels, value]);
+        }
+      };
+
+      const handleSaveAsanasConfig = () => {
+        setCategories(categories.map((cat) =>
+          cat.name === selectedCategoryForConfig
+            ? { ...cat, status: 'Asanas', badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300', format: 'asanas' }
+            : cat
+        ));
+        setShowAsanasConfig(false);
+        setConfigWizardStep(1);
+        alert(`Configuration for ${selectedCategoryForConfig} saved successfully!`);
+      };
+
+      const handleAddVivaRow = () => {
+        setVivaVoceQuestions([
+          ...vivaVoceQuestions,
+          { id: Date.now(), question: '', answer: '', minMarks: '1', maxMarks: '5' }
+        ]);
+      };
+
+      const handleRemoveVivaRow = (id) => {
+        setVivaVoceQuestions(vivaVoceQuestions.filter(q => q.id !== id));
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col bg-slate-100 text-slate-800 pb-24">
+          
+          {/* TOP GLOBAL NAVBAR */}
+          <header className="bg-teal-800 text-white shadow-md sticky top-0 z-30">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-teal-600 border border-teal-400 flex items-center justify-center font-bold text-lg text-white shadow-inner">
+                  🧘‍♀️
+                </div>
+                <div>
+                  <h1 className="font-bold text-base tracking-wide text-white leading-none">YOGASANA SPORTS ADMIN</h1>
+                  <p className="text-xs text-teal-200 mt-0.5">Competition Management Portal</p>
+                </div>
+              </div>
+
+              {/* View Switcher & Demo Tools */}
+              <div className="flex items-center gap-2 bg-teal-900/60 p-1.5 rounded-lg border border-teal-700/60 text-xs">
+                <button
+                  onClick={() => setViewMode('empty')}
+                  className={`px-2.5 py-1 rounded font-medium transition ${viewMode === 'empty' ? 'bg-teal-500 text-white shadow' : 'text-teal-200 hover:text-white'}`}
+                >
+                  Screen 1 (Empty State)
+                </button>
+                <button
+                  onClick={() => setViewMode('filled')}
+                  className={`px-2.5 py-1 rounded font-medium transition ${viewMode === 'filled' ? 'bg-teal-500 text-white shadow' : 'text-teal-200 hover:text-white'}`}
+                >
+                  Screen 2 (Filled State)
+                </button>
+
+                <div className="h-4 w-px bg-teal-700 mx-1"></div>
+
+                <label className="flex items-center gap-1.5 text-teal-100 cursor-pointer select-none px-1">
+                  <input
+                    type="checkbox"
+                    checked={showDevAnnotations}
+                    onChange={(e) => setShowDevAnnotations(e.target.checked)}
+                    className="rounded text-teal-600 focus:ring-0"
+                  />
+                  <span>Dev Mapping Badges</span>
+                </label>
+
+                <button
+                  onClick={() => setIsMobileView(!isMobileView)}
+                  className={`px-2.5 py-1 rounded border flex items-center gap-1 transition ${isMobileView ? 'bg-amber-500 text-white border-amber-400' : 'bg-teal-800 text-teal-200 border-teal-600 hover:bg-teal-700'}`}
+                >
+                  <Icon name="smartphone" size={14} />
+                  <span>{isMobileView ? 'Mobile View' : 'Desktop'}</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* MAIN CONTAINER */}
+          <main className={`flex-1 transition-all duration-300 mx-auto px-4 py-6 w-full ${isMobileView ? 'max-w-md' : 'max-w-7xl'}`}>
+
+            {/* SCREEN HEADING */}
+            <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-200 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded">Admin Dashboard</span>
+                  {showDevAnnotations && (
+                    <span className="text-xs font-mono bg-purple-100 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded">
+                      [Main Page: Screen 1 / Screen 2]
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1 uppercase">CREATE COMPETITION</h2>
+              </div>
+              <p className="text-xs text-slate-500">Fields marked with <span className="text-red-500 font-bold">*</span> are required for official schedule publishing.</p>
+            </div>
+
+            {/* TWO COLUMN LAYOUT: MAIN FORM & RIGHT SIDEBAR */}
+            <div className={`grid gap-6 ${isMobileView ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-12'}`}>
+              
+              {/* LEFT / MAIN COLUMN FORM */}
+              <div className={`${isMobileView ? 'col-span-1' : 'lg:col-span-8'} space-y-6`}>
+
+                {/* 1. COMPETITION NAME */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                  {showDevAnnotations && (
+                    <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                      [Form Section 1] Competition Name
+                    </span>
+                  )}
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Competition Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={compName}
+                    onChange={(e) => setCompName(e.target.value)}
+                    placeholder="e.g. 12th National Yogasana Championship 2026"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 font-medium focus:ring-2 focus:ring-teal-600 focus:bg-white focus:outline-none transition"
+                  />
+                </div>
+
+                {/* 2. DESCRIPTION */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                  {showDevAnnotations && (
+                    <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                      [Form Section 2] Description
+                    </span>
+                  )}
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Provide details about the competition scope, guidelines, or organizing body..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:ring-2 focus:ring-teal-600 focus:bg-white focus:outline-none transition"
+                  />
+                </div>
+
+                {/* 3. ADDRESS */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                  {showDevAnnotations && (
+                    <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                      [Form Section 3] Address
+                    </span>
+                  )}
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Address / Venue Details <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Full physical venue location or online link details..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:ring-2 focus:ring-teal-600 focus:bg-white focus:outline-none transition"
+                  />
+                </div>
+
+                {/* 4. EVENT DETAILS CARD */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative space-y-4">
+                  {showDevAnnotations && (
+                    <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                      [Form Section 4] Event Details Card
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <Icon name="calendar" size={18} className="text-teal-700" />
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">Event Schedule & Publishing</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Event Start Date</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Event End Date</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Display Ad From</label>
+                      <input
+                        type="date"
+                        value={displayAdFrom}
+                        onChange={(e) => setDisplayAdFrom(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Event Start Time</label>
+                      <input
+                        type="time"
+                        value={startTime}
+                        onChange={(e) => setStartTime(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Event End Time</label>
+                      <input
+                        type="time"
+                        value={endTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={publishNow}
+                        onChange={(e) => setPublishNow(e.target.checked)}
+                        className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
+                      />
+                      <span className="text-sm font-semibold text-slate-800">Publish the result now</span>
+                    </label>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Results Publish Time</label>
+                      <input
+                        type="datetime-local"
+                        disabled={publishNow}
+                        value={publishTime}
+                        onChange={(e) => setPublishTime(e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-lg text-sm ${publishNow ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-slate-50 border-slate-300 text-slate-800 focus:ring-2 focus:ring-teal-600'}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. BEST SCHOOL AWARD CARD */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                  {showDevAnnotations && (
+                    <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                      [Form Section 5] Best School Award
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon name="award" size={18} className="text-teal-700" />
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">Best School Award Threshold</h3>
+                  </div>
+                  <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 max-w-md">
+                    <span className="text-sm font-medium text-slate-700">Best School Award above:</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={bestSchoolMin}
+                      onChange={(e) => setBestSchoolMin(e.target.value)}
+                      className="w-20 px-2.5 py-1.5 bg-white border border-slate-300 rounded text-center text-sm font-bold text-slate-900 focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                    />
+                    <span className="text-sm font-medium text-slate-700">participants</span>
+                  </div>
+                </div>
+
+                {/* 6. COMPETITION TYPE CARD */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                  {showDevAnnotations && (
+                    <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                      [Form Section 6] Competition Mode
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-3">
+                    <Icon name="settings" size={18} className="text-teal-700" />
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">Competition Mode</h3>
+                  </div>
+
+                  <div className="flex items-center gap-6">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Mode:</span>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="compMode"
+                        value="online"
+                        checked={compMode === 'online'}
+                        onChange={() => setCompMode('online')}
+                        className="w-4 h-4 text-teal-600 border-slate-300 focus:ring-teal-500"
+                      />
+                      <span className="text-sm font-semibold text-slate-800">Online</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="compMode"
+                        value="offline"
+                        checked={compMode === 'offline'}
+                        onChange={() => setCompMode('offline')}
+                        className="w-4 h-4 text-teal-600 border-slate-300 focus:ring-teal-500"
+                      />
+                      <span className="text-sm font-semibold text-slate-800">Offline</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* 7. CATEGORIES SECTION */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                  {showDevAnnotations && (
+                    <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                      [Form Section 7] Categories (Screen 1: Empty / Screen 2: Filled)
+                    </span>
+                  )}
+                  <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Icon name="layers" size={18} className="text-teal-700" />
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">CATEGORIES</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      className="px-3 py-1.5 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition flex items-center gap-1 shadow-sm"
+                    >
+                      <Icon name="plus" size={14} />
+                      <span>Add Category</span>
+                    </button>
+                  </div>
+
+                  {/* EMPTY STATE (When viewMode === 'empty') */}
+                  {viewMode === 'empty' && (
+                    <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center bg-slate-50/50">
+                      <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                        <Icon name="folder-plus" size={24} />
+                      </div>
+                      <p className="text-sm font-semibold text-slate-600">No categories added yet</p>
+                      <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                        Click the button above to add categories like Common, Special, or One Asana Challenge.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* FILLED STATE (When viewMode === 'filled') */}
+                  {viewMode === 'filled' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {categories.map((cat) => (
+                        <div
+                          key={cat.id}
+                          onClick={() => handleCategoryCardClick(cat)}
+                          className="group border border-slate-200 hover:border-teal-400 hover:shadow-md transition bg-white p-4 rounded-xl cursor-pointer flex flex-col justify-between relative"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <h4 className="font-extrabold text-slate-900 text-sm group-hover:text-teal-700 transition tracking-wide">
+                                {cat.name}
+                              </h4>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cat.badgeColor}`}>
+                                  {cat.status}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDeleteCategory(cat.id, e)}
+                                  className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"
+                                  title="Delete Category"
+                                >
+                                  <Icon name="trash-2" size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium">
+                              {cat.summary}
+                            </p>
+                          </div>
+                          
+                          <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-teal-700 font-semibold">
+                            <span>{cat.format === 'challenge' ? 'Open challenge settings' : 'Configure rules & asanas'}</span>
+                            <Icon name="chevron-right" size={16} className="group-hover:translate-x-1 transition" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* RIGHT SIDEBAR - UPLOAD BROCHURE PREVIEW CARD */}
+              <div className={`${isMobileView ? 'col-span-1' : 'lg:col-span-4'} space-y-6`}>
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm sticky top-20">
+                  {showDevAnnotations && (
+                    <span className="block mb-2 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border w-max">
+                      [Right Sidebar] Upload Brochure
+                    </span>
+                  )}
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-1.5">
+                    <Icon name="file-text" size={16} className="text-teal-700" />
+                    <span>Upload Brochure</span>
+                  </h3>
+
+                  {/* Preview Dropzone Container */}
+                  <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center bg-slate-50 hover:bg-teal-50/20 hover:border-teal-300 transition flex flex-col items-center justify-center min-h-[220px]">
+                    <div className="w-12 h-12 rounded-full bg-teal-100/60 text-teal-700 flex items-center justify-center mb-3">
+                      <Icon name="upload-cloud" size={24} />
+                    </div>
+                    <p className="text-xs font-bold text-slate-700">Drag & Drop Brochure PDF / Image</p>
+                    <p className="text-[11px] text-slate-400 mt-1 mb-3">Optional preview card</p>
+                    <button
+                      type="button"
+                      className="px-3.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm"
+                    >
+                      Browse File
+                    </button>
+                  </div>
+
+                  <div className="mt-3 text-[11px] text-slate-500 space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <p>• Accepted: JPG, PNG, PDF</p>
+                    <p>• Images over 2 MB compressed automatically</p>
+                    <p>• Max file size: 25 MB</p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </main>
+
+          {/* BOTTOM STICKY ACTION BAR */}
+          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-lg z-20 py-3 px-6">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <div className="text-xs text-slate-500 hidden sm:block">
+                Draft auto-saved 1 min ago
+              </div>
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => alert("Moving to Next Category Configuration")}
+                  className="px-5 py-2.5 rounded-lg border border-teal-700 text-teal-700 font-bold text-sm hover:bg-teal-50 transition shadow-sm w-full sm:w-auto"
+                >
+                  Next Category
+                </button>
+                <button
+                  type="button"
+                  onClick={() => alert("Competition Details & Category Rules Finalized Successfully!")}
+                  className="px-6 py-2.5 rounded-lg bg-teal-700 text-white font-bold text-sm hover:bg-teal-800 transition shadow w-full sm:w-auto flex items-center justify-center gap-1.5"
+                >
+                  <Icon name="check-circle" size={16} />
+                  <span>Finalize</span>
+                </button>
+              </div>
+            </div>
+          </footer>
+
+          {/* SCREEN 3: MODE CHOOSER / ADD CATEGORY WIZARD */}
+          {showModeChooser && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 relative animate-in fade-in zoom-in duration-150">
+                {showDevAnnotations && (
+                  <span className="absolute right-4 top-4 text-[10px] font-mono bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded border">
+                    [Screen 3] {modeChooserContext === 'add' ? (addCategoryStep === 'format' ? 'Add: Choose Format' : 'Add: Name') : 'Mode Chooser'}
+                  </span>
+                )}
+
+                {/* STEP: FORMAT (Asanas / Challenge) — only when adding a new category */}
+                {addCategoryStep === 'format' && (
+                  <>
+                    <div className="mb-5">
+                      <h3 className="text-xl font-black text-slate-900">
+                        {modeChooserContext === 'add' ? 'Add Category' : (
+                          <>Configure Category — <span className="text-teal-700">{selectedCategoryForConfig}</span></>
+                        )}
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        {modeChooserContext === 'add' ? 'Step 1 of 2 — Choose competition format' : 'Choose competition format'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 mb-6">
+                      <div
+                        onClick={() => handleSelectMode('asanas')}
+                        className="p-4 border-2 border-slate-200 hover:border-teal-600 rounded-xl cursor-pointer hover:bg-teal-50/40 transition group flex items-start gap-3"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center shrink-0 group-hover:bg-teal-600 group-hover:text-white transition">
+                          🧘
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-teal-700">Asanas</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Stage-based yoga asana competition</p>
+                        </div>
+                      </div>
+
+                      <div
+                        onClick={() => handleSelectMode('challenge')}
+                        className="p-4 border-2 border-slate-200 hover:border-sky-500 rounded-xl cursor-pointer hover:bg-sky-50/40 transition group flex items-start gap-3"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-800 flex items-center justify-center shrink-0 group-hover:bg-sky-600 group-hover:text-white transition">
+                          ⚡
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-sky-700">Challenge</h4>
+                            /* <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-bold">Coming soon</span> */
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">Single-pose endurance or speed challenge</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleCloseModeChooser}
+                        className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* STEP: NAME — after format selected when adding */}
+                {addCategoryStep === 'name' && (
+                  <>
+                    <div className="mb-5">
+                      <h3 className="text-xl font-black text-slate-900">Name your category</h3>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        Step 2 of 2 — Format:{' '}
+                        <span className={`font-bold ${pendingCategoryFormat === 'challenge' ? 'text-sky-700' : 'text-teal-700'}`}>
+                          {pendingCategoryFormat === 'challenge' ? 'Challenge' : 'Asanas'}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div className="mb-6">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Category Name</label>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmNewCategory(); }}
+                        placeholder="e.g. ARTISTIC, PAIR YOGA"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 uppercase focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setAddCategoryStep('format'); setNewCategoryName(''); }}
+                        className="px-4 py-2 border border-teal-300 text-teal-800 bg-teal-50 rounded-lg text-xs font-bold hover:bg-teal-100 flex items-center gap-1"
+                      >
+                        <Icon name="chevron-left" size={14} />
+                        <span>Back</span>
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCloseModeChooser}
+                          className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleConfirmNewCategory}
+                          className="px-5 py-2 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 shadow flex items-center gap-1"
+                        >
+                          <Icon name="plus" size={14} />
+                          <span>Create</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* CHALLENGE PLACEHOLDER ALERT */}
+          {showChallengeAlert && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-xs p-5 text-center">
+                <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3">
+                  <Icon name="info" size={20} />
+                </div>
+                <h4 className="font-bold text-slate-900 text-base mb-1">Notice</h4>
+                <p className="text-xs text-slate-600 mb-5">Implementation going on...</p>
+                <button
+                  type="button"
+                  onClick={() => setShowChallengeAlert(false)}
+                  className="w-full py-2 bg-teal-700 text-white font-bold rounded-lg text-xs hover:bg-teal-800 transition"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* SCREEN 4: ASANAS CONFIGURATION POPUP — 12-STEP WIZARD */}
+          {showAsanasConfig && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-[920px] max-h-[92vh] flex flex-col my-auto relative animate-in fade-in zoom-in duration-150">
+                
+                {/* MODAL HEADER */}
+                <div className="p-5 border-b border-slate-200 bg-slate-50 rounded-t-2xl shrink-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-extrabold uppercase bg-teal-100 text-teal-800 border border-teal-300 px-2 py-0.5 rounded">
+                          Full Config
+                        </span>
+                        <span className="text-xs font-bold bg-white text-teal-800 border border-teal-200 px-2 py-0.5 rounded">
+                          Step {configWizardStep} of {TOTAL_CONFIG_STEPS}
+                        </span>
+                        {showDevAnnotations && (
+                          <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded border">
+                            [Screen 4] Asanas Config Wizard
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-xl font-black text-slate-900 mt-1">
+                        Asanas Config — <span className="text-teal-700">{selectedCategoryForConfig}</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                        {CONFIG_WIZARD_STEPS[configWizardStep - 1].label}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => { setShowAsanasConfig(false); setConfigWizardStep(1); }}
+                      className="px-3 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-100 transition shrink-0"
+                      title="Close"
+                    >
+                      <Icon name="x" size={16} />
+                    </button>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mt-3 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-teal-600 rounded-full transition-all duration-300"
+                      style={{ width: `${(configWizardStep / TOTAL_CONFIG_STEPS) * 100}%` }}
+                    />
+                  </div>
+
+                  {/* Clickable step pills */}
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {CONFIG_WIZARD_STEPS.map((step) => {
+                      const isActive = configWizardStep === step.id;
+                      const isDone = configWizardStep > step.id;
+                      return (
+                        <button
+                          key={step.id}
+                          type="button"
+                          onClick={() => setConfigWizardStep(step.id)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition ${
+                            isActive
+                              ? 'bg-teal-700 text-white border-teal-700 shadow-sm'
+                              : isDone
+                                ? 'bg-teal-50 text-teal-800 border-teal-300 hover:bg-teal-100'
+                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
+                          }`}
+                          title={step.label}
+                        >
+                          <span className="opacity-70 mr-1">{step.id}.</span>
+                          {step.short}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* MODAL BODY — single active step */}
+                <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+
+                  {/* STEP 1: STAGES */}
+                  {configWizardStep === 1 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 1] Stages
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3 flex items-center gap-1.5">
+                        <Icon name="grid" size={16} />
+                        <span>1. Stages Configuration</span>
+                      </h4>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Naming Format</label>
+                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setStageNaming('alphabet')}
+                              className={`flex-1 py-1.5 rounded font-bold transition ${stageNaming === 'alphabet' ? 'bg-white text-teal-800 shadow' : 'text-slate-600'}`}
+                            >
+                              A–Z
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStageNaming('stages')}
+                              className={`flex-1 py-1.5 rounded font-bold transition ${stageNaming === 'stages' ? 'bg-white text-teal-800 shadow' : 'text-slate-600'}`}
+                            >
+                              Stages
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStageNaming('other')}
+                              className={`flex-1 py-1.5 rounded font-bold transition ${stageNaming === 'other' ? 'bg-white text-teal-800 shadow' : 'text-slate-600'}`}
+                            >
+                              Other
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">How many stages?</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="26"
+                            value={stageCount}
+                            onChange={(e) => setStageCount(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 focus:ring-2 focus:ring-teal-600"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-slate-100">
+                        <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Auto-Generated Stage Chips Preview:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {generatedStages.map((stg, i) => (
+                            <span key={i} className="px-3 py-1 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold rounded-lg shadow-sm">
+                              {stg}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 2: GROUP TYPES */}
+                  {configWizardStep === 2 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 2] Group Types
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3 flex items-center gap-1.5">
+                        <Icon name="users" size={16} />
+                        <span>2. Group Types & Multi-Select Chips</span>
+                      </h4>
+
+                      <div className="flex border-b border-slate-200 mb-3">
+                        {['Study', 'Age', 'Level'].map((gt) => (
+                          <button
+                            key={gt}
+                            type="button"
+                            onClick={() => setGroupType(gt)}
+                            className={`px-4 py-2 text-xs font-bold border-b-2 transition ${groupType === gt ? 'border-teal-600 text-teal-800 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                          >
+                            {gt} Groups
+                          </button>
+                        ))}
+                      </div>
+
+                      {groupType === 'Study' && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-semibold text-slate-600">Select Study Classes:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {studyGroupOptions.map((cls) => {
+                              const isSel = selectedStudyGroups.includes(cls);
+                              return (
+                                <button
+                                  key={cls}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSel) setSelectedStudyGroups(selectedStudyGroups.filter(x => x !== cls));
+                                    else setSelectedStudyGroups([...selectedStudyGroups, cls]);
+                                  }}
+                                  className={`px-3 py-1 rounded-full text-xs font-bold transition border ${isSel ? 'bg-teal-700 text-white border-teal-700' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'}`}
+                                >
+                                  {cls}
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={handleAddGroupChip}
+                              className="px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-800 border border-teal-300 border-dashed hover:bg-teal-100 flex items-center gap-1"
+                            >
+                              <Icon name="plus" size={12} />
+                              <span>Add</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {groupType === 'Age' && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-semibold text-slate-600">Select Sample Age Ranges:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {ageGroupOptions.map((ag) => {
+                              const isSel = selectedAgeGroups.includes(ag);
+                              return (
+                                <button
+                                  key={ag}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSel) setSelectedAgeGroups(selectedAgeGroups.filter(x => x !== ag));
+                                    else setSelectedAgeGroups([...selectedAgeGroups, ag]);
+                                  }}
+                                  className={`px-3 py-1 rounded-full text-xs font-bold transition border ${isSel ? 'bg-teal-700 text-white border-teal-700' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'}`}
+                                >
+                                  {ag}
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={handleAddGroupChip}
+                              className="px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-800 border border-teal-300 border-dashed hover:bg-teal-100 flex items-center gap-1"
+                            >
+                              <Icon name="plus" size={12} />
+                              <span>Add</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {groupType === 'Level' && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-semibold text-slate-600">Select Difficulty Levels:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {levelGroupOptions.map((lvl) => {
+                              const isSel = selectedLevels.includes(lvl);
+                              return (
+                                <button
+                                  key={lvl}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSel) setSelectedLevels(selectedLevels.filter(x => x !== lvl));
+                                    else setSelectedLevels([...selectedLevels, lvl]);
+                                  }}
+                                  className={`px-3 py-1 rounded-full text-xs font-bold transition border ${isSel ? 'bg-teal-700 text-white border-teal-700' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'}`}
+                                >
+                                  {lvl}
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={handleAddGroupChip}
+                              className="px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-800 border border-teal-300 border-dashed hover:bg-teal-100 flex items-center gap-1"
+                            >
+                              <Icon name="plus" size={12} />
+                              <span>Add</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* STEP 3: STAGE ALLOTMENT */}
+                  {configWizardStep === 3 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 3] Stage Allotment
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3 flex items-center gap-1.5">
+                        <Icon name="git-merge" size={16} />
+                        <span>3. Allot Stages & Mapped Groups</span>
+                      </h4>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {generatedStages.slice(0, 4).map((stg) => (
+                          <div key={stg} className="bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-teal-800 uppercase">{stg}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">Mapped Groups</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(allotments[stg] || ['I', 'II']).map((grp, idx) => (
+                                <span key={idx} className="bg-white px-2 py-0.5 border border-slate-300 rounded text-xs font-medium text-slate-700 shadow-xs">
+                                  {grp}
+                                </span>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const addGrp = prompt(`Add group to ${stg}:`, "III");
+                                  if (addGrp) {
+                                    setAllotments({
+                                      ...allotments,
+                                      [stg]: [...(allotments[stg] || []), addGrp]
+                                    });
+                                  }
+                                }}
+                                className="px-2 py-0.5 bg-teal-100 text-teal-800 hover:bg-teal-200 rounded text-xs font-bold"
+                              >
+                                + Allot
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 4: PARTICIPANTS & MARKS */}
+                  {configWizardStep === 4 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative space-y-4">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 4] Participants & Marks
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-1 flex items-center gap-1.5">
+                        <Icon name="sliders" size={16} />
+                        <span>4. Participants & Marks Limits</span>
+                      </h4>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Participants per Stage</label>
+                          <select
+                            value={participantsPerStage}
+                            onChange={(e) => setParticipantsPerStage(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Min Marks</label>
+                          <select
+                            value={minMarks}
+                            onChange={(e) => setMinMarks(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[1,2,3,4,5,10,20].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Max Marks</label>
+                          <select
+                            value={maxMarks}
+                            onChange={(e) => setMaxMarks(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[10,20,50,100].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 flex items-center gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={skippedAsanaEnabled}
+                            onChange={(e) => setSkippedAsanaEnabled(e.target.checked)}
+                            className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
+                          />
+                          <span className="text-xs font-bold text-slate-700">Enable Skipped Asana</span>
+                        </label>
+
+                        {skippedAsanaEnabled && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500 font-semibold">Skipped Asana Count:</span>
+                            <select
+                              value={skippedAsanaCount}
+                              onChange={(e) => setSkippedAsanaCount(e.target.value)}
+                              className="px-2.5 py-1 bg-slate-50 border border-slate-300 rounded text-xs font-bold focus:ring-2 focus:ring-teal-600"
+                            >
+                              {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 5: JURIES */}
+                  {configWizardStep === 5 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 5] Juries
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3 flex items-center gap-1.5">
+                        <Icon name="shield-check" size={16} />
+                        <span>5. Juries per Stage</span>
+                      </h4>
+
+                      <div className="flex items-center gap-3 max-w-xs">
+                        <label className="text-xs font-semibold text-slate-600">Juries per Stage:</label>
+                        <select
+                          value={juriesPerStage}
+                          onChange={(e) => setJuriesPerStage(e.target.value)}
+                          className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 focus:ring-2 focus:ring-teal-600"
+                        >
+                          {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 6: ASANAS */}
+                  {configWizardStep === 6 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative space-y-3">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 6] Asanas
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-1 flex items-center gap-1.5">
+                        <Icon name="list" size={16} />
+                        <span>6. Asanas Breakdown</span>
+                      </h4>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Compulsory / From Chart</label>
+                          <select
+                            value={compulsoryAsanas}
+                            onChange={(e) => setCompulsoryAsanas(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Own Choice</label>
+                          <select
+                            value={ownChoiceAsanas}
+                            onChange={(e) => setOwnChoiceAsanas(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Each (Time in mins)</label>
+                          <select
+                            value={eachAsanaTime}
+                            onChange={(e) => setEachAsanaTime(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n} min</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 7: BEND TYPES */}
+                  {configWizardStep === 7 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 7] Bend Types
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3 flex items-center gap-1.5">
+                        <Icon name="check-square" size={16} />
+                        <span>7. Bend Types Required</span>
+                      </h4>
+
+                      <div className="flex flex-wrap gap-4">
+                        {[
+                          { key: 'forward', label: 'Forward Bend' },
+                          { key: 'backward', label: 'Backward Bend' },
+                          { key: 'handBalance', label: 'Hand Balance' },
+                          { key: 'legBalance', label: 'Leg Balance' },
+                          { key: 'twisting', label: 'Twisting' }
+                        ].map((item) => (
+                          <label key={item.key} className="flex items-center gap-2 cursor-pointer select-none bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-teal-50/50">
+                            <input
+                              type="checkbox"
+                              checked={bendTypes[item.key]}
+                              onChange={(e) => setBendTypes({ ...bendTypes, [item.key]: e.target.checked })}
+                              className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
+                            />
+                            <span className="text-xs font-bold text-slate-800">{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 8: PRIZES */}
+                  {configWizardStep === 8 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 8] Prizes
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3 flex items-center gap-1.5">
+                        <Icon name="trophy" size={16} />
+                        <span>8. Prizes Applies for Top</span>
+                      </h4>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Boys Top</label>
+                          <select
+                            value={prizesTop.boys}
+                            onChange={(e) => setPrizesTop({ ...prizesTop, boys: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Girls Top</label>
+                          <select
+                            value={prizesTop.girls}
+                            onChange={(e) => setPrizesTop({ ...prizesTop, girls: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Others Top</label>
+                          <select
+                            value={prizesTop.others}
+                            onChange={(e) => setPrizesTop({ ...prizesTop, others: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                          >
+                            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 9: SCORING (+ Timed conditional) */}
+                  {configWizardStep === 9 && (
+                    <div className="space-y-4">
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative space-y-4">
+                        {showDevAnnotations && (
+                          <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                            [Step 9] Scoring
+                          </span>
+                        )}
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-1 flex items-center gap-1.5">
+                          <Icon name="target" size={16} />
+                          <span>9. Scoring Method & Automatic Upgrade</span>
+                        </h4>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Scoring Method</label>
+                            <select
+                              value={scoringMethod}
+                              onChange={(e) => setScoringMethod(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                            >
+                              {['NONE', 'Marks', 'Grading', 'Timed', 'Timed + Scoring'].map(m => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Upgrade Top</label>
+                            <select
+                              value={upgradeTop}
+                              onChange={(e) => setUpgradeTop(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                            >
+                              {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Upgrade To Category</label>
+                            <select
+                              value={upgradeToCategory}
+                              onChange={(e) => setUpgradeToCategory(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                            >
+                              {['SPECIAL', 'CHAMPIONS', 'CHAMPIONS OF CHAMPIONS'].map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {(scoringMethod === 'Timed' || scoringMethod === 'Timed + Scoring') && (
+                        <div className="bg-amber-50/60 p-5 rounded-xl border border-amber-200 shadow-sm relative">
+                          {showDevAnnotations && (
+                            <span className="absolute right-3 top-3 text-[10px] font-mono bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded border">
+                              Timed Limits (Conditional)
+                            </span>
+                          )}
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-3 flex items-center gap-1.5">
+                            <Icon name="clock" size={16} />
+                            <span>Timed Method Limits</span>
+                          </h4>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">Min Time</label>
+                              <input
+                                type="time"
+                                value={minTime}
+                                onChange={(e) => setMinTime(e.target.value)}
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">Max Time</label>
+                              <input
+                                type="time"
+                                value={maxTime}
+                                onChange={(e) => setMaxTime(e.target.value)}
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-teal-600"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* STEP 10: VIVA VOCE */}
+                  {configWizardStep === 10 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative space-y-3">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 10] Viva Voce
+                        </span>
+                      )}
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+                          <Icon name="help-circle" size={16} />
+                          <span>10. Viva Voce Question Repeater</span>
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={handleAddVivaRow}
+                          className="px-3 py-1 bg-teal-100 text-teal-800 hover:bg-teal-200 rounded text-xs font-bold flex items-center gap-1"
+                        >
+                          <Icon name="plus" size={14} />
+                          <span>Add Question</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {vivaVoceQuestions.map((q, idx) => (
+                          <div key={q.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 relative">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-700">Question #{idx + 1}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveVivaRow(q.id)}
+                                className="text-red-500 hover:text-red-700 text-xs font-semibold flex items-center gap-0.5"
+                              >
+                                <Icon name="trash-2" size={14} />
+                                <span>Remove</span>
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              <input
+                                type="text"
+                                placeholder="Question textbox..."
+                                value={q.question}
+                                onChange={(e) => {
+                                  const newQs = [...vivaVoceQuestions];
+                                  newQs[idx].question = e.target.value;
+                                  setVivaVoceQuestions(newQs);
+                                }}
+                                className="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs focus:ring-2 focus:ring-teal-600"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Answer textbox..."
+                                value={q.answer}
+                                onChange={(e) => {
+                                  const newQs = [...vivaVoceQuestions];
+                                  newQs[idx].answer = e.target.value;
+                                  setVivaVoceQuestions(newQs);
+                                }}
+                                className="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs focus:ring-2 focus:ring-teal-600"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-4 text-xs pt-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-500">Min Marks:</span>
+                                <select
+                                  value={q.minMarks}
+                                  onChange={(e) => {
+                                    const newQs = [...vivaVoceQuestions];
+                                    newQs[idx].minMarks = e.target.value;
+                                    setVivaVoceQuestions(newQs);
+                                  }}
+                                  className="bg-white border border-slate-300 rounded px-2 py-0.5 font-bold"
+                                >
+                                  {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-500">Max Marks:</span>
+                                <select
+                                  value={q.maxMarks}
+                                  onChange={(e) => {
+                                    const newQs = [...vivaVoceQuestions];
+                                    newQs[idx].maxMarks = e.target.value;
+                                    setVivaVoceQuestions(newQs);
+                                  }}
+                                  className="bg-white border border-slate-300 rounded px-2 py-0.5 font-bold"
+                                >
+                                  {[5,10,15,20].map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 11: COMPLIMENTS (Top + Non-Top) */}
+                  {configWizardStep === 11 && (
+                    <div className="space-y-4">
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                        {showDevAnnotations && (
+                          <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                            [Step 11] Top Compliments
+                          </span>
+                        )}
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3 flex items-center gap-1.5">
+                          <Icon name="gift" size={16} />
+                          <span>11. Compliments for Top Participants</span>
+                        </h4>
+
+                        <div className="flex flex-wrap gap-2">
+                          {['e-Certificate', 'Certificate', 'Medal', 'Trophy', 'Gold Coin', 'Bicycle', 'Cash Prize'].map((item) => {
+                            const isSel = topCompliments.includes(item);
+                            return (
+                              <button
+                                key={item}
+                                type="button"
+                                onClick={() => {
+                                  if (isSel) setTopCompliments(topCompliments.filter(x => x !== item));
+                                  else setTopCompliments([...topCompliments, item]);
+                                }}
+                                className={`px-3 py-1 rounded-full text-xs font-bold transition border ${isSel ? 'bg-teal-700 text-white border-teal-700' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'}`}
+                              >
+                                {item}
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const custom = prompt("Add Custom Compliment:");
+                              if (custom) setTopCompliments([...topCompliments, custom]);
+                            }}
+                            className="px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300"
+                          >
+                            + Add Custom
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative">
+                        {showDevAnnotations && (
+                          <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                            [Step 11] Non-Top Compliments
+                          </span>
+                        )}
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3 flex items-center gap-1.5">
+                          <Icon name="smile" size={16} />
+                          <span>Compliments for Non-Top Participants</span>
+                        </h4>
+
+                        <div className="flex flex-wrap gap-2">
+                          {['e-Certificate', 'Certificate', 'Medal', 'Trophy', 'Participation Badge'].map((item) => {
+                            const isSel = nonTopCompliments.includes(item);
+                            return (
+                              <button
+                                key={item}
+                                type="button"
+                                onClick={() => {
+                                  if (isSel) setNonTopCompliments(nonTopCompliments.filter(x => x !== item));
+                                  else setNonTopCompliments([...nonTopCompliments, item]);
+                                }}
+                                className={`px-3 py-1 rounded-full text-xs font-bold transition border ${isSel ? 'bg-teal-700 text-white border-teal-700' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'}`}
+                              >
+                                {item}
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const custom = prompt("Add Custom Compliment:");
+                              if (custom) setNonTopCompliments([...nonTopCompliments, custom]);
+                            }}
+                            className="px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300"
+                          >
+                            + Add Custom
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 12: FEES */}
+                  {configWizardStep === 12 && (
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative space-y-3">
+                      {showDevAnnotations && (
+                        <span className="absolute right-3 top-3 text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">
+                          [Step 12] Fees
+                        </span>
+                      )}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-1 flex items-center gap-1.5">
+                        <Icon name="indian-rupee" size={16} />
+                        <span>12. Category Registration Fees</span>
+                      </h4>
+
+                      <div className="max-w-xs space-y-2">
+                        <label className="block text-xs font-semibold text-slate-600">Amount per Participant</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-slate-500 font-bold text-sm">₹</span>
+                          <input
+                            type="number"
+                            value={feeAmount}
+                            onChange={(e) => setFeeAmount(e.target.value)}
+                            className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-black text-slate-900 focus:ring-2 focus:ring-teal-600"
+                          />
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                          <input
+                            type="checkbox"
+                            checked={includeFeeInRegistration}
+                            onChange={(e) => setIncludeFeeInRegistration(e.target.checked)}
+                            className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
+                          />
+                          <span className="text-xs font-semibold text-slate-700">Include fee in registration form</span>
+                        </label>
+
+                        <p className="text-[11px] text-slate-500 pt-1">
+                          Fee breakdown: Base ₹{feeAmount} + 18% GST (₹{(parseFloat(feeAmount || 0) * 0.18).toFixed(2)}) = <span className="font-bold text-slate-800">₹{(parseFloat(feeAmount || 0) * 1.18).toFixed(2)} total</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* MODAL FOOTER — step-aware actions */}
+                <div className="p-4 border-t border-slate-200 bg-white rounded-b-2xl flex items-center justify-between shrink-0 gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">
+                      Configuring: <strong className="text-teal-700">{selectedCategoryForConfig}</strong>
+                    </span>
+                    <span className="hidden sm:inline text-xs text-slate-400">·</span>
+                    <span className="hidden sm:inline text-xs font-bold text-slate-600">
+                      Step {configWizardStep} of {TOTAL_CONFIG_STEPS}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => { setShowAsanasConfig(false); setConfigWizardStep(1); }}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-100 transition"
+                    >
+                      Cancel
+                    </button>
+
+                    {configWizardStep > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleConfigWizardPrev}
+                        className="px-4 py-2 border border-teal-300 text-teal-800 bg-teal-50 rounded-lg text-xs font-bold hover:bg-teal-100 transition flex items-center gap-1"
+                      >
+                        <Icon name="chevron-left" size={14} />
+                        <span>Previous</span>
+                      </button>
+                    )}
+
+                    {configWizardStep < TOTAL_CONFIG_STEPS ? (
+                      <button
+                        type="button"
+                        onClick={handleConfigWizardNext}
+                        className="px-5 py-2 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition shadow flex items-center gap-1"
+                      >
+                        <span>Next</span>
+                        <Icon name="chevron-right" size={14} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSaveAsanasConfig}
+                        className="px-5 py-2 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition shadow flex items-center gap-1"
+                      >
+                        <Icon name="check" size={14} />
+                        <span>Save Configuration</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

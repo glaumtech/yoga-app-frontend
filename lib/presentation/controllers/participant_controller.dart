@@ -27,6 +27,7 @@ import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/photo_capture_service.dart';
 import '../../core/utils/photo_upload_processor.dart';
 import '../../core/utils/upload_filename_helper.dart';
+import '../../core/utils/registration_category_options.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
 import 'competition_controller.dart';
@@ -118,6 +119,8 @@ class ParticipantController extends GetxController {
 
   final Rx<DateTime?> dateOfBirth = Rx<DateTime?>(null);
   final RxString gender = ''.obs;
+  /// INSTITUTIONAL (requires institution + yoga teacher) or OPEN (those fields skipped).
+  final RxString registrationCategory = 'INSTITUTIONAL'.obs;
   final RxBool isSpotRegistration = false.obs;
   final RxString selectedPaymentMode = 'GPAY'.obs;
   final Rx<XFile?> paymentProofImage = Rx<XFile?>(null);
@@ -128,6 +131,8 @@ class ParticipantController extends GetxController {
   final RxBool termsAccepted = false.obs;
   final RxBool showTermsError = false.obs;
   final RxList<String> selectedCategories = <String>[].obs;
+  /// ONLINE or OFFLINE for the selected category (same name can exist in both).
+  final RxString selectedCategoryMode = ''.obs;
   final RxString selectedStage = ''.obs; // Selected stage name
   final RxString standard = ''.obs;
   final RxInt formResetTrigger =
@@ -194,6 +199,7 @@ class ParticipantController extends GetxController {
   final TextEditingController bulkInstitutionNameController =
       TextEditingController();
   final RxString bulkCategory = ''.obs;
+  final RxString bulkCategoryMode = ''.obs;
   final RxList<BulkRegistrationRow> bulkRegistrationRows =
       <BulkRegistrationRow>[].obs;
 
@@ -433,6 +439,7 @@ class ParticipantController extends GetxController {
   }
 
   bool get isBonafideCertificateApplicable {
+    if (isOpenRegistrationCategory) return false;
     return isGovtAidedSchoolInstitution(selectedInstitution.value);
   }
 
@@ -697,7 +704,41 @@ class ParticipantController extends GetxController {
     await _syncSelectedInstitutionFromId();
   }
 
+  bool get isOpenRegistrationCategory =>
+      registrationCategory.value.toUpperCase() == 'OPEN';
+
+  bool get isInstitutionalRegistrationCategory => !isOpenRegistrationCategory;
+
+  void setRegistrationCategory(String category) {
+    final normalized = category.trim().toUpperCase();
+    if (normalized != 'INSTITUTIONAL' && normalized != 'OPEN') {
+      return;
+    }
+    if (registrationCategory.value == normalized) {
+      return;
+    }
+    registrationCategory.value = normalized;
+    if (normalized == 'OPEN') {
+      selectedInstitutionId.value = null;
+      selectedInstitution.value = null;
+      participantInstitutionId.value = null;
+      schoolNameController.text = '';
+      yogaMasterNameController.text = '';
+      yogaMasterContactController.text = '';
+      institutionSuggestions.clear();
+      _resetInstitutionSearchFilters();
+      _clearBonafideCertificateFiles();
+      institutionFieldRevision.value++;
+    }
+    validateRegistrationFormOnFieldChange();
+  }
+
   Future<bool> validateBonafideBeforeSave() async {
+    if (isOpenRegistrationCategory) {
+      _clearBonafideCertificateFiles();
+      return true;
+    }
+
     await _syncSelectedInstitutionFromId();
 
     final school = selectedInstitution.value;
@@ -910,6 +951,7 @@ class ParticipantController extends GetxController {
     bulkYogaTeacherCellController.clear();
     bulkInstitutionNameController.clear();
     bulkCategory.value = '';
+    bulkCategoryMode.value = '';
     isSpotRegistration.value = false;
     optForECertificate.value = false;
     for (final row in bulkRegistrationRows) {
@@ -1054,6 +1096,10 @@ class ParticipantController extends GetxController {
       'isSpotRegistration': isSpotRegistration.value,
       'optForECertificate': optForECertificate.value,
     };
+    if (bulkCategoryMode.value.trim().isNotEmpty) {
+      registrationData['categoryMode'] =
+          RegistrationCategoryOption.normalizeMode(bulkCategoryMode.value);
+    }
 
     try {
       isLoading.value = true;
@@ -1396,19 +1442,32 @@ class ParticipantController extends GetxController {
   // Map registration response to ParticipantModel
   // Also stores institutionId for edit mode
   ParticipantModel _mapRegistrationToParticipant(Map<String, dynamic> reg) {
-    // Store institutionId for edit mode (will be used when initializing form for edit)
-    // Check multiple possible field names
+    String? mappedInstitutionId;
     if (reg['institutionId'] != null) {
-      participantInstitutionId.value = reg['institutionId']?.toString();
+      mappedInstitutionId = reg['institutionId']?.toString();
     } else if (reg['institution_id'] != null) {
-      participantInstitutionId.value = reg['institution_id']?.toString();
+      mappedInstitutionId = reg['institution_id']?.toString();
     } else if (reg['institution'] != null && reg['institution'] is Map) {
-      // If institution is an object, try to get the ID
       final institution = reg['institution'] as Map<String, dynamic>;
       if (institution['id'] != null) {
-        participantInstitutionId.value = institution['id']?.toString();
+        mappedInstitutionId = institution['id']?.toString();
       }
     }
+    // Keep for edit/view form init (last mapped row wins when listing).
+    participantInstitutionId.value = mappedInstitutionId;
+
+    final rawRegCategory =
+        (reg['registrationCategory'] ?? reg['registration_category'])
+            ?.toString()
+            .trim()
+            .toUpperCase();
+    final mappedRegistrationCategory = rawRegCategory == 'OPEN'
+        ? 'OPEN'
+        : (rawRegCategory == 'INSTITUTIONAL'
+              ? 'INSTITUTIONAL'
+              : ((mappedInstitutionId == null || mappedInstitutionId.isEmpty)
+                    ? 'OPEN'
+                    : 'INSTITUTIONAL'));
 
     // Parse date of birth
     DateTime dob;
@@ -1494,6 +1553,23 @@ class ParticipantController extends GetxController {
       optForECertificate:
           _parseRegBool(reg['optForECertificate']) ||
           _parseRegBool(reg['opt_for_e_certificate']),
+      isUpgrade:
+          _parseRegBool(reg['isUpgrade']) ||
+          _parseRegBool(reg['is_upgrade']),
+      upgradeFromRegistrationId: reg['upgradeFromRegistrationId'] is int
+          ? reg['upgradeFromRegistrationId'] as int
+          : int.tryParse(
+              reg['upgradeFromRegistrationId']?.toString() ??
+                  reg['upgrade_from_registration_id']?.toString() ??
+                  '',
+            ),
+      upgradeFromCategoryId: reg['upgradeFromCategoryId'] is int
+          ? reg['upgradeFromCategoryId'] as int
+          : int.tryParse(
+              reg['upgradeFromCategoryId']?.toString() ??
+                  reg['upgrade_from_category_id']?.toString() ??
+                  '',
+            ),
       stageId: reg['stageId'] is int
           ? reg['stageId'] as int
           : int.tryParse(reg['stageId']?.toString() ?? ''),
@@ -1505,6 +1581,14 @@ class ParticipantController extends GetxController {
           : int.tryParse(reg['groupId']?.toString() ?? ''),
       paymentMode: reg['paymentMode']?.toString(),
       paymentProofPath: reg['paymentProofPath']?.toString(),
+      paymentStatus:
+          (reg['paymentStatus'] ?? reg['payment_status'])?.toString(),
+      amount: () {
+        final raw = reg['amount'];
+        if (raw is num) return raw.toDouble();
+        return double.tryParse(raw?.toString() ?? '');
+      }(),
+      registrationCategory: mappedRegistrationCategory,
     );
   }
 
@@ -1972,10 +2056,12 @@ class ParticipantController extends GetxController {
     // Clear all reactive values first - this will trigger Obx rebuilds
     dateOfBirth.value = null;
     gender.value = '';
+    registrationCategory.value = 'INSTITUTIONAL';
     optForECertificate.value = false;
     termsAccepted.value = false;
     showTermsError.value = false;
     selectedCategories.clear();
+    selectedCategoryMode.value = '';
     selectedStage.value = '';
     standard.value = '';
     photoFile.value = null;
@@ -2075,11 +2161,13 @@ class ParticipantController extends GetxController {
     _resetInstitutionSearchFilters();
     dateOfBirth.value = null;
     gender.value = '';
+    registrationCategory.value = 'INSTITUTIONAL';
     optForECertificate.value = false;
     termsAccepted.value = false;
     showTermsError.value = false;
     isSpotRegistration.value = false;
     selectedCategories.clear();
+    selectedCategoryMode.value = '';
     selectedStage.value = '';
     standard.value = '';
     photoFile.value = null;
@@ -2226,6 +2314,10 @@ class ParticipantController extends GetxController {
       addressController.text = participant.address;
       standard.value = participant.standard;
       gender.value = _normalizeGender(participant.gender);
+      registrationCategory.value =
+          participant.registrationCategory.toUpperCase() == 'OPEN'
+          ? 'OPEN'
+          : 'INSTITUTIONAL';
       isSpotRegistration.value = participant.isSpotRegistration;
       optForECertificate.value = participant.optForECertificate;
       dateOfBirth.value = participant.dateOfBirth;
@@ -2292,6 +2384,7 @@ class ParticipantController extends GetxController {
 
       // Set category - use the category name directly from participant
       selectedCategories.clear();
+      selectedCategoryMode.value = '';
       if (participant.category.isNotEmpty) {
         // Use the category name as-is (it should match competition categories)
         selectedCategories.add(participant.category.trim());
@@ -2407,6 +2500,10 @@ class ParticipantController extends GetxController {
     addressController.text = participant.address;
     standard.value = participant.standard;
     gender.value = _normalizeGender(participant.gender);
+    registrationCategory.value =
+        participant.registrationCategory.toUpperCase() == 'OPEN'
+        ? 'OPEN'
+        : 'INSTITUTIONAL';
     isSpotRegistration.value = participant.isSpotRegistration;
     optForECertificate.value = participant.optForECertificate;
     dateOfBirth.value = participant.dateOfBirth;
@@ -2470,6 +2567,7 @@ class ParticipantController extends GetxController {
 
     // Set category - use the category name directly from participant
     selectedCategories.clear();
+    selectedCategoryMode.value = '';
     if (participant.category.isNotEmpty) {
       // Use the category name as-is (it should match competition categories)
       selectedCategories.add(participant.category.trim());
@@ -2503,6 +2601,7 @@ class ParticipantController extends GetxController {
       address: addressController.text.trim(),
       yogaMasterName: yogaMasterNameController.text.trim(),
       yogaMasterContact: yogaMasterContactController.text.trim(),
+      registrationCategory: registrationCategory.value,
     );
   }
 
@@ -2750,47 +2849,49 @@ class ParticipantController extends GetxController {
       return false;
     }
 
-    // Check if institution is selected
-    if (selectedInstitutionId.value == null ||
-        selectedInstitutionId.value!.isEmpty) {
-      // If institution name is provided but ID is not set, try to find it
-      if (schoolNameController.text.trim().isNotEmpty) {
-        // Search for the institution by name
-        await searchInstitutions(
-          schoolNameController.text.trim(),
-          useInstitutionSearchFilters: false,
-        );
+    // Check if institution is selected (institutional category only)
+    if (isInstitutionalRegistrationCategory) {
+      if (selectedInstitutionId.value == null ||
+          selectedInstitutionId.value!.isEmpty) {
+        // If institution name is provided but ID is not set, try to find it
+        if (schoolNameController.text.trim().isNotEmpty) {
+          // Search for the institution by name
+          await searchInstitutions(
+            schoolNameController.text.trim(),
+            useInstitutionSearchFilters: false,
+          );
 
-        if (!identical(_registrationSubmitOwner, submitOwner)) {
-          isLoading.value = false;
-          errorMessage.value = '';
-          return false;
-        }
-
-        // Check if we found a matching institution
-        final matchingInstitution = institutionSuggestions.firstWhereOrNull(
-          (institution) =>
-              institution.institutionName.trim().toLowerCase() ==
-              schoolNameController.text.trim().toLowerCase(),
-        );
-
-        if (matchingInstitution != null && matchingInstitution.id != null) {
-          selectedInstitutionId.value = matchingInstitution.id;
-          selectedInstitution.value = matchingInstitution;
-          _applyBonafideRulesForSelectedInstitution();
-        } else {
-          // If still not found, check if participantInstitutionId is available (from edit mode)
-          if (participantInstitutionId.value != null &&
-              participantInstitutionId.value!.isNotEmpty) {
-            selectedInstitutionId.value = participantInstitutionId.value;
-          } else {
-            errorMessage.value = 'Please select an institution from the list';
+          if (!identical(_registrationSubmitOwner, submitOwner)) {
+            isLoading.value = false;
+            errorMessage.value = '';
             return false;
           }
+
+          // Check if we found a matching institution
+          final matchingInstitution = institutionSuggestions.firstWhereOrNull(
+            (institution) =>
+                institution.institutionName.trim().toLowerCase() ==
+                schoolNameController.text.trim().toLowerCase(),
+          );
+
+          if (matchingInstitution != null && matchingInstitution.id != null) {
+            selectedInstitutionId.value = matchingInstitution.id;
+            selectedInstitution.value = matchingInstitution;
+            _applyBonafideRulesForSelectedInstitution();
+          } else {
+            // If still not found, check if participantInstitutionId is available (from edit mode)
+            if (participantInstitutionId.value != null &&
+                participantInstitutionId.value!.isNotEmpty) {
+              selectedInstitutionId.value = participantInstitutionId.value;
+            } else {
+              errorMessage.value = 'Please select an institution from the list';
+              return false;
+            }
+          }
+        } else {
+          errorMessage.value = 'Please select an institution from the list';
+          return false;
         }
-      } else {
-        errorMessage.value = 'Please select an institution from the list';
-        return false;
       }
     }
 
@@ -2834,10 +2935,13 @@ class ParticipantController extends GetxController {
       return false;
     }
 
-    final institutionId = int.tryParse(selectedInstitutionId.value!);
-    if (institutionId == null) {
-      errorMessage.value = 'Invalid institution selected';
-      return false;
+    int? institutionId;
+    if (isInstitutionalRegistrationCategory) {
+      institutionId = int.tryParse(selectedInstitutionId.value ?? '');
+      if (institutionId == null) {
+        errorMessage.value = 'Invalid institution selected';
+        return false;
+      }
     }
 
     final groupId = compController.getGroupIdByName(standard.value);
@@ -2919,12 +3023,10 @@ class ParticipantController extends GetxController {
       'age': age,
       'categoryId': categoryId,
       'stageId': stageId,
-      'yogaTeacherName': yogaMasterNameController.text.trim(),
-      'institutionId': institutionId,
+      'registrationCategory': registrationCategory.value,
       'participantName': nameController.text.trim().toUpperCase(),
       'sex': gender.value,
       'groupId': groupId,
-      'yogaTeacherCell': yogaMasterContactController.text.trim(),
       'paymentMode': payBeforeSave || prepaidCheckout != null
           ? 'ONLINE'
           : _resolvePaymentModeForSubmit(compController, eventId),
@@ -2932,6 +3034,26 @@ class ParticipantController extends GetxController {
       'optForECertificate': optForECertificate.value,
       // Registration number will be auto-generated by backend based on competition, category, gender, and stage
     };
+    if (selectedCategoryMode.value.trim().isNotEmpty) {
+      registrationData['categoryMode'] =
+          RegistrationCategoryOption.normalizeMode(selectedCategoryMode.value);
+    }
+    if (isInstitutionalRegistrationCategory) {
+      registrationData['yogaTeacherName'] =
+          yogaMasterNameController.text.trim();
+      registrationData['institutionId'] = institutionId;
+      registrationData['yogaTeacherCell'] =
+          yogaMasterContactController.text.trim();
+    } else {
+      final yogaName = yogaMasterNameController.text.trim();
+      final yogaCell = yogaMasterContactController.text.trim();
+      if (yogaName.isNotEmpty) {
+        registrationData['yogaTeacherName'] = yogaName;
+      }
+      if (yogaCell.isNotEmpty) {
+        registrationData['yogaTeacherCell'] = yogaCell;
+      }
+    }
     if (prepaidCheckout != null) {
       final orderId = prepaidCheckout['razorpay_order_id'];
       final paymentId = prepaidCheckout['razorpay_payment_id'];
@@ -3263,6 +3385,7 @@ class ParticipantController extends GetxController {
     final fee = compController.resolveCategoryPayableFeeRupees(
       eventId,
       categoryId,
+      spotRegistration: isSpotRegistration.value,
     );
     return (fee * 100).round();
   }

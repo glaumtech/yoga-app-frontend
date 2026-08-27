@@ -500,6 +500,17 @@ class ParticipantsListScreen extends StatelessWidget {
                                 ),
                               ),
                             ],
+                            if (participant.isUpgrade) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Upgrade (no fee)',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.teal.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -514,6 +525,8 @@ class ParticipantsListScreen extends StatelessWidget {
                     'Spot Reg',
                     participant.isSpotRegistration ? 'Yes' : 'No',
                   ),
+                  if (participant.isUpgrade)
+                    _buildInfoRow('Upgrade', 'Yes'),
                   _buildInfoRow('Institution', participant.schoolName),
                   _buildInfoRow('Yoga Teacher', participant.yogaMasterName),
                   if (participant.yogaMasterContact.isNotEmpty)
@@ -671,7 +684,9 @@ class ParticipantsListScreen extends StatelessWidget {
                 _buildCreatedCellWidget(participant),
                 _buildUpdatedCellWidget(participant),
                 _buildTableCell(
-                  participant.isSpotRegistration ? 'Yes' : 'No',
+                  participant.isUpgrade
+                      ? 'Upgrade'
+                      : (participant.isSpotRegistration ? 'Yes' : 'No'),
                 ),
                 _buildActionCell(context, participant, controller),
               ],
@@ -889,6 +904,17 @@ class ParticipantsListScreen extends StatelessWidget {
                   fontSize: 11,
                   color: Colors.grey[600],
                   fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+            if (participant.isUpgrade) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Upgrade',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.teal.shade700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],

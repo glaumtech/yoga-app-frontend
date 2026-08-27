@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/reports_repository.dart';
 import '../../controllers/reports_participants_list_preset.dart';
+import '../../controllers/reports_participants_tab_logic.dart';
 import '../../widgets/responsive_admin_table.dart';
 import 'reports_institutions_details_popup.dart';
 import 'reports_registered_participants_popup.dart';
@@ -62,6 +64,7 @@ class _MastersDetailsDialogState extends State<_MastersDetailsDialog> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   bool _studentCountDesc = true;
+  bool _downloading = false;
 
   @override
   void dispose() {
@@ -102,6 +105,109 @@ class _MastersDetailsDialogState extends State<_MastersDetailsDialog> {
 
   void _toggleStudentCountSort() {
     setState(() => _studentCountDesc = !_studentCountDesc);
+  }
+
+  Future<void> _askDownloadFormat() async {
+    if (_visibleRows.isEmpty) {
+      Get.snackbar(
+        'Download',
+        'No masters to download.',
+        backgroundColor: Colors.orange.shade800,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Download'),
+          content: const Text('Choose download format'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('pdf'),
+              child: const Text('PDF'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop('excel'),
+              child: const Text('Excel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (choice == null || !mounted) return;
+    await _downloadMasters(asExcel: choice == 'excel');
+  }
+
+  Future<void> _downloadMasters({required bool asExcel}) async {
+    final competitionId = int.tryParse(widget.competitionId);
+    if (competitionId == null) {
+      Get.snackbar(
+        'Download',
+        'Invalid competition id.',
+        backgroundColor: Colors.orange.shade800,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    setState(() => _downloading = true);
+    try {
+      final repo = ReportsRepository();
+      final search = _query.trim().isEmpty ? null : _query.trim();
+      final resp = asExcel
+          ? await repo.getCompetitionMastersExcel(
+              competitionId,
+              sortDesc: _studentCountDesc,
+              search: search,
+              title: widget.title,
+            )
+          : await repo.getCompetitionMastersPrintPdf(
+              competitionId,
+              sortDesc: _studentCountDesc,
+              search: search,
+              title: widget.title,
+            );
+
+      if (!resp.success || resp.data == null || resp.data!.isEmpty) {
+        Get.snackbar(
+          'Download',
+          resp.message ??
+              (asExcel
+                  ? 'Failed to generate Masters Excel'
+                  : 'Failed to generate Masters PDF'),
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
+      final safeTitle = widget.title
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+          .replaceAll(RegExp(r'^_+|_+$'), '');
+      final base = safeTitle.isEmpty ? 'masters' : safeTitle;
+      final filename =
+          asExcel ? '${base}_$competitionId.xlsx' : '${base}_$competitionId.pdf';
+
+      await ReportsParticipantsTabLogic.downloadFileBytes(
+        resp.data!,
+        filename,
+        mimeType: asExcel
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'application/pdf',
+      );
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
   }
 
   void _openMasterInstitutions(Map<String, dynamic> row) {
@@ -560,6 +666,26 @@ class _MastersDetailsDialogState extends State<_MastersDetailsDialog> {
                         ],
                       ),
                     ),
+                    _downloading
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        : IconButton(
+                            tooltip: 'Download',
+                            onPressed: _askDownloadFormat,
+                            icon: const Icon(
+                              Icons.download,
+                              color: Colors.white,
+                            ),
+                          ),
                     IconButton(
                       tooltip: 'Close',
                       onPressed: () => Navigator.of(context).pop(),

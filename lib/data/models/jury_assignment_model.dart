@@ -136,20 +136,51 @@ class GroupAssignment {
 class CategoryAssignment {
   final int id;
   final String categoryName;
+  /// Compulsory / from-chart asanas from category config.
+  final int compulsoryAsanas;
+  /// Own-choice asanas from category config.
+  final int ownChoiceAsanas;
+  /// Total asanas to score for this category (compulsory + own choice).
+  final int numberOfAsanas;
 
-  CategoryAssignment({required this.id, required this.categoryName});
+  CategoryAssignment({
+    required this.id,
+    required this.categoryName,
+    this.compulsoryAsanas = 4,
+    this.ownChoiceAsanas = 2,
+    int? numberOfAsanas,
+  }) : numberOfAsanas =
+            numberOfAsanas ??
+            ((compulsoryAsanas + ownChoiceAsanas) > 0
+                ? compulsoryAsanas + ownChoiceAsanas
+                : 5);
 
   bool get isChampions =>
       categoryName.trim().toUpperCase() == 'CHAMPIONS';
 
   factory CategoryAssignment.fromJson(Map<String, dynamic> json) {
+    final compulsory = json['compulsoryAsanas'] as int? ?? 4;
+    final ownChoice = json['ownChoiceAsanas'] as int? ?? 2;
+    final totalFromApi = json['numberOfAsanas'] as int?;
+    final total = totalFromApi != null && totalFromApi > 0
+        ? totalFromApi
+        : (compulsory + ownChoice > 0 ? compulsory + ownChoice : 5);
     return CategoryAssignment(
       id: json['id'] as int? ?? 0,
       categoryName: json['categoryName'] as String? ?? '',
+      compulsoryAsanas: compulsory,
+      ownChoiceAsanas: ownChoice,
+      numberOfAsanas: total,
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'categoryName': categoryName};
+    return {
+      'id': id,
+      'categoryName': categoryName,
+      'compulsoryAsanas': compulsoryAsanas,
+      'ownChoiceAsanas': ownChoiceAsanas,
+      'numberOfAsanas': numberOfAsanas,
+    };
   }
 }
