@@ -8,6 +8,7 @@ import '../../widgets/toggle_button_group.dart';
 import '../../controllers/school_controller.dart';
 import 'school_create_screen.dart';
 import 'school_list_screen.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 /// Institutions Screen
 /// Manages institutions list
@@ -231,7 +232,7 @@ class _InstitutionPrecheckAndCreateState
       final isMobile = screenWidth < 600;
       final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-      return SingleChildScrollView(
+      return PinnedVerticalScrollView(
         padding: EdgeInsets.all(isMobile ? 16 : 16),
         child: Card(
           elevation: 4,

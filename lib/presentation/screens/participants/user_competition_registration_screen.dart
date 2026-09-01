@@ -13,6 +13,7 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/registration_success_panel.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../home/home_landing_sections.dart';
 import 'participant_registration_form_screen.dart';
 import 'registration_event_landing.dart';
@@ -125,7 +126,7 @@ class _UserCompetitionRegistrationScreenState
         final fullCompetition = competitionController.competitions
             .firstWhereOrNull((c) => c.id == widget.competitionId);
 
-        return SingleChildScrollView(
+        return PinnedVerticalScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

@@ -10,6 +10,7 @@ import '../../widgets/mandatory_aware_label.dart';
 import '../../../data/models/institution_category_model.dart';
 import '../../../data/models/city_model.dart';
 import '../../../data/models/district_model.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 String _villageName(CityModel c) => (c.village ?? c.description ?? '').trim();
 
@@ -59,7 +60,7 @@ class SchoolCreateScreen extends StatelessWidget {
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
-    return SingleChildScrollView(
+    return PinnedVerticalScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 16),
       child: Card(
         elevation: 4,

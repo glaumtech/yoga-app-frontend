@@ -21,7 +21,7 @@ class ReportsController extends GetxController {
   /// {
   ///   totals: {...},
   ///   categoryCounts: {...},
-  ///   prefixAgeCounts: {...},
+  ///   prefixAgeCounts: { COMMON: { CBA: { age: count } }, ... },
   ///   institutions: {...},
   ///   prizeWinners: [...]
   /// }

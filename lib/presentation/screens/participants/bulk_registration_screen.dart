@@ -13,18 +13,70 @@ import '../../widgets/location/state_search_field.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../core/utils/photo_capture_service.dart';
 import '../../../core/utils/photo_upload_processor.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../data/models/district_model.dart';
+import '../../../core/utils/registration_category_options.dart';
 import '../../models/bulk_registration_row.dart';
 
 List<({String groupName, String stageName})> _groupStageEntriesForBulk(
   CompetitionModel? competition,
-  CompetitionController competitionController,
-) {
+  CompetitionController competitionController, {
+  String? categoryName,
+  String? categoryMode,
+}) {
   if (competition == null) return const [];
+
+  final selectedCategory = categoryName?.trim() ?? '';
+  if (selectedCategory.isNotEmpty &&
+      competition.categoryConfigs != null &&
+      competition.categoryConfigs!.isNotEmpty) {
+    final cfg = findCategoryConfig(
+      configs: competition.categoryConfigs!,
+      categoryName: selectedCategory,
+      mode: categoryMode,
+    );
+    if (cfg != null) {
+      final fromAllotment = <({String groupName, String stageName})>[];
+      if (cfg.stageAllotment.isNotEmpty) {
+        final stages = cfg.stageAllotment.keys.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        for (final stageName in stages) {
+          final groups = List<String>.from(
+            cfg.stageAllotment[stageName] ?? const [],
+          )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          for (final groupName in groups) {
+            if (groupName.trim().isEmpty) continue;
+            fromAllotment.add((groupName: groupName, stageName: stageName));
+          }
+        }
+        if (fromAllotment.isNotEmpty) return fromAllotment;
+      }
+      if (cfg.selectedGroups.isNotEmpty) {
+        final stageByGroup = <String, String>{};
+        final labels = competition.stageGroupLabels;
+        if (labels != null) {
+          for (final e in labels.entries) {
+            for (final g in e.value) {
+              stageByGroup[g.trim().toLowerCase()] = e.key;
+            }
+          }
+        }
+        final groups = List<String>.from(cfg.selectedGroups)
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        for (final groupName in groups) {
+          if (groupName.trim().isEmpty) continue;
+          final stageName =
+              stageByGroup[groupName.trim().toLowerCase()] ?? 'Stage';
+          fromAllotment.add((groupName: groupName, stageName: stageName));
+        }
+        if (fromAllotment.isNotEmpty) return fromAllotment;
+      }
+    }
+  }
 
   final entries = <({String groupName, String stageName})>[];
 
@@ -130,7 +182,7 @@ class BulkRegistrationScreen extends StatelessWidget {
           key: participantController.formKey,
           // Per-field `autovalidateMode` — Form-level `onUserInteraction` validates all fields.
           autovalidateMode: AutovalidateMode.disabled,
-          child: SingleChildScrollView(
+          child: PinnedVerticalScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -841,13 +893,24 @@ class BulkRegistrationScreen extends StatelessWidget {
                 (c) => c.id == controller.selectedEventId.value,
               );
 
-          final categories = selectedCompetition?.categories ?? [];
+          final options = buildRegistrationCategoryOptions(
+            configs: selectedCompetition?.categoryConfigs,
+            categoryNames: selectedCompetition?.categories,
+            competitionMode: selectedCompetition?.competitionMode,
+          );
+          final selectedName = controller.bulkCategory.value;
+          final selectedMode = controller.bulkCategoryMode.value;
+          final selectedValue = options
+              .firstWhereOrNull(
+                (o) =>
+                    o.categoryName == selectedName &&
+                    (selectedMode.isEmpty || o.mode == selectedMode),
+              )
+              ?.valueKey;
 
           return DropdownButtonFormField<String>(
             autovalidateMode: AutovalidateMode.onUserInteraction,
-            value: controller.bulkCategory.value.isNotEmpty
-                ? controller.bulkCategory.value
-                : null,
+            value: selectedValue,
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -858,15 +921,26 @@ class BulkRegistrationScreen extends StatelessWidget {
               ),
             ),
             hint: const Text('Select Category'),
-            items: categories.map((category) {
+            items: options.map((option) {
               return DropdownMenuItem<String>(
-                value: category,
-                child: Text(category),
+                value: option.valueKey,
+                child: Text(
+                  option.displayLabel,
+                  overflow: TextOverflow.ellipsis,
+                ),
               );
             }).toList(),
             onChanged: (value) {
-              if (value != null) {
-                controller.bulkCategory.value = value;
+              final option = RegistrationCategoryOption.tryParse(value);
+              if (option != null) {
+                controller.bulkCategory.value = option.categoryName;
+                controller.bulkCategoryMode.value = option.mode;
+                // Groups are category-specific — clear prior row group/stage picks.
+                for (final row in controller.bulkRegistrationRows) {
+                  if (row.isRegistered.value) continue;
+                  row.group.value = '';
+                  row.stage.value = '';
+                }
                 controller.validateRegistrationFormOnFieldChange();
               }
             },
@@ -1253,10 +1327,14 @@ class BulkRegistrationScreen extends StatelessWidget {
     return Obx(() {
       final selectedCompetition = competitionController.competitions
           .firstWhereOrNull((c) => c.id == controller.selectedEventId.value);
+      final selectedCategory = controller.bulkCategory.value;
+      final selectedCategoryMode = controller.bulkCategoryMode.value;
 
       final groupStageEntries = _groupStageEntriesForBulk(
         selectedCompetition,
         competitionController,
+        categoryName: selectedCategory,
+        categoryMode: selectedCategoryMode,
       );
 
       final allGroupsWithStage = groupStageEntries
@@ -1285,6 +1363,7 @@ class BulkRegistrationScreen extends StatelessWidget {
       }
 
       return DropdownButtonFormField<String>(
+        key: ValueKey('bulk-group-${selectedCategory}-${row.hashCode}'),
         value: currentValue,
         isExpanded: true,
         style: TextStyle(fontSize: isMobile ? 12 : 12, color: Colors.black),

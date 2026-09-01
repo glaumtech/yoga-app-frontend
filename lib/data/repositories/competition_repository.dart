@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/competition_model.dart';
+import '../models/category_config_model.dart';
 import '../models/competition_option_model.dart';
 import '../models/api_response.dart';
 
@@ -26,6 +27,16 @@ class CreateCompetitionResult {
 
 class CompetitionRepository {
   final APIService _apiService = APIService();
+
+  Future<ApiResponse<Map<String, dynamic>>> getGoogleDriveConfig() {
+    return _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionGoogleDriveConfig,
+      apiType: APIType.aGet,
+      fromJson: (json) => json is Map<String, dynamic>
+          ? json
+          : Map<String, dynamic>.from(json as Map),
+    );
+  }
 
   Future<ApiResponse<CreateCompetitionResult>> createCompetition({
     required CompetitionModel competition,
@@ -790,6 +801,37 @@ class CompetitionRepository {
     }
   }
 
+  /// Create responses wrap the option under keys like `prize` / `category` / `stage` / `group`.
+  /// [ApiService] already unwraps the outer `data`, so [raw] is typically `{ "prize": {...} }`.
+  static CompetitionOptionModel? parseCreatedOption(
+    dynamic raw, {
+    required String entityKey,
+  }) {
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(raw as Map);
+
+    Map<String, dynamic>? candidate;
+    final nested = map[entityKey];
+    if (nested is Map) {
+      candidate = Map<String, dynamic>.from(nested);
+    } else if (map['data'] is Map) {
+      final inner = Map<String, dynamic>.from(map['data'] as Map);
+      final nestedInner = inner[entityKey];
+      if (nestedInner is Map) {
+        candidate = Map<String, dynamic>.from(nestedInner);
+      } else if (inner.containsKey('id')) {
+        candidate = inner;
+      }
+    } else if (map.containsKey('id')) {
+      candidate = map;
+    }
+
+    if (candidate == null) return null;
+    final option = CompetitionOptionModel.fromJson(candidate);
+    if (option.id <= 0 || option.name.trim().isEmpty) return null;
+    return option;
+  }
+
   // Create new category
   Future<ApiResponse<CompetitionOptionModel>> createCategory({
     required String name,
@@ -810,17 +852,10 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionOptionModel? category;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          dynamic categoryData = dataMap['data'] ?? dataMap;
-
-          if (categoryData is Map<String, dynamic>) {
-            category = CompetitionOptionModel.fromJson(categoryData);
-          }
-        }
-
+        final category = parseCreatedOption(
+          response.data,
+          entityKey: 'category',
+        );
         if (category != null) {
           return ApiResponse(success: true, data: category);
         }
@@ -835,6 +870,244 @@ class CompetitionRepository {
       return ApiResponse(
         success: false,
         message: 'Error creating category: ${e.toString()}',
+      );
+    }
+  }
+
+  /// PUT /competition/{id}/category-config — persist one category wizard config.
+  Future<ApiResponse<CompetitionCategoryConfigModel>> upsertCategoryConfig({
+    required int competitionId,
+    required CompetitionCategoryConfigModel config,
+  }) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionCategoryConfig(competitionId.toString()),
+        apiType: APIType.aPut,
+        body: config.toJson(),
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        final raw = response.data;
+        Map<String, dynamic>? configJson;
+        if (raw is Map) {
+          final map = Map<String, dynamic>.from(raw);
+          final direct = map['categoryConfig'];
+          if (direct is Map) {
+            configJson = Map<String, dynamic>.from(direct);
+          } else {
+            final data = map['data'];
+            if (data is Map && data['categoryConfig'] is Map) {
+              configJson = Map<String, dynamic>.from(
+                data['categoryConfig'] as Map,
+              );
+            } else if (map.containsKey('categoryName') ||
+                map.containsKey('categoryId') ||
+                map.containsKey('format')) {
+              configJson = map;
+            }
+          }
+        }
+        if (configJson != null) {
+          return ApiResponse(
+            success: true,
+            data: CompetitionCategoryConfigModel.fromJson(configJson),
+          );
+        }
+        return ApiResponse(success: true, data: config);
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to save category configuration',
+      );
+    } catch (e) {
+      print('Error in upsertCategoryConfig: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error saving category configuration: ${e.toString()}',
+      );
+    }
+  }
+
+  /// GET /competition/{id}/categories/{categoryId}/tie-breaker/groups
+  Future<ApiResponse<List<Map<String, dynamic>>>> fetchTieBreakerGroups({
+    required int competitionId,
+    required int categoryId,
+  }) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionTieBreakerGroups(
+          competitionId.toString(),
+          categoryId.toString(),
+        ),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+      if (!response.success) {
+        return ApiResponse(
+          success: false,
+          message: response.message ?? 'Failed to load tie breaker groups',
+        );
+      }
+      final raw = response.data;
+      List<dynamic> list = const [];
+      if (raw is Map) {
+        final map = Map<String, dynamic>.from(raw);
+        final data = map['data'];
+        if (data is Map && data['groups'] is List) {
+          list = data['groups'] as List;
+        } else if (map['groups'] is List) {
+          list = map['groups'] as List;
+        }
+      }
+      return ApiResponse(
+        success: true,
+        data: list
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList(),
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error loading tie breaker groups: ${e.toString()}',
+      );
+    }
+  }
+
+  /// POST /competition/{id}/categories/{categoryId}/tie-breaker/start
+  Future<ApiResponse<Map<String, dynamic>>> startTieBreaker({
+    required int competitionId,
+    required int categoryId,
+    required Map<String, dynamic> body,
+  }) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionTieBreakerStart(
+          competitionId.toString(),
+          categoryId.toString(),
+        ),
+        apiType: APIType.aPost,
+        body: body,
+        fromJson: (json) => json,
+      );
+      if (!response.success) {
+        return ApiResponse(
+          success: false,
+          message: response.message ?? 'Failed to start tie breaker',
+        );
+      }
+      final raw = response.data;
+      Map<String, dynamic>? session;
+      if (raw is Map) {
+        final map = Map<String, dynamic>.from(raw);
+        final data = map['data'];
+        if (data is Map && data['session'] is Map) {
+          session = Map<String, dynamic>.from(data['session'] as Map);
+        } else if (map['session'] is Map) {
+          session = Map<String, dynamic>.from(map['session'] as Map);
+        } else {
+          session = map;
+        }
+      }
+      return ApiResponse(success: true, data: session ?? {});
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error starting tie breaker: ${e.toString()}',
+      );
+    }
+  }
+
+  /// GET /competition/{id}/categories/{categoryId}/upgrade/preview
+  Future<ApiResponse<Map<String, dynamic>>> previewCategoryUpgrade({
+    required int competitionId,
+    required int categoryId,
+  }) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionCategoryUpgradePreview(
+          competitionId.toString(),
+          categoryId.toString(),
+        ),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+      if (!response.success) {
+        return ApiResponse(
+          success: false,
+          message: response.message ?? 'Failed to load upgrade preview',
+        );
+      }
+      Map<String, dynamic>? data;
+      final raw = response.data;
+      if (raw is Map) {
+        final map = Map<String, dynamic>.from(raw);
+        final nested = map['data'];
+        if (nested is Map) {
+          data = Map<String, dynamic>.from(nested);
+        } else {
+          data = map;
+        }
+      }
+      return ApiResponse(
+        success: true,
+        data: data ?? {},
+        message: response.message,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error loading upgrade preview: ${e.toString()}',
+      );
+    }
+  }
+
+  /// POST /competition/{id}/categories/{categoryId}/upgrade/apply
+  Future<ApiResponse<Map<String, dynamic>>> applyCategoryUpgrade({
+    required int competitionId,
+    required int categoryId,
+    List<int>? participantRegistrationIds,
+  }) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionCategoryUpgradeApply(
+          competitionId.toString(),
+          categoryId.toString(),
+        ),
+        apiType: APIType.aPost,
+        body: <String, dynamic>{
+          'participantRegistrationIds': participantRegistrationIds ?? <int>[],
+        },
+        fromJson: (json) => json,
+      );
+      if (!response.success) {
+        return ApiResponse(
+          success: false,
+          message: response.message ?? 'Failed to apply upgrade',
+        );
+      }
+      Map<String, dynamic>? data;
+      final raw = response.data;
+      if (raw is Map) {
+        final map = Map<String, dynamic>.from(raw);
+        final nested = map['data'];
+        if (nested is Map) {
+          data = Map<String, dynamic>.from(nested);
+        } else {
+          data = map;
+        }
+      }
+      return ApiResponse(
+        success: true,
+        data: data ?? {},
+        message: response.message,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error applying upgrade: ${e.toString()}',
       );
     }
   }
@@ -859,17 +1132,7 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionOptionModel? prize;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          dynamic prizeData = dataMap['data'] ?? dataMap;
-
-          if (prizeData is Map<String, dynamic>) {
-            prize = CompetitionOptionModel.fromJson(prizeData);
-          }
-        }
-
+        final prize = parseCreatedOption(response.data, entityKey: 'prize');
         if (prize != null) {
           return ApiResponse(success: true, data: prize);
         }
@@ -908,17 +1171,7 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionOptionModel? stage;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          dynamic stageData = dataMap['data'] ?? dataMap;
-
-          if (stageData is Map<String, dynamic>) {
-            stage = CompetitionOptionModel.fromJson(stageData);
-          }
-        }
-
+        final stage = parseCreatedOption(response.data, entityKey: 'stage');
         if (stage != null) {
           return ApiResponse(success: true, data: stage);
         }
@@ -957,17 +1210,7 @@ class CompetitionRepository {
       );
 
       if (response.success && response.data != null) {
-        CompetitionOptionModel? group;
-
-        if (response.data is Map<String, dynamic>) {
-          final dataMap = response.data as Map<String, dynamic>;
-          dynamic groupData = dataMap['data'] ?? dataMap;
-
-          if (groupData is Map<String, dynamic>) {
-            group = CompetitionOptionModel.fromJson(groupData);
-          }
-        }
-
+        final group = parseCreatedOption(response.data, entityKey: 'group');
         if (group != null) {
           return ApiResponse(success: true, data: group);
         }

@@ -13,6 +13,7 @@ import '../../controllers/user_management_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../widgets/footer_section.dart';
 import '../home/home_landing_sections.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class ContactScreen extends StatefulWidget {
   const ContactScreen({super.key});
@@ -215,7 +216,7 @@ class _ContactScreenState extends State<ContactScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
+      body: PinnedVerticalScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

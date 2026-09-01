@@ -11,6 +11,7 @@ import '../../../core/utils/competition_registration_url.dart';
 import '../../../routes/app_routes.dart';
 import 'competition_registration_qr_image.dart';
 import 'primary_button.dart';
+import 'pinned_scroll_views.dart';
 
 class CompetitionCard extends StatelessWidget {
   final HomeCompetitionModel competition;
@@ -69,7 +70,7 @@ class CompetitionCard extends StatelessWidget {
         Widget buildScrollableContent() {
           return Padding(
             padding: contentPad,
-            child: SingleChildScrollView(
+            child: PinnedVerticalScrollView(
               physics: const ClampingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

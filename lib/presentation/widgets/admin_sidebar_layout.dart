@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/keyboard/keyboard_scroll_discovery.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/permission_store.dart';
 import '../../../core/utils/role_display_name.dart';
+import '../../../routes/app_routes.dart';
 import '../controllers/user_management_controller.dart';
 import 'admin_sidebar.dart';
 import 'change_password_dialog.dart';
@@ -21,6 +24,9 @@ class AdminSidebarLayout extends StatelessWidget {
     final userController = Get.isRegistered<UserManagementController>()
         ? Get.find<UserManagementController>()
         : Get.put(UserManagementController());
+    final permissionStore = Get.isRegistered<PermissionStore>()
+        ? Get.find<PermissionStore>()
+        : Get.put(PermissionStore());
 
     return Scaffold(
       drawer: isMobile && userController.isAuthenticated
@@ -169,9 +175,45 @@ class AdminSidebarLayout extends StatelessWidget {
                                         ChangePasswordDialog.show(
                                           scaffoldContext,
                                         );
+                                      } else if (value == 'organization_update') {
+                                        scaffoldContext.go(
+                                          AppRoutes.organizationUpdate,
+                                        );
                                       }
                                     },
                                     itemBuilder: (context) => [
+                                      if (permissionStore.has(
+                                        'ORGANIZATION_UPDATE',
+                                      ))
+                                        PopupMenuItem<String>(
+                                          value: 'organization_update',
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.primaryColor
+                                                      .withOpacity(0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Icon(
+                                                  Icons.business_outlined,
+                                                  size: 18,
+                                                  color: AppTheme.primaryColor,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              const Text(
+                                                'Organization Update',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       PopupMenuItem<String>(
                                         value: 'reset_password',
                                         child: Row(

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:convert';
 import 'package:yoga_champ/routes/app_routes.dart';
 import '../presentation/screens/splash/splash_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
@@ -27,20 +28,56 @@ import '../presentation/screens/users/users_list_screen.dart';
 import '../presentation/screens/competitions/create_competition_screen.dart';
 import '../presentation/screens/participants/participant_management_screen.dart';
 import '../presentation/screens/participants/user_competition_registration_screen.dart';
+import '../presentation/screens/participants/participant_video_upload_screen.dart';
 import '../presentation/screens/scoring/jury_scoring_screen.dart';
 import '../presentation/screens/organization_setup/organization_setup_screen.dart';
+import '../presentation/screens/organization_update/organization_update_screen.dart';
 import '../core/constants/app_constants.dart';
 import '../core/navigation/root_navigator_key.dart';
+import '../core/utils/organization_mandatory_checker.dart';
+import '../core/utils/permission_store.dart';
 import '../core/utils/storage_service.dart';
+import '../core/utils/online_participant_login_url.dart';
+
+import '../data/models/user_management_model.dart';
 
 Page<void> _noTransitionPage(GoRouterState state, Widget child) {
   return NoTransitionPage<void>(key: state.pageKey, child: child);
 }
 
 class AppRouter {
+  static void refresh() {
+    try {
+      router.refresh();
+    } catch (_) {}
+  }
+
+  static bool _isBranchAdminFromStorage() {
+    final userJson = StorageService.getString(AppConstants.userKey);
+    if (userJson == null || userJson.isEmpty) return false;
+    try {
+      final user = UserManagementModel.fromJson(
+        jsonDecode(userJson) as Map<String, dynamic>,
+      );
+      return isBranchAdminRole(user.userTypeName, fallbackType: user.type);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool _requiresMandatoryOrganizationUpdate() {
+    return StorageService.getBool(AppConstants.orgMandatoryUpdateRequiredKey) ==
+        true;
+  }
+
+  static bool _requiresFirstCompetition() {
+    return StorageService.getBool(AppConstants.firstCompetitionRequiredKey) ==
+        true;
+  }
+
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: kIsWeb ? AppRoutes.home : AppRoutes.splash,
+    initialLocation: kIsWeb ? flutterWebInitialLocation() : AppRoutes.splash,
     debugLogDiagnostics: kDebugMode,
     errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(title: const Text('Page not found')),
@@ -147,24 +184,39 @@ class AppRouter {
             return AppRoutes.juryScoring;
           }
 
+          // Super admin with incomplete organization details: lock to org complete only.
+          final isOrgCompleteRoute = location == AppRoutes.organizationComplete ||
+              location.startsWith(AppRoutes.organizationComplete);
+          if (_requiresMandatoryOrganizationUpdate() &&
+              _isBranchAdminFromStorage() &&
+              !isOrgCompleteRoute) {
+            return AppRoutes.organizationComplete;
+          }
+
+          // Branch admin with no competition yet: lock to competition creation only.
+          final isCompetitionCreateRoute =
+              location == AppRoutes.createCompetition ||
+              location.startsWith(AppRoutes.createCompetition);
+          if (!_requiresMandatoryOrganizationUpdate() &&
+              _requiresFirstCompetition() &&
+              _isBranchAdminFromStorage() &&
+              !isCompetitionCreateRoute) {
+            return AppRoutes.createCompetition;
+          }
+
           // Permission-based route access
           List<String>? requiredKeys;
           if (location == AppRoutes.adminDashboard ||
               location.startsWith(AppRoutes.adminDashboard)) {
             // Allow dashboard for any admin menu permission
-            requiredKeys = const [
-              'MENU_DASHBOARD',
-              'MENU_COMPETITIONS',
-              'MENU_USERS',
-              'MENU_PARTICIPANTS',
-              'MENU_INSTITUTIONS',
-              'MENU_REPORTS',
-              'MENU_SETTINGS',
-              'MENU_SPONSORS',
-            ];
+            requiredKeys = PermissionStore.adminDashboardAccessKeys;
           } else if (location == AppRoutes.createCompetition ||
               location.startsWith('/admin/competitions')) {
-            requiredKeys = const ['MENU_COMPETITIONS'];
+            if (_requiresFirstCompetition() && _isBranchAdminFromStorage()) {
+              requiredKeys = null;
+            } else {
+              requiredKeys = const ['MENU_COMPETITIONS'];
+            }
           } else if (location == AppRoutes.userManagement ||
               location.startsWith('/admin/users')) {
             requiredKeys = const ['MENU_USERS'];
@@ -187,9 +239,17 @@ class AppRouter {
           } else if (location == AppRoutes.juryScoring ||
               location.startsWith('/jury/')) {
             requiredKeys = const ['SHOW_JURY_SCREEN'];
+          } else if (location == AppRoutes.organizationComplete ||
+              location.startsWith(AppRoutes.organizationComplete)) {
+            requiredKeys = null;
+          } else if (location == AppRoutes.organizationUpdate ||
+              location.startsWith('/organization/update')) {
+            requiredKeys = const ['ORGANIZATION_UPDATE'];
           }
 
-          if (requiredKeys != null && !requiredKeys.any(hasKey)) {
+          if (requiredKeys != null &&
+              !requiredKeys.any(hasKey) &&
+              !(_requiresFirstCompetition() && _isBranchAdminFromStorage())) {
             // If user doesn't have permission for the route, send them home.
             return AppRoutes.home;
           }
@@ -302,6 +362,20 @@ class AppRouter {
           );
         },
       ),
+      GoRoute(
+        path: AppRoutes.participantVideoUploadWithRegNo,
+        name: 'participant-video-upload-regno',
+        builder: (context, state) => ParticipantVideoUploadScreen(
+          registrationNo: registrationNoFromGoRouterState(state),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.participantVideoUpload,
+        name: 'participant-video-upload',
+        builder: (context, state) => ParticipantVideoUploadScreen(
+          registrationNo: registrationNoFromGoRouterState(state),
+        ),
+      ),
 
       // Admin
       GoRoute(
@@ -397,6 +471,16 @@ class AppRouter {
         path: AppRoutes.organizationSetup,
         name: 'organization-setup',
         builder: (context, state) => const OrganizationSetupScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.organizationUpdate,
+        name: 'organization-update',
+        builder: (context, state) => const OrganizationUpdateScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.organizationComplete,
+        name: 'organization-complete',
+        builder: (context, state) => const OrganizationUpdateScreen(),
       ),
     ],
   );

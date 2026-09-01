@@ -53,6 +53,19 @@ class AppRoutes {
   static String registerCompetitionPath(String competitionId) =>
       '/register/competition/$competitionId';
 
+  /// Public participant video URL / file upload.
+  static const String participantVideoUpload = '/register/video-upload';
+  static const String participantVideoUploadWithRegNo =
+      '/register/video-upload/:registrationNo';
+
+  static String participantVideoUploadPath({String? registrationNo}) {
+    final regNo = registrationNo?.trim();
+    if (regNo == null || regNo.isEmpty) {
+      return participantVideoUpload;
+    }
+    return '$participantVideoUpload/${Uri.encodeComponent(regNo)}';
+  }
+
   // Admin
   static const String adminLogin = '/admin/login';
   static const String adminDashboard = '/admin/dashboard';
@@ -98,4 +111,6 @@ class AppRoutes {
 
   // Organization Setup
   static const String organizationSetup = '/organization/setup';
+  static const String organizationUpdate = '/organization/update';
+  static const String organizationComplete = '/organization/complete';
 }

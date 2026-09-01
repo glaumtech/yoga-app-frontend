@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/participant_receipt_image_download.dart';
 import '../../data/models/participant_model.dart';
 import '../controllers/participant_controller.dart';
+import 'online_participant_login_qr_panel.dart';
 import 'participant_payment_receipt_view.dart';
 
 /// Post-registration confirmation styled as a payment success screen.
@@ -37,53 +38,63 @@ class _RegistrationSuccessPanelState extends State<RegistrationSuccessPanel> {
   Widget build(BuildContext context) {
     final hasParticipant = participant != null;
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            RepaintBoundary(
-              key: _receiptCaptureKey,
-              child: ParticipantPaymentReceiptView(
-                participant: participant,
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: _actionButton(
-                label: 'Download Receipt',
-                backgroundColor: RegistrationSuccessPanel._receiptBlue,
-                onPressed: hasParticipant
-                    ? () => downloadParticipantReceiptImage(
-                        context,
-                        _receiptCaptureKey,
-                        registrationId: participant!.id,
-                        registrationNo: participant!.registrationNo,
-                      )
-                    : null,
-              ),
-            ),
-            if (widget.onRegisterAnother != null) ...[
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: widget.onRegisterAnother,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.primaryColor,
-                  side: BorderSide(color: AppTheme.primaryColor),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                ),
-                icon: const Icon(Icons.person_add_outlined),
-                label: Text(widget.registerAnotherLabel ?? 'Register Another'),
-              ),
-            ],
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RepaintBoundary(
+          key: _receiptCaptureKey,
+          child: ParticipantPaymentReceiptView(
+            participant: participant,
+          ),
         ),
-      ),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (hasParticipant && participant!.isOnlineCategory) ...[
+                    OnlineParticipantLoginQrPanel(participant: participant!),
+                    const SizedBox(height: 16),
+                  ],
+                  _actionButton(
+                    label: 'Download Receipt',
+                    backgroundColor: RegistrationSuccessPanel._receiptBlue,
+                    onPressed: hasParticipant
+                        ? () => downloadParticipantReceiptImage(
+                            context,
+                            _receiptCaptureKey,
+                            registrationId: participant!.id,
+                            registrationNo: participant!.registrationNo,
+                          )
+                        : null,
+                  ),
+                  if (widget.onRegisterAnother != null) ...[
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: widget.onRegisterAnother,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.primaryColor,
+                        side: BorderSide(color: AppTheme.primaryColor),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                      ),
+                      icon: const Icon(Icons.person_add_outlined),
+                      label: Text(
+                        widget.registerAnotherLabel ?? 'Register Another',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

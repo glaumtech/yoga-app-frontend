@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import '../../controllers/auth_controller.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class SignUpScreen extends StatelessWidget {
   const SignUpScreen({super.key});
@@ -32,7 +33,7 @@ class SignUpScreen extends StatelessWidget {
         ),
         child: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
+            child: PinnedVerticalScrollView(
               padding: EdgeInsets.all(isMobile ? 24.0 : 32.0),
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),

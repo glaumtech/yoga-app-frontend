@@ -10,6 +10,7 @@ import '../../controllers/competition_controller.dart';
 import '../../../core/utils/recent_competition_store.dart';
 import '../../controllers/users_list_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/jury_login_qr_dialog.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/user_management_model.dart';
@@ -364,7 +365,7 @@ class UsersListScreen extends StatelessWidget {
       final recentCompetitions = usersListController.recentCompetitions;
 
       return Center(
-        child: SingleChildScrollView(
+        child: PinnedVerticalScrollView(
           padding: EdgeInsets.symmetric(
             horizontal: isMobile ? 8 : 24,
             vertical: 24,
@@ -440,7 +441,7 @@ class UsersListScreen extends StatelessWidget {
   ) {
     return RefreshIndicator(
       onRefresh: () => _reloadUsers(controller),
-      child: ListView.builder(
+      child: PinnedListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(12),
         itemCount: users.length,

@@ -10,6 +10,7 @@ import '../../data/models/app_permission_record_model.dart';
 import '../../data/models/district_model.dart';
 import '../../data/models/organization_setup_model.dart';
 import '../../data/models/state_model.dart';
+import '../../core/utils/state_defaults.dart';
 import '../../core/utils/subscription_catalog_filter.dart';
 import '../../data/models/subscription_mode_model.dart';
 import '../../data/models/subscription_package_model.dart';
@@ -18,6 +19,7 @@ import '../../data/repositories/organization_setup_repository.dart';
 import '../../data/repositories/payment_repository.dart';
 import '../../data/repositories/permission_repository.dart';
 import '../../services/razorpay_checkout_service.dart';
+import '../widgets/organization/organization_proof_image_upload.dart';
 
 class OrganizationSetupController extends GetxController {
   final OrganizationSetupRepository _repo = OrganizationSetupRepository();
@@ -27,7 +29,7 @@ class OrganizationSetupController extends GetxController {
   final RazorpayCheckoutService _razorpayCheckout = RazorpayCheckoutService();
   final ImagePicker _imagePicker = ImagePicker();
 
-  /// 0 = org/branch, 1 = plan & payment, 2 = admin users (final submit)
+  /// 0 = org/branch, 1 = documents, 2 = plan & payment, 3 = admin users (final submit)
   final RxInt currentStep = 0.obs;
   final Rx<OrganizationSetupFoundationResponseModel?> foundationResult =
       Rx<OrganizationSetupFoundationResponseModel?>(null);
@@ -123,6 +125,20 @@ class OrganizationSetupController extends GetxController {
   final Rx<Uint8List?> logoBytes = Rx<Uint8List?>(null);
   final RxString logoFileName = ''.obs;
 
+  // Documents
+  final TextEditingController panNumberController = TextEditingController();
+  final TextEditingController aadharNumberController = TextEditingController();
+  final TextEditingController bankAccountNumberController =
+      TextEditingController();
+  final TextEditingController bankIfscController = TextEditingController();
+  final TextEditingController bankBranchController = TextEditingController();
+  final TextEditingController bankNameController = TextEditingController();
+  final TextEditingController gstNumberController = TextEditingController();
+  final Rx<Uint8List?> panImageBytes = Rx<Uint8List?>(null);
+  final Rx<Uint8List?> aadharDocumentBytes = Rx<Uint8List?>(null);
+  final RxString panDocumentFileName = ''.obs;
+  final RxString aadharDocumentFileName = ''.obs;
+
   @override
   void onInit() {
     super.onInit();
@@ -157,6 +173,13 @@ class OrganizationSetupController extends GetxController {
     branchAdminUserNameController.dispose();
     branchAdminEmailController.dispose();
     branchAdminPasswordController.dispose();
+    panNumberController.dispose();
+    aadharNumberController.dispose();
+    bankAccountNumberController.dispose();
+    bankIfscController.dispose();
+    bankBranchController.dispose();
+    bankNameController.dispose();
+    gstNumberController.dispose();
     super.onClose();
   }
 
@@ -179,11 +202,25 @@ class OrganizationSetupController extends GetxController {
       if (response.success && response.data != null) {
         states.assignAll(response.data!);
         states.sort((a, b) => a.stateName.compareTo(b.stateName));
+        await _applyDefaultCountryAndStateIfEmpty();
       }
     } catch (e) {
       errorMessage.value = 'Failed to load states: ${e.toString()}';
     } finally {
       isLoadingStates.value = false;
+    }
+  }
+
+  Future<void> _applyDefaultCountryAndStateIfEmpty() async {
+    if (countryController.text.trim().isEmpty) {
+      countryController.text = StateDefaults.defaultCountry;
+    }
+    if (selectedStateId.value <= 0 &&
+        stateSearchTextController.text.trim().isEmpty) {
+      final tn = StateDefaults.findTamilNadu(states);
+      if (tn != null) {
+        await setSelectedState(tn.id);
+      }
     }
   }
 
@@ -253,6 +290,55 @@ class OrganizationSetupController extends GetxController {
     logoFileName.value = '';
   }
 
+  Future<void> pickPanDocument() async {
+    try {
+      errorMessage.value = '';
+      final picked = await pickOrganizationProofPdf(documentLabel: 'e-PAN');
+      if (picked == null) return;
+      panImageBytes.value = picked.bytes;
+      panDocumentFileName.value = picked.fileName;
+    } catch (e) {
+      final message = formatOrganizationProofPickError(e);
+      errorMessage.value = message;
+      handleOrganizationProofPickFailure(e);
+    }
+  }
+
+  void clearPanDocument() {
+    panImageBytes.value = null;
+    panDocumentFileName.value = '';
+  }
+
+  Future<void> pickAadharDocument() async {
+    try {
+      errorMessage.value = '';
+      final picked = await pickOrganizationProofPdf(documentLabel: 'e-AADHAR');
+      if (picked == null) return;
+      aadharDocumentBytes.value = picked.bytes;
+      aadharDocumentFileName.value = picked.fileName;
+    } catch (e) {
+      final message = formatOrganizationProofPickError(e);
+      errorMessage.value = message;
+      handleOrganizationProofPickFailure(e);
+    }
+  }
+
+  void clearAadharDocument() {
+    aadharDocumentBytes.value = null;
+    aadharDocumentFileName.value = '';
+  }
+
+  Map<String, dynamic> get _documentUploadParams => {
+    'panImageBytes': panImageBytes.value,
+    'panImageFileName': panDocumentFileName.value.isEmpty
+        ? 'epan.pdf'
+        : panDocumentFileName.value,
+    'aadharFrontImageBytes': aadharDocumentBytes.value,
+    'aadharFrontImageFileName': aadharDocumentFileName.value.isEmpty
+        ? 'eaadhar.pdf'
+        : aadharDocumentFileName.value,
+  };
+
   Future<void> pickPaymentProof() async {
     try {
       final picked = await _imagePicker.pickImage(
@@ -308,6 +394,17 @@ class OrganizationSetupController extends GetxController {
     branchAdminPhotoBytes.value = null;
 
     clearLogo();
+    panNumberController.clear();
+    aadharNumberController.clear();
+    bankAccountNumberController.clear();
+    bankIfscController.clear();
+    bankBranchController.clear();
+    bankNameController.clear();
+    gstNumberController.clear();
+    panImageBytes.value = null;
+    aadharDocumentBytes.value = null;
+    panDocumentFileName.value = '';
+    aadharDocumentFileName.value = '';
 
     orgAdminPermissionIds.clear();
     branchAdminPermissionIds.clear();
@@ -317,6 +414,7 @@ class OrganizationSetupController extends GetxController {
     foundationResult.value = null;
     adminsCreated.value = false;
     subscriptionPaymentCompleted.value = false;
+
     selectedCheckoutMethod.value = 'RAZORPAY';
 
     selectedSubscriptionModeId.value = null;
@@ -330,6 +428,8 @@ class OrganizationSetupController extends GetxController {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       formKey.currentState?.reset();
     });
+
+    _applyDefaultCountryAndStateIfEmpty();
   }
 
   SubscriptionPackageModel? get selectedPackage =>
@@ -341,8 +441,10 @@ class OrganizationSetupController extends GetxController {
   String get stepTitle {
     switch (currentStep.value) {
       case 1:
-        return 'Plan & Payment';
+        return 'Documents';
       case 2:
+        return 'Plan & Payment';
+      case 3:
         return 'Admin Users';
       default:
         return 'Organization Details';
@@ -660,6 +762,27 @@ class OrganizationSetupController extends GetxController {
       theme: themeController.text.trim().isEmpty
           ? null
           : themeController.text.trim(),
+      panNumber: panNumberController.text.trim().isEmpty
+          ? null
+          : panNumberController.text.trim().toUpperCase(),
+      aadharNumber: aadharNumberController.text.trim().isEmpty
+          ? null
+          : aadharNumberController.text.trim().replaceAll(' ', ''),
+      bankAccountNumber: bankAccountNumberController.text.trim().isEmpty
+          ? null
+          : bankAccountNumberController.text.trim(),
+      bankIfsc: bankIfscController.text.trim().isEmpty
+          ? null
+          : bankIfscController.text.trim().toUpperCase(),
+      bankBranch: bankBranchController.text.trim().isEmpty
+          ? null
+          : bankBranchController.text.trim(),
+      bankName: bankNameController.text.trim().isEmpty
+          ? null
+          : bankNameController.text.trim(),
+      gstNumber: gstNumberController.text.trim().isEmpty
+          ? null
+          : gstNumberController.text.trim().toUpperCase(),
     );
 
     return OrganizationSetupFoundationRequestModel(
@@ -718,6 +841,82 @@ class OrganizationSetupController extends GetxController {
     return true;
   }
 
+  bool validateDocumentStep() {
+    errorMessage.value = '';
+    final panErr = _panValidator(panNumberController.text);
+    if (panErr != null) {
+      errorMessage.value = panErr;
+      return false;
+    }
+    final aadharErr = _aadharValidator(aadharNumberController.text);
+    if (aadharErr != null) {
+      errorMessage.value = aadharErr;
+      return false;
+    }
+    final ifscErr = _ifscValidator(bankIfscController.text);
+    if (ifscErr != null) {
+      errorMessage.value = ifscErr;
+      return false;
+    }
+    final accountErr = requiredValidator(
+      bankAccountNumberController.text,
+      fieldName: 'Account number',
+    );
+    if (accountErr != null) {
+      errorMessage.value = accountErr;
+      return false;
+    }
+    final branchErr = requiredValidator(
+      bankBranchController.text,
+      fieldName: 'Bank branch',
+    );
+    if (branchErr != null) {
+      errorMessage.value = branchErr;
+      return false;
+    }
+    final bankNameErr = requiredValidator(
+      bankNameController.text,
+      fieldName: 'Bank name',
+    );
+    if (bankNameErr != null) {
+      errorMessage.value = bankNameErr;
+      return false;
+    }
+    final gstErr = validateGstNumber(gstNumberController.text);
+    if (gstErr != null) {
+      errorMessage.value = gstErr;
+      return false;
+    }
+    return formKey.currentState?.validate() ?? true;
+  }
+
+  String? _panValidator(String? value) {
+    final v = value?.trim().toUpperCase() ?? '';
+    if (v.isEmpty) return 'PAN number is required';
+    if (!RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$').hasMatch(v)) {
+      return 'Enter a valid PAN (e.g. ABCDE1234F)';
+    }
+    return null;
+  }
+
+  String? _aadharValidator(String? value) {
+    final v = value?.trim().replaceAll(' ', '') ?? '';
+    if (v.isEmpty) return 'Aadhar number is required';
+    if (!RegExp(r'^\d{12}$').hasMatch(v)) {
+      return 'Enter a valid 12-digit Aadhar number';
+    }
+    return null;
+  }
+
+  String? _ifscValidator(String? value) {
+    final v = value?.trim().toUpperCase() ?? '';
+    if (v.isEmpty) return 'IFSC number is required';
+    if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$').hasMatch(v)) {
+      return 'Enter a valid IFSC code';
+    }
+    return null;
+  }
+
   bool validateAdminStep() {
     errorMessage.value = '';
     final name = requiredValidator(
@@ -757,10 +956,17 @@ class OrganizationSetupController extends GetxController {
   Future<bool> continueFromOrganizationStep() async {
     if (!validateStep0()) return false;
     errorMessage.value = '';
+    currentStep.value = 1;
+    return true;
+  }
+
+  Future<bool> continueFromDocumentsStep() async {
+    if (!validateDocumentStep()) return false;
+    errorMessage.value = '';
     if (subscriptionModes.isEmpty && !isLoadingModes.value) {
       await loadSubscriptionModes();
     }
-    currentStep.value = 1;
+    currentStep.value = 2;
     return true;
   }
 
@@ -779,6 +985,7 @@ class OrganizationSetupController extends GetxController {
   Future<bool> _ensureFoundation() async {
     if (foundationResult.value != null) return true;
     if (!validateStep0()) return false;
+    if (!validateDocumentStep()) return false;
 
     if (!validatePlanStep()) return false;
 
@@ -788,10 +995,15 @@ class OrganizationSetupController extends GetxController {
     }
 
     try {
+      final docs = _documentUploadParams;
       final res = await _repo.setupFoundation(
         request: buildFoundationRequest(),
         logoBytes: logoBytes.value,
         logoFileName: logoFileName.value.isEmpty ? null : logoFileName.value,
+        panImageBytes: docs['panImageBytes'] as Uint8List?,
+        panImageFileName: docs['panImageFileName'] as String?,
+        aadharFrontImageBytes: docs['aadharFrontImageBytes'] as Uint8List?,
+        aadharFrontImageFileName: docs['aadharFrontImageFileName'] as String?,
       );
       if (!res.success || res.data == null) {
         errorMessage.value = res.message ?? 'Failed to create organization';
@@ -845,12 +1057,18 @@ class OrganizationSetupController extends GetxController {
         final method = selectedCheckoutMethod.value;
 
         if (method != 'CASH' && requiresSubscriptionPayment) {
+          final docs = _documentUploadParams;
           final res = await _repo.setupFoundationWithPaymentOrder(
             request: buildFoundationRequest(),
             logoBytes: logoBytes.value,
             logoFileName: logoFileName.value.isEmpty
                 ? null
                 : logoFileName.value,
+            panImageBytes: docs['panImageBytes'] as Uint8List?,
+            panImageFileName: docs['panImageFileName'] as String?,
+            aadharFrontImageBytes: docs['aadharFrontImageBytes'] as Uint8List?,
+            aadharFrontImageFileName:
+                docs['aadharFrontImageFileName'] as String?,
           );
           if (!res.success || res.data == null) {
             errorMessage.value =
@@ -867,7 +1085,7 @@ class OrganizationSetupController extends GetxController {
           selectedCheckoutMethod.value == 'CASH') {
         subscriptionPaymentCompleted.value = true;
         prepareAdminStep();
-        currentStep.value = 2;
+        currentStep.value = 3;
         SnackbarHelper.show(
           title: 'Payment recorded',
           message: 'Create admin users to complete setup.',
@@ -929,7 +1147,7 @@ class OrganizationSetupController extends GetxController {
 
       subscriptionPaymentCompleted.value = true;
       prepareAdminStep();
-      currentStep.value = 2;
+      currentStep.value = 3;
       SnackbarHelper.show(
         title: 'Payment successful',
         message: 'Create admin users to complete setup.',
@@ -964,12 +1182,12 @@ class OrganizationSetupController extends GetxController {
     }
     errorMessage.value = '';
     prepareAdminStep();
-    currentStep.value = 2;
+    currentStep.value = 3;
   }
 
   Future<void> goToStep(int step) async {
     if (step == currentStep.value) return;
-    if (step < 0 || step > 2) return;
+    if (step < 0 || step > 3) return;
 
     if (step == 0) {
       currentStep.value = 0;
@@ -978,7 +1196,7 @@ class OrganizationSetupController extends GetxController {
     }
 
     if (step == 1) {
-      if (currentStep.value >= 1) {
+      if (currentStep.value > 1) {
         currentStep.value = 1;
         errorMessage.value = '';
         return;
@@ -988,16 +1206,34 @@ class OrganizationSetupController extends GetxController {
     }
 
     if (step == 2) {
+      if (currentStep.value > 2) {
+        currentStep.value = 2;
+        errorMessage.value = '';
+        return;
+      }
       if (currentStep.value == 0) {
         final okOrg = await continueFromOrganizationStep();
         if (!okOrg) return;
+      }
+      await continueFromDocumentsStep();
+      return;
+    }
+
+    if (step == 3) {
+      if (currentStep.value == 0) {
+        final okOrg = await continueFromOrganizationStep();
+        if (!okOrg) return;
+      }
+      if (currentStep.value <= 1) {
+        final okDocs = await continueFromDocumentsStep();
+        if (!okDocs) return;
       }
       if (!canOpenAdminStep) {
         errorMessage.value = 'Complete subscription payment first';
         return;
       }
       prepareAdminStep();
-      currentStep.value = 2;
+      currentStep.value = 3;
       errorMessage.value = '';
     }
   }
@@ -1040,7 +1276,10 @@ class OrganizationSetupController extends GetxController {
     if (currentStep.value == 0) {
       return continueFromOrganizationStep();
     }
-    if (currentStep.value == 2) {
+    if (currentStep.value == 1) {
+      return continueFromDocumentsStep();
+    }
+    if (currentStep.value == 3) {
       return submitAdminUsers();
     }
     return completeSubscriptionPayment();

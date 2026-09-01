@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'category_config_model.dart';
 import 'competition_grade_model.dart';
 
 class CompetitionModel {
@@ -12,11 +13,15 @@ class CompetitionModel {
   final DateTime eventEndDate;
   final String? eventEndTime;
   final bool publishResultNow;
+  final DateTime? resultsPublishDate;
+  final String? resultsPublishTime;
   final DateTime? displayAdFrom;
   final bool spotRegistration;
   final int? participantsPerStage; // 1-5
   final int? minimumMarks;
   final int? maximumMarks;
+  /// Mark applied when jury selects skipped asana (typically 0).
+  final int? skippedAsanaMarks;
   /// Schools with at least this many participants qualify for Best School Award in reports.
   final int? bestSchoolAwardMinParticipants;
   final List<String>?
@@ -27,6 +32,10 @@ class CompetitionModel {
   final List<int>? categoryIds; // e.g., [1, 2, 3] - for API submission
   final Map<String, double>?
   categoryAmounts; // e.g., {"1": 500.0, "2": 600.0} - key is category ID as string
+  /// Spot registration fee per category (same key style as [categoryAmounts]).
+  final Map<String, double>? categorySpotAmounts;
+  /// Per-category: when true, amount already includes gateway/platform fees.
+  final Map<String, bool>? categoryExtraFeeIncluded;
   final List<String>? stages; // e.g., ["A", "B", "C"] - for display/parsing
   final List<int>? stageIds; // e.g., [1, 2, 3] - for API submission
   final Map<String, List<int>>?
@@ -37,6 +46,14 @@ class CompetitionModel {
   final String? registrationUrl;
   /// SEPARATE_CATEGORY or FROM_FIRST_PLACE_WINNERS
   final String? championshipStyle;
+  /// ONLINE or OFFLINE
+  final String? competitionMode;
+  /// Organizer Google Drive folder link for participant video uploads.
+  final String? googleDriveFolderUrl;
+  final String? googleDriveFolderId;
+  final String? googleDriveServiceAccountEmail;
+  final bool googleDriveConfigured;
+  final List<CompetitionCategoryConfigModel>? categoryConfigs;
   final List<CompetitionGradeModel>? grades;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -53,17 +70,22 @@ class CompetitionModel {
     required this.eventEndDate,
     this.eventEndTime,
     this.publishResultNow = false,
+    this.resultsPublishDate,
+    this.resultsPublishTime,
     this.displayAdFrom,
     this.spotRegistration = false,
     this.participantsPerStage,
     this.minimumMarks,
     this.maximumMarks,
+    this.skippedAsanaMarks,
     this.bestSchoolAwardMinParticipants,
     this.prizes,
     this.prizeIds,
     this.categories,
     this.categoryIds,
     this.categoryAmounts,
+    this.categorySpotAmounts,
+    this.categoryExtraFeeIncluded,
     this.stages,
     this.stageIds,
     this.stageGroups,
@@ -71,6 +93,12 @@ class CompetitionModel {
     this.brochureUrl,
     this.registrationUrl,
     this.championshipStyle,
+    this.competitionMode,
+    this.googleDriveFolderUrl,
+    this.googleDriveFolderId,
+    this.googleDriveServiceAccountEmail,
+    this.googleDriveConfigured = false,
+    this.categoryConfigs,
     this.grades,
     this.createdAt,
     this.updatedAt,
@@ -102,6 +130,23 @@ class CompetitionModel {
     final normalized = value.toString().trim().toLowerCase();
     if (normalized.isEmpty) return defaultValue;
     return normalized == 'true' || normalized == '1' || normalized == 'yes';
+  }
+
+  static bool? parseNullableBool(dynamic value) {
+    if (value == null) return null;
+    return parseBool(value);
+  }
+
+  static Map<String, bool> parseCategoryExtraFeeIncludedMap(dynamic raw) {
+    if (raw is! Map) return {};
+    final result = <String, bool>{};
+    for (final entry in raw.entries) {
+      final parsed = parseNullableBool(entry.value);
+      if (parsed != null) {
+        result[entry.key.toString()] = parsed;
+      }
+    }
+    return result;
   }
 
   /// Handles null API values and hot-reload instances missing newer bool fields.
@@ -163,6 +208,19 @@ class CompetitionModel {
     return fallback;
   }
 
+  static DateTime? _parseOptionalEventDate(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return null;
+      return DateTime.tryParse(trimmed);
+    }
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    return null;
+  }
+
   static String? _timeFromDateTime(DateTime? value) {
     if (value == null) return null;
     if (value.hour == 0 && value.minute == 0 && value.second == 0) {
@@ -175,11 +233,16 @@ class CompetitionModel {
     final startDatetimeRaw =
         json['eventStartDatetime'] ?? json['event_start_datetime'];
     final endDatetimeRaw = json['eventEndDatetime'] ?? json['event_end_datetime'];
+    final resultsPublishDatetimeRaw =
+        json['resultsPublishDatetime'] ?? json['results_publish_datetime'];
     final parsedStartDatetime = startDatetimeRaw != null
         ? _parseEventDate(startDatetimeRaw, fallback: DateTime.now())
         : null;
     final parsedEndDatetime = endDatetimeRaw != null
         ? _parseEventDate(endDatetimeRaw, fallback: DateTime.now())
+        : null;
+    final parsedResultsPublishDatetime = resultsPublishDatetimeRaw != null
+        ? _parseOptionalEventDate(resultsPublishDatetimeRaw)
         : null;
 
     return CompetitionModel(
@@ -209,6 +272,19 @@ class CompetitionModel {
       publishResultNow: parseBool(
         json['publishResultNow'] ?? json['publish_result_now'],
       ),
+      resultsPublishDate: _parseOptionalEventDate(
+            json['resultsPublishDate'] ?? json['results_publish_date'],
+          ) ??
+          (parsedResultsPublishDatetime != null
+              ? DateTime(
+                  parsedResultsPublishDatetime.year,
+                  parsedResultsPublishDatetime.month,
+                  parsedResultsPublishDatetime.day,
+                )
+              : null),
+      resultsPublishTime: _timeFromDateTime(parsedResultsPublishDatetime) ??
+          json['resultsPublishTime']?.toString() ??
+          json['results_publish_time']?.toString(),
       displayAdFrom: json['displayAdFrom'] != null
           ? (json['displayAdFrom'] is String
                 ? DateTime.parse(json['displayAdFrom'])
@@ -227,6 +303,8 @@ class CompetitionModel {
           json['participantsPerStage'] ?? json['participants_per_stage'],
       minimumMarks: json['minimumMarks'] ?? json['minimum_marks'],
       maximumMarks: json['maximumMarks'] ?? json['maximum_marks'],
+      skippedAsanaMarks:
+          json['skippedAsanaMarks'] ?? json['skipped_asana_marks'],
       bestSchoolAwardMinParticipants:
           json['bestSchoolAwardMinParticipants'] ??
           json['best_school_award_min_participants'],
@@ -336,12 +414,69 @@ class CompetitionModel {
               ),
             )
           : null,
+      categorySpotAmounts: json['categorySpotAmounts'] != null
+          ? Map<String, double>.from(
+              (json['categorySpotAmounts'] as Map).map(
+                (key, value) => MapEntry(
+                  key.toString(),
+                  (value is num)
+                      ? value.toDouble()
+                      : double.tryParse(value.toString()) ?? 0.0,
+                ),
+              ),
+            )
+          : json['categorySpotAmountsById'] != null
+          ? Map<String, double>.from(
+              (json['categorySpotAmountsById'] as Map).map(
+                (key, value) => MapEntry(
+                  key.toString(),
+                  (value is num)
+                      ? value.toDouble()
+                      : double.tryParse(value.toString()) ?? 0.0,
+                ),
+              ),
+            )
+          : null,
+      categoryExtraFeeIncluded: parseCategoryExtraFeeIncludedMap(
+        json['categoryExtraFeeIncluded'] ??
+            json['categoryExtraFeeIncludedById'] ??
+            json['category_extra_fee_included'],
+      ).isEmpty
+          ? null
+          : parseCategoryExtraFeeIncludedMap(
+              json['categoryExtraFeeIncluded'] ??
+                  json['categoryExtraFeeIncludedById'] ??
+                  json['category_extra_fee_included'],
+            ),
       brochureUrl:
           json['brochureUrl']?.toString() ?? json['brochure_url']?.toString(),
       registrationUrl: json['registrationUrl']?.toString(),
       championshipStyle:
           json['championshipStyle']?.toString() ??
           json['championship_style']?.toString(),
+      competitionMode:
+          json['competitionMode']?.toString() ??
+          json['competition_mode']?.toString() ??
+          'OFFLINE',
+      googleDriveFolderUrl:
+          json['googleDriveFolderUrl']?.toString() ??
+          json['google_drive_folder_url']?.toString(),
+      googleDriveFolderId:
+          json['googleDriveFolderId']?.toString() ??
+          json['google_drive_folder_id']?.toString(),
+      googleDriveServiceAccountEmail:
+          json['googleDriveServiceAccountEmail']?.toString(),
+      googleDriveConfigured: parseBool(json['googleDriveConfigured']),
+      categoryConfigs: json['categoryConfigs'] != null
+          ? (json['categoryConfigs'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) => CompetitionCategoryConfigModel.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : null,
       grades: json['grades'] != null
           ? (json['grades'] as List)
                 .whereType<Map>()
@@ -388,12 +523,17 @@ class CompetitionModel {
       if (eventEndTime != null && eventEndTime!.trim().isNotEmpty)
         'eventEndTime': eventEndTime,
       'publishResultNow': publishResultNow,
+      if (resultsPublishDate != null)
+        'resultsPublishDate': formatDate(resultsPublishDate!),
+      if (resultsPublishTime != null && resultsPublishTime!.trim().isNotEmpty)
+        'resultsPublishTime': resultsPublishTime,
       if (displayAdFrom != null) 'displayAdFrom': formatDate(displayAdFrom!),
       'spotRegistration': spotRegistration,
       if (participantsPerStage != null)
         'participantsPerStage': participantsPerStage,
       if (minimumMarks != null) 'minimumMarks': minimumMarks,
       if (maximumMarks != null) 'maximumMarks': maximumMarks,
+      if (skippedAsanaMarks != null) 'skippedAsanaMarks': skippedAsanaMarks,
       'bestSchoolAwardMinParticipants': bestSchoolAwardMinParticipants,
       // Send IDs for API submission
       if (prizeIds != null && prizeIds!.isNotEmpty) 'prizeIds': prizeIds,
@@ -401,11 +541,22 @@ class CompetitionModel {
         'categoryIds': categoryIds,
       if (categoryAmounts != null && categoryAmounts!.isNotEmpty)
         'categoryAmounts': categoryAmounts,
+      if (categorySpotAmounts != null && categorySpotAmounts!.isNotEmpty)
+        'categorySpotAmounts': categorySpotAmounts,
+      if (categoryExtraFeeIncluded != null &&
+          categoryExtraFeeIncluded!.isNotEmpty)
+        'categoryExtraFeeIncluded': categoryExtraFeeIncluded,
       if (stageIds != null && stageIds!.isNotEmpty) 'stageIds': stageIds,
       if (stageGroups != null && stageGroups!.isNotEmpty)
         'stageGroups': stageGroups,
       if (championshipStyle != null && championshipStyle!.trim().isNotEmpty)
         'championshipStyle': championshipStyle!.trim(),
+      if (competitionMode != null && competitionMode!.trim().isNotEmpty)
+        'competitionMode': competitionMode!.trim(),
+      'googleDriveFolderUrl': googleDriveFolderUrl?.trim() ?? '',
+      if (categoryConfigs != null && categoryConfigs!.isNotEmpty)
+        'categoryConfigs':
+            categoryConfigs!.map((c) => c.toJson()).toList(),
       'grades': (grades ?? const <CompetitionGradeModel>[])
           .map((grade) => grade.toJson())
           .toList(),
@@ -434,17 +585,22 @@ class CompetitionModel {
     DateTime? eventEndDate,
     String? eventEndTime,
     bool? publishResultNow,
+    DateTime? resultsPublishDate,
+    String? resultsPublishTime,
     DateTime? displayAdFrom,
     bool? spotRegistration,
     int? participantsPerStage,
     int? minimumMarks,
     int? maximumMarks,
+    int? skippedAsanaMarks,
     int? bestSchoolAwardMinParticipants,
     List<String>? prizes,
     List<int>? prizeIds,
     List<String>? categories,
     List<int>? categoryIds,
     Map<String, double>? categoryAmounts,
+    Map<String, double>? categorySpotAmounts,
+    Map<String, bool>? categoryExtraFeeIncluded,
     List<String>? stages,
     List<int>? stageIds,
     Map<String, List<int>>? stageGroups,
@@ -452,6 +608,12 @@ class CompetitionModel {
     String? brochureUrl,
     String? registrationUrl,
     String? championshipStyle,
+    String? competitionMode,
+    String? googleDriveFolderUrl,
+    String? googleDriveFolderId,
+    String? googleDriveServiceAccountEmail,
+    bool? googleDriveConfigured,
+    List<CompetitionCategoryConfigModel>? categoryConfigs,
     List<CompetitionGradeModel>? grades,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -468,11 +630,14 @@ class CompetitionModel {
       eventEndDate: eventEndDate ?? this.eventEndDate,
       eventEndTime: eventEndTime ?? this.eventEndTime,
       publishResultNow: publishResultNow ?? resolvedPublishResultNow,
+      resultsPublishDate: resultsPublishDate ?? this.resultsPublishDate,
+      resultsPublishTime: resultsPublishTime ?? this.resultsPublishTime,
       displayAdFrom: displayAdFrom ?? this.displayAdFrom,
       spotRegistration: spotRegistration ?? resolvedSpotRegistration,
       participantsPerStage: participantsPerStage ?? this.participantsPerStage,
       minimumMarks: minimumMarks ?? this.minimumMarks,
       maximumMarks: maximumMarks ?? this.maximumMarks,
+      skippedAsanaMarks: skippedAsanaMarks ?? this.skippedAsanaMarks,
       bestSchoolAwardMinParticipants: bestSchoolAwardMinParticipants ??
           this.bestSchoolAwardMinParticipants,
       prizes: prizes ?? this.prizes,
@@ -480,6 +645,9 @@ class CompetitionModel {
       categories: categories ?? this.categories,
       categoryIds: categoryIds ?? this.categoryIds,
       categoryAmounts: categoryAmounts ?? this.categoryAmounts,
+      categorySpotAmounts: categorySpotAmounts ?? this.categorySpotAmounts,
+      categoryExtraFeeIncluded:
+          categoryExtraFeeIncluded ?? this.categoryExtraFeeIncluded,
       stages: stages ?? this.stages,
       stageIds: stageIds ?? this.stageIds,
       stageGroups: stageGroups ?? this.stageGroups,
@@ -487,6 +655,14 @@ class CompetitionModel {
       brochureUrl: brochureUrl ?? this.brochureUrl,
       registrationUrl: registrationUrl ?? this.registrationUrl,
       championshipStyle: championshipStyle ?? this.championshipStyle,
+      competitionMode: competitionMode ?? this.competitionMode,
+      googleDriveFolderUrl: googleDriveFolderUrl ?? this.googleDriveFolderUrl,
+      googleDriveFolderId: googleDriveFolderId ?? this.googleDriveFolderId,
+      googleDriveServiceAccountEmail:
+          googleDriveServiceAccountEmail ?? this.googleDriveServiceAccountEmail,
+      googleDriveConfigured:
+          googleDriveConfigured ?? this.googleDriveConfigured,
+      categoryConfigs: categoryConfigs ?? this.categoryConfigs,
       grades: grades ?? this.grades,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -536,9 +712,28 @@ class CompetitionModel {
     );
   }
 
-  /// E-certificates may be downloaded when results are published early or the event has ended.
+  /// Scheduled results publish as a single [DateTime] (uses event end date when date unset).
+  DateTime? get resultsPublishDateTime {
+    if (resolvedPublishResultNow) return null;
+    final publishTime = parseTime(resultsPublishTime);
+    if (publishTime == null) return null;
+    final date = resultsPublishDate ?? eventEndDate;
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      publishTime.hour,
+      publishTime.minute,
+    );
+  }
+
+  /// E-certificates may be downloaded when results are published early or the scheduled time has passed.
   bool get areCertificatesAvailable {
     if (resolvedPublishResultNow) return true;
+    final publishAt = resultsPublishDateTime;
+    if (publishAt != null) {
+      return !DateTime.now().isBefore(publishAt);
+    }
     return !DateTime.now().isBefore(eventEndDateTime);
   }
 }
@@ -554,9 +749,14 @@ class HomeCompetitionModel {
   final String? eventEndDate;
   final String? eventEndTime;
   final bool publishResultNow;
+  final String? resultsPublishDate;
+  final String? resultsPublishTime;
   final String? displayAdFrom;
   final List<String> categories;
   final Map<String, double> categoryAmounts;
+  /// Per-category Online/Offline rows from the public competition API.
+  final List<CategoryModeSummary> categoryModes;
+  final Map<String, bool> categoryExtraFeeIncluded;
   final String? brochureUrl;
   final String? brochureFilePath;
   final String status;
@@ -578,9 +778,13 @@ class HomeCompetitionModel {
     this.eventEndDate,
     this.eventEndTime,
     this.publishResultNow = false,
+    this.resultsPublishDate,
+    this.resultsPublishTime,
     this.displayAdFrom,
     this.categories = const [],
     this.categoryAmounts = const {},
+    this.categoryModes = const [],
+    this.categoryExtraFeeIncluded = const {},
     this.brochureUrl,
     this.brochureFilePath,
     this.status = 'upcoming',
@@ -623,11 +827,21 @@ class HomeCompetitionModel {
       publishResultNow: CompetitionModel.parseBool(
         json['publishResultNow'] ?? json['publish_result_now'],
       ),
+      resultsPublishDate: json['resultsPublishDate']?.toString() ??
+          json['results_publish_date']?.toString(),
+      resultsPublishTime: json['resultsPublishTime']?.toString() ??
+          json['results_publish_time']?.toString(),
       displayAdFrom: json['displayAdFrom']?.toString(),
       categories: json['categories'] != null
           ? List<String>.from(json['categories'])
           : [],
       categoryAmounts: amounts,
+      categoryModes: CategoryModeSummary.listFromJson(json['categoryModes']),
+      categoryExtraFeeIncluded: CompetitionModel.parseCategoryExtraFeeIncludedMap(
+        json['categoryExtraFeeIncluded'] ??
+            json['categoryExtraFeeIncludedById'] ??
+            json['category_extra_fee_included'],
+      ),
       brochureUrl: json['brochureUrl']?.toString(),
       brochureFilePath: json['brochureFilePath']?.toString(),
       status: json['status']?.toString() ?? 'upcoming',
@@ -672,9 +886,32 @@ class HomeCompetitionModel {
     );
   }
 
-  /// E-certificates are available after event end or when results are published early.
+  DateTime? get resultsPublishDateTime {
+    if (publishResultNow) return null;
+    final publishTime = CompetitionModel.parseTime(resultsPublishTime);
+    if (publishTime == null) return null;
+    final dateRaw = resultsPublishDate?.trim().isNotEmpty == true
+        ? resultsPublishDate
+        : eventEndDate;
+    if (dateRaw == null || dateRaw.trim().isEmpty) return null;
+    final parsedDate = DateTime.tryParse(dateRaw);
+    if (parsedDate == null) return null;
+    return DateTime(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day,
+      publishTime.hour,
+      publishTime.minute,
+    );
+  }
+
+  /// E-certificates are available after scheduled publish time or when results are published early.
   bool get areCertificatesAvailable {
     if (publishResultNow) return true;
+    final publishAt = resultsPublishDateTime;
+    if (publishAt != null) {
+      return !DateTime.now().isBefore(publishAt);
+    }
     final end = eventEndDateTime;
     if (end != null) {
       return !DateTime.now().isBefore(end);
@@ -684,4 +921,49 @@ class HomeCompetitionModel {
 
   /// Alias used by competition cards navigating to the public participants list.
   bool get areResultsAvailable => areCertificatesAvailable;
+}
+
+class CategoryModeSummary {
+  final String categoryName;
+  final String mode;
+  final double feeAmount;
+  final double spotFeeAmount;
+
+  const CategoryModeSummary({
+    required this.categoryName,
+    required this.mode,
+    this.feeAmount = 0,
+    this.spotFeeAmount = 0,
+  });
+
+  bool get isOnline => mode.toUpperCase() == 'ONLINE';
+
+  double get displayFee {
+    if (isOnline) return feeAmount;
+    return spotFeeAmount > 0 ? spotFeeAmount : feeAmount;
+  }
+
+  factory CategoryModeSummary.fromJson(Map<String, dynamic> json) {
+    double parseAmount(dynamic value) {
+      if (value is int) return value.toDouble();
+      if (value is double) return value;
+      return double.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    return CategoryModeSummary(
+      categoryName: json['categoryName']?.toString() ?? '',
+      mode: json['mode']?.toString() ?? 'OFFLINE',
+      feeAmount: parseAmount(json['feeAmount']),
+      spotFeeAmount: parseAmount(json['spotFeeAmount']),
+    );
+  }
+
+  static List<CategoryModeSummary> listFromJson(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => CategoryModeSummary.fromJson(Map<String, dynamic>.from(e)))
+        .where((e) => e.categoryName.trim().isNotEmpty)
+        .toList();
+  }
 }

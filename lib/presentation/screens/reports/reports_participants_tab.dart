@@ -13,6 +13,7 @@ import '../../controllers/reports_participants_tab_controller.dart';
 import '../../controllers/reports_participants_tab_logic.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/responsive_admin_table.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../../data/models/district_model.dart';
 import '../../../data/models/school_model.dart';
 import '../../../data/models/state_model.dart';
@@ -626,6 +627,9 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                     child:
                                         ReportsParticipantsTabLogic.rowOptForECertificate(
                                           row,
+                                        ) &&
+                                        ReportsParticipantsTabLogic.rowCertificateAvailable(
+                                          row,
                                         )
                                         ? Tooltip(
                                             message: 'Download e-certificate',
@@ -981,6 +985,7 @@ class ReportsParticipantFiltersBar extends StatelessWidget {
     required this.onDownloadExcel,
     required this.searchHint,
     required this.emptyFiltersHint,
+    this.requireSingleStageForExcel = true,
   });
 
   final ReportsParticipantsTabController controller;
@@ -989,6 +994,9 @@ class ReportsParticipantFiltersBar extends StatelessWidget {
   final VoidCallback onDownloadExcel;
   final String searchHint;
   final String emptyFiltersHint;
+
+  /// Score Excel export needs exactly one stage; registered list Excel does not.
+  final bool requireSingleStageForExcel;
 
   @override
   Widget build(BuildContext context) {
@@ -1140,15 +1148,18 @@ class ReportsParticipantFiltersBar extends StatelessWidget {
     );
 
     final downloadButton = Obx(() {
-      final stageSelected = controller.selectedStageIds.length == 1;
+      // Always read an observable so Obx is valid when stage is not required.
+      final stageCount = controller.selectedStageIds.length;
+      final canDownload =
+          !requireSingleStageForExcel || stageCount == 1;
       return IconButton(
-        tooltip: stageSelected
+        tooltip: canDownload
             ? 'Download Excel'
             : 'Select exactly one stage for Excel',
-        onPressed: stageSelected ? onDownloadExcel : null,
+        onPressed: canDownload ? onDownloadExcel : null,
         icon: Icon(
           Icons.download,
-          color: stageSelected ? AppTheme.primaryColor : Colors.grey,
+          color: canDownload ? AppTheme.primaryColor : Colors.grey,
         ),
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
@@ -1509,7 +1520,7 @@ class ReportsParticipantFiltersDialogState
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Center(child: CircularProgressIndicator()),
               )
-            : SingleChildScrollView(
+            : PinnedVerticalScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,

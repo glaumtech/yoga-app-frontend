@@ -13,6 +13,9 @@ class ReportsRegisteredParticipantsTabController
   final RxnString selectedInstitutionKind = RxnString();
   final RxnString selectedInstitutionDisplayName = RxnString();
   final RxBool requireInstitutionFilter = false.obs;
+  final RxnString yogaTeacherNameFilter = RxnString();
+  final RxnString yogaTeacherCellFilter = RxnString();
+  final RxnString yogaTeacherDisplayName = RxnString();
 
   Worker? _presetWatcher;
 
@@ -73,6 +76,9 @@ class ReportsRegisteredParticipantsTabController
           selectedInstitutionKind.value = null;
           selectedInstitutionDisplayName.value = null;
           requireInstitutionFilter.value = false;
+          yogaTeacherNameFilter.value = null;
+          yogaTeacherCellFilter.value = null;
+          yogaTeacherDisplayName.value = null;
         }
       },
     );
@@ -138,6 +144,14 @@ class ReportsRegisteredParticipantsTabController
     if (preset.age != null) {
       filterAge.value = preset.age;
     }
+    if (preset.yogaTeacherName != null &&
+        preset.yogaTeacherName!.trim().isNotEmpty) {
+      yogaTeacherNameFilter.value = preset.yogaTeacherName!.trim();
+      yogaTeacherCellFilter.value = preset.yogaTeacherCell?.trim();
+      yogaTeacherDisplayName.value = preset.label?.trim().isNotEmpty == true
+          ? preset.label!.trim()
+          : preset.yogaTeacherName!.trim();
+    }
     tablePage.value = 0;
     final id = int.tryParse(
       reportsController.selectedCompetitionId.value ?? '',
@@ -157,6 +171,9 @@ class ReportsRegisteredParticipantsTabController
     selectedInstitutionKind.value = null;
     selectedInstitutionDisplayName.value = null;
     requireInstitutionFilter.value = false;
+    yogaTeacherNameFilter.value = null;
+    yogaTeacherCellFilter.value = null;
+    yogaTeacherDisplayName.value = null;
   }
 
   @override
@@ -169,6 +186,9 @@ class ReportsRegisteredParticipantsTabController
     selectedInstitutionKind.value = null;
     selectedInstitutionDisplayName.value = null;
     requireInstitutionFilter.value = false;
+    yogaTeacherNameFilter.value = null;
+    yogaTeacherCellFilter.value = null;
+    yogaTeacherDisplayName.value = null;
     _lastCompetitionId = null;
     _competitionLoadGeneration = 0;
   }
@@ -185,6 +205,10 @@ class ReportsRegisteredParticipantsTabController
       n++;
     }
     if (requireInstitutionFilter.value) n++;
+    if (yogaTeacherNameFilter.value != null &&
+        yogaTeacherNameFilter.value!.trim().isNotEmpty) {
+      n++;
+    }
     return n;
   }
 
@@ -244,6 +268,11 @@ class ReportsRegisteredParticipantsTabController
         key: 'institutionKind:COLLEGE',
         label: 'Colleges only',
       ));
+    } else if (instKind == 'YOGA_CENTER') {
+      chips.add(const ReportsActiveFilterChip(
+        key: 'institutionKind:YOGA_CENTER',
+        label: 'Yoga Centers',
+      ));
     }
 
     final instId = selectedInstitutionId.value;
@@ -256,6 +285,15 @@ class ReportsRegisteredParticipantsTabController
           label: 'Institution: $display',
         ));
       }
+    }
+
+    final teacherName = yogaTeacherNameFilter.value?.trim();
+    if (teacherName != null && teacherName.isNotEmpty) {
+      final display = yogaTeacherDisplayName.value?.trim();
+      chips.add(ReportsActiveFilterChip(
+        key: 'yogaTeacher',
+        label: 'Master: ${display != null && display.isNotEmpty ? display : teacherName}',
+      ));
     }
 
     return chips;
@@ -281,6 +319,10 @@ class ReportsRegisteredParticipantsTabController
     } else if (key == 'institution') {
       selectedInstitutionId.value = null;
       selectedInstitutionDisplayName.value = null;
+    } else if (key == 'yogaTeacher') {
+      yogaTeacherNameFilter.value = null;
+      yogaTeacherCellFilter.value = null;
+      yogaTeacherDisplayName.value = null;
     } else {
       await super.removeActiveFilter(key);
       return;
@@ -331,6 +373,8 @@ class ReportsRegisteredParticipantsTabController
         institutionKind: selectedInstitutionKind.value,
         hasInstitution:
             requireInstitutionFilter.value ? true : null,
+        yogaTeacherName: yogaTeacherNameFilter.value,
+        yogaTeacherCell: yogaTeacherCellFilter.value,
       );
 
       if (!resp.success || resp.data == null) {

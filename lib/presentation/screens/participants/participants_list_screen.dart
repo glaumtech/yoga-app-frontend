@@ -6,6 +6,7 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/participant_model.dart';
 
@@ -15,12 +16,12 @@ class ParticipantsListScreen extends StatelessWidget {
   static const Map<int, TableColumnWidth> _desktopColumnWidths = {
     0: FixedColumnWidth(80),
     1: FlexColumnWidth(2.0),
-    2: FlexColumnWidth(1.3),
-    3: FixedColumnWidth(132),
+    2: FlexColumnWidth(1.5),
+    3: FixedColumnWidth(140),
     4: FlexColumnWidth(2.0),
     5: FlexColumnWidth(1.5),
-    6: FixedColumnWidth(104),
-    7: FixedColumnWidth(108),
+    6: FixedColumnWidth(118),
+    7: FixedColumnWidth(118),
     8: FixedColumnWidth(88),
     9: FixedColumnWidth(136),
   };
@@ -448,7 +449,7 @@ class ParticipantsListScreen extends StatelessWidget {
         }
         return Future.value();
       },
-      child: ListView.builder(
+      child: PinnedListView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: participants.length,
         itemBuilder: (context, index) {
@@ -499,6 +500,17 @@ class ParticipantsListScreen extends StatelessWidget {
                                 ),
                               ),
                             ],
+                            if (participant.isUpgrade) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Upgrade (no fee)',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.teal.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -513,6 +525,8 @@ class ParticipantsListScreen extends StatelessWidget {
                     'Spot Reg',
                     participant.isSpotRegistration ? 'Yes' : 'No',
                   ),
+                  if (participant.isUpgrade)
+                    _buildInfoRow('Upgrade', 'Yes'),
                   _buildInfoRow('Institution', participant.schoolName),
                   _buildInfoRow('Yoga Teacher', participant.yogaMasterName),
                   if (participant.yogaMasterContact.isNotEmpty)
@@ -670,7 +684,9 @@ class ParticipantsListScreen extends StatelessWidget {
                 _buildCreatedCellWidget(participant),
                 _buildUpdatedCellWidget(participant),
                 _buildTableCell(
-                  participant.isSpotRegistration ? 'Yes' : 'No',
+                  participant.isUpgrade
+                      ? 'Upgrade'
+                      : (participant.isSpotRegistration ? 'Yes' : 'No'),
                 ),
                 _buildActionCell(context, participant, controller),
               ],
@@ -690,9 +706,9 @@ class ParticipantsListScreen extends StatelessWidget {
           fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
           fontSize: isHeader ? 14 : 13,
         ),
-        softWrap: !isHeader,
-        maxLines: isHeader ? 1 : null,
-        overflow: isHeader ? TextOverflow.ellipsis : null,
+        softWrap: true,
+        maxLines: isHeader ? 2 : null,
+        overflow: isHeader ? TextOverflow.ellipsis : TextOverflow.visible,
       ),
     );
   }
@@ -789,6 +805,8 @@ class ParticipantsListScreen extends StatelessWidget {
               dateTime,
               style: const TextStyle(fontSize: 13),
               softWrap: true,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
             ),
             Text(
               'by ${participant.createdBy}',
@@ -798,6 +816,8 @@ class ParticipantsListScreen extends StatelessWidget {
                 fontStyle: FontStyle.italic,
               ),
               softWrap: true,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ],
         ),
@@ -824,6 +844,8 @@ class ParticipantsListScreen extends StatelessWidget {
               dateTime,
               style: const TextStyle(fontSize: 13),
               softWrap: true,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
             ),
             Text(
               'by ${participant.updatedBy}',
@@ -833,6 +855,8 @@ class ParticipantsListScreen extends StatelessWidget {
                 fontStyle: FontStyle.italic,
               ),
               softWrap: true,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ],
         ),
@@ -880,6 +904,17 @@ class ParticipantsListScreen extends StatelessWidget {
                   fontSize: 11,
                   color: Colors.grey[600],
                   fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+            if (participant.isUpgrade) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Upgrade',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.teal.shade700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -1023,18 +1058,19 @@ class ParticipantsListScreen extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isActive ? AppTheme.primaryColor : Colors.black87,
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isActive ? AppTheme.primaryColor : Colors.black87,
+                  ),
+                  softWrap: true,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                softWrap: false,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
               if (isSortable) ...[
                 const SizedBox(width: 4),

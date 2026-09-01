@@ -15,7 +15,7 @@ Future<void> downloadParticipantECertificate(
   final categoryId = participant.categoryId;
   final groupId = participant.groupId;
 
-  if (registrationId == null || stageId == null || categoryId == null) {
+  if (registrationId == null || categoryId == null) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -26,7 +26,8 @@ Future<void> downloadParticipantECertificate(
     return;
   }
 
-  if (!participant.optForECertificate) {
+  if (!participant.optForECertificate &&
+      participant.certificateAvailable != true) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

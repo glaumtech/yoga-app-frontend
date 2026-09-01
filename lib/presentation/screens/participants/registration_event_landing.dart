@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/competition_registration_url.dart';
+import '../../../core/utils/registration_category_options.dart';
 import '../../../core/utils/venue_map_helper.dart';
 import '../../../data/models/competition_model.dart';
 import '../../controllers/competition_controller.dart';
@@ -171,6 +172,36 @@ class RegistrationCategoryCards extends StatelessWidget {
     required this.onRegisterTap,
   });
 
+  double? _feeForOption(RegistrationCategoryOption option) {
+    final configs = fullCompetition?.categoryConfigs;
+    if (configs != null && configs.isNotEmpty) {
+      final cfg = findCategoryConfig(
+        configs: configs,
+        categoryName: option.categoryName,
+        mode: option.mode,
+      );
+      if (cfg != null) {
+        if (option.isOnline) {
+          if (cfg.feeAmount > 0) return cfg.feeAmount;
+        } else {
+          final spot =
+              cfg.spotFeeAmount > 0 ? cfg.spotFeeAmount : cfg.feeAmount;
+          if (spot > 0) return spot;
+        }
+      }
+    }
+    final fromHome = competition.categoryModes.firstWhereOrNull(
+      (m) =>
+          m.categoryName.trim().toLowerCase() ==
+              option.categoryName.trim().toLowerCase() &&
+          RegistrationCategoryOption.normalizeMode(m.mode) == option.mode,
+    );
+    if (fromHome != null && fromHome.displayFee > 0) {
+      return fromHome.displayFee;
+    }
+    return _feeForCategory(option.categoryName);
+  }
+
   double? _feeForCategory(String categoryName) {
     final categoryId = competitionController.getCategoryIdByName(categoryName);
     if (categoryId != null) {
@@ -190,8 +221,13 @@ class RegistrationCategoryCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categories = competition.categories;
-    if (categories.isEmpty) return const SizedBox.shrink();
+    final options = buildRegistrationCategoryOptions(
+      configs: fullCompetition?.categoryConfigs,
+      categoryModes: competition.categoryModes,
+      categoryNames: competition.categories,
+      competitionMode: fullCompetition?.competitionMode,
+    );
+    if (options.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,36 +237,46 @@ class RegistrationCategoryCards extends StatelessWidget {
           builder: (context, constraints) {
             final cardWidth = constraints.maxWidth < 600
                 ? constraints.maxWidth
-                : (constraints.maxWidth / categories.length.clamp(1, 4)).clamp(
+                : (constraints.maxWidth / options.length.clamp(1, 4)).clamp(
                     220.0,
                     280.0,
                   );
 
             return Obx(() {
-              final selected =
+              final selectedName =
                   participantController.selectedCategories.isNotEmpty
                   ? participantController.selectedCategories.first
                   : null;
+              final selectedMode =
+                  participantController.selectedCategoryMode.value;
 
               return Wrap(
                 spacing: 16,
                 runSpacing: 16,
-                children: categories.map((category) {
-                  final fee = _feeForCategory(category);
-                  final isSelected = selected == category;
+                children: options.map((option) {
+                  final fee = _feeForOption(option);
+                  final isSelected =
+                      selectedName == option.categoryName &&
+                      (selectedMode.isEmpty || selectedMode == option.mode);
 
                   return SizedBox(
                     width: constraints.maxWidth < 600
                         ? double.infinity
                         : cardWidth,
                     child: _CategoryCard(
-                      categoryName: category,
+                      categoryName: option.categoryName,
+                      modeLabel: option.modeLabel,
+                      isOnline: option.isOnline,
                       fee: fee,
                       isSelected: isSelected,
                       onRegister: () {
                         participantController.selectedCategories.value = [
-                          category,
+                          option.categoryName,
                         ];
+                        participantController.selectedCategoryMode.value =
+                            option.mode;
+                        participantController.standard.value = '';
+                        participantController.selectedStage.value = '';
                         participantController
                             .validateRegistrationFormOnFieldChange();
                         onRegisterTap();
@@ -249,12 +295,16 @@ class RegistrationCategoryCards extends StatelessWidget {
 
 class _CategoryCard extends StatelessWidget {
   final String categoryName;
+  final String modeLabel;
+  final bool isOnline;
   final double? fee;
   final bool isSelected;
   final VoidCallback onRegister;
 
   const _CategoryCard({
     required this.categoryName,
+    required this.modeLabel,
+    required this.isOnline,
     required this.fee,
     required this.isSelected,
     required this.onRegister,
@@ -262,6 +312,9 @@ class _CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final modeBg = isOnline ? const Color(0xFFEFF6FF) : const Color(0xFFF3F4F6);
+    final modeFg = isOnline ? const Color(0xFF1D4ED8) : const Color(0xFF4B5563);
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -286,13 +339,50 @@ class _CategoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            categoryName,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.textColor,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  categoryName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: modeBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: modeFg.withValues(alpha: 0.18)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isOnline
+                          ? Icons.laptop_chromebook_outlined
+                          : Icons.location_on_outlined,
+                      size: 13,
+                      color: modeFg,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      modeLabel,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: modeFg,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           if (fee != null && fee! > 0) ...[
             const SizedBox(height: 10),

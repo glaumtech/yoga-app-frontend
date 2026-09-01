@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../presentation/widgets/pinned_scroll_views.dart';
 import 'keyboard_scroll_action.dart';
 import 'keyboard_scroll_registry.dart';
 
@@ -90,7 +91,7 @@ class _KeyboardScrollableState extends State<KeyboardScrollable> {
         actions: <Type, Action<Intent>>{
           ScrollIntent: KeyboardScrollAction(controller: _controller),
         },
-        child: SingleChildScrollView(
+        child: PinnedVerticalScrollView(
           controller: _controller,
           padding: widget.padding,
           physics: widget.physics,
@@ -176,7 +177,10 @@ class _KeyboardScrollableViewportState extends State<KeyboardScrollableViewport>
         actions: <Type, Action<Intent>>{
           ScrollIntent: KeyboardScrollAction(controller: widget.controller),
         },
-        child: widget.child,
+        child: PinnedVerticalScrollViewport(
+          controller: widget.controller,
+          child: widget.child,
+        ),
       ),
     );
   }

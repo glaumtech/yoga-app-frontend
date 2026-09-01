@@ -30,6 +30,19 @@ class ParticipantModel {
   final String? eventId; // Event ID
   final bool isSpotRegistration;
   final bool optForECertificate;
+  /// True when the API currently allows e-certificate download for this registration.
+  /// Count: last duration day. Video: competition result publish settings.
+  final bool? certificateAvailable;
+  /// INSTITUTIONAL or OPEN
+  final String registrationCategory;
+  /// ONLINE or OFFLINE for the registered category.
+  final String? categoryMode;
+  /// Public online login URL encoded in the participant QR.
+  final String? onlineLoginUrl;
+  /// True when auto-created via category upgrade (second registration, no fee).
+  final bool isUpgrade;
+  final int? upgradeFromRegistrationId;
+  final int? upgradeFromCategoryId;
   final int? stageId;
   final int? categoryId;
   final int? groupId;
@@ -74,6 +87,13 @@ class ParticipantModel {
     this.eventId,
     this.isSpotRegistration = false,
     this.optForECertificate = false,
+    this.certificateAvailable,
+    this.registrationCategory = 'INSTITUTIONAL',
+    this.categoryMode,
+    this.onlineLoginUrl,
+    this.isUpgrade = false,
+    this.upgradeFromRegistrationId,
+    this.upgradeFromCategoryId,
     this.stageId,
     this.categoryId,
     this.groupId,
@@ -201,6 +221,38 @@ class ParticipantModel {
           _parseBool(json['optForECertificate']) ??
           _parseBool(json['opt_for_e_certificate']) ??
           false,
+      certificateAvailable: _parseBool(json['certificateAvailable']) ??
+          _parseBool(json['certificate_available']),
+      registrationCategory: () {
+        final raw =
+            (json['registrationCategory'] ?? json['registration_category'])
+                ?.toString()
+                .trim()
+                .toUpperCase();
+        if (raw == 'OPEN') return 'OPEN';
+        return 'INSTITUTIONAL';
+      }(),
+      categoryMode: () {
+        final raw = (json['categoryMode'] ?? json['category_mode'])
+            ?.toString()
+            .trim()
+            .toUpperCase();
+        if (raw == 'ONLINE' || raw == 'OFFLINE') return raw;
+        return null;
+      }(),
+      onlineLoginUrl: (json['onlineLoginUrl'] ?? json['online_login_url'])
+          ?.toString(),
+      isUpgrade:
+          _parseBool(json['isUpgrade']) ??
+          _parseBool(json['is_upgrade']) ??
+          false,
+      upgradeFromRegistrationId: _parseInt(
+        json['upgradeFromRegistrationId'] ??
+            json['upgrade_from_registration_id'],
+      ),
+      upgradeFromCategoryId: _parseInt(
+        json['upgradeFromCategoryId'] ?? json['upgrade_from_category_id'],
+      ),
       stageId: _parseInt(json['stageId'] ?? json['stage_id']),
       categoryId: _parseInt(json['categoryId'] ?? json['category_id']),
       groupId: _parseInt(json['groupId'] ?? json['group_id']),
@@ -292,6 +344,16 @@ class ParticipantModel {
       if (eventId != null) 'eventId': eventId,
       'isSpotRegistration': isSpotRegistration,
       'optForECertificate': optForECertificate,
+      if (certificateAvailable != null)
+        'certificateAvailable': certificateAvailable,
+      'registrationCategory': registrationCategory,
+      if (categoryMode != null) 'categoryMode': categoryMode,
+      if (onlineLoginUrl != null) 'onlineLoginUrl': onlineLoginUrl,
+      'isUpgrade': isUpgrade,
+      if (upgradeFromRegistrationId != null)
+        'upgradeFromRegistrationId': upgradeFromRegistrationId,
+      if (upgradeFromCategoryId != null)
+        'upgradeFromCategoryId': upgradeFromCategoryId,
     };
   }
 
@@ -323,6 +385,13 @@ class ParticipantModel {
     String? eventId,
     bool? isSpotRegistration,
     bool? optForECertificate,
+    bool? certificateAvailable,
+    String? registrationCategory,
+    String? categoryMode,
+    String? onlineLoginUrl,
+    bool? isUpgrade,
+    int? upgradeFromRegistrationId,
+    int? upgradeFromCategoryId,
     String? competitionName,
     String? paymentMode,
     String? paymentStatus,
@@ -358,6 +427,15 @@ class ParticipantModel {
       eventId: eventId ?? this.eventId,
       isSpotRegistration: isSpotRegistration ?? this.isSpotRegistration,
       optForECertificate: optForECertificate ?? this.optForECertificate,
+      certificateAvailable: certificateAvailable ?? this.certificateAvailable,
+      registrationCategory: registrationCategory ?? this.registrationCategory,
+      categoryMode: categoryMode ?? this.categoryMode,
+      onlineLoginUrl: onlineLoginUrl ?? this.onlineLoginUrl,
+      isUpgrade: isUpgrade ?? this.isUpgrade,
+      upgradeFromRegistrationId:
+          upgradeFromRegistrationId ?? this.upgradeFromRegistrationId,
+      upgradeFromCategoryId:
+          upgradeFromCategoryId ?? this.upgradeFromCategoryId,
       competitionName: competitionName ?? this.competitionName,
       paymentMode: paymentMode ?? this.paymentMode,
       paymentStatus: paymentStatus ?? this.paymentStatus,
@@ -365,6 +443,11 @@ class ParticipantModel {
       razorpayOrderId: razorpayOrderId ?? this.razorpayOrderId,
       razorpayPaymentId: razorpayPaymentId ?? this.razorpayPaymentId,
     );
+  }
+
+  bool get isOnlineCategory {
+    if (categoryMode?.toUpperCase() == 'ONLINE') return true;
+    return category.toLowerCase().contains('(online)');
   }
 
   double calculateGrandTotal() {

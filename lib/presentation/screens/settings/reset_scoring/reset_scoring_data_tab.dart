@@ -8,6 +8,8 @@ import '../../../../data/repositories/jury_scoring_repository.dart';
 import '../../../controllers/reports_controller.dart';
 import '../../../controllers/reports_participants_tab_controller.dart';
 
+import '../../../widgets/pinned_scroll_views.dart';
+
 enum _ResetDataStep { competitions, tableSelection }
 
 enum _ResetTableType { scoring }
@@ -574,7 +576,7 @@ class _ResetScoringDataTabState extends State<ResetScoringDataTab> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
-    return SingleChildScrollView(
+    return PinnedVerticalScrollView(
       padding: const EdgeInsets.all(12),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 900),

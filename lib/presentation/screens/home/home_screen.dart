@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../routes/app_routes.dart';
 import 'home_landing_sections.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -85,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }),
         ),
-        body: SingleChildScrollView(
+        body: PinnedVerticalScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

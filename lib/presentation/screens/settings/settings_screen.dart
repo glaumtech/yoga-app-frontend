@@ -10,6 +10,7 @@ import 'imports/imports_tab.dart';
 import 'certificate/certificate_template_tab.dart';
 import 'theme/theme_tab.dart';
 import 'reset_scoring/reset_scoring_data_tab.dart';
+import 'masters/masters_tab.dart';
 
 /// Re-enable when Imports settings are ready to ship.
 const bool _kShowImportsTab = false;
@@ -78,6 +79,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         label: 'Reset Data',
         view: const ResetScoringDataTab(),
         requiredKey: 'RESET_COMPETITION_SCORING_DATA',
+      ),
+      (
+        label: 'Master',
+        view: const MastersTab(),
+        requiredKey: 'SHOW_SETTINGS_MASTERS_TAB',
       ),
     ].where((t) => permissionStore.has(t.requiredKey)).toList();
 

@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../controllers/school_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../../data/models/district_model.dart';
@@ -596,7 +597,7 @@ class SchoolListScreen extends StatelessWidget {
   ) {
     return RefreshIndicator(
       onRefresh: () => controller.loadSchools(),
-      child: ListView.builder(
+      child: PinnedListView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: schools.length,
         itemBuilder: (context, index) {

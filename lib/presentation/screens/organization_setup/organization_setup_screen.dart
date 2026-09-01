@@ -11,6 +11,8 @@ import '../../../data/models/app_permission_record_model.dart';
 import '../../controllers/organization_setup_controller.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
+import '../../widgets/organization/organization_proof_image_upload.dart';
+import '../../widgets/pinned_scroll_views.dart';
 
 class OrganizationSetupScreen extends StatelessWidget {
   const OrganizationSetupScreen({super.key});
@@ -98,7 +100,7 @@ class OrganizationSetupScreen extends StatelessWidget {
                       controlAffinity: ListTileControlAffinity.trailing,
                     ),
                     Expanded(
-                      child: ListView.builder(
+                      child: PinnedListView.builder(
                         itemCount: filtered.length,
                         itemBuilder: (ctx, i) {
                           final p = filtered[i];
@@ -381,7 +383,10 @@ class OrganizationSetupScreen extends StatelessWidget {
           final active = step == index;
           final done = step > index;
           final canTap =
-              index == 0 || index == 1 || (index == 2 && c.canOpenAdminStep);
+              index == 0 ||
+              index == 1 ||
+              index == 2 ||
+              (index == 3 && c.canOpenAdminStep);
           return Expanded(
             child: Material(
               color: Colors.transparent,
@@ -438,13 +443,152 @@ class OrganizationSetupScreen extends StatelessWidget {
             children: [
               chip(0, 'Organization'),
               Expanded(child: Container(height: 2, color: Colors.grey[300])),
-              chip(1, 'Plan & Payment'),
+              chip(1, 'Document'),
               Expanded(child: Container(height: 2, color: Colors.grey[300])),
-              chip(2, 'Admin Users'),
+              chip(2, 'Plan & Payment'),
+              Expanded(child: Container(height: 2, color: Colors.grey[300])),
+              chip(3, 'Admin Users'),
             ],
           ),
         );
       });
+    }
+
+    Widget buildDocumentStepPanel() {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Proof Details',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Obx(
+            () => OrganizationProofDetailsLayout(
+              panField: TextFormField(
+                controller: c.panNumberController,
+                textCapitalization: TextCapitalization.characters,
+                textInputAction: TextInputAction.next,
+                validator: (v) => validatePanNumber(v),
+                decoration: deco(
+                  label: 'PAN Number',
+                  icon: Icons.badge_outlined,
+                  hint: 'ABCDE1234F',
+                ),
+              ),
+              aadharField: TextFormField(
+                controller: c.aadharNumberController,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                validator: (v) => validateAadharNumber(v),
+                decoration: deco(
+                  label: 'Aadhar Number',
+                  icon: Icons.fingerprint_outlined,
+                  hint: '12-digit number',
+                ),
+              ),
+              panDocumentBytes: c.panImageBytes,
+              panDocumentFileName: c.panDocumentFileName,
+              aadharDocumentBytes: c.aadharDocumentBytes,
+              aadharDocumentFileName: c.aadharDocumentFileName,
+              busy: c.isLoading.value,
+              onPickPan: c.pickPanDocument,
+              onPickAadhar: c.pickAadharDocument,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              organizationProofUploadNotes,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+          ),
+          Obx(
+            () => buildOrganizationProofUploadErrorBanner(c.errorMessage.value),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Bank Details',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            organizationBankDetailsNote,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          gridOrColumn(
+            desktopColumns: 2,
+            tabletColumns: 2,
+            children: [
+              TextFormField(
+                controller: c.bankAccountNumberController,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                validator: (v) =>
+                    validateRequiredField(v, fieldName: 'Account number'),
+                decoration: deco(
+                  label: 'Account Number',
+                  icon: Icons.account_balance_outlined,
+                ),
+              ),
+              TextFormField(
+                controller: c.bankIfscController,
+                textCapitalization: TextCapitalization.characters,
+                textInputAction: TextInputAction.next,
+                validator: validateIfsc,
+                decoration: deco(
+                  label: 'IFSC Number',
+                  icon: Icons.numbers_outlined,
+                ),
+              ),
+              TextFormField(
+                controller: c.bankBranchController,
+                textInputAction: TextInputAction.next,
+                validator: (v) =>
+                    validateRequiredField(v, fieldName: 'Bank branch'),
+                decoration: deco(
+                  label: 'Bank Branch',
+                  icon: Icons.location_city_outlined,
+                ),
+              ),
+              TextFormField(
+                controller: c.bankNameController,
+                textInputAction: TextInputAction.next,
+                validator: (v) =>
+                    validateRequiredField(v, fieldName: 'Bank name'),
+                decoration: deco(
+                  label: 'Bank Name',
+                  icon: Icons.account_balance_wallet_outlined,
+                ),
+              ),
+              TextFormField(
+                controller: c.gstNumberController,
+                textCapitalization: TextCapitalization.characters,
+                textInputAction: TextInputAction.done,
+                validator: validateGstNumber,
+                decoration: deco(
+                  label: 'GST Number (optional)',
+                  icon: Icons.receipt_long_outlined,
+                  hint: '22AAAAA0000A1Z5',
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
     }
 
     Widget buildPaymentStepPanel(BuildContext context) {
@@ -1102,7 +1246,7 @@ class OrganizationSetupScreen extends StatelessWidget {
         ),
         child: SafeArea(
           child: LayoutBuilder(
-            builder: (context, viewport) => SingleChildScrollView(
+            builder: (context, viewport) => PinnedVerticalScrollView(
               padding: EdgeInsets.symmetric(
                 horizontal: isMobile ? 10 : 0,
                 vertical: isMobile ? 12 : 10,
@@ -1429,9 +1573,11 @@ class OrganizationSetupScreen extends StatelessWidget {
                                 final busy =
                                     c.isLoading.value ||
                                     c.isProcessingPayment.value;
-                                final showPrimaryAction = step != 1;
+                                final showPrimaryAction = step != 2;
                                 String label;
                                 if (step == 0) {
+                                  label = 'Continue to Documents';
+                                } else if (step == 1) {
                                   label = 'Continue to Plan & Payment';
                                 } else {
                                   label = 'Complete Setup';
@@ -1508,6 +1654,8 @@ class OrganizationSetupScreen extends StatelessWidget {
                                   c.currentStep.value == 0
                                       ? 'Enter organization details.'
                                       : c.currentStep.value == 1
+                                      ? 'Upload proof documents and bank details.'
+                                      : c.currentStep.value == 2
                                       ? 'Select your On Demand package to continue setup.'
                                       : 'Create the primary admin account for this organization.',
                                   style: Theme.of(context).textTheme.bodyMedium
@@ -1517,7 +1665,7 @@ class OrganizationSetupScreen extends StatelessWidget {
                               const SizedBox(height: 15),
                               Obx(() {
                                 final step = c.currentStep.value;
-                                if (step == 1) {
+                                if (step == 2) {
                                   return Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
@@ -1527,11 +1675,21 @@ class OrganizationSetupScreen extends StatelessWidget {
                                     ],
                                   );
                                 }
-                                if (step == 2) {
+                                if (step == 3) {
                                   return Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [usersRight, footer],
+                                  );
+                                }
+                                if (step == 1) {
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      buildDocumentStepPanel(),
+                                      footer,
+                                    ],
                                   );
                                 }
                                 if (!isWide) {

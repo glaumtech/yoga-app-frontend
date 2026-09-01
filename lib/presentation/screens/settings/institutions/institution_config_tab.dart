@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../controllers/institution_config_controller.dart';
 import '../../../widgets/form_title.dart';
+import '../../../widgets/pinned_scroll_views.dart';
 
 class InstitutionConfigTab extends StatefulWidget {
   const InstitutionConfigTab({super.key});
@@ -189,7 +190,7 @@ class _TypesTab extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.all(isMobile ? 12 : 16),
       child: isMobile
-          ? SingleChildScrollView(
+          ? PinnedVerticalScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -221,7 +222,7 @@ class _TypeForm extends StatelessWidget {
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: SingleChildScrollView(
+        child: PinnedVerticalScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -387,7 +388,7 @@ class _CategoriesTab extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.all(isMobile ? 12 : 16),
       child: isMobile
-          ? SingleChildScrollView(
+          ? PinnedVerticalScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -419,7 +420,7 @@ class _CategoryForm extends StatelessWidget {
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: SingleChildScrollView(
+        child: PinnedVerticalScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

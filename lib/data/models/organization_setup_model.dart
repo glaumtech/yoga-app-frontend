@@ -57,6 +57,7 @@ class OrganizationRequestModel {
 }
 
 class BranchRequestModel {
+  final int? organizationId;
   final String branchName;
   final String? branchCode;
   final int? commencingYear;
@@ -70,8 +71,16 @@ class BranchRequestModel {
   final String? address;
   final String? pincode;
   final String? theme;
+  final String? panNumber;
+  final String? aadharNumber;
+  final String? bankAccountNumber;
+  final String? bankIfsc;
+  final String? bankBranch;
+  final String? bankName;
+  final String? gstNumber;
 
   BranchRequestModel({
+    this.organizationId,
     required this.branchName,
     this.branchCode,
     this.commencingYear,
@@ -85,9 +94,17 @@ class BranchRequestModel {
     this.address,
     this.pincode,
     this.theme,
+    this.panNumber,
+    this.aadharNumber,
+    this.bankAccountNumber,
+    this.bankIfsc,
+    this.bankBranch,
+    this.bankName,
+    this.gstNumber,
   });
 
   Map<String, dynamic> toJson() => {
+    if (organizationId != null) 'organizationId': organizationId,
     'branchName': branchName,
     if (branchCode != null) 'branchCode': branchCode,
     if (commencingYear != null) 'commencingYear': commencingYear,
@@ -101,6 +118,13 @@ class BranchRequestModel {
     if (address != null) 'address': address,
     if (pincode != null) 'pincode': pincode,
     if (theme != null) 'theme': theme,
+    if (panNumber != null) 'panNumber': panNumber,
+    if (aadharNumber != null) 'aadharNumber': aadharNumber,
+    if (bankAccountNumber != null) 'bankAccountNumber': bankAccountNumber,
+    if (bankIfsc != null) 'bankIfsc': bankIfsc,
+    if (bankBranch != null) 'bankBranch': bankBranch,
+    if (bankName != null) 'bankName': bankName,
+    if (gstNumber != null) 'gstNumber': gstNumber,
   };
 }
 
@@ -178,6 +202,17 @@ class BranchDtoModel {
   final String? pincode;
   final String? theme;
   final String? logoPath;
+  final String? panNumber;
+  final String? panImagePath;
+  final String? aadharNumber;
+  final String? aadharImagePath;
+  final String? aadharFrontImagePath;
+  final String? aadharBackImagePath;
+  final String? bankAccountNumber;
+  final String? bankIfsc;
+  final String? bankBranch;
+  final String? bankName;
+  final String? gstNumber;
 
   BranchDtoModel({
     required this.id,
@@ -199,6 +234,17 @@ class BranchDtoModel {
     this.pincode,
     this.theme,
     this.logoPath,
+    this.panNumber,
+    this.panImagePath,
+    this.aadharNumber,
+    this.aadharImagePath,
+    this.aadharFrontImagePath,
+    this.aadharBackImagePath,
+    this.bankAccountNumber,
+    this.bankIfsc,
+    this.bankBranch,
+    this.bankName,
+    this.gstNumber,
   });
 
   factory BranchDtoModel.fromJson(Map<String, dynamic> json) {
@@ -227,6 +273,17 @@ class BranchDtoModel {
       pincode: json['pincode']?.toString(),
       theme: json['theme']?.toString(),
       logoPath: json['logoPath']?.toString(),
+      panNumber: json['panNumber']?.toString(),
+      panImagePath: json['panImagePath']?.toString(),
+      aadharNumber: json['aadharNumber']?.toString(),
+      aadharImagePath: json['aadharImagePath']?.toString(),
+      aadharFrontImagePath: json['aadharFrontImagePath']?.toString(),
+      aadharBackImagePath: json['aadharBackImagePath']?.toString(),
+      bankAccountNumber: json['bankAccountNumber']?.toString(),
+      bankIfsc: json['bankIfsc']?.toString(),
+      bankBranch: json['bankBranch']?.toString(),
+      bankName: json['bankName']?.toString(),
+      gstNumber: json['gstNumber']?.toString(),
     );
   }
 }

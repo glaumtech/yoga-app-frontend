@@ -13,6 +13,7 @@ import '../../widgets/custom_loader.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/toggle_button_group.dart';
+import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/photo_source_buttons.dart';
 import '../../../data/models/user_management_model.dart';
@@ -161,7 +162,7 @@ class UserManagementScreen extends StatelessWidget {
                           padding: EdgeInsets.all(16),
                           child: const UsersListScreen(),
                         )
-                      : SingleChildScrollView(
+                      : PinnedVerticalScrollView(
                           padding: EdgeInsets.all(isMobile ? 16 : 16),
                           child: Obx(() {
                             // Must read Rx values here so GetX tracks this Obx (nested

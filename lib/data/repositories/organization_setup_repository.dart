@@ -19,6 +19,12 @@ class OrganizationSetupRepository {
     File? logoFile,
     Uint8List? logoBytes,
     String? logoFileName,
+    Uint8List? panImageBytes,
+    String? panImageFileName,
+    Uint8List? aadharFrontImageBytes,
+    String? aadharFrontImageFileName,
+    Uint8List? aadharBackImageBytes,
+    String? aadharBackImageFileName,
     XFile? paymentProofXFile,
   }) async {
     return _postFoundationMultipart(
@@ -27,6 +33,12 @@ class OrganizationSetupRepository {
       logoFile: logoFile,
       logoBytes: logoBytes,
       logoFileName: logoFileName,
+      panImageBytes: panImageBytes,
+      panImageFileName: panImageFileName,
+      aadharFrontImageBytes: aadharFrontImageBytes,
+      aadharFrontImageFileName: aadharFrontImageFileName,
+      aadharBackImageBytes: aadharBackImageBytes,
+      aadharBackImageFileName: aadharBackImageFileName,
       paymentProofXFile: paymentProofXFile,
     );
   }
@@ -37,6 +49,12 @@ class OrganizationSetupRepository {
     File? logoFile,
     Uint8List? logoBytes,
     String? logoFileName,
+    Uint8List? panImageBytes,
+    String? panImageFileName,
+    Uint8List? aadharFrontImageBytes,
+    String? aadharFrontImageFileName,
+    Uint8List? aadharBackImageBytes,
+    String? aadharBackImageFileName,
     XFile? paymentProofXFile,
   }) async {
     final response = await _postFoundationMultipartRaw(
@@ -44,6 +62,12 @@ class OrganizationSetupRepository {
       request: request,
       logoBytes: logoBytes,
       logoFileName: logoFileName,
+      panImageBytes: panImageBytes,
+      panImageFileName: panImageFileName,
+      aadharFrontImageBytes: aadharFrontImageBytes,
+      aadharFrontImageFileName: aadharFrontImageFileName,
+      aadharBackImageBytes: aadharBackImageBytes,
+      aadharBackImageFileName: aadharBackImageFileName,
       paymentProofXFile: paymentProofXFile,
     );
 
@@ -69,6 +93,12 @@ class OrganizationSetupRepository {
     File? logoFile,
     Uint8List? logoBytes,
     String? logoFileName,
+    Uint8List? panImageBytes,
+    String? panImageFileName,
+    Uint8List? aadharFrontImageBytes,
+    String? aadharFrontImageFileName,
+    Uint8List? aadharBackImageBytes,
+    String? aadharBackImageFileName,
     XFile? paymentProofXFile,
   }) async {
     final raw = await _postFoundationMultipartRaw(
@@ -76,6 +106,12 @@ class OrganizationSetupRepository {
       request: request,
       logoBytes: logoBytes,
       logoFileName: logoFileName,
+      panImageBytes: panImageBytes,
+      panImageFileName: panImageFileName,
+      aadharFrontImageBytes: aadharFrontImageBytes,
+      aadharFrontImageFileName: aadharFrontImageFileName,
+      aadharBackImageBytes: aadharBackImageBytes,
+      aadharBackImageFileName: aadharBackImageFileName,
       paymentProofXFile: paymentProofXFile,
     );
     if (raw.success && raw.data != null) {
@@ -96,6 +132,12 @@ class OrganizationSetupRepository {
     required OrganizationSetupFoundationRequestModel request,
     Uint8List? logoBytes,
     String? logoFileName,
+    Uint8List? panImageBytes,
+    String? panImageFileName,
+    Uint8List? aadharFrontImageBytes,
+    String? aadharFrontImageFileName,
+    Uint8List? aadharBackImageBytes,
+    String? aadharBackImageFileName,
     XFile? paymentProofXFile,
     String? dataJsonOverride,
   }) async {
@@ -117,6 +159,36 @@ class OrganizationSetupRepository {
         final name = logoFileName ?? 'logo.png';
         httpRequest.files.add(
           http.MultipartFile.fromBytes('logo', bytes, filename: name),
+        );
+      }
+
+      if (panImageBytes != null) {
+        httpRequest.files.add(
+          http.MultipartFile.fromBytes(
+            'panImage',
+            panImageBytes,
+            filename: panImageFileName ?? 'epan.pdf',
+          ),
+        );
+      }
+
+      if (aadharFrontImageBytes != null) {
+        httpRequest.files.add(
+          http.MultipartFile.fromBytes(
+            'aadharFrontImage',
+            aadharFrontImageBytes,
+            filename: aadharFrontImageFileName ?? 'eaadhar.pdf',
+          ),
+        );
+      }
+
+      if (aadharBackImageBytes != null) {
+        httpRequest.files.add(
+          http.MultipartFile.fromBytes(
+            'aadharBackImage',
+            aadharBackImageBytes,
+            filename: aadharBackImageFileName ?? 'aadhar-back.png',
+          ),
         );
       }
 
@@ -163,6 +235,12 @@ class OrganizationSetupRepository {
     required OrganizationSetupCompleteRequestModel request,
     Uint8List? logoBytes,
     String? logoFileName,
+    Uint8List? panImageBytes,
+    String? panImageFileName,
+    Uint8List? aadharFrontImageBytes,
+    String? aadharFrontImageFileName,
+    Uint8List? aadharBackImageBytes,
+    String? aadharBackImageFileName,
     XFile? paymentProofXFile,
   }) async {
     final raw = await _postFoundationMultipartRaw(
@@ -175,6 +253,12 @@ class OrganizationSetupRepository {
       ),
       logoBytes: logoBytes,
       logoFileName: logoFileName,
+      panImageBytes: panImageBytes,
+      panImageFileName: panImageFileName,
+      aadharFrontImageBytes: aadharFrontImageBytes,
+      aadharFrontImageFileName: aadharFrontImageFileName,
+      aadharBackImageBytes: aadharBackImageBytes,
+      aadharBackImageFileName: aadharBackImageFileName,
       paymentProofXFile: paymentProofXFile,
       dataJsonOverride: request.toDataField(),
     );

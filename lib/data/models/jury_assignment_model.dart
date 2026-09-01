@@ -6,6 +6,7 @@ class JuryAssignmentModel {
   final String competitionName;
   final int minimumMarks;
   final int maximumMarks;
+  final int skippedAsanaMarks;
   final bool male;
   final bool female;
   final String? championshipStyle;
@@ -19,6 +20,7 @@ class JuryAssignmentModel {
     required this.competitionName,
     required this.minimumMarks,
     required this.maximumMarks,
+    this.skippedAsanaMarks = 0,
     this.male = false,
     this.female = false,
     this.championshipStyle,
@@ -54,6 +56,7 @@ class JuryAssignmentModel {
       minimumMarks: json['minimumMarks'] as int? ?? 0,
       // Use 0 when absent so callers can fall back to a default range (e.g. 3–10).
       maximumMarks: json['maximumMarks'] as int? ?? 0,
+      skippedAsanaMarks: json['skippedAsanaMarks'] as int? ?? 0,
       male: json['male'] as bool? ?? false,
       female: json['female'] as bool? ?? false,
       championshipStyle: json['championshipStyle']?.toString(),
@@ -70,6 +73,7 @@ class JuryAssignmentModel {
       'competitionName': competitionName,
       'minimumMarks': minimumMarks,
       'maximumMarks': maximumMarks,
+      'skippedAsanaMarks': skippedAsanaMarks,
       'male': male,
       'female': female,
       if (championshipStyle != null) 'championshipStyle': championshipStyle,
@@ -132,20 +136,51 @@ class GroupAssignment {
 class CategoryAssignment {
   final int id;
   final String categoryName;
+  /// Compulsory / from-chart asanas from category config.
+  final int compulsoryAsanas;
+  /// Own-choice asanas from category config.
+  final int ownChoiceAsanas;
+  /// Total asanas to score for this category (compulsory + own choice).
+  final int numberOfAsanas;
 
-  CategoryAssignment({required this.id, required this.categoryName});
+  CategoryAssignment({
+    required this.id,
+    required this.categoryName,
+    this.compulsoryAsanas = 4,
+    this.ownChoiceAsanas = 2,
+    int? numberOfAsanas,
+  }) : numberOfAsanas =
+            numberOfAsanas ??
+            ((compulsoryAsanas + ownChoiceAsanas) > 0
+                ? compulsoryAsanas + ownChoiceAsanas
+                : 5);
 
   bool get isChampions =>
       categoryName.trim().toUpperCase() == 'CHAMPIONS';
 
   factory CategoryAssignment.fromJson(Map<String, dynamic> json) {
+    final compulsory = json['compulsoryAsanas'] as int? ?? 4;
+    final ownChoice = json['ownChoiceAsanas'] as int? ?? 2;
+    final totalFromApi = json['numberOfAsanas'] as int?;
+    final total = totalFromApi != null && totalFromApi > 0
+        ? totalFromApi
+        : (compulsory + ownChoice > 0 ? compulsory + ownChoice : 5);
     return CategoryAssignment(
       id: json['id'] as int? ?? 0,
       categoryName: json['categoryName'] as String? ?? '',
+      compulsoryAsanas: compulsory,
+      ownChoiceAsanas: ownChoice,
+      numberOfAsanas: total,
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'categoryName': categoryName};
+    return {
+      'id': id,
+      'categoryName': categoryName,
+      'compulsoryAsanas': compulsoryAsanas,
+      'ownChoiceAsanas': ownChoiceAsanas,
+      'numberOfAsanas': numberOfAsanas,
+    };
   }
 }

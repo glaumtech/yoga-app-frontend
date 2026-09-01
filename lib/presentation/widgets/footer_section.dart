@@ -14,6 +14,7 @@ class FooterSection extends StatelessWidget {
 
   static const _navLinks = [
     _FooterNavLink('About Us', AppRoutes.about),
+    _FooterNavLink('Online Participant login', AppRoutes.participantVideoUpload),
     _FooterNavLink('Privacy Policy', '/legal/privacy'),
     _FooterNavLink('Refund and Cancellation policy', '/legal/refund'),
     _FooterNavLink('Terms and Conditions', '/legal/terms'),

@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/app_permission_record_model.dart';
 import '../../../controllers/settings_controller.dart';
 import '../../../widgets/buttons.dart';
+import '../../../widgets/pinned_scroll_views.dart';
 
 SettingsController? _activeSettingsController() {
   return Get.isRegistered<SettingsController>()
@@ -522,7 +523,7 @@ class _CreatePermissionTab extends StatelessWidget {
               children: [
                 Expanded(
                   flex: 6,
-                  child: SingleChildScrollView(
+                  child: PinnedVerticalScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: formCard(),
                   ),
