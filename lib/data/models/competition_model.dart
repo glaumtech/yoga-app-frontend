@@ -55,6 +55,8 @@ class CompetitionModel {
   final bool googleDriveConfigured;
   final List<CompetitionCategoryConfigModel>? categoryConfigs;
   final List<CompetitionGradeModel>? grades;
+  final bool maintenancePaidAsanas;
+  final bool maintenancePaidChallenge;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -100,6 +102,8 @@ class CompetitionModel {
     this.googleDriveConfigured = false,
     this.categoryConfigs,
     this.grades,
+    this.maintenancePaidAsanas = false,
+    this.maintenancePaidChallenge = false,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -487,6 +491,8 @@ class CompetitionModel {
                 )
                 .toList()
           : null,
+      maintenancePaidAsanas: parseBool(json['maintenancePaidAsanas']),
+      maintenancePaidChallenge: parseBool(json['maintenancePaidChallenge']),
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])

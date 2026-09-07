@@ -17,7 +17,10 @@ const bool _kShowImportsTab = false;
 
 /// Settings area with tabbed sections (same pattern as [ReportsScreen]).
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, this.initialTab});
+
+  /// Optional settings tab id, e.g. `certificate`.
+  final String? initialTab;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -48,44 +51,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? Get.find<PermissionStore>()
         : Get.put(PermissionStore());
 
-    final tabs = <({String label, Widget view, String requiredKey})>[
+    final tabs = <({String id, String label, Widget view, String requiredKey})>[
       (
+        id: 'permissions',
         label: 'Permissions',
         view: const SettingsPermissionsTab(),
         requiredKey: 'SETTINGS_PERMISSIONS',
       ),
       (
+        id: 'institution',
         label: 'Institution Config',
         view: const InstitutionConfigTab(),
         requiredKey: 'SHOW_INSTITUTION_CONFIG_TAB',
       ),
       (
+        id: 'certificate',
         label: 'Certificate template',
         view: const CertificateTemplateTab(),
         requiredKey: 'SHOW_INSTITUTION_CONFIG_TAB',
       ),
       if (_kShowImportsTab)
         (
+          id: 'imports',
           label: 'Imports',
           view: const SettingsImportsTab(),
           requiredKey: 'SHOW_IMPORT_TAB',
         ),
       (
+        id: 'theme',
         label: 'Theme',
         view: const SettingsThemeTab(),
         requiredKey: 'SHOW_SETTINGS_THEME_TAB',
       ),
       (
+        id: 'reset',
         label: 'Reset Data',
         view: const ResetScoringDataTab(),
         requiredKey: 'RESET_COMPETITION_SCORING_DATA',
       ),
       (
+        id: 'master',
         label: 'Master',
         view: const MastersTab(),
         requiredKey: 'SHOW_SETTINGS_MASTERS_TAB',
       ),
     ].where((t) => permissionStore.has(t.requiredKey)).toList();
+
+    final requestedTab = widget.initialTab?.trim().toLowerCase() ?? '';
+    var initialIndex = 0;
+    if (requestedTab.isNotEmpty) {
+      final idx = tabs.indexWhere((t) => t.id == requestedTab);
+      if (idx >= 0) initialIndex = idx;
+    }
 
     return AdminSidebarLayout(
       title: 'Settings',
@@ -98,6 +115,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             )
           : DefaultTabController(
               length: tabs.length,
+              initialIndex: initialIndex,
               child: Column(
                 children: [
                   Padding(

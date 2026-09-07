@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
@@ -15,6 +16,64 @@ const PinnedScrollBarStyle _kCertificateScrollbarStyle = PinnedScrollBarStyle.da
 
 enum _LayerKind { text, image }
 
+class _DynamicFieldSpec {
+  const _DynamicFieldSpec({
+    required this.key,
+    required this.label,
+    required this.kind,
+  });
+
+  final String key;
+  final String label;
+  final _LayerKind kind;
+}
+
+const List<_DynamicFieldSpec> _kDefaultDynamicFields = [
+  _DynamicFieldSpec(
+    key: 'participantName',
+    label: 'Participant name',
+    kind: _LayerKind.text,
+  ),
+  _DynamicFieldSpec(key: 'dob', label: 'DOB', kind: _LayerKind.text),
+  _DynamicFieldSpec(key: 'age', label: 'Age', kind: _LayerKind.text),
+  _DynamicFieldSpec(
+    key: 'startDate',
+    label: 'Start date',
+    kind: _LayerKind.text,
+  ),
+  _DynamicFieldSpec(key: 'endDate', label: 'End date', kind: _LayerKind.text),
+  _DynamicFieldSpec(
+    key: 'currentDate',
+    label: 'Current date',
+    kind: _LayerKind.text,
+  ),
+  _DynamicFieldSpec(
+    key: 'participantPhoto',
+    label: 'Participant photo',
+    kind: _LayerKind.image,
+  ),
+  _DynamicFieldSpec(
+    key: 'winnerCategory',
+    label: 'Winner category',
+    kind: _LayerKind.text,
+  ),
+  _DynamicFieldSpec(
+    key: 'institutionName',
+    label: 'Institution name',
+    kind: _LayerKind.text,
+  ),
+  _DynamicFieldSpec(
+    key: 'competitionName',
+    label: 'Competition name',
+    kind: _LayerKind.text,
+  ),
+  _DynamicFieldSpec(
+    key: 'competitionAddrss',
+    label: 'Competition address',
+    kind: _LayerKind.text,
+  ),
+];
+
 class _TemplateLayer {
   _TemplateLayer({
     required this.id,
@@ -24,6 +83,7 @@ class _TemplateLayer {
     this.text,
     this.imageBytes,
     this.fontSize = 28,
+    this.placeholderKey,
   });
 
   final String id;
@@ -32,6 +92,7 @@ class _TemplateLayer {
   Offset offset;
   String? text;
   Uint8List? imageBytes;
+  String? placeholderKey;
   double fontSize;
   Color textColor = const Color(0xFF1F2A44);
   FontWeight fontWeight = FontWeight.w700;
@@ -67,6 +128,8 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
 
   final TextEditingController _canvasNameController = TextEditingController();
   final TextEditingController _layerTextController = TextEditingController();
+  final TextEditingController _imageWidthController = TextEditingController();
+  final TextEditingController _imageHeightController = TextEditingController();
   final FocusNode _inlineEditFocusNode = FocusNode();
   final TextEditingController _customWidthMmController = TextEditingController(
     text: '1123',
@@ -76,6 +139,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   );
   final ScrollController _sidebarScrollController = ScrollController();
   final ScrollController _layersScrollController = ScrollController();
+  final ScrollController _defaultFieldsScrollController = ScrollController();
   final ScrollController _textToolbarScrollController = ScrollController();
   final ScrollController _textSlidersScrollController = ScrollController();
 
@@ -92,143 +156,15 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   String? _inlineEditingLayerId;
   bool? _multiMoveMode = false;
   Set<String>? _multiSelectedLayerIds;
+  bool _defaultFieldsMenuOpen = false;
 
   bool get _isMultiMoveMode => _multiMoveMode ?? false;
 
   Set<String> get _selectedLayerIds => _multiSelectedLayerIds ??= <String>{};
 
-  int _selectedLayerIndex = 2;
-  int _idSeq = 12;
-  final List<_TemplateLayer> _layers = <_TemplateLayer>[
-    _TemplateLayer(
-        id: 'layer_1',
-        kind: _LayerKind.text,
-        name: '{{competitionName}}',
-        text: '{{competitionName}}',
-        offset: const Offset(290, 12),
-        fontSize: 48,
-      )
-      ..fontWeight = FontWeight.w800
-      ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 560,
-    _TemplateLayer(
-        id: 'layer_2',
-        kind: _LayerKind.text,
-        name: 'Organized by details',
-        text:
-            'Organized by\nTamilNadu Professionally Qualified Registered Yoga Teachers Welfare Association,\nCo-organized by\n{{branchName}},{{branchCity}}',
-        offset: const Offset(260, 86),
-        fontSize: 18,
-      )
-      ..fontWeight = FontWeight.w700
-      ..lineHeight = 1.4
-      ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 620,
-    _TemplateLayer(
-        id: 'layer_3',
-        kind: _LayerKind.text,
-        name: '{{winnerCategory}} Prize',
-        text: '{{winnerCategory}} Prize',
-        offset: const Offset(350, 238),
-        fontSize: 45,
-      )
-      ..fontWeight = FontWeight.w800
-      ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 420,
-    _TemplateLayer(
-        id: 'layer_4',
-        kind: _LayerKind.text,
-        name: 'Body line 1',
-        text:
-            'This certificate is proudly presented to Selvan/Selvi {{participantName}} of',
-        offset: const Offset(84, 368),
-        fontSize: 18,
-      )
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 930,
-    _TemplateLayer(
-        id: 'layer_5',
-        kind: _LayerKind.text,
-        name: '{{participantName}}',
-        text: '{{participantName}}',
-        offset: const Offset(574, 364),
-        fontSize: 35,
-      )
-      ..fontWeight = FontWeight.w800
-      ..hasDashedBottomBorder = true
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 246,
-    _TemplateLayer(
-        id: 'layer_6',
-        kind: _LayerKind.text,
-        name: '{{institutionName}}',
-        text: '{{institutionName}}',
-        offset: const Offset(390, 407),
-        fontSize: 34,
-      )
-      ..fontWeight = FontWeight.w800
-      ..hasDashedBottomBorder = true
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 420,
-    _TemplateLayer(
-        id: 'layer_7',
-        kind: _LayerKind.text,
-        name: 'Body line 2',
-        text:
-            'his/her participation in the {{competitionName}} held on {{date}} at {{competitionAddrss}}. He/She is appreciated for {{winnerCategory}} Category. He/She is appreciated for his/her Excellence in the Competition.',
-        offset: const Offset(76, 456),
-        fontSize: 18,
-      )
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 960,
-    _TemplateLayer(
-        id: 'layer_8',
-        kind: _LayerKind.text,
-        name: 'Sign 1',
-        text: 'Signature 1\nPresident',
-        offset: const Offset(95, 675),
-        fontSize: 34,
-      )
-      ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 200,
-    _TemplateLayer(
-        id: 'layer_9',
-        kind: _LayerKind.text,
-        name: 'Sign 2',
-        text: 'Signature 2\nSecretary',
-        offset: const Offset(328, 675),
-        fontSize: 34,
-      )
-      ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 200,
-    _TemplateLayer(
-        id: 'layer_10',
-        kind: _LayerKind.text,
-        name: 'Sign 3',
-        text: 'Signature 3\nCoordinator',
-        offset: const Offset(560, 675),
-        fontSize: 34,
-      )
-      ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 220,
-    _TemplateLayer(
-        id: 'layer_11',
-        kind: _LayerKind.text,
-        name: 'Sign 4',
-        text: 'Signature 4\nChief Guest',
-        offset: const Offset(818, 675),
-        fontSize: 34,
-      )
-      ..textAlign = TextAlign.center
-      ..textColor = const Color(0xFF111827)
-      ..textBoxWidth = 200,
-  ];
+  int _selectedLayerIndex = 0;
+  int _idSeq = 1;
+  final List<_TemplateLayer> _layers = <_TemplateLayer>[];
 
   @override
   void initState() {
@@ -254,11 +190,14 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     _loadingWorker.dispose();
     _canvasNameController.dispose();
     _layerTextController.dispose();
+    _imageWidthController.dispose();
+    _imageHeightController.dispose();
     _inlineEditFocusNode.dispose();
     _customWidthMmController.dispose();
     _customHeightMmController.dispose();
     _sidebarScrollController.dispose();
     _layersScrollController.dispose();
+    _defaultFieldsScrollController.dispose();
     _textToolbarScrollController.dispose();
     _textSlidersScrollController.dispose();
     super.dispose();
@@ -363,6 +302,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     } else {
       final restoredFromHtml = _applyTemplateHtml(body);
       if (!restoredFromHtml) {
+        _clearDesignerCanvas();
         _syncBackgroundFromBackend(c);
         final hasBackground =
             (_backgroundImageBytes != null &&
@@ -376,6 +316,18 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       _syncTemplateGenderFromPronouns(c);
     }
     _syncLayerTextEditor();
+  }
+
+  void _clearDesignerCanvas() {
+    _layers.clear();
+    _selectedLayerIndex = 0;
+    _idSeq = 1;
+    _inlineEditingLayerId = null;
+    _multiMoveMode = false;
+    _selectedLayerIds.clear();
+    _backgroundImageBytes = null;
+    _backgroundImageUrl = null;
+    _layerTextController.clear();
   }
 
   void _ensureSelectedTemplateBody(CertificateTemplateController c, {int? id}) {
@@ -400,7 +352,13 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       r"""<div[^>]*style=["'][^"']*position\s*:\s*absolute[^"']*["'][^>]*>[\s\S]*?<\/div>""",
       caseSensitive: false,
     );
-    if (!positionedTextDiv.hasMatch(text)) return false;
+    final positionedImg = RegExp(
+      r"""<img[^>]*style=["'][^"']*position\s*:\s*absolute[^"']*["'][^>]*>""",
+      caseSensitive: false,
+    );
+    if (!positionedTextDiv.hasMatch(text) && !positionedImg.hasMatch(text)) {
+      return false;
+    }
 
     final rootMatch = RegExp(
       r"""<div[^>]*style=["']([^"']*position\s*:\s*relative[^"']*)["'][^>]*>""",
@@ -431,6 +389,12 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     for (final m in imageRe.allMatches(text)) {
       final src = m.group(1)?.trim() ?? '';
       final style = m.group(2) ?? '';
+      if (RegExp(
+        r'alt=["'']Background["'']',
+        caseSensitive: false,
+      ).hasMatch(m.group(0) ?? '')) {
+        continue;
+      }
       final left = _styleDouble(style, 'left') ?? 0;
       final top = _styleDouble(style, 'top') ?? 0;
       final width = (_styleDouble(style, 'width') ?? 100).clamp(40.0, 1400.0);
@@ -440,13 +404,15 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       if (data != null) {
         bytes = data.$2;
       }
+      final placeholderKey = _placeholderKeyFromToken(src);
       parsed.add(
         _TemplateLayer(
           id: 'layer_${_idSeq++}',
           kind: _LayerKind.image,
-          name: 'Image',
+          name: placeholderKey == null ? 'Image' : '{{$placeholderKey}}',
           offset: Offset(left, top),
           imageBytes: bytes,
+          placeholderKey: placeholderKey,
         )
           ..imageWidth = width
           ..imageHeight = height,
@@ -531,6 +497,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
             offset: Offset(left, top),
             text: layerText,
             fontSize: fontSize,
+            placeholderKey: _placeholderKeyFromToken(layerText),
           )
           ..fontWeight = _fontWeightFromInt(hasBoldTag ? 700 : fontWeight)
           ..isItalic = isItalic
@@ -780,6 +747,12 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       if (_selectedLayerIndex >= _layers.length) {
         _selectedLayerIndex = _layers.isEmpty ? 0 : _layers.length - 1;
       }
+    } else {
+      _layers.clear();
+      _selectedLayerIndex = 0;
+      _idSeq = 1;
+      _inlineEditingLayerId = null;
+      _selectedLayerIds.clear();
     }
   }
 
@@ -827,6 +800,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
         name: name,
         imageBytes: bytes,
         offset: Offset(dx, dy),
+        placeholderKey: m['placeholderKey']?.toString(),
       )
         ..imageWidth = (m['imageWidth'] as num?)?.toDouble() ?? 100
         ..imageHeight = (m['imageHeight'] as num?)?.toDouble() ?? 72;
@@ -840,6 +814,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
             text: m['text']?.toString(),
             offset: Offset(dx, dy),
             fontSize: (m['fontSize'] as num?)?.toDouble() ?? 28,
+            placeholderKey:
+                m['placeholderKey']?.toString() ??
+                _placeholderKeyFromToken(m['text']?.toString()),
           )
           ..fontWeight = _fontWeightFromInt(
             (m['fontWeight'] as num?)?.toInt() ?? 700,
@@ -869,6 +846,23 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
         .replaceAll("'", '&#39;');
   }
 
+  String? _placeholderKeyFromToken(String? value) {
+    if (value == null) return null;
+    final m = RegExp(r'^\{\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}\}$').firstMatch(
+      value.trim(),
+    );
+    return m?.group(1);
+  }
+
+  String _dynamicFieldToken(_DynamicFieldSpec field) => '{{${field.key}}}';
+
+  bool _layerUsesField(_TemplateLayer layer, _DynamicFieldSpec field) {
+    if (layer.placeholderKey == field.key) return true;
+    if (layer.text == _dynamicFieldToken(field)) return true;
+    if (layer.name == _dynamicFieldToken(field)) return true;
+    return false;
+  }
+
   String _colorToCss(Color c) {
     final argb = c.toARGB32();
     final aInt = (argb >> 24) & 0xFF;
@@ -895,6 +889,75 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     return null;
   }
 
+  String _cssMm(double px) => '${(px * 25.4 / 96.0).toStringAsFixed(4)}mm';
+
+  Size? _bitmapSize(Uint8List bytes) {
+    if (bytes.length >= 24 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      final w =
+          (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+      final h =
+          (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+      if (w > 0 && h > 0) return Size(w.toDouble(), h.toDouble());
+    }
+    if (bytes.length > 10 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
+      var i = 2;
+      while (i + 8 < bytes.length) {
+        if (bytes[i] != 0xFF) {
+          i++;
+          continue;
+        }
+        final marker = bytes[i + 1];
+        if (marker == 0xD9 || marker == 0xDA) break;
+        if (i + 3 >= bytes.length) break;
+        final len = (bytes[i + 2] << 8) | bytes[i + 3];
+        if (marker >= 0xC0 && marker <= 0xC3) {
+          final h = (bytes[i + 5] << 8) | bytes[i + 6];
+          final w = (bytes[i + 7] << 8) | bytes[i + 8];
+          if (w > 0 && h > 0) return Size(w.toDouble(), h.toDouble());
+          break;
+        }
+        i += 2 + len;
+      }
+    }
+    return null;
+  }
+
+  String _coverFittedImageHtml({
+    required String src,
+    required String alt,
+    required double boxLeft,
+    required double boxTop,
+    required double boxWidth,
+    required double boxHeight,
+    Uint8List? bytes,
+  }) {
+    var imgLeft = boxLeft;
+    var imgTop = boxTop;
+    var imgWidth = boxWidth;
+    var imgHeight = boxHeight;
+    if (bytes != null && bytes.isNotEmpty) {
+      final natural = _bitmapSize(bytes);
+      if (natural != null && natural.width > 0 && natural.height > 0) {
+        final scale = math.max(
+          boxWidth / natural.width,
+          boxHeight / natural.height,
+        );
+        imgWidth = natural.width * scale;
+        imgHeight = natural.height * scale;
+        imgLeft = boxLeft + (boxWidth - imgWidth) / 2;
+        imgTop = boxTop + (boxHeight - imgHeight) / 2;
+      }
+    }
+    return '''
+<div style="position:absolute;left:${_cssMm(boxLeft)};top:${_cssMm(boxTop)};width:${_cssMm(boxWidth)};height:${_cssMm(boxHeight)};overflow:hidden;margin:0;padding:0;">
+<img src="$src" alt="${_htmlEscape(alt)}" width="${boxWidth.round()}" height="${boxHeight.round()}" style="position:absolute;left:${_cssMm(imgLeft - boxLeft)};top:${_cssMm(imgTop - boxTop)};width:${_cssMm(imgWidth)};height:${_cssMm(imgHeight)};display:block;margin:0;padding:0;border:0;"/>
+</div>''';
+  }
+
   String _buildTemplateHtml() {
     final paper = _paperDimensionsPx();
     final shortSide = paper.width < paper.height ? paper.width : paper.height;
@@ -902,57 +965,83 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     final widthPx = _portrait ? shortSide : longSide;
     final heightPx = _portrait ? longSide : shortSide;
     final bgUrl = _backgroundImageDataUrl();
+    final pageW = _cssMm(widthPx);
+    final pageH = _cssMm(heightPx);
 
     final layerHtml = _layers
         .map((layer) {
-          final left = layer.offset.dx.toStringAsFixed(2);
-          final top = layer.offset.dy.toStringAsFixed(2);
+          final left = layer.offset.dx;
+          final top = layer.offset.dy;
           if (layer.kind == _LayerKind.image) {
-            if (layer.imageBytes == null || layer.imageBytes!.isEmpty)
+            final iw = layer.imageWidth.clamp(40.0, 1400.0);
+            final ih = layer.imageHeight.clamp(24.0, 1200.0);
+            final photoKey = layer.placeholderKey;
+            if (photoKey != null && photoKey.isNotEmpty) {
+              return '''
+<div style="position:absolute;left:${_cssMm(left)};top:${_cssMm(top)};width:${_cssMm(iw)};height:${_cssMm(ih)};overflow:hidden;margin:0;padding:0;">
+<img src="{{$photoKey}}" alt="${_htmlEscape(layer.name)}" width="${iw.round()}" height="${ih.round()}" style="position:absolute;left:0;top:0;width:${_cssMm(iw)};height:${_cssMm(ih)};display:block;margin:0;padding:0;border:0;object-fit:cover;"/>
+</div>''';
+            }
+            if (layer.imageBytes == null || layer.imageBytes!.isEmpty) {
               return '';
+            }
             final imgData =
                 'data:image/png;base64,${base64Encode(layer.imageBytes!)}';
-            final iw = layer.imageWidth.clamp(40.0, 1400.0).toStringAsFixed(2);
-            final ih = layer.imageHeight.clamp(24.0, 1200.0).toStringAsFixed(2);
-            return '''
-<img src="$imgData" alt="${_htmlEscape(layer.name)}" style="position:absolute;left:${left}px;top:${top}px;width:${iw}px;height:${ih}px;object-fit:cover;" />''';
+            return _coverFittedImageHtml(
+              src: imgData,
+              alt: layer.name,
+              boxLeft: left,
+              boxTop: top,
+              boxWidth: iw,
+              boxHeight: ih,
+              bytes: layer.imageBytes,
+            );
           }
-          final text = _resolveTemplateText(
-            layer.text ?? '',
-          ).replaceAll('\n', '<br/>');
+          final text = (layer.text ?? '').replaceAll('\n', '<br/>');
           final fw = _fontWeightToInt(layer.fontWeight);
-          final fs = layer.fontSize.toStringAsFixed(2);
-          final lh = layer.lineHeight.toStringAsFixed(2);
-          final ls = layer.letterSpacing.toStringAsFixed(2);
+          final fs = layer.fontSize;
+          final lhPx = math.max(fs * layer.lineHeight, fs);
+          final ls = layer.letterSpacing;
           final ta = _textAlignToString(layer.textAlign);
           final color = _colorToCss(layer.textColor);
           final ff = _htmlEscape(layer.fontFamily);
-          final tw = layer.textBoxWidth.toStringAsFixed(2);
+          final tw = layer.textBoxWidth;
           final italic = layer.isItalic ? 'italic' : 'normal';
           final decoration = layer.isUnderlined ? 'underline' : 'none';
           final borderBottom = layer.hasDashedBottomBorder
-              ? 'border-bottom:1px dashed $color;'
+              ? 'border-bottom:0.2mm dashed $color;'
               : '';
           return '''
-<div style="position:absolute;left:${left}px;top:${top}px;width:${tw}px;font-size:${fs}px;font-weight:${fw};font-style:$italic;text-decoration:$decoration;text-align:$ta;line-height:$lh;letter-spacing:${ls}px;color:$color;font-family:'$ff',sans-serif;$borderBottom">$text</div>''';
+<div style="position:absolute;left:${_cssMm(left)};top:${_cssMm(top)};width:${_cssMm(tw)};margin:0;padding:0;border:0;box-sizing:border-box;white-space:nowrap;overflow:visible;font-size:${_cssMm(fs)};font-weight:${fw};font-style:$italic;text-decoration:$decoration;text-align:$ta;line-height:${_cssMm(lhPx)};letter-spacing:${_cssMm(ls)};color:$color;font-family:'$ff',sans-serif;$borderBottom">$text</div>''';
         })
         .join('\n');
 
-    final backgroundCss = 'background:#ffffff;';
-    final backgroundLayerHtml = bgUrl == null
-        ? ''
-        : '<img src="${_htmlEscape(bgUrl)}" alt="Background" style="position:absolute;left:0;top:0;width:${widthPx.toStringAsFixed(2)}px;height:${heightPx.toStringAsFixed(2)}px;object-fit:cover;" />';
+    final backgroundCss = 'background:#ffffff;overflow:hidden;';
+    String backgroundLayerHtml = '';
+    if (bgUrl != null) {
+      backgroundLayerHtml = _coverFittedImageHtml(
+        src: _htmlEscape(bgUrl),
+        alt: 'Background',
+        boxLeft: 0,
+        boxTop: 0,
+        boxWidth: widthPx,
+        boxHeight: heightPx,
+        bytes: _backgroundImageBytes,
+      );
+    }
 
     return '''
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>${_htmlEscape(_canvasNameController.text.trim())}</title>
+  <style id="cursor-pdf-page-size">
+    @page { size: $pageW $pageH; margin: 0; }
+    html, body { margin: 0; padding: 0; width: $pageW; height: $pageH; overflow: hidden; }
+  </style>
 </head>
 <body style="margin:0;padding:0;">
-  <div style="position:relative;width:${widthPx.toStringAsFixed(2)}px;height:${heightPx.toStringAsFixed(2)}px;$backgroundCss">
+  <div style="position:relative;width:$pageW;height:$pageH;$backgroundCss">
     $backgroundLayerHtml
     $layerHtml
   </div>
@@ -977,6 +1066,9 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
             'dy': layer.offset.dy,
           },
         };
+        if (layer.placeholderKey != null && layer.placeholderKey!.isNotEmpty) {
+          map['placeholderKey'] = layer.placeholderKey;
+        }
         if (layer.kind == _LayerKind.image) {
           map['imageBase64'] = layer.imageBytes == null
               ? null
@@ -1144,6 +1236,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
               ),
       ),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           for (var i = 0; i < _layers.length; i++)
             _buildLayerItem(
@@ -1285,6 +1378,60 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
     });
   }
 
+  void _addDynamicField(_DynamicFieldSpec field) {
+    final existingIndex = _layers.indexWhere(
+      (layer) => _layerUsesField(layer, field),
+    );
+    if (existingIndex >= 0) {
+      setState(() {
+        _selectedLayerIndex = existingIndex;
+        _syncLayerTextEditor();
+      });
+      return;
+    }
+
+    setState(() {
+      final id = 'layer_${_idSeq++}';
+      final token = _dynamicFieldToken(field);
+      if (field.kind == _LayerKind.image) {
+        _layers.add(
+          _TemplateLayer(
+            id: id,
+            kind: _LayerKind.image,
+            name: token,
+            offset: Offset(
+              80 + (_layers.length * 12),
+              90 + (_layers.length * 10),
+            ),
+            placeholderKey: field.key,
+          )
+            ..imageWidth = 120
+            ..imageHeight = 150,
+        );
+      } else {
+        _layers.add(
+          _TemplateLayer(
+            id: id,
+            kind: _LayerKind.text,
+            name: token,
+            text: token,
+            offset: Offset(
+              80 + (_layers.length * 14),
+              90 + (_layers.length * 12),
+            ),
+            fontSize: 24,
+            placeholderKey: field.key,
+          )
+            ..fontWeight = FontWeight.w700
+            ..textColor = const Color(0xFF111827)
+            ..textBoxWidth = 280,
+        );
+      }
+      _selectedLayerIndex = _layers.length - 1;
+      _syncLayerTextEditor();
+    });
+  }
+
   _TemplateLayer? get _selectedLayerOrNull {
     if (_layers.isEmpty) return null;
     if (_selectedLayerIndex < 0 || _selectedLayerIndex >= _layers.length) {
@@ -1295,10 +1442,20 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
 
   void _syncLayerTextEditor() {
     final layer = _selectedLayerOrNull;
-    if (layer == null || layer.kind != _LayerKind.text) {
+    if (layer == null) {
       _inlineEditingLayerId = null;
+      _imageWidthController.clear();
+      _imageHeightController.clear();
       return;
     }
+    if (layer.kind == _LayerKind.image) {
+      _inlineEditingLayerId = null;
+      _imageWidthController.text = layer.imageWidth.round().toString();
+      _imageHeightController.text = layer.imageHeight.round().toString();
+      return;
+    }
+    _imageWidthController.clear();
+    _imageHeightController.clear();
     _layerTextController.text = layer.text ?? '';
     _layerTextController.selection = TextSelection.collapsed(
       offset: _layerTextController.text.length,
@@ -1314,6 +1471,25 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       }
       _selectedLayerIndex = _layers.indexOf(layer);
       _syncLayerTextEditor();
+    });
+  }
+
+  bool get _allLayersSelected =>
+      _layers.isNotEmpty &&
+      _layers.every((layer) => _selectedLayerIds.contains(layer.id));
+
+  bool get _someLayersSelected =>
+      _layers.any((layer) => _selectedLayerIds.contains(layer.id));
+
+  void _toggleSelectAllLayers() {
+    setState(() {
+      if (_allLayersSelected) {
+        _selectedLayerIds.clear();
+      } else {
+        _selectedLayerIds
+          ..clear()
+          ..addAll(_layers.map((layer) => layer.id));
+      }
     });
   }
 
@@ -1451,6 +1627,7 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                 ? null
                 : Uint8List.fromList(source.imageBytes!),
             fontSize: source.fontSize,
+            placeholderKey: source.placeholderKey,
           )
           ..textColor = source.textColor
           ..fontWeight = source.fontWeight
@@ -1470,6 +1647,267 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
       _selectedLayerIndex = _layers.length - 1;
       _syncLayerTextEditor();
     });
+  }
+
+  Widget _photoPlaceholderBox(
+    _TemplateLayer layer,
+    double width,
+    double height,
+  ) {
+    final label = layer.placeholderKey == 'participantPhoto'
+        ? 'Participant photo'
+        : (layer.name.trim().isEmpty ? 'Photo' : layer.name);
+    return Container(
+      width: width,
+      height: height,
+      color: const Color(0xFFE8EEF6),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.person_outline,
+            size: (height * 0.28).clamp(18, 42),
+            color: const Color(0xFF64748B),
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF475569),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _adjustSelectedImageSize({
+    double widthDelta = 0,
+    double heightDelta = 0,
+  }) {
+    final layer = _selectedLayerOrNull;
+    if (layer == null || layer.kind != _LayerKind.image) return;
+    setState(() {
+      layer.imageWidth = (layer.imageWidth + widthDelta).clamp(40, 1000);
+      layer.imageHeight = (layer.imageHeight + heightDelta).clamp(24, 700);
+      _syncLayerTextEditor();
+    });
+  }
+
+  void _applyImageSizeFromFields(_TemplateLayer layer) {
+    final width = double.tryParse(_imageWidthController.text.trim());
+    final height = double.tryParse(_imageHeightController.text.trim());
+    setState(() {
+      if (width != null) {
+        layer.imageWidth = width.clamp(40, 1000);
+      }
+      if (height != null) {
+        layer.imageHeight = height.clamp(24, 700);
+      }
+      _syncLayerTextEditor();
+    });
+  }
+
+  Widget _buildDefaultFieldsDropdown() {
+    const itemHeight = 40.0;
+    const visibleCount = 5;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: const Color(0xFF182845),
+          borderRadius: BorderRadius.circular(9),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(9),
+            onTap: () => setState(
+              () => _defaultFieldsMenuOpen = !_defaultFieldsMenuOpen,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Select a field',
+                      style: TextStyle(
+                        color: Colors.blueGrey.shade400,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _defaultFieldsMenuOpen
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (_defaultFieldsMenuOpen) ...[
+          const SizedBox(height: 4),
+          Container(
+            height: itemHeight * visibleCount,
+            decoration: BoxDecoration(
+              color: const Color(0xFF182845),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: const Color(0xFF2E4568)),
+            ),
+            child: PinnedVerticalScrollViewport(
+              controller: _defaultFieldsScrollController,
+              alwaysShowScrollbar: true,
+              style: _kCertificateScrollbarStyle,
+              child: ListView.builder(
+                controller: _defaultFieldsScrollController,
+                primary: false,
+                itemExtent: itemHeight,
+                itemCount: _kDefaultDynamicFields.length,
+                itemBuilder: (context, index) {
+                  final field = _kDefaultDynamicFields[index];
+                  final onCanvas = _layers.any(
+                    (layer) => _layerUsesField(layer, field),
+                  );
+                  return InkWell(
+                    onTap: () {
+                      _addDynamicField(field);
+                      setState(() => _defaultFieldsMenuOpen = false);
+                    },
+                    child: Container(
+                      color: onCanvas
+                          ? const Color(0xFF1D4ED8)
+                          : Colors.transparent,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        onCanvas ? '${field.label} (added)' : field.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _layerDisplayName(_TemplateLayer layer) {
+    if (layer.placeholderKey != null) {
+      for (final field in _kDefaultDynamicFields) {
+        if (field.key == layer.placeholderKey) return field.label;
+      }
+    }
+    return layer.name;
+  }
+
+  Widget _buildImageSizePanel(_TemplateLayer layer) {
+    final isPhoto = layer.placeholderKey == 'participantPhoto';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF13233F),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF2E4568)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+        children: [
+          Text(
+            isPhoto ? 'PHOTO SIZE' : 'IMAGE SIZE',
+            style: const TextStyle(
+              color: Color(0xFF9AB0D0),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'W',
+            style: TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 72,
+            child: TextField(
+              controller: _imageWidthController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              decoration: _panelFieldDecoration().copyWith(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
+              ),
+              onSubmitted: (_) => _applyImageSizeFromFields(layer),
+              onEditingComplete: () => _applyImageSizeFromFields(layer),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'H',
+            style: TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 72,
+            child: TextField(
+              controller: _imageHeightController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              decoration: _panelFieldDecoration().copyWith(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
+              ),
+              onSubmitted: (_) => _applyImageSizeFromFields(layer),
+              onEditingComplete: () => _applyImageSizeFromFields(layer),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _styleIconButton(
+            icon: Icons.remove,
+            selected: false,
+            onTap: () => _adjustSelectedImageSize(widthDelta: -10, heightDelta: -8),
+          ),
+          const SizedBox(width: 4),
+          _styleIconButton(
+            icon: Icons.add,
+            selected: false,
+            onTap: () => _adjustSelectedImageSize(widthDelta: 10, heightDelta: 8),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${layer.imageWidth.round()} × ${layer.imageHeight.round()} px',
+            style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 11),
+          ),
+        ],
+        ),
+      ),
+    );
   }
 
   Widget _styleIconButton({
@@ -1967,13 +2405,12 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
   }
 
   Widget _buildLayerItem(_TemplateLayer layer, Size canvasSize, bool selected) {
-    final stroke = selected ? AppTheme.primaryColor : Colors.transparent;
-    final boxWidth = layer.kind == _LayerKind.image ? layer.imageWidth : 60.0;
+    final boxWidth = layer.kind == _LayerKind.image
+        ? layer.imageWidth
+        : layer.textBoxWidth;
     final boxHeight = layer.kind == _LayerKind.image ? layer.imageHeight : 40.0;
     final maxLeft = (canvasSize.width - boxWidth).clamp(0.0, canvasSize.width);
     final maxTop = (canvasSize.height - boxHeight).clamp(0.0, canvasSize.height);
-    final dragMaxLeft = maxLeft;
-    final dragMaxTop = maxTop;
     return Positioned(
       left: layer.offset.dx.clamp(0.0, maxLeft),
       top: layer.offset.dy.clamp(0.0, maxTop),
@@ -1995,9 +2432,21 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
               final idx = _layers.indexWhere((l) => l.id == id);
               if (idx < 0) continue;
               final current = _layers[idx];
+              final itemWidth = current.kind == _LayerKind.image
+                  ? current.imageWidth
+                  : current.textBoxWidth;
+              final itemHeight = current.kind == _LayerKind.image
+                  ? current.imageHeight
+                  : 40.0;
               current.offset = Offset(
-                (current.offset.dx + d.delta.dx).clamp(0.0, dragMaxLeft),
-                (current.offset.dy + d.delta.dy).clamp(0.0, dragMaxTop),
+                (current.offset.dx + d.delta.dx).clamp(
+                  0.0,
+                  (canvasSize.width - itemWidth).clamp(0.0, canvasSize.width),
+                ),
+                (current.offset.dy + d.delta.dy).clamp(
+                  0.0,
+                  (canvasSize.height - itemHeight).clamp(0.0, canvasSize.height),
+                ),
               );
             }
           });
@@ -2018,215 +2467,193 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                 _startInlineEdit(layer);
               })
             : null,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            border: Border.all(color: stroke, width: 1.6),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: layer.kind == _LayerKind.text
-              ? SizedBox(
-                  width: layer.textBoxWidth,
-                  child: selected && _inlineEditingLayerId == layer.id
-                      ? TextField(
-                          controller: _layerTextController,
-                          focusNode: _inlineEditFocusNode,
-                          autofocus: true,
-                          maxLines: null,
-                          textAlign: layer.textAlign,
-                          onChanged: (v) {
-                            setState(() {
-                              layer.text = v;
-                              layer.name = v.isEmpty ? 'Text layer' : v;
-                            });
-                          },
-                          onSubmitted: (_) => setState(_stopInlineEdit),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          style: TextStyle(
-                            fontSize: layer.fontSize,
-                            fontWeight: layer.fontWeight,
-                            fontStyle: layer.isItalic
-                                ? FontStyle.italic
-                                : FontStyle.normal,
-                            decoration: layer.isUnderlined
-                                ? TextDecoration.underline
-                                : TextDecoration.none,
-                            color: layer.textColor,
-                            fontFamily: layer.fontFamily,
-                            height: layer.lineHeight,
-                            letterSpacing: layer.letterSpacing,
-                          ),
-                        )
-                      : Stack(
-                          fit: StackFit.passthrough,
-                          children: [
-                            Text.rich(
-                              TextSpan(
-                                children: _buildInlineStyledSpans(
-                                  _resolveTemplateText(layer.text ?? ''),
-                                  TextStyle(
-                                    fontSize: layer.fontSize,
-                                    fontWeight: layer.fontWeight,
-                                    fontStyle: layer.isItalic
-                                        ? FontStyle.italic
-                                        : FontStyle.normal,
-                                    decoration: layer.isUnderlined
-                                        ? TextDecoration.underline
-                                        : TextDecoration.none,
-                                    color: layer.textColor,
-                                    fontFamily: layer.fontFamily,
-                                    height: layer.lineHeight,
-                                    letterSpacing: layer.letterSpacing,
-                                  ),
-                                ),
-                              ),
-                              textAlign: layer.textAlign,
-                            ),
-                            if (layer.hasDashedBottomBorder)
-                              Positioned(
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final count = (constraints.maxWidth / 8)
-                                        .floor();
-                                    return Row(
-                                      children: List.generate(count, (i) {
-                                        return Container(
-                                          width: 4,
-                                          height: 1,
-                                          margin: const EdgeInsets.only(
-                                            right: 4,
-                                          ),
-                                          color: layer.textColor,
-                                        );
-                                      }),
-                                    );
-                                  },
-                                ),
-                              ),
-                          ],
-                        ),
-                )
-              : Builder(
-                  builder: (_) {
-                    final imageWidth = layer.imageWidth.clamp(40.0, 1000.0);
-                    final imageHeight = layer.imageHeight.clamp(24.0, 700.0);
-                    const toolbarHeight = 34.0;
-                    final totalWidth = selected
-                        ? (imageWidth < 172 ? 172.0 : imageWidth)
-                        : imageWidth;
-                    final imageTop = selected ? toolbarHeight : 0.0;
-                    return SizedBox(
-                      width: totalWidth,
-                      height: imageHeight + imageTop,
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: 0,
-                            top: imageTop,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: Image.memory(
-                                layer.imageBytes ?? Uint8List(0),
-                                width: imageWidth,
-                                height: imageHeight,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: imageWidth,
-                                  height: imageHeight,
-                                  color: Colors.grey.shade200,
-                                  alignment: Alignment.center,
-                                  child: const Icon(
-                                    Icons.broken_image_outlined,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (selected)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xCC0E1D34),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: const Color(0xFF1F3353)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _styleIconButton(
-                                icon: Icons.width_normal,
-                                selected: false,
-                                onTap: () => setState(() {
-                                  layer.imageWidth = (layer.imageWidth - 10).clamp(
-                                    40,
-                                    1000,
-                                  );
-                                }),
-                              ),
-                              const SizedBox(width: 4),
-                              _styleIconButton(
-                                icon: Icons.height,
-                                selected: false,
-                                onTap: () => setState(() {
-                                  layer.imageHeight = (layer.imageHeight - 8)
-                                      .clamp(24, 700);
-                                }),
-                              ),
-                              const SizedBox(width: 4),
-                              _styleIconButton(
-                                icon: Icons.add,
-                                selected: false,
-                                onTap: () => setState(() {
-                                  layer.imageWidth = (layer.imageWidth + 10).clamp(
-                                    40,
-                                    1000,
-                                  );
-                                  layer.imageHeight = (layer.imageHeight + 8)
-                                      .clamp(24, 700);
-                                }),
-                              ),
-                              const SizedBox(width: 4),
-                              InkWell(
-                                onTap: _deleteSelectedLayer,
-                                borderRadius: BorderRadius.circular(6),
-                                child: Container(
-                                  width: 34,
-                                  height: 28,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF3B1A1A),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Icon(
-                                    Icons.delete_outline,
-                                    size: 16,
-                                    color: Color(0xFFF87171),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                              ),
-                            ),
-                        ],
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            layer.kind == _LayerKind.text
+                ? _buildTextLayerContent(layer, selected)
+                : _buildImageLayerContent(layer),
+            if (selected)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: AppTheme.primaryColor,
+                        width: 1.6,
                       ),
-                    );
-                  },
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
                 ),
+              ),
+            if (selected && layer.kind == _LayerKind.image)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: _buildImageLayerToolbar(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextLayerContent(_TemplateLayer layer, bool selected) {
+    final textStyle = TextStyle(
+      fontSize: layer.fontSize,
+      fontWeight: layer.fontWeight,
+      fontStyle: layer.isItalic ? FontStyle.italic : FontStyle.normal,
+      decoration: layer.isUnderlined
+          ? TextDecoration.underline
+          : TextDecoration.none,
+      color: layer.textColor,
+      fontFamily: layer.fontFamily,
+      height: layer.lineHeight,
+      leadingDistribution: TextLeadingDistribution.even,
+      letterSpacing: layer.letterSpacing,
+    );
+    return SizedBox(
+      width: layer.textBoxWidth,
+      child: selected && _inlineEditingLayerId == layer.id
+          ? TextField(
+              controller: _layerTextController,
+              focusNode: _inlineEditFocusNode,
+              autofocus: true,
+              maxLines: 1,
+              textAlign: layer.textAlign,
+              onChanged: (v) {
+                setState(() {
+                  layer.text = v;
+                  layer.name = v.isEmpty ? 'Text layer' : v;
+                });
+              },
+              onSubmitted: (_) => setState(_stopInlineEdit),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isCollapsed: true,
+              ),
+              style: textStyle,
+            )
+          : Stack(
+              fit: StackFit.passthrough,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    children: _buildInlineStyledSpans(
+                      _resolveTemplateText(layer.text ?? ''),
+                      textStyle,
+                    ),
+                  ),
+                  textAlign: layer.textAlign,
+                  softWrap: false,
+                  maxLines: 1,
+                  overflow: TextOverflow.visible,
+                ),
+                if (layer.hasDashedBottomBorder)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final count = (constraints.maxWidth / 8).floor();
+                        return Row(
+                          children: List.generate(count, (i) {
+                            return Container(
+                              width: 4,
+                              height: 1,
+                              margin: const EdgeInsets.only(right: 4),
+                              color: layer.textColor,
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildImageLayerContent(_TemplateLayer layer) {
+    final imageWidth = layer.imageWidth.clamp(40.0, 1000.0);
+    final imageHeight = layer.imageHeight.clamp(24.0, 700.0);
+    return SizedBox(
+      width: imageWidth,
+      height: imageHeight,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: (layer.imageBytes == null || layer.imageBytes!.isEmpty)
+            ? _photoPlaceholderBox(layer, imageWidth, imageHeight)
+            : Image.memory(
+                layer.imageBytes!,
+                width: imageWidth,
+                height: imageHeight,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) =>
+                    _photoPlaceholderBox(layer, imageWidth, imageHeight),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildImageLayerToolbar() {
+    return Material(
+      color: const Color(0xCC0E1D34),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF1F3353)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _styleIconButton(
+              icon: Icons.width_normal,
+              selected: false,
+              onTap: () => _adjustSelectedImageSize(widthDelta: -10),
+            ),
+            const SizedBox(width: 4),
+            _styleIconButton(
+              icon: Icons.height,
+              selected: false,
+              onTap: () => _adjustSelectedImageSize(heightDelta: -8),
+            ),
+            const SizedBox(width: 4),
+            _styleIconButton(
+              icon: Icons.add,
+              selected: false,
+              onTap: () => _adjustSelectedImageSize(
+                widthDelta: 10,
+                heightDelta: 8,
+              ),
+            ),
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: _deleteSelectedLayer,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                width: 34,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B1A1A),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.delete_outline,
+                  size: 16,
+                  color: Color(0xFFF87171),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2302,8 +2729,11 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                         child: OutlinedButton.icon(
                           onPressed: () {
                             c.createNewTemplateDraft();
-                            _designerHydrated = false;
-                            _hydrateFromController(c, force: true);
+                            _clearDesignerCanvas();
+                            _designerHydrated = true;
+                            _canvasNameController.text = c.templateName.text;
+                            _persistDesignerToBackendModel(c);
+                            _syncLayerTextEditor();
                             setState(() {});
                           },
                           icon: const Icon(Icons.add, size: 16),
@@ -2647,6 +3077,16 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                   ),
                   const SizedBox(height: 12),
                   Text(
+                    'DEFAULT FIELDS',
+                    style: TextStyle(
+                      color: Colors.blueGrey.shade300,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildDefaultFieldsDropdown(),
+                  const SizedBox(height: 12),
+                  Text(
                     'LAYERS',
                     style: TextStyle(
                       color: Colors.blueGrey.shade300,
@@ -2694,60 +3134,128 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFF2E4568)),
                       ),
-                      child: PinnedVerticalScrollViewport(
-                        controller: _layersScrollController,
-                        style: _kCertificateScrollbarStyle,
-                        child: ListView.builder(
-                          controller: _layersScrollController,
-                          primary: false,
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          itemCount: _layers.length,
-                        itemBuilder: (_, i) {
-                          final layer = _layers[i];
-                          final selected = i == _selectedLayerIndex;
-                          return ListTile(
-                            dense: true,
-                            selected: selected,
-                            selectedTileColor: const Color(0xFF213455),
-                            leading: Icon(
-                              layer.kind == _LayerKind.text
-                                  ? Icons.text_fields
-                                  : Icons.image_outlined,
-                              color: selected
-                                  ? Colors.white
-                                  : Colors.blueGrey.shade200,
-                              size: 18,
-                            ),
-                            title: Text(
-                              layer.name,
-                              style: TextStyle(
-                                color: selected
-                                    ? Colors.white
-                                    : Colors.blueGrey.shade100,
-                                fontSize: 12,
+                      child: _layers.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                'Click a default field to add it to the template.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.blueGrey.shade300,
+                                  fontSize: 12,
+                                ),
                               ),
+                            )
+                          : Column(
+                              children: [
+                                if (_isMultiMoveMode)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      4,
+                                      4,
+                                      0,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            'Select all',
+                                            style: TextStyle(
+                                              color: Colors.blueGrey.shade100,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                        Checkbox(
+                                          tristate: true,
+                                          value: _allLayersSelected
+                                              ? true
+                                              : (_someLayersSelected
+                                                    ? null
+                                                    : false),
+                                          onChanged: (_) =>
+                                              _toggleSelectAllLayers(),
+                                          side: BorderSide(
+                                            color: Colors.blueGrey.shade200,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: PinnedVerticalScrollViewport(
+                                    controller: _layersScrollController,
+                                    alwaysShowScrollbar: true,
+                                    style: _kCertificateScrollbarStyle,
+                                    child: ListView.builder(
+                                      controller: _layersScrollController,
+                                      primary: false,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      itemCount: _layers.length,
+                                      itemBuilder: (_, i) {
+                                        final layer = _layers[i];
+                                        final selected =
+                                            i == _selectedLayerIndex;
+                                        return ListTile(
+                                          dense: true,
+                                          selected: selected,
+                                          selectedTileColor: const Color(
+                                            0xFF213455,
+                                          ),
+                                          leading: Icon(
+                                            layer.kind == _LayerKind.image
+                                                ? (layer.placeholderKey ==
+                                                          'participantPhoto'
+                                                      ? Icons.person_outline
+                                                      : Icons.image_outlined)
+                                                : Icons.text_fields,
+                                            color: selected
+                                                ? Colors.white
+                                                : Colors.blueGrey.shade200,
+                                            size: 18,
+                                          ),
+                                          title: Text(
+                                            _layerDisplayName(layer),
+                                            style: TextStyle(
+                                              color: selected
+                                                  ? Colors.white
+                                                  : Colors.blueGrey.shade100,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          trailing: _isMultiMoveMode
+                                              ? Checkbox(
+                                                  value: _selectedLayerIds
+                                                      .contains(layer.id),
+                                                  onChanged: (_) =>
+                                                      _toggleMultiLayerSelection(
+                                                        layer,
+                                                      ),
+                                                )
+                                              : null,
+                                          onTap: () {
+                                            if (_isMultiMoveMode) {
+                                              _toggleMultiLayerSelection(
+                                                layer,
+                                              );
+                                              return;
+                                            }
+                                            setState(() {
+                                              _selectedLayerIndex = i;
+                                              _syncLayerTextEditor();
+                                            });
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            trailing: _isMultiMoveMode
-                                ? Checkbox(
-                                    value: _selectedLayerIds.contains(layer.id),
-                                    onChanged: (_) =>
-                                        _toggleMultiLayerSelection(layer),
-                                  )
-                                : null,
-                            onTap: () {
-                              if (_isMultiMoveMode) {
-                                _toggleMultiLayerSelection(layer);
-                                return;
-                              }
-                              setState(() {
-                                _selectedLayerIndex = i;
-                                _syncLayerTextEditor();
-                              });
-                            },
-                          );
-                        },
-                        ),
-                      ),
                     ),
                   ),
                 ],
@@ -2772,6 +3280,13 @@ class _CertificateTemplateTabState extends State<CertificateTemplateTab> {
                           alignment: Alignment.topCenter,
                           child: _buildTextStylePanel(selectedLayer!),
                         ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    if (selectedLayer?.kind == _LayerKind.image) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                        child: _buildImageSizePanel(selectedLayer!),
                       ),
                       const SizedBox(height: 6),
                     ],

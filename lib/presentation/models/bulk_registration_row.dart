@@ -44,11 +44,17 @@ class BulkRegistrationRow {
     dateOfBirthController.dispose();
   }
 
+  bool get hasPhoto =>
+      photoFile.value != null ||
+      photoXFile.value != null ||
+      (photoBytes.value != null && photoBytes.value!.isNotEmpty);
+
   bool get isValid {
     return nameController.text.trim().isNotEmpty &&
         dateOfBirth.value != null &&
         gender.value.isNotEmpty &&
-        group.value.isNotEmpty;
+        group.value.isNotEmpty &&
+        hasPhoto;
   }
 
   BulkRegistrationRow copyWith({

@@ -686,19 +686,27 @@ class _CategoryAsanasConfigWizardState
         .map((e) => e.toModel())
         .whereType<CompetitionGradeModel>()
         .toList();
-    _config.durationDays = int.tryParse(_durationDaysController.text.trim());
-    if (_config.durationDays == 1) {
-      _config.howManyTimes = int.tryParse(_howManyTimesController.text.trim());
+    if (_config.isAsanas) {
+      _config.durationDays = null;
+      _config.howManyTimes = null;
       _config.increaseCountEnabled = false;
       _config.increaseCountRanges = <IncreaseCountRangeModel>[];
     } else {
-      _config.howManyTimes = null;
-      _config.increaseCountRanges = _config.increaseCountEnabled
-          ? _increaseCountEntries
-              .map((e) => e.toModel())
-              .whereType<IncreaseCountRangeModel>()
-              .toList()
-          : <IncreaseCountRangeModel>[];
+      _config.durationDays = int.tryParse(_durationDaysController.text.trim());
+      if (_config.durationDays == 1) {
+        _config.howManyTimes =
+            int.tryParse(_howManyTimesController.text.trim());
+        _config.increaseCountEnabled = false;
+        _config.increaseCountRanges = <IncreaseCountRangeModel>[];
+      } else {
+        _config.howManyTimes = null;
+        _config.increaseCountRanges = _config.increaseCountEnabled
+            ? _increaseCountEntries
+                .map((e) => e.toModel())
+                .whereType<IncreaseCountRangeModel>()
+                .toList()
+            : <IncreaseCountRangeModel>[];
+      }
     }
     _config.minTime = _minTimeController.text.trim().isEmpty
         ? null
@@ -2425,117 +2433,140 @@ class _CategoryAsanasConfigWizardState
               );
             },
           ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 520;
-              final daysField = _labeledField(
-                label: 'Duration (days)',
-                child: TextFormField(
-                  controller: _durationDaysController,
-                  enabled: !_readOnly,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: _compactDecoration(hint: 'e.g. 40'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                  onChanged: (v) {
-                    setState(() {
-                      _config.durationDays = int.tryParse(v.trim());
-                      if (_config.durationDays == 1) {
-                        _config.increaseCountEnabled = false;
-                      }
-                    });
-                  },
-                ),
-              );
-              final timesField = _labeledField(
-                label: 'How many times',
-                child: TextFormField(
-                  controller: _howManyTimesController,
-                  enabled: !_readOnly,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: _compactDecoration(hint: 'e.g. 50'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                  onChanged: (v) {
-                    setState(() {
-                      _config.howManyTimes = int.tryParse(v.trim());
-                    });
-                  },
-                ),
-              );
-              final increaseCheckbox = Padding(
-                padding: const EdgeInsets.only(top: 22),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: _config.increaseCountEnabled,
-                      onChanged: _readOnly
-                          ? null
-                          : (v) {
-                              final enabled = v ?? false;
-                              setState(() {
-                                _config.increaseCountEnabled = enabled;
-                                if (enabled && _increaseCountEntries.isEmpty) {
-                                  _increaseCountEntries.add(
-                                    IncreaseCountRangeEntry(),
-                                  );
-                                }
-                              });
-                            },
-                      activeColor: primary,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
+          if (_config.isChallenge) ...[
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 520;
+                final daysField = _labeledField(
+                  label: 'Duration (days)',
+                  child: TextFormField(
+                    controller: _durationDaysController,
+                    enabled: !_readOnly,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: _compactDecoration(hint: 'e.g. 40'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
                     ),
-                    const Flexible(
-                      child: Text(
-                        'Increase count',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                    onChanged: (v) {
+                      setState(() {
+                        _config.durationDays = int.tryParse(v.trim());
+                        if (_config.durationDays == 1) {
+                          _config.increaseCountEnabled = false;
+                        }
+                      });
+                    },
+                  ),
+                );
+                final timesField = _labeledField(
+                  label: 'How many times',
+                  child: TextFormField(
+                    controller: _howManyTimesController,
+                    enabled: !_readOnly,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: _compactDecoration(hint: 'e.g. 50'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                    onChanged: (v) {
+                      setState(() {
+                        _config.howManyTimes = int.tryParse(v.trim());
+                      });
+                    },
+                  ),
+                );
+                final increaseCheckbox = Padding(
+                  padding: const EdgeInsets.only(top: 22),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: _config.increaseCountEnabled,
+                        onChanged: _readOnly
+                            ? null
+                            : (v) {
+                                final enabled = v ?? false;
+                                setState(() {
+                                  _config.increaseCountEnabled = enabled;
+                                  if (enabled &&
+                                      _increaseCountEntries.isEmpty) {
+                                    _increaseCountEntries.add(
+                                      IncreaseCountRangeEntry(),
+                                    );
+                                  }
+                                });
+                              },
+                        activeColor: primary,
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Increase count',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Tick this if the asana count should go up over the challenge days. '
+                                'Then add day ranges with a count (e.g. days 1 to 40 = 50 times).',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  height: 1.35,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-              if (wide) {
-                return Row(
+                    ],
+                  ),
+                );
+                if (wide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: daysField),
+                      const SizedBox(width: 12),
+                      if (_isSingleDayDuration)
+                        Expanded(child: timesField)
+                      else
+                        Expanded(child: increaseCheckbox),
+                    ],
+                  );
+                }
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: daysField),
-                    const SizedBox(width: 12),
-                    if (_isSingleDayDuration)
-                      Expanded(child: timesField)
-                    else
-                      Expanded(child: increaseCheckbox),
+                    daysField,
+                    if (_isSingleDayDuration) ...[
+                      const SizedBox(height: 12),
+                      timesField,
+                    ] else ...[
+                      const SizedBox(height: 4),
+                      increaseCheckbox,
+                    ],
                   ],
                 );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  daysField,
-                  if (_isSingleDayDuration) ...[
-                    const SizedBox(height: 12),
-                    timesField,
-                  ] else ...[
-                    const SizedBox(height: 4),
-                    increaseCheckbox,
-                  ],
-                ],
-              );
-            },
-          ),
-          if (!_isSingleDayDuration && _config.increaseCountEnabled) ...[
-            const SizedBox(height: 14),
-            _buildIncreaseCountRanges(primary),
+              },
+            ),
+            if (!_isSingleDayDuration && _config.increaseCountEnabled) ...[
+              const SizedBox(height: 14),
+              _buildIncreaseCountRanges(primary),
+            ],
           ],
         ],
       ),
@@ -2555,7 +2586,7 @@ class _CategoryAsanasConfigWizardState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Add from–to ranges with a count (e.g. 1 to 40 = 50).',
+            'Add day ranges with a count. Example: 1 to 40 = 50 means days 1–40 are performed 50 times.',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 12),

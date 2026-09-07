@@ -361,6 +361,8 @@ class CompetitionController extends GetxController {
   final RxBool isOnDemandOrg = true.obs;
   final RxBool isLoadingOnDemandContext = false.obs;
   final RxInt onDemandMaintenanceFeePaise = 0.obs;
+  final RxInt onDemandAsanasFeePaise = 500000.obs;
+  final RxInt onDemandChallengeFeePaise = 100000.obs;
   final RxDouble onDemandPaymentGatewayFeePercent = 3.0.obs;
   final RxDouble onDemandPlatformFeePercent = 3.0.obs;
   final RxBool onDemandExtraFeeForCompetition = true.obs;
@@ -369,14 +371,19 @@ class CompetitionController extends GetxController {
   final RxString organizationPaymentModel =
       SubscriptionCatalogFilter.onDemandModeKey.obs;
   final RxBool isProcessingCompetitionPayment = false.obs;
+  final RxBool maintenancePaidAsanas = false.obs;
+  final RxBool maintenancePaidChallenge = false.obs;
 
-  /// On Demand only: new competitions require maintenance payment before save.
-  bool get requiresPrepaidCompetitionPayment => !isEditMode.value;
+  /// On Demand: pay when creating, or when edit adds a format that is not paid yet.
+  bool get requiresPrepaidCompetitionPayment {
+    if (isViewMode.value || !isOnDemandOrg.value) return false;
+    return unpaidAsanasForPayment || unpaidChallengeForPayment;
+  }
 
   String get createCompetitionButtonLabel =>
       requiresPrepaidCompetitionPayment
           ? 'Pay and Finalize'
-          : 'Finalize';
+          : (isEditMode.value ? 'Save changes' : 'Finalize');
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -880,6 +887,14 @@ class CompetitionController extends GetxController {
         onDemandMaintenanceFeePaise.value = feePaise is int
             ? feePaise
             : int.tryParse(feePaise?.toString() ?? '') ?? 0;
+        onDemandAsanasFeePaise.value = _parsePaise(
+          data['asanasMaintenanceFeeAmountPaise'],
+          500000,
+        );
+        onDemandChallengeFeePaise.value = _parsePaise(
+          data['challengeMaintenanceFeeAmountPaise'],
+          100000,
+        );
         onDemandPaymentGatewayFeePercent.value =
             _parsePercent(data['paymentGatewayFeePercent'], 3.0);
         onDemandPlatformFeePercent.value =
@@ -1026,10 +1041,18 @@ class CompetitionController extends GetxController {
   void _applyOnDemandDefaults() {
     isOnDemandOrg.value = true;
     organizationPaymentModel.value = SubscriptionCatalogFilter.onDemandModeKey;
+    onDemandAsanasFeePaise.value = 500000;
+    onDemandChallengeFeePaise.value = 100000;
     onDemandPaymentGatewayFeePercent.value = 3.0;
     onDemandPlatformFeePercent.value = 3.0;
     onDemandExtraFeeForCompetition.value = true;
     onDemandExtraFeeForParticipantReg.value = false;
+  }
+
+  int _parsePaise(dynamic raw, int fallback) {
+    if (raw is int) return raw;
+    if (raw is num) return raw.round();
+    return int.tryParse(raw?.toString() ?? '') ?? fallback;
   }
 
   double _parsePercent(dynamic raw, double fallback) {
@@ -1055,11 +1078,49 @@ class CompetitionController extends GetxController {
     return baseAmount + gateway + platform;
   }
 
-  double maintenanceFeeRupees() =>
-      onDemandMaintenanceFeePaise.value / 100.0;
+  bool get hasAsanasCategoryDraft {
+    if (categoryConfigDrafts.isEmpty) {
+      return selectedCategoryIds.isNotEmpty;
+    }
+    return categoryConfigDrafts.any((c) => c.isAsanas);
+  }
+
+  bool get hasChallengeCategoryDraft =>
+      categoryConfigDrafts.any((c) => c.isChallenge);
+
+  bool get unpaidAsanasForPayment =>
+      hasAsanasCategoryDraft && !maintenancePaidAsanas.value;
+
+  bool get unpaidChallengeForPayment =>
+      hasChallengeCategoryDraft && !maintenancePaidChallenge.value;
+
+  double maintenanceFeeRupees() {
+    double base = 0;
+    if (unpaidAsanasForPayment) {
+      base += onDemandAsanasFeePaise.value / 100.0;
+    }
+    if (unpaidChallengeForPayment) {
+      base += onDemandChallengeFeePaise.value / 100.0;
+    }
+    return base;
+  }
+
+  ({double baseAmount, double feeAmount, double totalAmount})
+      competitionMaintenanceBreakdown() {
+    final base = maintenanceFeeRupees();
+    final total = calculateOnDemandTotalWithFees(
+      base,
+      extraFeeIncludedOverride: false,
+    );
+    return (
+      baseAmount: _roundMoney(base),
+      feeAmount: _roundMoney(total - base),
+      totalAmount: _roundMoney(total),
+    );
+  }
 
   double calculateCompetitionMaintenanceTotal() =>
-      calculateOnDemandTotalWithFees(maintenanceFeeRupees());
+      competitionMaintenanceBreakdown().totalAmount;
 
   // Load all options (categories, prizes, stages, groups) from API
   Future<void> loadOptions() async {
@@ -1222,8 +1283,14 @@ class CompetitionController extends GetxController {
   Future<String?> _completeOnDemandPaymentBeforeCreate({
     required String description,
   }) async {
+    if (!unpaidAsanasForPayment && !unpaidChallengeForPayment) {
+      _notifyError('Add at least one Asanas or Challenge category before payment');
+      return null;
+    }
     final orderResponse = await _paymentRepository.createApiOrder(
       purpose: PaymentRepository.onDemandCompetitionPurpose,
+      hasAsanas: unpaidAsanasForPayment,
+      hasChallenge: unpaidChallengeForPayment,
     );
     if (!orderResponse.success || orderResponse.data == null) {
       _notifyError(orderResponse.message ?? 'Failed to create payment order');
@@ -2337,7 +2404,9 @@ class CompetitionController extends GetxController {
       upsertCategoryDraft(draft);
 
       final competitionId = int.tryParse(competitionToEdit.value?.id ?? '');
-      if (competitionId != null && competitionId > 0) {
+      final unpaidNewFormat = (draft.isChallenge && !maintenancePaidChallenge.value) ||
+          (draft.isAsanas && !maintenancePaidAsanas.value);
+      if (competitionId != null && competitionId > 0 && !unpaidNewFormat) {
         final response = await _repository.upsertCategoryConfig(
           competitionId: competitionId,
           config: draft,
@@ -2893,6 +2962,45 @@ class CompetitionController extends GetxController {
         validateDisplayAdFrom(displayAdFrom.value, requireWhenEmpty: forSubmit);
   }
 
+  Future<bool> _ensureCompetitionNameIsAvailable() async {
+    final name = competitionNameController.text.trim();
+    if (name.isEmpty) {
+      _notifyError('Competition name is required');
+      scrollToSection(
+        competitionNameFieldKey,
+        focusNode: competitionNameFocusNode,
+      );
+      return false;
+    }
+    int? excludeId;
+    if (isEditMode.value) {
+      excludeId = int.tryParse(competitionToEdit.value?.id ?? '');
+    }
+    final response = await _repository.isCompetitionNameAvailable(
+      name: name,
+      excludeId: excludeId,
+    );
+    if (!response.success) {
+      _notifyError(
+        response.message ?? 'Could not verify competition name. Try again.',
+      );
+      scrollToSection(
+        competitionNameFieldKey,
+        focusNode: competitionNameFocusNode,
+      );
+      return false;
+    }
+    if (response.data == false) {
+      _notifyError("Competition with name '$name' already exists!");
+      scrollToSection(
+        competitionNameFieldKey,
+        focusNode: competitionNameFocusNode,
+      );
+      return false;
+    }
+    return true;
+  }
+
   void alertCompetitionDateValidationIssue() {
     final message = validateCompetitionDates();
     if (message == null) return;
@@ -2991,6 +3099,11 @@ class CompetitionController extends GetxController {
 
       isLoading.value = true;
       errorMessage.value = '';
+
+      if (!await _ensureCompetitionNameIsAvailable()) {
+        isLoading.value = false;
+        return false;
+      }
 
       await loadOnDemandContext();
 
@@ -3123,6 +3236,9 @@ class CompetitionController extends GetxController {
 
   // Update competition
   Future<bool> updateCompetition() async {
+    if (isProcessingCompetitionPayment.value) {
+      return false;
+    }
     try {
       if (competitionToEdit.value == null) {
         _notifyError('No competition selected for update');
@@ -3202,6 +3318,32 @@ class CompetitionController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
+      if (!await _ensureCompetitionNameIsAvailable()) {
+        isLoading.value = false;
+        return false;
+      }
+
+      await loadOnDemandContext();
+
+      String? maintenancePaymentOrderId;
+      if (requiresPrepaidCompetitionPayment) {
+        isLoading.value = false;
+        isProcessingCompetitionPayment.value = true;
+        try {
+          maintenancePaymentOrderId =
+              await _completeOnDemandPaymentBeforeCreate(
+                description: competitionNameController.text.trim(),
+              );
+          if (maintenancePaymentOrderId == null) {
+            return false;
+          }
+        } finally {
+          isProcessingCompetitionPayment.value = false;
+          _razorpayCheckout.dispose();
+        }
+        isLoading.value = true;
+      }
+
       final configs = categoryConfigsForSubmit;
       if (configs.isNotEmpty) {
         _applyFirstAsanasFlatFieldsFromDrafts();
@@ -3250,6 +3392,7 @@ class CompetitionController extends GetxController {
 
       final response = await _repository.updateCompetition(
         competition: competition,
+        maintenancePaymentOrderId: maintenancePaymentOrderId,
         brochureFile: hasNewBrochure ? brochureFile.value : null,
         brochureFileLocal: hasNewBrochure ? brochureFileLocal.value : null,
         brochureBytes: hasNewBrochure ? brochureBytes.value : null,
@@ -3261,6 +3404,14 @@ class CompetitionController extends GetxController {
       if (response.success) {
         if (response.data != null) {
           competitionToEdit.value = response.data;
+          _applyPaidFormatsFromCompetition(response.data!);
+        } else {
+          if (unpaidAsanasForPayment) {
+            maintenancePaidAsanas.value = true;
+          }
+          if (unpaidChallengeForPayment) {
+            maintenancePaidChallenge.value = true;
+          }
         }
         // Update timestamp to force brochure reload after update
         brochureUpdateTimestamp.value = DateTime.now().millisecondsSinceEpoch;
@@ -3460,6 +3611,7 @@ class CompetitionController extends GetxController {
     isEditMode.value = !isView; // true for edit, false for view
     isViewMode.value = isView; // true for view-only
     competitionToEdit.value = competition;
+    _applyPaidFormatsFromCompetition(competition);
 
     // Load data into form fields
     competitionNameController.text = competition.competitionName;
@@ -4046,6 +4198,22 @@ class CompetitionController extends GetxController {
     isEditMode.value = false;
     isViewMode.value = false;
     competitionToEdit.value = null;
+    maintenancePaidAsanas.value = false;
+    maintenancePaidChallenge.value = false;
+  }
+
+  void _applyPaidFormatsFromCompetition(CompetitionModel competition) {
+    var paidAsanas = competition.maintenancePaidAsanas;
+    var paidChallenge = competition.maintenancePaidChallenge;
+    if (!paidAsanas && !paidChallenge) {
+      final configs = competition.categoryConfigs;
+      if (configs != null && configs.isNotEmpty) {
+        paidAsanas = configs.any((c) => c.isAsanas);
+        paidChallenge = configs.any((c) => c.isChallenge);
+      }
+    }
+    maintenancePaidAsanas.value = paidAsanas;
+    maintenancePaidChallenge.value = paidChallenge;
   }
 
   bool _isFirstCompetitionGateActive() {

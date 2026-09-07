@@ -131,6 +131,7 @@ class EndPoints {
   /// COMPETITIONS
   static String competitionCreate = '/competition';
   static String competitionList = '/competition/list';
+  static String competitionNameAvailable = '/competition/name-available';
   static String competitionUpdate(String id) => '/competition/$id';
   static String competitionById(String id) => '/competition/$id';
   static String competitionCategoryConfig(String id) =>

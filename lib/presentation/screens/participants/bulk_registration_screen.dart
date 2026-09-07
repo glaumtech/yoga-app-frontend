@@ -45,11 +45,11 @@ List<({String groupName, String stageName})> _groupStageEntriesForBulk(
         final stages = cfg.stageAllotment.keys.toList()
           ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         for (final stageName in stages) {
-          final groups = List<String>.from(
+          final groups = _groupsInCreatedOrderForBulk(
             cfg.stageAllotment[stageName] ?? const [],
-          )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+            selectedGroups: cfg.selectedGroups,
+          );
           for (final groupName in groups) {
-            if (groupName.trim().isEmpty) continue;
             fromAllotment.add((groupName: groupName, stageName: stageName));
           }
         }
@@ -65,10 +65,8 @@ List<({String groupName, String stageName})> _groupStageEntriesForBulk(
             }
           }
         }
-        final groups = List<String>.from(cfg.selectedGroups)
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final groups = _groupsInCreatedOrderForBulk(cfg.selectedGroups);
         for (final groupName in groups) {
-          if (groupName.trim().isEmpty) continue;
           final stageName =
               stageByGroup[groupName.trim().toLowerCase()] ?? 'Stage';
           fromAllotment.add((groupName: groupName, stageName: stageName));
@@ -98,16 +96,9 @@ List<({String groupName, String stageName})> _groupStageEntriesForBulk(
       final stageName = competitionController.getStageNameById(stageId);
       if (stageName == null) continue;
 
-      final groupIds =
-          List<int>.from(
-            competition.stageGroups![stageId.toString()] ?? const [],
-          )..sort((a, b) {
-            final groupA =
-                competitionController.getGroupNameById(a)?.toLowerCase() ?? '';
-            final groupB =
-                competitionController.getGroupNameById(b)?.toLowerCase() ?? '';
-            return groupA.compareTo(groupB);
-          });
+      final groupIds = List<int>.from(
+        competition.stageGroups![stageId.toString()] ?? const [],
+      );
 
       for (final groupId in groupIds) {
         final groupName = competitionController.getGroupNameById(groupId);
@@ -122,9 +113,9 @@ List<({String groupName, String stageName})> _groupStageEntriesForBulk(
     final sortedStages = competition.stageGroupLabels!.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     for (final stageName in sortedStages) {
-      final groups = List<String>.from(
+      final groups = _groupsInCreatedOrderForBulk(
         competition.stageGroupLabels![stageName] ?? const [],
-      )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      );
       for (final groupName in groups) {
         entries.add((groupName: groupName, stageName: stageName));
       }
@@ -132,6 +123,37 @@ List<({String groupName, String stageName})> _groupStageEntriesForBulk(
   }
 
   return entries;
+}
+
+/// Registration group list in Challenge Config / created order, not A–Z.
+List<String> _groupsInCreatedOrderForBulk(
+  Iterable<String> groups, {
+  List<String> selectedGroups = const [],
+}) {
+  final seen = <String>{};
+  final result = <String>[];
+
+  void add(String raw) {
+    final name = raw.trim();
+    if (name.isEmpty) return;
+    if (seen.add(name.toLowerCase())) {
+      result.add(name);
+    }
+  }
+
+  if (selectedGroups.isNotEmpty) {
+    final wanted = {
+      for (final g in groups)
+        if (g.trim().isNotEmpty) g.trim().toLowerCase(),
+    };
+    for (final g in selectedGroups) {
+      if (wanted.contains(g.trim().toLowerCase())) add(g);
+    }
+  }
+  for (final g in groups) {
+    add(g);
+  }
+  return result;
 }
 
 class BulkRegistrationScreen extends StatelessWidget {
@@ -543,20 +565,15 @@ class BulkRegistrationScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'E-Certificate :', bottomSpacing: 8),
-        Obx(
-          () => CheckboxListTile(
-            value: controller.optForECertificate.value,
-            onChanged: (value) {
-              controller.optForECertificate.value = value ?? false;
-              controller.validateRegistrationFormOnFieldChange();
-            },
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            activeColor: Colors.green,
-            title: Text(
-              'Save Trees. Go Green. Opt for a Downloadable E-Certificate',
-              style: TextStyle(fontSize: isMobile ? 12 : 13),
-            ),
+        CheckboxListTile(
+          value: true,
+          onChanged: null,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          activeColor: Colors.green,
+          title: Text(
+            'Save Trees. Go Green. Opt for a Downloadable E-Certificate',
+            style: TextStyle(fontSize: isMobile ? 12 : 13),
           ),
         ),
       ],
@@ -1007,7 +1024,7 @@ class BulkRegistrationScreen extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    'PHOTO',
+                    'PHOTO *',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
@@ -1177,7 +1194,7 @@ class BulkRegistrationScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _buildMobileField(
-                  'PHOTO',
+                  'PHOTO *',
                   _buildPhotoField(context, controller, row, isMobile),
                 ),
               ],

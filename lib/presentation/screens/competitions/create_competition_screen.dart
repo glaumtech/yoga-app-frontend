@@ -410,17 +410,24 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                   ),
 
                 Obx(() {
-                  if (controller.isEditMode.value ||
-                      controller.isViewMode.value ||
+                  if (controller.isViewMode.value ||
                       !controller.isOnDemandOrg.value) {
                     return const SizedBox.shrink();
                   }
-                  controller.onDemandMaintenanceFeePaise.value;
+                  controller.categoryConfigDrafts.length;
+                  controller.categoryConfigDrafts.toList();
+                  controller.selectedCategoryIds.length;
+                  controller.maintenancePaidAsanas.value;
+                  controller.maintenancePaidChallenge.value;
+                  controller.onDemandAsanasFeePaise.value;
+                  controller.onDemandChallengeFeePaise.value;
                   controller.onDemandExtraFeeForCompetition.value;
                   controller.onDemandPaymentGatewayFeePercent.value;
                   controller.onDemandPlatformFeePercent.value;
-                  final total = controller.calculateCompetitionMaintenanceTotal();
-                  if (total <= 0) return const SizedBox.shrink();
+                  final breakdown = controller.competitionMaintenanceBreakdown();
+                  if (breakdown.totalAmount <= 0) {
+                    return const SizedBox.shrink();
+                  }
                   return Container(
                     width: double.infinity,
                     margin: EdgeInsets.only(
@@ -444,15 +451,32 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                             size: 18, color: AppTheme.primaryColor),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(
-                            'Total payable: ₹${total.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color.lerp(
-                                      AppTheme.primaryColor, Colors.black, 0.25) ??
-                                  AppTheme.primaryColor,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '₹${breakdown.baseAmount.toStringAsFixed(2)}'
+                                ' + ₹${breakdown.feeAmount.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Total payable: ₹${breakdown.totalAmount.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color.lerp(
+                                          AppTheme.primaryColor,
+                                          Colors.black,
+                                          0.25) ??
+                                      AppTheme.primaryColor,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -576,15 +600,23 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
             : Row(mainAxisAlignment: MainAxisAlignment.end, children: [btn]);
       }
 
+      controller.isOnDemandOrg.value;
+      controller.isEditMode.value;
+      controller.maintenancePaidAsanas.value;
+      controller.maintenancePaidChallenge.value;
+      controller.categoryConfigDrafts.length;
+
       final primary = controller.isEditMode.value
           ? saveButton(
               onPressed: () async {
                 await controller.updateCompetition();
               },
               isLoading: controller.isLoading,
-              text: 'Save changes',
+              text: controller.createCompetitionButtonLabel,
               isFullWidth: isMobile,
-              width: isMobile ? null : 200,
+              width: isMobile
+                  ? null
+                  : (controller.requiresPrepaidCompetitionPayment ? 300 : 200),
             )
           : saveButton(
               onPressed: () async {
@@ -901,6 +933,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
             ],
           ),
         ),
+        SizedBox(height: isMobile ? 10 : 12),
+        _buildCertificateTemplateLinkCard(context, isMobile: isMobile),
         gap,
         _buildSectionCard(
           key: controller.categoriesSectionKey,
@@ -947,6 +981,62 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCertificateTemplateLinkCard(
+    BuildContext context, {
+    required bool isMobile,
+  }) {
+    final permissionStore = Get.isRegistered<PermissionStore>()
+        ? Get.find<PermissionStore>()
+        : Get.put(PermissionStore());
+    if (!permissionStore.has('MENU_SETTINGS')) {
+      return const SizedBox.shrink();
+    }
+
+    final primary = AppTheme.primaryColor;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.push(
+            AppRoutes.settingsPath(tab: AppRoutes.settingsCertificateTab),
+          ),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.workspace_premium_outlined,
+                  size: isMobile ? 15 : 16,
+                  color: primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Certificate template',
+                  style: TextStyle(
+                    fontSize: isMobile ? 12.5 : 13,
+                    fontWeight: FontWeight.w700,
+                    color: primary,
+                    decoration: TextDecoration.underline,
+                    decorationColor: primary.withValues(alpha: 0.45),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 13,
+                  color: primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

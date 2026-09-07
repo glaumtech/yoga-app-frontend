@@ -98,6 +98,17 @@ class AppRoutes {
     ).toString();
   }
   static const String settings = '/admin/settings';
+  static const String settingsCertificateTab = 'certificate';
+
+  static String settingsPath({String? tab}) {
+    final requestedTab = tab?.trim();
+    if (requestedTab == null || requestedTab.isEmpty) return settings;
+    return Uri(
+      path: settings,
+      queryParameters: {'tab': requestedTab},
+    ).toString();
+  }
+
   static const String sponsors = '/admin/sponsors';
   static const String userManagement = '/admin/users';
   static const String usersList = '/admin/users/list';

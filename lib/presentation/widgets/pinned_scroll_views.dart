@@ -148,8 +148,9 @@ class _PinnedVerticalScrollBarState extends State<PinnedVerticalScrollBar> {
     }
 
     final contentHeight = viewportDim + maxScroll;
+    final minThumb = math.min(thumbMinHeight, trackHeight);
     final thumbHeight = (trackHeight * viewportDim / contentHeight)
-        .clamp(thumbMinHeight, trackHeight);
+        .clamp(minThumb, trackHeight);
     final scrollableRange = math.max(0.0, trackHeight - thumbHeight);
     final thumbOffset = scrollableRange == 0
         ? 0.0
@@ -297,8 +298,9 @@ class _PinnedHorizontalScrollBarState extends State<PinnedHorizontalScrollBar> {
     }
 
     final contentWidth = viewportDim + maxScroll;
+    final minThumb = math.min(thumbMinWidth, trackWidth);
     final thumbWidth = (trackWidth * viewportDim / contentWidth)
-        .clamp(thumbMinWidth, trackWidth);
+        .clamp(minThumb, trackWidth);
     final scrollableRange = math.max(0.0, trackWidth - thumbWidth);
     final thumbOffset = scrollableRange == 0
         ? 0.0

@@ -443,8 +443,10 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.settings,
         name: 'settings',
-        pageBuilder: (context, state) =>
-            _noTransitionPage(state, const SettingsScreen()),
+        pageBuilder: (context, state) => _noTransitionPage(
+          state,
+          SettingsScreen(initialTab: state.uri.queryParameters['tab']),
+        ),
       ),
       GoRoute(
         path: AppRoutes.sponsors,

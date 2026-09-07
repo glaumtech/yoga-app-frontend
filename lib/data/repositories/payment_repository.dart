@@ -324,6 +324,8 @@ class PaymentRepository {
     String? purpose,
     String? currency,
     String? receipt,
+    bool? hasAsanas,
+    bool? hasChallenge,
   }) async {
     final body = <String, dynamic>{};
     if (amountPaise != null) body['amount'] = amountPaise;
@@ -332,6 +334,8 @@ class PaymentRepository {
     if (purpose != null && purpose.trim().isNotEmpty) {
       body['purpose'] = purpose.trim();
     }
+    if (hasAsanas != null) body['hasAsanas'] = hasAsanas;
+    if (hasChallenge != null) body['hasChallenge'] = hasChallenge;
     if (currency != null && currency.trim().isNotEmpty) {
       body['currency'] = currency.trim();
     }

@@ -140,11 +140,11 @@ List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
         final stages = cfg.stageAllotment.keys.toList()
           ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         for (final stageName in stages) {
-          final groups = List<String>.from(
+          final groups = _groupsInCreatedOrder(
             cfg.stageAllotment[stageName] ?? const [],
-          )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+            selectedGroups: cfg.selectedGroups,
+          );
           for (final groupName in groups) {
-            if (groupName.trim().isEmpty) continue;
             fromAllotment.add((groupName: groupName, stageName: stageName));
           }
         }
@@ -161,10 +161,8 @@ List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
             }
           }
         }
-        final groups = List<String>.from(cfg.selectedGroups)
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final groups = _groupsInCreatedOrder(cfg.selectedGroups);
         for (final groupName in groups) {
-          if (groupName.trim().isEmpty) continue;
           final stageName =
               stageByGroup[groupName.trim().toLowerCase()] ?? 'Stage';
           fromAllotment.add((groupName: groupName, stageName: stageName));
@@ -194,16 +192,9 @@ List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
       final stageName = competitionController.getStageNameById(stageId);
       if (stageName == null) continue;
 
-      final groupIds =
-          List<int>.from(
-            competition.stageGroups![stageId.toString()] ?? const [],
-          )..sort((a, b) {
-            final groupA =
-                competitionController.getGroupNameById(a)?.toLowerCase() ?? '';
-            final groupB =
-                competitionController.getGroupNameById(b)?.toLowerCase() ?? '';
-            return groupA.compareTo(groupB);
-          });
+      final groupIds = List<int>.from(
+        competition.stageGroups![stageId.toString()] ?? const [],
+      );
 
       for (final groupId in groupIds) {
         final groupName = competitionController.getGroupNameById(groupId);
@@ -218,9 +209,9 @@ List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
     final sortedStages = competition.stageGroupLabels!.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     for (final stageName in sortedStages) {
-      final groups = List<String>.from(
+      final groups = _groupsInCreatedOrder(
         competition.stageGroupLabels![stageName] ?? const [],
-      )..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      );
       for (final groupName in groups) {
         entries.add((groupName: groupName, stageName: stageName));
       }
@@ -228,6 +219,37 @@ List<({String groupName, String stageName})> _groupStageEntriesForRegistration(
   }
 
   return entries;
+}
+
+/// Registration group list in Challenge Config / created order, not A–Z.
+List<String> _groupsInCreatedOrder(
+  Iterable<String> groups, {
+  List<String> selectedGroups = const [],
+}) {
+  final seen = <String>{};
+  final result = <String>[];
+
+  void add(String raw) {
+    final name = raw.trim();
+    if (name.isEmpty) return;
+    if (seen.add(name.toLowerCase())) {
+      result.add(name);
+    }
+  }
+
+  if (selectedGroups.isNotEmpty) {
+    final wanted = {
+      for (final g in groups)
+        if (g.trim().isNotEmpty) g.trim().toLowerCase(),
+    };
+    for (final g in selectedGroups) {
+      if (wanted.contains(g.trim().toLowerCase())) add(g);
+    }
+  }
+  for (final g in groups) {
+    add(g);
+  }
+  return result;
 }
 
 class ParticipantRegistrationFormScreen extends StatelessWidget {
@@ -523,22 +545,25 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                       isTablet,
                                     ),
                                     Obx(() {
-                                      if (!participantController
-                                          .isInstitutionalRegistrationCategory) {
-                                        return const SizedBox.shrink();
-                                      }
+                                      final institutional =
+                                          participantController
+                                              .isInstitutionalRegistrationCategory;
                                       return Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
                                           SizedBox(height: isMobile ? 20 : 24),
-                                          _buildInstitutionSection(
-                                            context,
-                                            participantController,
-                                            isMobile,
-                                            isTablet,
-                                          ),
-                                          SizedBox(height: isMobile ? 20 : 24),
+                                          if (institutional) ...[
+                                            _buildInstitutionSection(
+                                              context,
+                                              participantController,
+                                              isMobile,
+                                              isTablet,
+                                            ),
+                                            SizedBox(
+                                              height: isMobile ? 20 : 24,
+                                            ),
+                                          ],
                                           Row(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
@@ -644,21 +669,21 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                         isTablet,
                       ),
                       Obx(() {
-                        if (!participantController
-                            .isInstitutionalRegistrationCategory) {
-                          return const SizedBox.shrink();
-                        }
+                        final institutional = participantController
+                            .isInstitutionalRegistrationCategory;
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             SizedBox(height: isMobile ? 20 : 24),
-                            _buildInstitutionSection(
-                              context,
-                              participantController,
-                              isMobile,
-                              isTablet,
-                            ),
-                            SizedBox(height: isMobile ? 20 : 24),
+                            if (institutional) ...[
+                              _buildInstitutionSection(
+                                context,
+                                participantController,
+                                isMobile,
+                                isTablet,
+                              ),
+                              SizedBox(height: isMobile ? 20 : 24),
+                            ],
                             _buildYogaTeacherNameField(
                               context,
                               participantController,
@@ -1294,7 +1319,11 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FormLabelWithHint(label: "Participant's Photo :", bottomSpacing: 8),
+        FormLabelWithHint(
+          label: "Participant's Photo :",
+          hintText: '(Required)',
+          bottomSpacing: 8,
+        ),
         Center(
           child: Obx(
             () => _buildImagePreview(
@@ -1305,9 +1334,26 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               isMobile ? 150 : 200,
               defaultIcon: Icons.person,
               defaultText: 'No Photo',
+              showError: controller.showPhotoError.value,
             ),
           ),
         ),
+        Obx(() {
+          if (!controller.showPhotoError.value) {
+            return const SizedBox.shrink();
+          }
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              "Participant's photo is required",
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: isMobile ? 12 : 13,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          );
+        }),
         Padding(
           padding: const EdgeInsets.only(top: 16),
           child: Center(
@@ -1599,23 +1645,15 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'E-Certificate :', bottomSpacing: 8),
-        Obx(
-          () => IgnorePointer(
-            ignoring: controller.isViewMode.value,
-            child: CheckboxListTile(
-              value: controller.optForECertificate.value,
-              onChanged: (value) {
-                controller.optForECertificate.value = value ?? false;
-                controller.validateRegistrationFormOnFieldChange();
-              },
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              activeColor: Colors.green,
-              title: Text(
-                'Save Trees. Go Green. Opt for a Downloadable E-Certificate',
-                style: TextStyle(fontSize: isMobile ? 12 : 13),
-              ),
-            ),
+        CheckboxListTile(
+          value: true,
+          onChanged: null,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          activeColor: Colors.green,
+          title: Text(
+            'Save Trees. Go Green. Opt for a Downloadable E-Certificate',
+            style: TextStyle(fontSize: isMobile ? 12 : 13),
           ),
         ),
       ],
@@ -1815,12 +1853,18 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isMobile,
     bool isTablet,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FormLabelWithHint(label: 'Yoga Teacher Name :', bottomSpacing: 10),
-        Obx(
-          () => TextFormField(
+    return Obx(() {
+      final requiredField = controller.isInstitutionalRegistrationCategory;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FormLabelWithHint(
+            label: requiredField
+                ? 'Yoga Teacher Name :'
+                : 'Yoga Teacher Name (optional) :',
+            bottomSpacing: 10,
+          ),
+          TextFormField(
             autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.yogaMasterNameController,
             readOnly: controller.isViewMode.value,
@@ -1842,16 +1886,17 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             ),
             validator: !controller.isViewMode.value
                 ? (value) {
-                    if (value == null || value.trim().isEmpty) {
+                    if (requiredField &&
+                        (value == null || value.trim().isEmpty)) {
                       return 'Yoga teacher name is required';
                     }
                     return null;
                   }
                 : null,
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 
   Widget _buildYogaTeacherCellField(
@@ -1860,16 +1905,19 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isMobile,
     bool isTablet,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FormLabelWithHint(
-          label: 'Yoga Teacher Cell :',
-          hintText: '(Without +91)',
-          bottomSpacing: 5,
-        ),
-        Obx(
-          () => TextFormField(
+    return Obx(() {
+      final requiredField = controller.isInstitutionalRegistrationCategory;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FormLabelWithHint(
+            label: requiredField
+                ? 'Yoga Teacher Cell :'
+                : 'Yoga Teacher Cell (optional) :',
+            hintText: '(Without +91)',
+            bottomSpacing: 5,
+          ),
+          TextFormField(
             autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.yogaMasterContactController,
             readOnly: controller.isViewMode.value,
@@ -1895,28 +1943,28 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             ),
             validator: !controller.isViewMode.value
                 ? (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Yoga teacher cell is required';
+                    final cell = value?.trim() ?? '';
+                    if (cell.isEmpty) {
+                      return requiredField
+                          ? 'Yoga teacher cell is required'
+                          : null;
                     }
-                    // Validate 10 digits
-                    if (value.trim().length != 10) {
+                    if (cell.length != 10) {
                       return 'Cell number must be exactly 10 digits';
                     }
-                    // Check for fake numbers (all same digit or reverse sequence)
-                    if (RegExp(r'^(\d)\1{9}$').hasMatch(value.trim())) {
+                    if (RegExp(r'^(\d)\1{9}$').hasMatch(cell)) {
                       return 'Invalid cell number';
                     }
-                    if (value.trim() == '9876543210' ||
-                        value.trim() == '0123456789') {
+                    if (cell == '9876543210' || cell == '0123456789') {
                       return 'Invalid cell number';
                     }
                     return null;
                   }
                 : null,
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 
   Widget _buildInstitutionSection(
@@ -2410,6 +2458,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     String defaultText = 'No Image',
     Uint8List? memoryBytes,
     Object? previewKey,
+    bool showError = false,
   }) {
     final hasMemoryImage = memoryBytes != null && memoryBytes.isNotEmpty;
     final hasLocalImage =
@@ -2423,7 +2472,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(
+          color: showError ? Colors.red : Colors.grey[300]!,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
@@ -2731,3 +2782,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+

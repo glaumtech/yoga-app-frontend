@@ -119,7 +119,7 @@ class ParticipantController extends GetxController {
 
   final Rx<DateTime?> dateOfBirth = Rx<DateTime?>(null);
   final RxString gender = ''.obs;
-  /// INSTITUTIONAL (requires institution + yoga teacher) or OPEN (those fields skipped).
+  /// INSTITUTIONAL (requires institution + yoga teacher) or OPEN (yoga teacher optional).
   final RxString registrationCategory = 'INSTITUTIONAL'.obs;
   final RxBool isSpotRegistration = false.obs;
   final RxString selectedPaymentMode = 'GPAY'.obs;
@@ -127,9 +127,10 @@ class ParticipantController extends GetxController {
 
   /// Server path from existing registration (edit mode — no re-upload required).
   final RxString existingPaymentProofPath = ''.obs;
-  final RxBool optForECertificate = false.obs;
+  final RxBool optForECertificate = true.obs;
   final RxBool termsAccepted = false.obs;
   final RxBool showTermsError = false.obs;
+  final RxBool showPhotoError = false.obs;
   final RxList<String> selectedCategories = <String>[].obs;
   /// ONLINE or OFFLINE for the selected category (same name can exist in both).
   final RxString selectedCategoryMode = ''.obs;
@@ -723,14 +724,31 @@ class ParticipantController extends GetxController {
       selectedInstitution.value = null;
       participantInstitutionId.value = null;
       schoolNameController.text = '';
-      yogaMasterNameController.text = '';
-      yogaMasterContactController.text = '';
       institutionSuggestions.clear();
       _resetInstitutionSearchFilters();
       _clearBonafideCertificateFiles();
       institutionFieldRevision.value++;
     }
     validateRegistrationFormOnFieldChange();
+  }
+
+  bool get hasParticipantPhotoSelected =>
+      selectedImage.value != null ||
+      photoFile.value != null ||
+      existingPhotoUrl.value.trim().isNotEmpty;
+
+  bool validateParticipantPhotoBeforeSave() {
+    if (isViewMode.value) {
+      showPhotoError.value = false;
+      return true;
+    }
+    if (hasParticipantPhotoSelected) {
+      showPhotoError.value = false;
+      return true;
+    }
+    showPhotoError.value = true;
+    errorMessage.value = "Participant's photo is required";
+    return false;
   }
 
   Future<bool> validateBonafideBeforeSave() async {
@@ -953,7 +971,7 @@ class ParticipantController extends GetxController {
     bulkCategory.value = '';
     bulkCategoryMode.value = '';
     isSpotRegistration.value = false;
-    optForECertificate.value = false;
+    optForECertificate.value = true;
     for (final row in bulkRegistrationRows) {
       row.dispose();
     }
@@ -1014,7 +1032,7 @@ class ParticipantController extends GetxController {
 
     if (!row.isValid) {
       errorMessage.value =
-          'Please fill name, date of birth, sex, and group for the participant';
+          'Please fill name, date of birth, sex, group, and photo for the participant';
       return false;
     }
 
@@ -1094,7 +1112,7 @@ class ParticipantController extends GetxController {
       'yogaTeacherCell': bulkYogaTeacherCellController.text.trim(),
       'paymentMode': selectedPaymentMode.value,
       'isSpotRegistration': isSpotRegistration.value,
-      'optForECertificate': optForECertificate.value,
+      'optForECertificate': true,
     };
     if (bulkCategoryMode.value.trim().isNotEmpty) {
       registrationData['categoryMode'] =
@@ -1186,7 +1204,17 @@ class ParticipantController extends GetxController {
     // Validate at least one row has data
     final validRows = bulkRegistrationRows.where((row) => row.isValid).toList();
     if (validRows.isEmpty) {
-      errorMessage.value = 'Please enter at least one participant';
+      final missingPhoto = bulkRegistrationRows.any(
+        (row) =>
+            !row.hasPhoto &&
+            (row.nameController.text.trim().isNotEmpty ||
+                row.dateOfBirth.value != null ||
+                row.gender.value.isNotEmpty ||
+                row.group.value.isNotEmpty),
+      );
+      errorMessage.value = missingPhoto
+          ? "Participant's photo is required"
+          : 'Please enter at least one participant';
       return;
     }
 
@@ -1971,6 +1999,7 @@ class ParticipantController extends GetxController {
         photoFile.value = null;
       }
       existingPhotoUrl.value = '';
+      showPhotoError.value = false;
       errorMessage.value = '';
     } on PhotoUploadException catch (e) {
       final message = e.message;
@@ -2057,9 +2086,10 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     registrationCategory.value = 'INSTITUTIONAL';
-    optForECertificate.value = false;
+    optForECertificate.value = true;
     termsAccepted.value = false;
     showTermsError.value = false;
+    showPhotoError.value = false;
     selectedCategories.clear();
     selectedCategoryMode.value = '';
     selectedStage.value = '';
@@ -2162,9 +2192,10 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     registrationCategory.value = 'INSTITUTIONAL';
-    optForECertificate.value = false;
+    optForECertificate.value = true;
     termsAccepted.value = false;
     showTermsError.value = false;
+    showPhotoError.value = false;
     isSpotRegistration.value = false;
     selectedCategories.clear();
     selectedCategoryMode.value = '';
@@ -2319,7 +2350,7 @@ class ParticipantController extends GetxController {
           ? 'OPEN'
           : 'INSTITUTIONAL';
       isSpotRegistration.value = participant.isSpotRegistration;
-      optForECertificate.value = participant.optForECertificate;
+      optForECertificate.value = true;
       dateOfBirth.value = participant.dateOfBirth;
 
       // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
@@ -2505,7 +2536,7 @@ class ParticipantController extends GetxController {
         ? 'OPEN'
         : 'INSTITUTIONAL';
     isSpotRegistration.value = participant.isSpotRegistration;
-    optForECertificate.value = participant.optForECertificate;
+    optForECertificate.value = true;
     dateOfBirth.value = participant.dateOfBirth;
     // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
     // Otherwise, try to find the stage from competition data
@@ -2641,6 +2672,10 @@ class ParticipantController extends GetxController {
 
     if (standard.value.isEmpty) {
       errorMessage.value = 'Please select standard/group';
+      return false;
+    }
+
+    if (!validateParticipantPhotoBeforeSave()) {
       return false;
     }
 
@@ -2849,6 +2884,10 @@ class ParticipantController extends GetxController {
       return false;
     }
 
+    if (!validateParticipantPhotoBeforeSave()) {
+      return false;
+    }
+
     // Check if institution is selected (institutional category only)
     if (isInstitutionalRegistrationCategory) {
       if (selectedInstitutionId.value == null ||
@@ -3031,7 +3070,7 @@ class ParticipantController extends GetxController {
           ? 'ONLINE'
           : _resolvePaymentModeForSubmit(compController, eventId),
       'isSpotRegistration': isSpotRegistration.value,
-      'optForECertificate': optForECertificate.value,
+      'optForECertificate': true,
       // Registration number will be auto-generated by backend based on competition, category, gender, and stage
     };
     if (selectedCategoryMode.value.trim().isNotEmpty) {

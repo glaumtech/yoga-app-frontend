@@ -38,6 +38,53 @@ class CompetitionRepository {
     );
   }
 
+  Future<ApiResponse<bool>> isCompetitionNameAvailable({
+    required String name,
+    int? excludeId,
+  }) async {
+    final params = <String, String>{'name': name.trim()};
+    if (excludeId != null && excludeId > 0) {
+      params['excludeId'] = '$excludeId';
+    }
+    final query = Uri(queryParameters: params).query;
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: '${EndPoints.competitionNameAvailable}?$query',
+        apiType: APIType.aGet,
+      );
+      if (!response.success) {
+        return ApiResponse<bool>(
+          success: false,
+          message: response.message ?? 'Failed to check competition name',
+          statusCode: response.statusCode,
+        );
+      }
+      final raw = response.data;
+      bool available = false;
+      if (raw is Map) {
+        if (raw['available'] == true) {
+          available = true;
+        } else {
+          final inner = raw['data'];
+          if (inner is Map && inner['available'] == true) {
+            available = true;
+          }
+        }
+      }
+      return ApiResponse<bool>(
+        success: true,
+        data: available,
+        message: response.message,
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse<bool>(
+        success: false,
+        message: 'Error checking competition name: ${e.toString()}',
+      );
+    }
+  }
+
   Future<ApiResponse<CreateCompetitionResult>> createCompetition({
     required CompetitionModel competition,
     String? maintenancePaymentOrderId,
@@ -144,6 +191,7 @@ class CompetitionRepository {
 
   Future<ApiResponse<CompetitionModel>> updateCompetition({
     required CompetitionModel competition,
+    String? maintenancePaymentOrderId,
     XFile? brochureFile,
     File? brochureFileLocal,
     Uint8List? brochureBytes,
@@ -160,6 +208,11 @@ class CompetitionRepository {
       // Prepare competition data as JSON string
       // For update, don't include metadata (id, createdAt, updatedAt) in the data field
       final competitionJson = competition.toJson(includeMetadata: false);
+      if (maintenancePaymentOrderId != null &&
+          maintenancePaymentOrderId.trim().isNotEmpty) {
+        competitionJson['maintenancePaymentOrderId'] =
+            maintenancePaymentOrderId.trim();
+      }
       final dataJsonString = jsonEncode(competitionJson);
 
       print('Update competition request data: $dataJsonString');
