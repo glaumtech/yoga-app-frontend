@@ -452,7 +452,7 @@ class _UploadPanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'The calendar begins on the day you tap Start. Then choose Count or Video for the first date; later dates use the same option.',
+                    'The calendar begins on the day you tap Start.',
                     style: TextStyle(color: AppColors.textMuted, height: 1.4),
                   ),
                   const SizedBox(height: 20),

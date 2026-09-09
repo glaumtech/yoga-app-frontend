@@ -11,6 +11,7 @@ import '../../../data/models/competition_model.dart';
 import '../../../data/repositories/reports_repository.dart';
 import '../../controllers/reports_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../controllers/reports_participants_list_preset.dart';
 import 'reports_users_tab.dart';
 import 'reports_participants_tab.dart';
@@ -474,32 +475,23 @@ class _ReportsScreenState extends State<ReportsScreen>
           final competitions = controller.competitions;
           final selectedId = controller.selectedCompetitionId.value;
 
-          final dropdown = DropdownButtonFormField<String>(
-            value: selectedId,
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: 'Competition',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: isMobile ? 10 : 12,
-              ),
-            ),
+          final dropdown = SearchableDropdownField(
             items: competitions
+                .where((c) => (c.id ?? '').isNotEmpty)
                 .map(
-                  (CompetitionModel c) => DropdownMenuItem<String>(
-                    value: c.id,
-                    child: Text(
-                      c.competitionName,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
+                  (CompetitionModel c) => SearchableDropdownItem(
+                    value: c.id!,
+                    label: c.competitionName,
                   ),
                 )
                 .toList(),
+            selectedValue: selectedId,
+            labelText: 'Competition',
+            hintText: 'Select competition',
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: isMobile ? 10 : 12,
+            ),
             onChanged: (v) => controller.setSelectedCompetition(v),
           );
 

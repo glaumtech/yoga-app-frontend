@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
@@ -11,6 +12,7 @@ import '../../../data/models/participant_model.dart';
 import '../../../data/repositories/competition_repository.dart';
 import '../../../data/repositories/participant_feedback_repository.dart';
 import '../../../data/repositories/participant_repository.dart';
+import '../../../routes/app_routes.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import 'home_landing_sections.dart';
@@ -210,6 +212,7 @@ class _PublicCompetitionParticipantsScreenState
       yogaMasterName: reg['yogaTeacherName']?.toString() ?? '',
       yogaMasterContact: reg['yogaTeacherCell']?.toString() ?? '',
       registrationNo: reg['registrationNo']?.toString(),
+      categoryMode: reg['categoryMode']?.toString(),
       optForECertificate:
           parseBool(reg['optForECertificate']) ||
           parseBool(reg['opt_for_e_certificate']),
@@ -256,6 +259,17 @@ class _PublicCompetitionParticipantsScreenState
     );
 
     if (mounted) setState(() => _downloadingDetailsId = null);
+  }
+
+  bool _canOpenOnlineLogin(ParticipantModel p) {
+    final regNo = p.registrationNo?.trim() ?? '';
+    return regNo.isNotEmpty && p.isOnlineCategory;
+  }
+
+  void _onOpenOnlineLogin(ParticipantModel p) {
+    final regNo = p.registrationNo?.trim() ?? '';
+    if (regNo.isEmpty) return;
+    context.push(AppRoutes.participantVideoUploadPath(registrationNo: regNo));
   }
 
   bool _canDownloadCert(ParticipantModel p) {
@@ -593,6 +607,9 @@ class _PublicCompetitionParticipantsScreenState
           onDownloadDetails: p.id != null && p.id!.trim().isNotEmpty
               ? () => _onDownloadDetails(p)
               : null,
+          onLogin: _canOpenOnlineLogin(p)
+              ? () => _onOpenOnlineLogin(p)
+              : null,
         );
       },
     );
@@ -607,6 +624,7 @@ class _ParticipantTile extends StatelessWidget {
   final bool downloadingDetails;
   final VoidCallback? onDownloadCert;
   final VoidCallback? onDownloadDetails;
+  final VoidCallback? onLogin;
 
   const _ParticipantTile({
     required this.participant,
@@ -616,6 +634,7 @@ class _ParticipantTile extends StatelessWidget {
     required this.downloadingDetails,
     this.onDownloadCert,
     this.onDownloadDetails,
+    this.onLogin,
   });
 
   @override
@@ -670,44 +689,56 @@ class _ParticipantTile extends StatelessWidget {
       ),
     );
 
+    final actionWidgets = <Widget>[
+      if (onDownloadDetails != null)
+        downloadingDetails
+            ? const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : _buildAction(
+                label: 'Download receipt',
+                icon: Icons.download_outlined,
+                color: Colors.blue.shade800,
+                onPressed: onDownloadDetails!,
+              ),
+      if (showCertificateDownload && onDownloadCert != null)
+        downloadingCert
+            ? const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : _buildAction(
+                label: 'Certificate',
+                icon: Icons.download_outlined,
+                color: AppTheme.primaryColor,
+                onPressed: onDownloadCert!,
+              ),
+      if (onLogin != null)
+        _buildAction(
+          label: 'Login',
+          icon: Icons.login,
+          color: AppTheme.primaryColor,
+          onPressed: onLogin!,
+        ),
+    ];
+
     final actions = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        if (onDownloadDetails != null)
-          downloadingDetails
-              ? const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : _buildDownloadAction(
-                  label: 'Download receipt',
-                  color: Colors.blue.shade800,
-                  onPressed: onDownloadDetails!,
-                ),
-        if (onDownloadDetails != null &&
-            showCertificateDownload &&
-            onDownloadCert != null)
-          const SizedBox(height: 8),
-        if (showCertificateDownload && onDownloadCert != null)
-          downloadingCert
-              ? const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : _buildDownloadAction(
-                  label: 'Certificate',
-                  color: AppTheme.primaryColor,
-                  onPressed: onDownloadCert!,
-                ),
+        for (var i = 0; i < actionWidgets.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          actionWidgets[i],
+        ],
       ],
     );
 
@@ -753,14 +784,15 @@ class _ParticipantTile extends StatelessWidget {
     );
   }
 
-  Widget _buildDownloadAction({
+  Widget _buildAction({
     required String label,
+    required IconData icon,
     required Color color,
     required VoidCallback onPressed,
   }) {
     return TextButton.icon(
       onPressed: onPressed,
-      icon: Icon(Icons.download_outlined, size: 16, color: color),
+      icon: Icon(icon, size: 16, color: color),
       label: Text(
         label,
         style: TextStyle(

@@ -13,6 +13,7 @@ import 'presentation/controllers/competition_controller.dart';
 import 'routes/app_router.dart';
 import 'core/constants/app_constants.dart';
 import 'core/keyboard/app_keyboard_scroll_scope.dart';
+import 'core/keyboard/app_text_caret_restore_scope.dart';
 import 'core/utils/permission_store.dart';
 
 void main() async {
@@ -68,7 +69,9 @@ class MyApp extends StatelessWidget {
         WidgetsApp.defaultShortcuts,
       ),
       builder: (context, child) {
-        return AppKeyboardScrollScope(child: child);
+        return AppTextCaretRestoreScope(
+          child: AppKeyboardScrollScope(child: child),
+        );
       },
     ),
     );

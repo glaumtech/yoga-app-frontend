@@ -10,6 +10,8 @@ class ParticipantModel {
   final String address;
   final String yogaMasterName;
   final String yogaMasterContact;
+  /// Participant mobile without +91.
+  final String participantPhone;
   final String? photoUrl;
 
   /// Server storage path for bonafied certificate (e.g. certificates/abc.pdf).
@@ -71,6 +73,7 @@ class ParticipantModel {
     required this.address,
     required this.yogaMasterName,
     required this.yogaMasterContact,
+    this.participantPhone = '',
     this.photoUrl,
     this.bonafiedCertificate,
     this.participantCode,
@@ -148,6 +151,10 @@ class ParticipantModel {
       yogaMasterContact: (json['yogaMasterContact'] ??
               json['yoga_master_contact'] ??
               json['yogaTeacherCell'])
+          ?.toString() ??
+          '',
+      participantPhone: (json['participantPhone'] ??
+              json['participant_phone'])
           ?.toString() ??
           '',
       photoUrl: (json['photoUrl'] ?? json['photo_url'] ?? json['photo'])
@@ -329,6 +336,7 @@ class ParticipantModel {
       'address': address,
       'yogaMasterName': yogaMasterName,
       'yogaMasterContact': yogaMasterContact,
+      'participantPhone': participantPhone,
       if (photoUrl != null) 'photoUrl': photoUrl,
       if (bonafiedCertificate != null)
         'bonafiedCertificate': bonafiedCertificate,
@@ -369,6 +377,7 @@ class ParticipantModel {
     String? address,
     String? yogaMasterName,
     String? yogaMasterContact,
+    String? participantPhone,
     String? photoUrl,
     String? bonafiedCertificate,
     String? participantCode,
@@ -411,6 +420,7 @@ class ParticipantModel {
       address: address ?? this.address,
       yogaMasterName: yogaMasterName ?? this.yogaMasterName,
       yogaMasterContact: yogaMasterContact ?? this.yogaMasterContact,
+      participantPhone: participantPhone ?? this.participantPhone,
       photoUrl: photoUrl ?? this.photoUrl,
       bonafiedCertificate: bonafiedCertificate ?? this.bonafiedCertificate,
       participantCode: participantCode ?? this.participantCode,

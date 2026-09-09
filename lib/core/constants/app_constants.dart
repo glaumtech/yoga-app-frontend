@@ -81,6 +81,8 @@ class EndPoints {
 
   /// PARTICIPANT REGISTRATIONS (New API)
   static String participantRegistrationCreate = '/participant-registration';
+  static String participantRegistrationValidate =
+      '/participant-registration/validate';
   static String participantRegistrationList = '/participant-registration/list';
   static String participantRegistrationById(String id) =>
       '/participant-registration/$id';

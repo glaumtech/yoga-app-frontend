@@ -8,6 +8,7 @@ import '../../controllers/competition_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/responsive_admin_table.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../../data/models/participant_model.dart';
 
 class ParticipantsListScreen extends StatelessWidget {
@@ -231,59 +232,10 @@ class ParticipantsListScreen extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Obx(() {
-                  // Get the first competition ID as default if none selected
-                  final defaultCompetitionId =
-                      competitionController.competitions
-                          .where((c) => c.id != null)
-                          .isNotEmpty
-                      ? competitionController.competitions
-                            .where((c) => c.id != null)
-                            .first
-                            .id
-                      : null;
-
-                  final selectedValue =
-                      controller.selectedEventId.value.isNotEmpty
-                      ? controller.selectedEventId.value
-                      : defaultCompetitionId;
-
-                  return DropdownButtonFormField<String>(
-                    key: const ValueKey('mobile-competition-dropdown'),
-                    value: selectedValue,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 16,
-                      ),
-                      isDense: true,
-                    ),
-                    isExpanded: true,
-                    items: competitionController.competitions
-                        .where((competition) => competition.id != null)
-                        .map((competition) {
-                          return DropdownMenuItem<String>(
-                            value: competition.id,
-                            child: Text(
-                              competition.competitionName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        })
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        controller.selectedEventId.value = value;
-                        controller.loadParticipantsByEventId(value);
-                      }
-                    },
-                  );
-                }),
+                child: _buildCompetitionDropdown(
+                  controller,
+                  competitionController,
+                ),
               ),
               SizedBox(width: 8),
               IconButton(
@@ -355,61 +307,11 @@ class ParticipantsListScreen extends StatelessWidget {
         ),
         SizedBox(width: isTablet ? 12 : 16),
         // Competition Dropdown
-        Obx(() {
-          // Get the first competition ID as default if none selected
-          final defaultCompetitionId =
-              competitionController.competitions
-                  .where((c) => c.id != null)
-                  .isNotEmpty
-              ? competitionController.competitions
-                    .where((c) => c.id != null)
-                    .first
-                    .id
-              : null;
-
-          final selectedValue = controller.selectedEventId.value.isNotEmpty
-              ? controller.selectedEventId.value
-              : defaultCompetitionId;
-
-          return SizedBox(
-            width: isTablet ? 240 : 280,
-            child: DropdownButtonFormField<String>(
-              key: const ValueKey('desktop-competition-dropdown'),
-              value: selectedValue,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                filled: true,
-                fillColor: Colors.grey[50],
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 16,
-                ),
-                isDense: true,
-              ),
-              isExpanded: true,
-              items: competitionController.competitions
-                  .where((competition) => competition.id != null)
-                  .map((competition) {
-                    return DropdownMenuItem<String>(
-                      value: competition.id,
-                      child: Text(
-                        competition.competitionName,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  })
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  controller.selectedEventId.value = value;
-                  controller.loadParticipantsByEventId(value);
-                }
-              },
-            ),
-          );
-        }),
+        _buildCompetitionDropdown(
+          controller,
+          competitionController,
+          width: isTablet ? 240 : 280,
+        ),
         SizedBox(width: isTablet ? 8 : 12),
         // Refresh Button
         IconButton(
@@ -424,6 +326,45 @@ class ParticipantsListScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildCompetitionDropdown(
+    ParticipantController controller,
+    CompetitionController competitionController, {
+    double? width,
+  }) {
+    return Obx(() {
+      final competitions = competitionController.competitions
+          .where((competition) => competition.id != null)
+          .toList();
+      final defaultCompetitionId =
+          competitions.isNotEmpty ? competitions.first.id : null;
+      final selectedValue = controller.selectedEventId.value.isNotEmpty
+          ? controller.selectedEventId.value
+          : defaultCompetitionId;
+
+      final dropdown = SearchableDropdownField(
+        items: competitions
+            .map(
+              (competition) => SearchableDropdownItem(
+                value: competition.id!,
+                label: competition.competitionName,
+              ),
+            )
+            .toList(),
+        selectedValue: selectedValue,
+        hintText: 'Select competition',
+        searchHint: 'Search competition...',
+        visibleItemCount: 5,
+        onChanged: (value) {
+          controller.selectedEventId.value = value;
+          controller.loadParticipantsByEventId(value);
+        },
+      );
+
+      if (width == null) return dropdown;
+      return SizedBox(width: width, child: dropdown);
+    });
   }
 
   void _refreshParticipantsList(

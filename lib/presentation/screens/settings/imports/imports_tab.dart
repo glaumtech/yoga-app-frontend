@@ -11,6 +11,7 @@ import '../../../../data/models/competition_model.dart';
 import '../../../../data/repositories/competition_repository.dart';
 import '../../../../data/repositories/participant_repository.dart';
 import '../../../widgets/pinned_scroll_views.dart';
+import '../../../widgets/searchable_dropdown_field.dart';
 
 class SettingsImportsTab extends StatefulWidget {
   const SettingsImportsTab({super.key});
@@ -294,50 +295,42 @@ class _SettingsImportsTabState extends State<SettingsImportsTab> {
   }
 
   Widget _buildCompetitionPicker() {
-    final items = _competitions
-        .where((c) => (c.id ?? '').toString().trim().isNotEmpty)
-        .map(
-          (c) => DropdownMenuItem<CompetitionModel>(
-            value: c,
-            child: Text(
-              '${c.competitionName} (ID: ${c.id})',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    return SearchableDropdownField(
+      selectedValue: _selectedCompetition?.id,
+      labelText: 'Competition',
+      hintText: 'Select competition',
+      enabled: !_isImporting,
+      items: _competitions
+          .where((c) => (c.id ?? '').toString().trim().isNotEmpty)
+          .map(
+            (c) => SearchableDropdownItem(
+              value: c.id!,
+              label: '${c.competitionName} (ID: ${c.id})',
             ),
-          ),
-        )
-        .toList();
-
-    return DropdownButtonFormField<CompetitionModel>(
-      isExpanded: true,
-      initialValue: _selectedCompetition,
-      items: items,
-      onChanged: _isImporting
-          ? null
-          : (v) {
-              setState(() {
-                _selectedCompetition = v;
-                _result = null;
-              });
-            },
-      decoration: InputDecoration(
-        labelText: 'Competition',
-        border: const OutlineInputBorder(),
-        suffixIcon: _isCompetitionsLoading
-            ? const Padding(
-                padding: EdgeInsets.all(12),
-                child: SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            : IconButton(
-                tooltip: 'Refresh',
-                onPressed: _isImporting ? null : _loadCompetitions,
-                icon: const Icon(Icons.refresh),
+          )
+          .toList(),
+      onChanged: (value) {
+        setState(() {
+          _selectedCompetition = _competitions.firstWhereOrNull(
+            (c) => c.id == value,
+          );
+          _result = null;
+        });
+      },
+      suffixIcon: _isCompetitionsLoading
+          ? const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                height: 16,
+                width: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-      ),
+            )
+          : IconButton(
+              tooltip: 'Refresh',
+              onPressed: _isImporting ? null : _loadCompetitions,
+              icon: const Icon(Icons.refresh),
+            ),
     );
   }
 

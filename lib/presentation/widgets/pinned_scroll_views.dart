@@ -68,6 +68,71 @@ class _PinnedScrollHoverRegionState extends State<PinnedScrollHoverRegion> {
   }
 }
 
+/// Shows a pinned vertical scrollbar on hover without rebuilding [child].
+///
+/// Hover used to `setState` around the scroll content, which remounted
+/// text fields on Flutter web after switching browser tabs.
+class _HoverPinnedVerticalOverlay extends StatefulWidget {
+  const _HoverPinnedVerticalOverlay({
+    required this.child,
+    required this.controller,
+    required this.viewportHeight,
+    required this.alwaysShowScrollbar,
+    this.style,
+  });
+
+  final Widget child;
+  final ScrollController controller;
+  final double viewportHeight;
+  final bool alwaysShowScrollbar;
+  final PinnedScrollBarStyle? style;
+
+  @override
+  State<_HoverPinnedVerticalOverlay> createState() =>
+      _HoverPinnedVerticalOverlayState();
+}
+
+class _HoverPinnedVerticalOverlayState
+    extends State<_HoverPinnedVerticalOverlay> {
+  final ValueNotifier<bool> _hovered = ValueNotifier(false);
+
+  @override
+  void dispose() {
+    _hovered.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        MouseRegion(
+          onEnter: (_) => _hovered.value = true,
+          onExit: (_) => _hovered.value = false,
+          child: widget.child,
+        ),
+        Positioned(
+          right: 0,
+          top: 0,
+          height: widget.viewportHeight,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _hovered,
+            builder: (context, isHovered, _) {
+              return PinnedVerticalScrollBar(
+                controller: widget.controller,
+                viewportHeight: widget.viewportHeight,
+                visible: widget.alwaysShowScrollbar || isHovered,
+                style: widget.style,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Vertical scrollbar with reliable click-and-drag on web.
 class PinnedVerticalScrollBar extends StatefulWidget {
   const PinnedVerticalScrollBar({
@@ -453,27 +518,12 @@ class _PinnedVerticalScrollViewState extends State<PinnedVerticalScrollView> {
 
         final viewportHeight = constraints.maxHeight;
 
-        return PinnedScrollHoverRegion(
-          builder: (context, isHovered) {
-            final showBar = widget.alwaysShowScrollbar || isHovered;
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _buildScrollView(),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  height: viewportHeight,
-                  child: PinnedVerticalScrollBar(
-                    controller: _controller,
-                    viewportHeight: viewportHeight,
-                    visible: showBar,
-                    style: widget.style,
-                  ),
-                ),
-              ],
-            );
-          },
+        return _HoverPinnedVerticalOverlay(
+          controller: _controller,
+          viewportHeight: viewportHeight,
+          alwaysShowScrollbar: widget.alwaysShowScrollbar,
+          style: widget.style,
+          child: _buildScrollView(),
         );
       },
     );
@@ -510,27 +560,12 @@ class PinnedVerticalScrollViewport extends StatelessWidget {
 
         final viewportHeight = constraints.maxHeight;
 
-        return PinnedScrollHoverRegion(
-          builder: (context, isHovered) {
-            final showBar = alwaysShowScrollbar || isHovered;
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                child,
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  height: viewportHeight,
-                  child: PinnedVerticalScrollBar(
-                    controller: controller,
-                    viewportHeight: viewportHeight,
-                    visible: showBar,
-                    style: style,
-                  ),
-                ),
-              ],
-            );
-          },
+        return _HoverPinnedVerticalOverlay(
+          controller: controller,
+          viewportHeight: viewportHeight,
+          alwaysShowScrollbar: alwaysShowScrollbar,
+          style: style,
+          child: child,
         );
       },
     );

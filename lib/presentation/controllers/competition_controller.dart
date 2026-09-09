@@ -305,6 +305,22 @@ class CompetitionController extends GetxController {
   final descriptionController = TextEditingController();
   final addressController = TextEditingController();
 
+  /// Survives Flutter web TextField remount/dispose, which can wipe controllers.
+  String _draftCompetitionName = '';
+  String _draftDescription = '';
+  String _draftAddress = '';
+  String _draftGoogleDriveFolderUrl = '';
+  String _draftBestSchoolAwardMinParticipants = '';
+  bool _isApplyingDraftText = false;
+
+  /// After the form unmounts, Flutter web often emits `onChanged('')` during
+  /// TextField dispose. That must not overwrite drafts captured moments earlier.
+  bool _draftCaptureSuspended = false;
+
+  /// After drafts are re-applied, Flutter web may emit focused `onChanged('')`
+  /// and wipe every field except the one that "wins" the focus race.
+  DateTime? _ignoreEmptyDraftUntil;
+
   // Observable state
   final RxBool isLoading = false.obs;
   /// Loading flag for Add More prize/category/stage/group dialogs only.
@@ -362,7 +378,7 @@ class CompetitionController extends GetxController {
   final RxBool isLoadingOnDemandContext = false.obs;
   final RxInt onDemandMaintenanceFeePaise = 0.obs;
   final RxInt onDemandAsanasFeePaise = 500000.obs;
-  final RxInt onDemandChallengeFeePaise = 100000.obs;
+  final RxInt onDemandChallengeFeePaise = 100.obs;
   final RxDouble onDemandPaymentGatewayFeePercent = 3.0.obs;
   final RxDouble onDemandPlatformFeePercent = 3.0.obs;
   final RxBool onDemandExtraFeeForCompetition = true.obs;
@@ -893,7 +909,7 @@ class CompetitionController extends GetxController {
         );
         onDemandChallengeFeePaise.value = _parsePaise(
           data['challengeMaintenanceFeeAmountPaise'],
-          100000,
+          100,
         );
         onDemandPaymentGatewayFeePercent.value =
             _parsePercent(data['paymentGatewayFeePercent'], 3.0);
@@ -1042,7 +1058,7 @@ class CompetitionController extends GetxController {
     isOnDemandOrg.value = true;
     organizationPaymentModel.value = SubscriptionCatalogFilter.onDemandModeKey;
     onDemandAsanasFeePaise.value = 500000;
-    onDemandChallengeFeePaise.value = 100000;
+    onDemandChallengeFeePaise.value = 100;
     onDemandPaymentGatewayFeePercent.value = 3.0;
     onDemandPlatformFeePercent.value = 3.0;
     onDemandExtraFeeForCompetition.value = true;
@@ -3621,6 +3637,9 @@ class CompetitionController extends GetxController {
     addressController.text = competition.address;
     addressTouched.value = false;
     addressText.value = competition.address;
+    _draftCompetitionName = competition.competitionName;
+    _draftDescription = competition.description;
+    _draftAddress = competition.address;
     eventStartDate.value = competition.eventStartDate;
     eventEndDate.value = competition.eventEndDate;
     eventStartTime.value = CompetitionModel.parseTime(
@@ -3642,6 +3661,7 @@ class CompetitionController extends GetxController {
             : 'OFFLINE';
     googleDriveFolderUrlController.text =
         competition.googleDriveFolderUrl?.trim() ?? '';
+    _draftGoogleDriveFolderUrl = googleDriveFolderUrlController.text;
     if ((competition.googleDriveServiceAccountEmail ?? '').trim().isNotEmpty) {
       googleDriveServiceAccountEmail.value =
           competition.googleDriveServiceAccountEmail!.trim();
@@ -3656,6 +3676,8 @@ class CompetitionController extends GetxController {
             competition.bestSchoolAwardMinParticipants! > 0
         ? '${competition.bestSchoolAwardMinParticipants}'
         : '';
+    _draftBestSchoolAwardMinParticipants =
+        bestSchoolAwardMinParticipantsController.text;
     // Load IDs if available, otherwise convert names to IDs
     if (competition.prizeIds != null && competition.prizeIds!.isNotEmpty) {
       selectedPrizeIds.value = List<int>.from(competition.prizeIds!);
@@ -4126,23 +4148,196 @@ class CompetitionController extends GetxController {
     return List<CompetitionModel>.from(competitions);
   }
 
+  /// Re-attaches the form after the create screen is shown again (sidebar
+  /// navigation or Create/List toggle) without wiping in-progress values.
+  ///
+  /// Do not refresh [formKey] here: remounting TextFields on Flutter web can
+  /// clear [TextEditingController]s. Restore from drafts instead.
+  void prepareFormAfterShowing() {
+    restoreDraftTextFields();
+    descriptionText.value = descriptionController.text;
+    addressText.value = addressController.text;
+    // Keep capture suspended until after this frame so remounted web inputs
+    // cannot wipe drafts with a spurious empty onChanged.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isClosed) return;
+      restoreDraftTextFields();
+      descriptionText.value = descriptionController.text;
+      addressText.value = addressController.text;
+      _draftCaptureSuspended = false;
+      // Ignore focused '' onChanged while web re-attaches inputs / caret.
+      _ignoreEmptyDraftUntil =
+          DateTime.now().add(const Duration(milliseconds: 800));
+      // Do not requestFocus here — app-wide caret restore owns which field
+      // gets `|` after tab switches (this used to jump back to the name field).
+      // Re-apply once more after focus settles — web may clear non-first fields.
+      Future<void>.delayed(const Duration(milliseconds: 100), () {
+        if (isClosed) return;
+        restoreDraftTextFields();
+        descriptionText.value = descriptionController.text;
+        addressText.value = addressController.text;
+      });
+    });
+  }
+
+  bool _shouldIgnoreDraftCapture(String value, {FocusNode? focusNode}) {
+    if (_isApplyingDraftText || _draftCaptureSuspended) return true;
+    if (value.isEmpty) {
+      final until = _ignoreEmptyDraftUntil;
+      if (until != null && DateTime.now().isBefore(until)) {
+        return true;
+      }
+      // Remount/dispose clears often emit '' without focus; keep the last draft.
+      if (focusNode != null && !focusNode.hasFocus) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void captureCompetitionNameDraft(String value) {
+    if (_shouldIgnoreDraftCapture(
+      value,
+      focusNode: competitionNameFocusNode,
+    )) {
+      if (value.isEmpty && _draftCompetitionName.isNotEmpty) {
+        _setControllerText(competitionNameController, _draftCompetitionName);
+      }
+      return;
+    }
+    _draftCompetitionName = value;
+  }
+
+  void captureDescriptionDraft(String value) {
+    if (_shouldIgnoreDraftCapture(value, focusNode: descriptionFocusNode)) {
+      if (value.isEmpty && _draftDescription.isNotEmpty) {
+        _setControllerText(descriptionController, _draftDescription);
+        descriptionText.value = _draftDescription;
+      }
+      return;
+    }
+    _draftDescription = value;
+    descriptionText.value = value;
+  }
+
+  void captureAddressDraft(String value) {
+    if (_shouldIgnoreDraftCapture(value, focusNode: addressFocusNode)) {
+      if (value.isEmpty && _draftAddress.isNotEmpty) {
+        _setControllerText(addressController, _draftAddress);
+        addressText.value = _draftAddress;
+      }
+      return;
+    }
+    _draftAddress = value;
+    addressText.value = value;
+  }
+
+  void captureGoogleDriveFolderUrlDraft(String value) {
+    if (_shouldIgnoreDraftCapture(value)) {
+      if (value.isEmpty && _draftGoogleDriveFolderUrl.isNotEmpty) {
+        _setControllerText(
+          googleDriveFolderUrlController,
+          _draftGoogleDriveFolderUrl,
+        );
+      }
+      return;
+    }
+    _draftGoogleDriveFolderUrl = value;
+  }
+
+  void captureBestSchoolAwardMinParticipantsDraft(String value) {
+    if (_shouldIgnoreDraftCapture(value)) {
+      if (value.isEmpty && _draftBestSchoolAwardMinParticipants.isNotEmpty) {
+        _setControllerText(
+          bestSchoolAwardMinParticipantsController,
+          _draftBestSchoolAwardMinParticipants,
+        );
+      }
+      return;
+    }
+    _draftBestSchoolAwardMinParticipants = value;
+  }
+
+  /// Call before the create form unmounts so drafts are kept if controllers
+  /// still hold text. Empty controller values are ignored (Flutter web may
+  /// clear them during dispose).
+  void preserveDraftTextFieldsBeforeUnmount() {
+    final name = competitionNameController.text;
+    final description = descriptionController.text;
+    final address = addressController.text;
+    final drive = googleDriveFolderUrlController.text;
+    final award = bestSchoolAwardMinParticipantsController.text;
+    if (name.isNotEmpty) _draftCompetitionName = name;
+    if (description.isNotEmpty) _draftDescription = description;
+    if (address.isNotEmpty) _draftAddress = address;
+    if (drive.isNotEmpty) _draftGoogleDriveFolderUrl = drive;
+    if (award.isNotEmpty) _draftBestSchoolAwardMinParticipants = award;
+    // Block dispose-time onChanged('') from erasing the drafts above.
+    _draftCaptureSuspended = true;
+  }
+
+  void _clearDraftTextFields() {
+    _draftCompetitionName = '';
+    _draftDescription = '';
+    _draftAddress = '';
+    _draftGoogleDriveFolderUrl = '';
+    _draftBestSchoolAwardMinParticipants = '';
+  }
+
+  void _setControllerText(TextEditingController controller, String text) {
+    if (controller.text == text) {
+      final sel = controller.selection;
+      final offset = (!sel.isValid ||
+              sel.extentOffset < 0 ||
+              sel.extentOffset > text.length)
+          ? text.length
+          : sel.extentOffset;
+      if (!sel.isValid || !sel.isCollapsed || sel.extentOffset != offset) {
+        controller.selection = TextSelection.collapsed(offset: offset);
+      }
+      return;
+    }
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  /// Restores typed values after route changes / web input remounts.
+  void restoreDraftTextFields() {
+    if (_isApplyingDraftText) return;
+    _isApplyingDraftText = true;
+    try {
+      _setControllerText(competitionNameController, _draftCompetitionName);
+      _setControllerText(descriptionController, _draftDescription);
+      _setControllerText(addressController, _draftAddress);
+      _setControllerText(
+        googleDriveFolderUrlController,
+        _draftGoogleDriveFolderUrl,
+      );
+      _setControllerText(
+        bestSchoolAwardMinParticipantsController,
+        _draftBestSchoolAwardMinParticipants,
+      );
+    } finally {
+      _isApplyingDraftText = false;
+    }
+  }
+
   // Toggle view mode
   void toggleViewMode(bool isList) {
     if (isList && _isFirstCompetitionGateActive()) {
       return;
     }
+    if (isList) {
+      // Form unmounts when switching to list; keep typed values in drafts.
+      preserveDraftTextFieldsBeforeUnmount();
+    }
     isListView.value = isList;
     if (isList) {
-      // Reset edit mode when switching to list view
-      isEditMode.value = false;
-      competitionToEdit.value = null;
       loadCompetitions();
     } else {
-      _refreshFormKeys();
-      // Clear form when switching to create view (if not in edit mode)
-      if (!isEditMode.value) {
-        clearForm(refreshFormKeys: false);
-      }
+      prepareFormAfterShowing();
     }
   }
 
@@ -4151,6 +4346,9 @@ class CompetitionController extends GetxController {
     if (refreshFormKeys) {
       _refreshFormKeys();
     }
+
+    _draftCaptureSuspended = false;
+    _clearDraftTextFields();
 
     // Clear text controllers first
     competitionNameController.clear();

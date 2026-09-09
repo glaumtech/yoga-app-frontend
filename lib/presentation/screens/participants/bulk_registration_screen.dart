@@ -8,6 +8,7 @@ import '../../controllers/participant_controller.dart';
 import '../../controllers/competition_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../widgets/form_label_with_hint.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../widgets/location/district_search_field.dart';
@@ -290,46 +291,31 @@ class BulkRegistrationScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Obx(
-          () => DropdownButtonFormField<String>(
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            value: controller.selectedEventId.value.isNotEmpty
+          () => SearchableDropdownField(
+            selectedValue: controller.selectedEventId.value.isNotEmpty
                 ? controller.selectedEventId.value
                 : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 12,
-              ),
-              isDense: isMobile,
+            hintText: 'Select Competition',
+            fillColor: Colors.white,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 16,
+              vertical: 12,
             ),
-            hint: Text(
-              'Select Competition',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
+            isDense: isMobile,
             items: competitionController.competitions
                 .where((c) => c.id != null)
-                .map((competition) {
-                  return DropdownMenuItem<String>(
-                    value: competition.id,
-                    child: Text(
-                      competition.competitionName,
-                      style: TextStyle(fontSize: isMobile ? 14 : 16),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                })
+                .map(
+                  (competition) => SearchableDropdownItem(
+                    value: competition.id!,
+                    label: competition.competitionName,
+                  ),
+                )
                 .toList(),
             onChanged: (value) {
-              if (value != null) {
-                controller.selectedEventId.value = value;
-                controller.bulkCategory.value = '';
-                controller.applySpotRegistrationRulesForSelectedEvent();
-                controller.validateRegistrationFormOnFieldChange();
-              }
+              controller.selectedEventId.value = value;
+              controller.bulkCategory.value = '';
+              controller.applySpotRegistrationRulesForSelectedEvent();
+              controller.validateRegistrationFormOnFieldChange();
             },
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -337,7 +323,6 @@ class BulkRegistrationScreen extends StatelessWidget {
               }
               return null;
             },
-            isExpanded: true,
           ),
         ),
       ],

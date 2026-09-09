@@ -13,6 +13,7 @@ import '../../controllers/participant_registration_form_controller.dart'
         kParticipantRegistrationFormControllerTag;
 import '../../controllers/school_controller.dart';
 import '../../widgets/form_label_with_hint.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/buttons.dart';
 import '../../../data/models/competition_model.dart';
@@ -356,7 +357,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                 ),
                                 SizedBox(height: isMobile ? 20 : 24),
                               ],
-                              _buildNameField(
+                              _buildNameAndPhoneFields(
                                 context,
                                 participantController,
                                 isMobile,
@@ -449,7 +450,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                                       ),
                                       SizedBox(height: isMobile ? 20 : 24),
                                     ],
-                                    _buildNameField(
+                                    _buildNameAndPhoneFields(
                                       context,
                                       participantController,
                                       isMobile,
@@ -1090,57 +1091,40 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               return const LinearProgressIndicator(minHeight: 2);
             }
 
-            return DropdownButtonFormField<String>(
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              value: controller.selectedEventId.value.isNotEmpty
+            return SearchableDropdownField(
+              selectedValue: controller.selectedEventId.value.isNotEmpty
                   ? controller.selectedEventId.value
                   : null,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: isMobile ? 12 : 16,
-                  vertical: 12,
-                ),
-                isDense: isMobile,
-                filled: true,
-                fillColor: controller.isViewMode.value
-                    ? Colors.grey[200]
-                    : Colors.white,
+              hintText: 'Select Competition',
+              enabled: !controller.isViewMode.value,
+              fillColor: controller.isViewMode.value
+                  ? Colors.grey[200]
+                  : Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 12 : 16,
+                vertical: 12,
               ),
-              hint: Text(
-                'Select Competition',
-                style: TextStyle(fontSize: isMobile ? 14 : 16),
-              ),
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
+              isDense: isMobile,
               items: competitionController.competitions
                   .where((c) => c.id != null)
-                  .map((competition) {
-                    return DropdownMenuItem<String>(
-                      value: competition.id,
-                      child: Text(
-                        competition.competitionName,
-                        style: TextStyle(fontSize: isMobile ? 14 : 16),
-                      ),
-                    );
-                  })
+                  .map(
+                    (competition) => SearchableDropdownItem(
+                      value: competition.id!,
+                      label: competition.competitionName,
+                    ),
+                  )
                   .toList(),
-              onChanged: !controller.isViewMode.value
-                  ? (value) {
-                      if (value != null) {
-                        controller.selectedEventId.value = value;
-                        competitionController
-                            .ensureCompetitionLoadedForRegistration(value);
-                        // Clear category, stage and group when competition changes
-                        controller.selectedCategories.clear();
-                        controller.selectedStage.value = '';
-                        controller.standard.value = '';
-                        controller.applySpotRegistrationRulesForSelectedEvent();
-                        controller.validateRegistrationFormOnFieldChange();
-                      }
-                    }
-                  : null,
+              onChanged: (value) {
+                controller.selectedEventId.value = value;
+                competitionController.ensureCompetitionLoadedForRegistration(
+                  value,
+                );
+                controller.selectedCategories.clear();
+                controller.selectedStage.value = '';
+                controller.standard.value = '';
+                controller.applySpotRegistrationRulesForSelectedEvent();
+                controller.validateRegistrationFormOnFieldChange();
+              },
               validator: !controller.isViewMode.value
                   ? (value) {
                       if (value == null || value.isEmpty) {
@@ -1149,10 +1133,47 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                       return null;
                     }
                   : null,
-              isExpanded: true,
             );
           },
         ),
+      ],
+    );
+  }
+
+  Widget _buildNameAndPhoneFields(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    final nameField = _buildNameField(
+      context,
+      controller,
+      isMobile,
+      isTablet,
+    );
+    final phoneField = _buildParticipantPhoneField(
+      context,
+      controller,
+      isMobile,
+      isTablet,
+    );
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          nameField,
+          SizedBox(height: isMobile ? 20 : 24),
+          phoneField,
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: nameField),
+        SizedBox(width: isTablet ? 12 : 16),
+        Expanded(child: phoneField),
       ],
     );
   }
@@ -1201,6 +1222,69 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     final namePattern = RegExp(r'^[A-Za-z\s.]+$');
                     if (!namePattern.hasMatch(value.trim())) {
                       return 'Name can only contain letters, spaces, and periods';
+                    }
+                    return null;
+                  }
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildParticipantPhoneField(
+    BuildContext context,
+    ParticipantController controller,
+    bool isMobile,
+    bool isTablet,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FormLabelWithHint(
+          label: 'Participant Phone :',
+          hintText: '(Without +91)',
+          bottomSpacing: 6,
+        ),
+        Obx(
+          () => TextFormField(
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            controller: controller.participantPhoneController,
+            readOnly: controller.isViewMode.value,
+            onChanged: controller.isViewMode.value
+                ? null
+                : (_) => controller.validateRegistrationFormOnFieldChange(),
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            maxLength: 10,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              counterText: '',
+              filled: true,
+              fillColor: controller.isViewMode.value
+                  ? Colors.grey[200]
+                  : Colors.white,
+            ),
+            validator: !controller.isViewMode.value
+                ? (value) {
+                    final cell = value?.trim() ?? '';
+                    if (cell.isEmpty) {
+                      return 'Participant phone is required';
+                    }
+                    if (cell.length != 10) {
+                      return 'Phone number must be exactly 10 digits';
+                    }
+                    if (RegExp(r'^(\d)\1{9}$').hasMatch(cell)) {
+                      return 'Invalid phone number';
+                    }
+                    if (cell == '9876543210' || cell == '0123456789') {
+                      return 'Invalid phone number';
                     }
                     return null;
                   }

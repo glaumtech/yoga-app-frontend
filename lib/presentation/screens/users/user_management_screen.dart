@@ -12,6 +12,7 @@ import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../widgets/form_title.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../widgets/toggle_button_group.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/buttons.dart';
@@ -412,40 +413,28 @@ class UserManagementScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Obx(
-          () => DropdownButtonFormField<String>(
-            value: controller.selectedEventId.value.isNotEmpty
+          () => SearchableDropdownField(
+            selectedValue: controller.selectedEventId.value.isNotEmpty
                 ? controller.selectedEventId.value
                 : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 12,
-              ),
-              isDense: isMobile,
+            hintText: 'Select Competition',
+            fillColor: Colors.white,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 16,
+              vertical: 12,
             ),
-            hint: Text(
-              'Select Competition',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
+            isDense: isMobile,
             items: competitionController.competitions
                 .where((c) => c.id != null)
-                .map((competition) {
-                  return DropdownMenuItem<String>(
-                    value: competition.id,
-                    child: Text(
-                      competition.competitionName,
-                      style: TextStyle(fontSize: isMobile ? 14 : 16),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                })
+                .map(
+                  (competition) => SearchableDropdownItem(
+                    value: competition.id!,
+                    label: competition.competitionName,
+                  ),
+                )
                 .toList(),
             onChanged: (value) async {
-              if (value != null) {
+              if (value.isNotEmpty) {
                 controller.selectedEventId.value = value;
                 controller.errorMessage.value = '';
                 final match = competitionController.competitions
@@ -463,6 +452,7 @@ class UserManagementScreen extends StatelessWidget {
                   await controller.prepareVolunteerEntry();
                 }
               } else {
+                controller.selectedEventId.value = '';
                 controller.selectedEventName.value = '';
                 controller.availableStages.clear();
                 controller.availableCategories.clear();
@@ -472,13 +462,11 @@ class UserManagementScreen extends StatelessWidget {
               }
             },
             validator: (_) {
-              // Read controller so validation stays correct when Obx rebuilds the dropdown.
               if (controller.selectedEventId.value.isEmpty) {
                 return 'Please select a competition';
               }
               return null;
             },
-            isExpanded: true,
           ),
         ),
       ],
@@ -2134,51 +2122,27 @@ class UserManagementScreen extends StatelessWidget {
             SizedBox(
               width: isMobile ? double.infinity : (isTablet ? 160 : 180),
               child: Obx(
-                () => DropdownButtonFormField<int?>(
-                  value: userController.selectedEventId.value.isNotEmpty
-                      ? int.tryParse(userController.selectedEventId.value)
+                () => SearchableDropdownField(
+                  selectedValue: userController.selectedEventId.value.isNotEmpty
+                      ? userController.selectedEventId.value
                       : null,
-                  decoration: InputDecoration(
-                    labelText: 'Filter by Competition',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 16,
-                    ),
-                    isDense: true,
-                  ),
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text(
-                        'All Competitions',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    ...competitionController.competitions
-                        .where((competition) => competition.id != null)
-                        .map((competition) {
-                          return DropdownMenuItem<int?>(
-                            value: int.tryParse(competition.id!),
-                            child: Text(
-                              competition.competitionName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }),
-                  ],
+                  labelText: 'Filter by Competition',
+                  hintText: 'All Competitions',
+                  emptyOptionLabel: 'All Competitions',
+                  items: competitionController.competitions
+                      .where((competition) => competition.id != null)
+                      .map(
+                        (competition) => SearchableDropdownItem(
+                          value: competition.id!,
+                          label: competition.competitionName,
+                        ),
+                      )
+                      .toList(),
                   onChanged: (value) {
-                    if (value != null) {
-                      userController.selectedEventId.value = value.toString();
-                    } else {
-                      userController.selectedEventId.value = '';
-                    }
-                    userController.loadUsers(eventId: value);
+                    userController.selectedEventId.value = value;
+                    userController.loadUsers(
+                      eventId: value.isEmpty ? null : int.tryParse(value),
+                    );
                   },
                 ),
               ),
@@ -2690,42 +2654,27 @@ Widget _buildListSearchAndFilter(
         children: [
           Expanded(
             child: Obx(
-              () => DropdownButtonFormField<int?>(
-                value: userController.selectedEventId.value.isNotEmpty
-                    ? int.tryParse(userController.selectedEventId.value)
+              () => SearchableDropdownField(
+                selectedValue: userController.selectedEventId.value.isNotEmpty
+                    ? userController.selectedEventId.value
                     : null,
-                decoration: InputDecoration(
-                  labelText: 'Filter by Competition',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                ),
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('All Competitions'),
-                  ),
-                  ...competitionController.competitions
-                      .where((competition) => competition.id != null)
-                      .map((competition) {
-                        return DropdownMenuItem<int?>(
-                          value: int.tryParse(competition.id!),
-                          child: Text(
-                            competition.competitionName,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }),
-                ],
+                labelText: 'Filter by Competition',
+                hintText: 'All Competitions',
+                emptyOptionLabel: 'All Competitions',
+                items: competitionController.competitions
+                    .where((competition) => competition.id != null)
+                    .map(
+                      (competition) => SearchableDropdownItem(
+                        value: competition.id!,
+                        label: competition.competitionName,
+                      ),
+                    )
+                    .toList(),
                 onChanged: (value) {
-                  if (value != null) {
-                    userController.selectedEventId.value = value.toString();
-                  } else {
-                    userController.selectedEventId.value = '';
-                  }
-                  userController.loadUsers(eventId: value);
+                  userController.selectedEventId.value = value;
+                  userController.loadUsers(
+                    eventId: value.isEmpty ? null : int.tryParse(value),
+                  );
                 },
               ),
             ),

@@ -508,6 +508,24 @@ class ParticipantRepository {
   }
 
   // Create participant registration (new API)
+  Future<ApiResponse<Map<String, dynamic>>> validateParticipantRegistration({
+    required Map<String, dynamic> registrationData,
+  }) async {
+    try {
+      return await _apiService.getResponse<Map<String, dynamic>>(
+        url: EndPoints.participantRegistrationValidate,
+        apiType: APIType.aPost,
+        body: registrationData,
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+    } catch (e) {
+      return ApiResponse<Map<String, dynamic>>(
+        success: false,
+        message: 'Error validating registration: ${e.toString()}',
+      );
+    }
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> createParticipantRegistration({
     required Map<String, dynamic> registrationData,
     dynamic photoFile,

@@ -110,6 +110,8 @@ class ParticipantController extends GetxController {
 
   // Form state
   final TextEditingController nameController = TextEditingController();
+  final TextEditingController participantPhoneController =
+      TextEditingController();
   final TextEditingController schoolNameController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
   final TextEditingController yogaMasterNameController =
@@ -2109,6 +2111,7 @@ class ParticipantController extends GetxController {
 
     // Clear all text controllers - set to empty string explicitly
     nameController.text = '';
+    participantPhoneController.text = '';
     schoolNameController.text = '';
     addressController.text = '';
     yogaMasterNameController.text = '';
@@ -2184,6 +2187,7 @@ class ParticipantController extends GetxController {
   /// Clear all form controllers and reactive values
   void _clearFormData() {
     nameController.clear();
+    participantPhoneController.clear();
     schoolNameController.clear();
     addressController.clear();
     yogaMasterNameController.clear();
@@ -2332,6 +2336,7 @@ class ParticipantController extends GetxController {
 
       // Set form fields
       nameController.text = participant.participantName;
+      participantPhoneController.text = participant.participantPhone;
       final viewInstitutionName = participant.schoolName.trim();
       if (viewInstitutionName.isNotEmpty) {
         schoolNameController.text = viewInstitutionName;
@@ -2475,6 +2480,7 @@ class ParticipantController extends GetxController {
 
     // Set form fields
     nameController.text = participant.participantName;
+    participantPhoneController.text = participant.participantPhone;
     final institutionName = participant.schoolName.trim();
     if (institutionName.isNotEmpty) {
       schoolNameController.text = institutionName;
@@ -2632,6 +2638,7 @@ class ParticipantController extends GetxController {
       address: addressController.text.trim(),
       yogaMasterName: yogaMasterNameController.text.trim(),
       yogaMasterContact: yogaMasterContactController.text.trim(),
+      participantPhone: participantPhoneController.text.trim(),
       registrationCategory: registrationCategory.value,
     );
   }
@@ -3016,7 +3023,6 @@ class ParticipantController extends GetxController {
       categoryId,
     );
 
-    Map<String, String>? prepaidCheckout;
     if (payBeforeSave) {
       var amountPaise = _resolveRegistrationFeePaise(
         compController,
@@ -3035,27 +3041,9 @@ class ParticipantController extends GetxController {
         errorMessage.value = 'Invalid fee for selected category';
         return false;
       }
-
-      isLoading.value = true;
-      errorMessage.value = '';
-      isLoading.value = false;
-
-      prepaidCheckout = await registrationPaymentController
-          .collectRegistrationPayment(
-            competitionId: competitionId,
-            categoryId: categoryId,
-            description: 'Competition registration fee',
-          );
-      if (prepaidCheckout == null) {
-        final paymentErr = registrationPaymentController.paymentError.value;
-        errorMessage.value = paymentErr.isNotEmpty
-            ? paymentErr
-            : 'Payment failed. Registration was not saved.';
-        return false;
-      }
     }
 
-    // Prepare registration data
+    // Prepare registration data before payment so server validation can run first.
     final registrationData = <String, dynamic>{
       'competitionId': competitionId,
       'dateOfBirth': dobString,
@@ -3064,9 +3052,10 @@ class ParticipantController extends GetxController {
       'stageId': stageId,
       'registrationCategory': registrationCategory.value,
       'participantName': nameController.text.trim().toUpperCase(),
+      'participantPhone': participantPhoneController.text.trim(),
       'sex': gender.value,
       'groupId': groupId,
-      'paymentMode': payBeforeSave || prepaidCheckout != null
+      'paymentMode': payBeforeSave
           ? 'ONLINE'
           : _resolvePaymentModeForSubmit(compController, eventId),
       'isSpotRegistration': isSpotRegistration.value,
@@ -3093,6 +3082,54 @@ class ParticipantController extends GetxController {
         registrationData['yogaTeacherCell'] = yogaCell;
       }
     }
+
+    if (!isEditMode) {
+      isLoading.value = true;
+      errorMessage.value = '';
+      try {
+        final validation = await _participantRepository
+            .validateParticipantRegistration(registrationData: registrationData);
+        if (!identical(_registrationSubmitOwner, submitOwner)) {
+          isLoading.value = false;
+          errorMessage.value = '';
+          return false;
+        }
+        if (!validation.success) {
+          isLoading.value = false;
+          errorMessage.value = validation.message ??
+              'Please fix the registration details before payment.';
+          return false;
+        }
+      } catch (e) {
+        isLoading.value = false;
+        if (identical(_registrationSubmitOwner, submitOwner)) {
+          errorMessage.value =
+              'Unable to validate registration: ${e.toString()}';
+        }
+        return false;
+      }
+      isLoading.value = false;
+    }
+
+    Map<String, String>? prepaidCheckout;
+    if (payBeforeSave) {
+      errorMessage.value = '';
+
+      prepaidCheckout = await registrationPaymentController
+          .collectRegistrationPayment(
+            competitionId: competitionId,
+            categoryId: categoryId,
+            description: 'Competition registration fee',
+          );
+      if (prepaidCheckout == null) {
+        final paymentErr = registrationPaymentController.paymentError.value;
+        errorMessage.value = paymentErr.isNotEmpty
+            ? paymentErr
+            : 'Payment failed. Registration was not saved.';
+        return false;
+      }
+    }
+
     if (prepaidCheckout != null) {
       final orderId = prepaidCheckout['razorpay_order_id'];
       final paymentId = prepaidCheckout['razorpay_payment_id'];

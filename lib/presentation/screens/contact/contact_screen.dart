@@ -12,6 +12,7 @@ import '../../controllers/competition_controller.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../widgets/footer_section.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../home/home_landing_sections.dart';
 import '../../widgets/pinned_scroll_views.dart';
 
@@ -411,21 +412,23 @@ class _ContactScreenState extends State<ContactScreen> {
               const SizedBox(height: 16),
               Obx(() {
                 final events = competitionController.homeCompetitions
-                    .map((c) => c.competitionName)
+                    .where((c) => c.competitionName.trim().isNotEmpty)
                     .toList();
-                return DropdownButtonFormField<String>(
-                  value: _selectedEvent,
-                  decoration: _fieldDecoration('Event'),
-                  hint: const Text('Not event specific'),
-                  items: [
-                    const DropdownMenuItem(
-                      value: 'Not event specific',
-                      child: Text('Not event specific'),
-                    ),
-                    ...events.map(
-                      (name) => DropdownMenuItem(value: name, child: Text(name)),
-                    ),
-                  ],
+                return SearchableDropdownField(
+                  selectedValue: _selectedEvent,
+                  labelText: 'Event',
+                  hintText: 'Not event specific',
+                  emptyOptionLabel: 'Not event specific',
+                  emptyOptionValue: 'Not event specific',
+                  fillColor: Colors.white,
+                  items: events
+                      .map(
+                        (c) => SearchableDropdownItem(
+                          value: c.competitionName,
+                          label: c.competitionName,
+                        ),
+                      )
+                      .toList(),
                   onChanged: (v) => setState(() => _selectedEvent = v),
                 );
               }),
