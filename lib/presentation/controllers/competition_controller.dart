@@ -378,7 +378,7 @@ class CompetitionController extends GetxController {
   final RxBool isLoadingOnDemandContext = false.obs;
   final RxInt onDemandMaintenanceFeePaise = 0.obs;
   final RxInt onDemandAsanasFeePaise = 500000.obs;
-  final RxInt onDemandChallengeFeePaise = 100.obs;
+  final RxInt onDemandChallengeFeePaise = 100000.obs;
   final RxDouble onDemandPaymentGatewayFeePercent = 3.0.obs;
   final RxDouble onDemandPlatformFeePercent = 3.0.obs;
   final RxBool onDemandExtraFeeForCompetition = true.obs;
@@ -909,7 +909,7 @@ class CompetitionController extends GetxController {
         );
         onDemandChallengeFeePaise.value = _parsePaise(
           data['challengeMaintenanceFeeAmountPaise'],
-          100,
+          100000,
         );
         onDemandPaymentGatewayFeePercent.value =
             _parsePercent(data['paymentGatewayFeePercent'], 3.0);
@@ -1058,7 +1058,7 @@ class CompetitionController extends GetxController {
     isOnDemandOrg.value = true;
     organizationPaymentModel.value = SubscriptionCatalogFilter.onDemandModeKey;
     onDemandAsanasFeePaise.value = 500000;
-    onDemandChallengeFeePaise.value = 100;
+    onDemandChallengeFeePaise.value = 100000;
     onDemandPaymentGatewayFeePercent.value = 3.0;
     onDemandPlatformFeePercent.value = 3.0;
     onDemandExtraFeeForCompetition.value = true;
