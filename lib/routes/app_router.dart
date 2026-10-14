@@ -185,11 +185,16 @@ class AppRouter {
           }
 
           // Super admin with incomplete organization details: lock to org complete only.
+          // Public registration deep links stay reachable (share / QR / new tab).
           final isOrgCompleteRoute = location == AppRoutes.organizationComplete ||
               location.startsWith(AppRoutes.organizationComplete);
           if (_requiresMandatoryOrganizationUpdate() &&
               _isBranchAdminFromStorage() &&
-              !isOrgCompleteRoute) {
+              !isOrgCompleteRoute &&
+              !isRegister &&
+              !isLegal &&
+              !isPublicCompetitions &&
+              !isHomeRoute) {
             return AppRoutes.organizationComplete;
           }
 
@@ -200,7 +205,11 @@ class AppRouter {
           if (!_requiresMandatoryOrganizationUpdate() &&
               _requiresFirstCompetition() &&
               _isBranchAdminFromStorage() &&
-              !isCompetitionCreateRoute) {
+              !isCompetitionCreateRoute &&
+              !isRegister &&
+              !isLegal &&
+              !isPublicCompetitions &&
+              !isHomeRoute) {
             return AppRoutes.createCompetition;
           }
 
@@ -348,17 +357,24 @@ class AppRouter {
         },
       ),
 
-      // User-facing participant registration by competition (anyone can access)
+      // User-facing participant registration by opaque registration code
       GoRoute(
         path: AppRoutes.registerCompetition,
         name: 'register-competition',
         builder: (context, state) {
-          final competitionId = state.pathParameters['competitionId'] ?? '';
-          if (competitionId.isEmpty) {
+          final registrationCode =
+              state.pathParameters['registrationCode'] ?? '';
+          if (registrationCode.isEmpty) {
             return const HomeScreen();
           }
+          final editRegistrationId =
+              state.uri.queryParameters['edit']?.trim();
           return UserCompetitionRegistrationScreen(
-            competitionId: competitionId,
+            registrationCode: registrationCode,
+            editRegistrationId: (editRegistrationId != null &&
+                    editRegistrationId.isNotEmpty)
+                ? editRegistrationId
+                : null,
           );
         },
       ),

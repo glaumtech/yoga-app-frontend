@@ -190,13 +190,19 @@ class _AppTextCaretRestoreScopeState extends State<AppTextCaretRestoreScope>
   }
 
   bool _canRestore(FocusNode node) {
-    if (!node.canRequestFocus) return false;
-    final ctx = node.context;
-    if (ctx == null || !ctx.mounted) return false;
-    // IndexedStack offstage pages are not "current"; skip those.
-    final route = ModalRoute.of(ctx);
-    if (route != null && !route.isCurrent) return false;
-    return true;
+    try {
+      if (!node.canRequestFocus) return false;
+      final ctx = node.context;
+      if (ctx == null || !ctx.mounted) return false;
+      final renderObject = ctx.findRenderObject();
+      if (renderObject == null || !renderObject.attached) return false;
+      // IndexedStack offstage pages are not "current"; skip those.
+      final route = ModalRoute.of(ctx);
+      if (route != null && !route.isCurrent) return false;
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _scheduleRestore(_SavedField saved) {
@@ -231,32 +237,41 @@ class _AppTextCaretRestoreScopeState extends State<AppTextCaretRestoreScope>
     final node = saved.node;
     if (!_canRestore(node)) return;
 
-    // Drop whatever first-field focus Flutter assigned, then take ours.
-    final primary = FocusManager.instance.primaryFocus;
-    if (primary != null && !identical(primary, node) && primary.hasFocus) {
-      primary.unfocus(disposition: UnfocusDisposition.scope);
-    }
+    try {
+      // Drop whatever first-field focus Flutter assigned, then take ours.
+      final primary = FocusManager.instance.primaryFocus;
+      if (primary != null && !identical(primary, node) && primary.hasFocus) {
+        primary.unfocus(disposition: UnfocusDisposition.scope);
+      }
 
-    node.requestFocus();
+      node.requestFocus();
+      if (!_canRestore(node)) return;
 
-    final editable = _editableOf(node);
-    if (editable == null) return;
+      final editable = _editableOf(node);
+      if (editable == null || !editable.mounted) return;
 
-    final controller = editable.widget.controller;
-    final text = controller.text;
-    final offset = saved.caretOffset.clamp(0, text.length);
-    controller.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: offset),
-    );
-    editable.requestKeyboard();
+      final renderObject = editable.context.findRenderObject();
+      if (renderObject == null || !renderObject.attached) return;
 
-    if (kDebugMode) {
-      // ignore: avoid_print
-      debugPrint(
-        '[AppTextCaretRestore] restored focus '
-        'hasFocus=${node.hasFocus} offset=$offset',
+      final controller = editable.widget.controller;
+      final text = controller.text;
+      final offset = saved.caretOffset.clamp(0, text.length);
+      controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: offset),
       );
+      editable.requestKeyboard();
+
+      if (kDebugMode) {
+        debugPrint(
+          '[AppTextCaretRestore] restored focus '
+          'hasFocus=${node.hasFocus} offset=$offset',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AppTextCaretRestore] restore skipped: $e');
+      }
     }
   }
 

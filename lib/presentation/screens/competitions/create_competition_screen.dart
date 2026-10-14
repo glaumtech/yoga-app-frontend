@@ -23,9 +23,11 @@ import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/toggle_button_group.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/form_label_with_hint.dart';
+import '../../widgets/linkified_description.dart';
 import '../../widgets/competition_registration_qr_panel.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/subscription/subscription_plan_picker.dart';
+import '../../widgets/payment_inr_only_notice.dart';
 import '../../../data/models/subscription_package_model.dart';
 import 'competitions_list_screen.dart';
 import 'widgets/add_category_dialog.dart';
@@ -56,6 +58,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
       // Flutter web may remount empty inputs after the first frame.
       controller.prepareFormAfterShowing();
       controller.loadOptions();
+      // Fees live in a long-lived controller; always refresh after Amount Config changes.
+      controller.loadOnDemandContext();
     });
   }
 
@@ -471,8 +475,10 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '₹${breakdown.baseAmount.toStringAsFixed(2)}'
-                                ' + ₹${breakdown.feeAmount.toStringAsFixed(2)}',
+                                breakdown.feeAmount > 0
+                                    ? '₹${breakdown.baseAmount.toStringAsFixed(2)}'
+                                        ' + ₹${breakdown.feeAmount.toStringAsFixed(2)}'
+                                    : '₹${breakdown.baseAmount.toStringAsFixed(2)}',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -503,6 +509,35 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                 SizedBox(height: isMobile ? 20 : 28),
                 const Divider(height: 1, color: AppColors.divider),
                 SizedBox(height: isMobile ? 16 : 20),
+                Obx(() {
+                  if (controller.isViewMode.value) {
+                    return const SizedBox.shrink();
+                  }
+                  controller.isOnDemandOrg.value;
+                  controller.maintenancePaidAsanas.value;
+                  controller.maintenancePaidChallenge.value;
+                  controller.categoryConfigDrafts.length;
+                  controller.showSubscriptionTopUp.value;
+
+                  final needsPrepaid = controller.requiresPrepaidCompetitionPayment;
+                  final onDemandPayable =
+                      controller.isOnDemandOrg.value &&
+                      controller.competitionMaintenanceBreakdown().totalAmount >
+                          0;
+                  final subscriptionCheckout =
+                      controller.showSubscriptionTopUp.value;
+
+                  // Subscription top-up panel includes its own INR notice.
+                  if (subscriptionCheckout ||
+                      (!needsPrepaid && !onDemandPayable)) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: PaymentInrOnlyNotice(margin: EdgeInsets.zero),
+                  );
+                }),
                 _buildFormActions(context, controller, isMobile),
                 SizedBox(height: isMobile ? 8 : 12),
               ],
@@ -731,9 +766,12 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                 fieldKey: controller.descriptionFieldKey,
                 focusNode: controller.descriptionFocusNode,
                 isRequired: true,
-                maxLines: 3,
+                minLines: 4,
+                maxLines: 8,
                 isMobile: isMobile,
                 isTablet: isTablet,
+                isolateVerticalScroll: true,
+                linkifyWhenReadOnly: true,
                 minTrimmedLength: CompetitionController.descriptionMinLength,
                 minLengthMessage: CompetitionController.descriptionMinLengthMessage,
                 lengthWarningTouched: controller.descriptionTouched,
@@ -1917,8 +1955,12 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
           }),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: isMobile
-                ? Column(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const PaymentInrOnlyNotice(margin: EdgeInsets.only(bottom: 12)),
+                if (isMobile)
+                  Column(
                     children: [
                       saveButton(
                         onPressed: () async {
@@ -1940,7 +1982,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                       ),
                     ],
                   )
-                : Row(
+                else
+                  Row(
                     children: [
                       Expanded(
                         child: saveButton(
@@ -1964,6 +2007,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                       ),
                     ],
                   ),
+              ],
+            ),
           ),
         ],
       ),
@@ -2069,10 +2114,13 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
     Key? fieldKey,
     FocusNode? focusNode,
     bool isRequired = false,
+    int minLines = 1,
     int maxLines = 1,
     bool isMobile = false,
     bool isTablet = false,
     TextAlign textAlign = TextAlign.left,
+    bool isolateVerticalScroll = false,
+    bool linkifyWhenReadOnly = false,
     int? minTrimmedLength,
     String? minLengthMessage,
     RxBool? lengthWarningTouched,
@@ -2093,19 +2141,38 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
           ),
           bottomSpacing: 8,
         ),
-        _StableCompetitionTextFormField(
-          label: label,
-          textController: textController,
-          competitionController: competitionController,
-          focusNode: focusNode,
-          isRequired: isRequired,
-          maxLines: maxLines,
-          isMobile: isMobile,
-          textAlign: textAlign,
-          minTrimmedLength: minTrimmedLength,
-          minLengthMessage: minLengthMessage,
-          onChanged: onLengthWarningChanged,
-        ),
+        if (linkifyWhenReadOnly)
+          _CompetitionDescriptionInput(
+            label: label,
+            textController: textController,
+            competitionController: competitionController,
+            focusNode: focusNode,
+            isRequired: isRequired,
+            minLines: minLines,
+            maxLines: maxLines,
+            isMobile: isMobile,
+            isolateVerticalScroll: isolateVerticalScroll,
+            minTrimmedLength: minTrimmedLength,
+            minLengthMessage: minLengthMessage,
+            lengthWarningText: lengthWarningText,
+            onChanged: onLengthWarningChanged,
+          )
+        else
+          _StableCompetitionTextFormField(
+            label: label,
+            textController: textController,
+            competitionController: competitionController,
+            focusNode: focusNode,
+            isRequired: isRequired,
+            minLines: minLines,
+            maxLines: maxLines,
+            isMobile: isMobile,
+            textAlign: textAlign,
+            isolateVerticalScroll: isolateVerticalScroll,
+            minTrimmedLength: minTrimmedLength,
+            minLengthMessage: minLengthMessage,
+            onChanged: onLengthWarningChanged,
+          ),
         if (minTrimmedLength != null &&
             minLengthMessage != null &&
             lengthWarningTouched != null &&
@@ -5137,6 +5204,161 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
   }
 }
 
+class _CompetitionDescriptionInput extends StatefulWidget {
+  const _CompetitionDescriptionInput({
+    required this.label,
+    required this.textController,
+    required this.competitionController,
+    required this.isMobile,
+    this.focusNode,
+    this.isRequired = false,
+    this.minLines = 4,
+    this.maxLines = 8,
+    this.isolateVerticalScroll = true,
+    this.minTrimmedLength,
+    this.minLengthMessage,
+    this.lengthWarningText,
+    this.onChanged,
+  });
+
+  final String label;
+  final TextEditingController textController;
+  final CompetitionController competitionController;
+  final FocusNode? focusNode;
+  final bool isRequired;
+  final int minLines;
+  final int maxLines;
+  final bool isMobile;
+  final bool isolateVerticalScroll;
+  final int? minTrimmedLength;
+  final String? minLengthMessage;
+  final RxString? lengthWarningText;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  State<_CompetitionDescriptionInput> createState() =>
+      _CompetitionDescriptionInputState();
+}
+
+class _CompetitionDescriptionInputState
+    extends State<_CompetitionDescriptionInput> {
+  bool _editing = false;
+  FocusNode? _ownedFocusNode;
+  late FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    if (widget.focusNode == null) {
+      _ownedFocusNode = _focusNode;
+    }
+    _focusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChange);
+    _ownedFocusNode?.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (!_focusNode.hasFocus && _editing) {
+      setState(() => _editing = false);
+    }
+  }
+
+  void _startEditing() {
+    setState(() => _editing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  Widget _readOnlyDescription(String text, {required bool canEdit}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        14,
+        widget.isMobile ? 12 : 14,
+        canEdit ? 4 : 14,
+        widget.isMobile ? 12 : 14,
+      ),
+      decoration: BoxDecoration(
+        color: canEdit ? Colors.white : Colors.grey[200],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: LinkifiedDescription(
+              text: text,
+              maxHeight: widget.isMobile ? 220 : 280,
+              style: TextStyle(
+                fontSize: widget.isMobile ? 14 : 15,
+                height: 1.5,
+                color: AppColors.textBody,
+              ),
+            ),
+          ),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Edit description',
+              visualDensity: VisualDensity.compact,
+              onPressed: _startEditing,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final isView = widget.competitionController.isViewMode.value;
+      if (isView) {
+        final text =
+            widget.lengthWarningText?.value ?? widget.textController.text;
+        return _readOnlyDescription(text, canEdit: false);
+      }
+      if (_editing || widget.textController.text.trim().isEmpty) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _StableCompetitionTextFormField(
+              label: widget.label,
+              textController: widget.textController,
+              competitionController: widget.competitionController,
+              focusNode: _focusNode,
+              isRequired: widget.isRequired,
+              minLines: widget.minLines,
+              maxLines: widget.maxLines,
+              isMobile: widget.isMobile,
+              isolateVerticalScroll: widget.isolateVerticalScroll,
+              minTrimmedLength: widget.minTrimmedLength,
+              minLengthMessage: widget.minLengthMessage,
+              onChanged: widget.onChanged,
+            ),
+            Obx(
+              () => DescriptionUrlChips(
+                text: widget.lengthWarningText?.value ??
+                    widget.textController.text,
+              ),
+            ),
+          ],
+        );
+      }
+      final text =
+          widget.lengthWarningText?.value ?? widget.textController.text;
+      return _readOnlyDescription(text, canEdit: true);
+    });
+  }
+}
+
 /// Text field that reads view-mode outside the parent Form [Obx], so typing
 /// and tab-switch hover rebuilds do not remount the input on Flutter web.
 class _StableCompetitionTextFormField extends StatefulWidget {
@@ -5146,9 +5368,11 @@ class _StableCompetitionTextFormField extends StatefulWidget {
     required this.competitionController,
     this.focusNode,
     this.isRequired = false,
+    this.minLines = 1,
     this.maxLines = 1,
     this.isMobile = false,
     this.textAlign = TextAlign.left,
+    this.isolateVerticalScroll = false,
     this.minTrimmedLength,
     this.minLengthMessage,
     this.onChanged,
@@ -5163,9 +5387,11 @@ class _StableCompetitionTextFormField extends StatefulWidget {
   final CompetitionController competitionController;
   final FocusNode? focusNode;
   final bool isRequired;
+  final int minLines;
   final int maxLines;
   final bool isMobile;
   final TextAlign textAlign;
+  final bool isolateVerticalScroll;
   final int? minTrimmedLength;
   final String? minLengthMessage;
   final ValueChanged<String>? onChanged;
@@ -5181,15 +5407,26 @@ class _StableCompetitionTextFormField extends StatefulWidget {
 
 class _StableCompetitionTextFormFieldState
     extends State<_StableCompetitionTextFormField> {
+  ScrollController? _scrollController;
+
   @override
   void initState() {
     super.initState();
+    if (widget.isolateVerticalScroll) {
+      _scrollController = ScrollController();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // Restore drafts first in case Flutter web cleared controllers on remount.
       widget.competitionController.restoreDraftTextFields();
       _syncExistingTextToInput();
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController?.dispose();
+    super.dispose();
   }
 
   /// Flutter web can remount an empty HTML input even when the controller
@@ -5212,19 +5449,25 @@ class _StableCompetitionTextFormFieldState
   @override
   Widget build(BuildContext context) {
     final readOnly = widget.competitionController.isViewMode.value;
-    return TextFormField(
+    Widget field = TextFormField(
       key: ValueKey('competition-field-${widget.label}'),
       controller: widget.textController,
       focusNode: widget.focusNode,
+      scrollController: _scrollController,
+      minLines: widget.maxLines > 1 ? widget.minLines : null,
       maxLines: widget.maxLines,
       textAlign: widget.textAlign,
       readOnly: readOnly,
       showCursor: !readOnly,
+      scrollPhysics: widget.isolateVerticalScroll
+          ? const ClampingScrollPhysics()
+          : null,
       // Flutter web fades the caret to 0 while the browser tab is hidden
       // and never paints `|` again when you return.
       cursorOpacityAnimates: false,
       onChanged: widget.onChanged,
-      keyboardType: widget.keyboardType,
+      keyboardType: widget.keyboardType ??
+          (widget.maxLines > 1 ? TextInputType.multiline : null),
       inputFormatters: widget.inputFormatters,
       decoration: InputDecoration(
         hintText: widget.decorationHint,
@@ -5271,6 +5514,14 @@ class _StableCompetitionTextFormFieldState
             }
           : null,
     );
+    final scrollController = _scrollController;
+    if (widget.isolateVerticalScroll && scrollController != null) {
+      return IsolatedScrollListener(
+        controller: scrollController,
+        child: field,
+      );
+    }
+    return field;
   }
 }
 

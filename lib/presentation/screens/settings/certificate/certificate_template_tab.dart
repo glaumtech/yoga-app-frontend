@@ -34,6 +34,11 @@ const List<_DynamicFieldSpec> _kDefaultDynamicFields = [
     label: 'Participant name',
     kind: _LayerKind.text,
   ),
+  _DynamicFieldSpec(
+    key: 'participantNumber',
+    label: 'Participant Number',
+    kind: _LayerKind.text,
+  ),
   _DynamicFieldSpec(key: 'dob', label: 'DOB', kind: _LayerKind.text),
   _DynamicFieldSpec(key: 'age', label: 'Age', kind: _LayerKind.text),
   _DynamicFieldSpec(

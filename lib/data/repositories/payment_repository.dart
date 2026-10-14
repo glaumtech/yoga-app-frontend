@@ -19,6 +19,35 @@ class PaymentRepository {
     return _mapDataResponse(response);
   }
 
+  Future<ApiResponse<Map<String, dynamic>>> getPaymentSettings() async {
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.paymentSettings,
+      apiType: APIType.aGet,
+    );
+    return _mapDataResponse(response);
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> updatePaymentSettings({
+    required double asanasMaintenanceFee,
+    required double challengeMaintenanceFee,
+    required bool extraFeeIncludedForCompetition,
+    required double paymentGatewayFeePercent,
+    required double platformFeePercent,
+  }) async {
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.paymentSettings,
+      apiType: APIType.aPut,
+      body: {
+        'asanasMaintenanceFee': asanasMaintenanceFee,
+        'challengeMaintenanceFee': challengeMaintenanceFee,
+        'extraFeeIncludedForCompetition': extraFeeIncludedForCompetition,
+        'paymentGatewayFeePercent': paymentGatewayFeePercent,
+        'platformFeePercent': platformFeePercent,
+      },
+    );
+    return _mapDataResponse(response);
+  }
+
   Future<ApiResponse<List<SubscriptionModeModel>>> listSubscriptionModes({
     bool includeInactive = false,
   }) async {

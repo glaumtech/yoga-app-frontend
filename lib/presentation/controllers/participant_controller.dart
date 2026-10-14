@@ -119,6 +119,25 @@ class ParticipantController extends GetxController {
   final TextEditingController yogaMasterContactController =
       TextEditingController();
 
+  /// Scroll-to-error targets. Renewed with [formKey] on reset so remounts
+  /// never keep two widgets attached to the same GlobalKey.
+  GlobalKey nameFieldKey = GlobalKey();
+  GlobalKey phoneFieldKey = GlobalKey();
+  GlobalKey dateOfBirthFieldKey = GlobalKey();
+  GlobalKey genderFieldKey = GlobalKey();
+  GlobalKey photoFieldKey = GlobalKey();
+  GlobalKey categoryFieldKey = GlobalKey();
+  GlobalKey groupFieldKey = GlobalKey();
+  GlobalKey institutionFieldKey = GlobalKey();
+  GlobalKey yogaTeacherNameFieldKey = GlobalKey();
+  GlobalKey yogaTeacherCellFieldKey = GlobalKey();
+  GlobalKey termsFieldKey = GlobalKey();
+
+  final nameFocusNode = FocusNode();
+  final phoneFocusNode = FocusNode();
+  final yogaTeacherNameFocusNode = FocusNode();
+  final yogaTeacherCellFocusNode = FocusNode();
+
   final Rx<DateTime?> dateOfBirth = Rx<DateTime?>(null);
   final RxString gender = ''.obs;
   /// INSTITUTIONAL (requires institution + yoga teacher) or OPEN (yoga teacher optional).
@@ -712,6 +731,156 @@ class ParticipantController extends GetxController {
 
   bool get isInstitutionalRegistrationCategory => !isOpenRegistrationCategory;
 
+  static final RegExp _namePattern = RegExp(r'^[A-Za-z\s.]+$');
+  static final RegExp _repeatedDigitPhone = RegExp(r'^(\d)\1{9}$');
+
+  bool _isParticipantNameInvalid() {
+    final value = nameController.text.trim();
+    if (value.isEmpty) return true;
+    return !_namePattern.hasMatch(value);
+  }
+
+  bool _isTenDigitPhoneInvalid(String raw) {
+    final cell = raw.trim();
+    if (cell.isEmpty) return true;
+    if (cell.length != 10) return true;
+    if (_repeatedDigitPhone.hasMatch(cell)) return true;
+    return cell == '9876543210' || cell == '0123456789';
+  }
+
+  /// Scrolls to the first missing/invalid mandatory field and focuses text inputs.
+  void scrollToFirstMissingRegistrationField() {
+    if (_isParticipantNameInvalid()) {
+      scrollToSection(nameFieldKey, focusNode: nameFocusNode);
+      return;
+    }
+    if (_isTenDigitPhoneInvalid(participantPhoneController.text)) {
+      scrollToSection(phoneFieldKey, focusNode: phoneFocusNode);
+      return;
+    }
+    if (dateOfBirth.value == null) {
+      scrollToSection(dateOfBirthFieldKey);
+      return;
+    }
+    if (gender.value.isEmpty) {
+      scrollToSection(genderFieldKey);
+      return;
+    }
+    if (!isViewMode.value && !hasParticipantPhotoSelected) {
+      scrollToSection(photoFieldKey);
+      return;
+    }
+    if (selectedCategories.isEmpty) {
+      scrollToSection(categoryFieldKey);
+      return;
+    }
+    if (standard.value.isEmpty) {
+      scrollToSection(groupFieldKey);
+      return;
+    }
+    if (isInstitutionalRegistrationCategory) {
+      if (schoolNameController.text.trim().isEmpty) {
+        scrollToSection(institutionFieldKey);
+        return;
+      }
+      if (yogaMasterNameController.text.trim().isEmpty) {
+        scrollToSection(
+          yogaTeacherNameFieldKey,
+          focusNode: yogaTeacherNameFocusNode,
+        );
+        return;
+      }
+      if (_isTenDigitPhoneInvalid(yogaMasterContactController.text)) {
+        scrollToSection(
+          yogaTeacherCellFieldKey,
+          focusNode: yogaTeacherCellFocusNode,
+        );
+        return;
+      }
+    } else {
+      final teacherCell = yogaMasterContactController.text.trim();
+      if (teacherCell.isNotEmpty && _isTenDigitPhoneInvalid(teacherCell)) {
+        scrollToSection(
+          yogaTeacherCellFieldKey,
+          focusNode: yogaTeacherCellFocusNode,
+        );
+        return;
+      }
+    }
+    if (!isEditMode && !termsAccepted.value) {
+      scrollToSection(termsFieldKey);
+      return;
+    }
+    scrollToFirstInvalidFormField();
+  }
+
+  void scrollToFirstInvalidFormField() {
+    final formContext = formKey.currentContext;
+    if (formContext == null) return;
+
+    BuildContext? firstInvalid;
+    void visit(Element element) {
+      if (firstInvalid != null) return;
+      if (element is StatefulElement) {
+        final fieldState = element.state;
+        if (fieldState is FormFieldState &&
+            fieldState.mounted &&
+            fieldState.hasError) {
+          firstInvalid = element;
+          return;
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    formContext.visitChildElements(visit);
+    final target = firstInvalid;
+    if (target == null) return;
+    _scrollToAndFocus(target);
+  }
+
+  void scrollToSection(GlobalKey key, {FocusNode? focusNode}) {
+    final context = key.currentContext;
+    if (context == null) {
+      scrollToFirstInvalidFormField();
+      return;
+    }
+    _scrollToAndFocus(context, focusNode: focusNode);
+  }
+
+  void _scrollToAndFocus(BuildContext context, {FocusNode? focusNode}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.12,
+      );
+      if (focusNode != null) {
+        focusNode.requestFocus();
+        return;
+      }
+      _requestTextFocusIn(context);
+    });
+  }
+
+  void _requestTextFocusIn(BuildContext context) {
+    var focused = false;
+    void visit(Element element) {
+      if (focused) return;
+      final widget = element.widget;
+      if (widget is EditableText) {
+        widget.focusNode.requestFocus();
+        focused = true;
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    context.visitChildElements(visit);
+  }
+
   void setRegistrationCategory(String category) {
     final normalized = category.trim().toUpperCase();
     if (normalized != 'INSTITUTIONAL' && normalized != 'OPEN') {
@@ -991,6 +1160,7 @@ class ParticipantController extends GetxController {
     required CompetitionController competitionController,
   }) async {
     if (!formKey.currentState!.validate()) {
+      scrollToFirstInvalidFormField();
       return false;
     }
 
@@ -1558,6 +1728,10 @@ class ParticipantController extends GetxController {
           reg['yogaTeacherCell'] as String? ??
           reg['yogaMasterContact'] as String? ??
           '',
+      participantPhone:
+          reg['participantPhone']?.toString() ??
+          reg['participant_phone']?.toString() ??
+          '',
       photoUrl: reg['photo'] as String?,
       bonafiedCertificate:
           reg['bonafiedCertificate'] as String? ??
@@ -2076,6 +2250,17 @@ class ParticipantController extends GetxController {
 
   void _renewRegistrationFormKey() {
     formKey = GlobalKey<FormState>();
+    nameFieldKey = GlobalKey();
+    phoneFieldKey = GlobalKey();
+    dateOfBirthFieldKey = GlobalKey();
+    genderFieldKey = GlobalKey();
+    photoFieldKey = GlobalKey();
+    categoryFieldKey = GlobalKey();
+    groupFieldKey = GlobalKey();
+    institutionFieldKey = GlobalKey();
+    yogaTeacherNameFieldKey = GlobalKey();
+    yogaTeacherCellFieldKey = GlobalKey();
+    termsFieldKey = GlobalKey();
     formResetTrigger.value = formResetTrigger.value + 1;
   }
 
@@ -2659,30 +2844,36 @@ class ParticipantController extends GetxController {
   /// Submit update form for existing participant
   Future<bool> submitUpdateForm(String participantId) async {
     if (!formKey.currentState!.validate()) {
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (dateOfBirth.value == null) {
       errorMessage.value = 'Please select date of birth';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (gender.value.isEmpty) {
       errorMessage.value = 'Please select gender';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (selectedCategories.isEmpty) {
       errorMessage.value = 'Please select at least one category';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (standard.value.isEmpty) {
       errorMessage.value = 'Please select standard/group';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (!validateParticipantPhotoBeforeSave()) {
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
@@ -2853,12 +3044,14 @@ class ParticipantController extends GetxController {
     CompetitionController? competitionController,
   }) async {
     if (!formKey.currentState!.validate()) {
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (!isEditMode && !termsAccepted.value) {
       showTermsError.value = true;
       errorMessage.value = 'Please accept the terms & conditions to continue';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
     showTermsError.value = false;
@@ -2868,30 +3061,36 @@ class ParticipantController extends GetxController {
 
     if (dateOfBirth.value == null) {
       errorMessage.value = 'Please select date of birth';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (gender.value.isEmpty) {
       errorMessage.value = 'Please select gender';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (selectedCategories.isEmpty) {
       errorMessage.value = 'Please select at least one category';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (standard.value.isEmpty) {
       errorMessage.value = 'Please select standard/group';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (selectedStage.value.isEmpty) {
       errorMessage.value = 'Please select a stage';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (!validateParticipantPhotoBeforeSave()) {
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
@@ -2931,11 +3130,13 @@ class ParticipantController extends GetxController {
               selectedInstitutionId.value = participantInstitutionId.value;
             } else {
               errorMessage.value = 'Please select an institution from the list';
+              scrollToFirstMissingRegistrationField();
               return false;
             }
           }
         } else {
           errorMessage.value = 'Please select an institution from the list';
+          scrollToFirstMissingRegistrationField();
           return false;
         }
       }
@@ -2944,6 +3145,8 @@ class ParticipantController extends GetxController {
     if (!await validateBonafideBeforeSave()) {
       if (!identical(_registrationSubmitOwner, submitOwner)) {
         errorMessage.value = '';
+      } else {
+        scrollToFirstMissingRegistrationField();
       }
       return false;
     }
@@ -3180,11 +3383,9 @@ class ParticipantController extends GetxController {
             );
           }
 
-          // Store the latest registered/updated participant for UI flows.
-          if (participants.isNotEmpty) {
-            lastRegisteredParticipant.value = participants.first;
-          }
-          registrationSaved.value = true;
+          // Payment receipt is only for new registrations, not updates.
+          registrationSaved.value = false;
+          lastRegisteredParticipant.value = null;
 
           // Reset form immediately after successful update (clears validators)
           resetForm();

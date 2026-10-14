@@ -260,6 +260,15 @@ class _CategoryAsanasConfigWizardState
     // leftover groups/stages/fees from a previously configured category.
     if (!_config.configured) {
       _config.resetWizardFieldsToDefaults();
+      final ctrl = widget.competitionController;
+      if (ctrl != null) {
+        final mapped = ctrl.mappedAmountsFor(
+          _config.categoryId,
+          categoryName: _config.categoryName,
+        );
+        _config.feeAmount = mapped.amount;
+        _config.spotFeeAmount = mapped.spotAmount;
+      }
     }
 
     if (!_config.isOnlineMode) {

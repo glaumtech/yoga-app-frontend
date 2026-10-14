@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -24,14 +25,18 @@ class ContactScreen extends StatefulWidget {
 }
 
 class _ContactScreenState extends State<ContactScreen> {
-  static const _supportEmail = 'praveen.sekar@glaum.in';
+  static const _supportEmail = 'praveen@glaum.in';
   static const _phone = '+91 9952825358';
   static const _address =
       'Glaum Technologies, Kulithalai, Karur - 639 104, Tamilnadu, India.';
 
+  static const _notEventSpecific = 'Not event specific';
+  static const _newEventEnquiry = 'New Event Enquiry';
+
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _callbackEmailController = TextEditingController();
 
@@ -90,6 +95,7 @@ class _ContactScreenState extends State<ContactScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _descriptionController.dispose();
     _callbackEmailController.dispose();
     super.dispose();
@@ -133,8 +139,9 @@ class _ContactScreenState extends State<ContactScreen> {
       'Name: ${_nameController.text.trim()}',
       'User Type: $_userType',
       'Query Type: $_querySubtype',
-      'Event: ${_selectedEvent ?? 'Not event specific'}',
+      'Event: ${_selectedEvent ?? _notEventSpecific}',
       'Email: ${_emailController.text.trim()}',
+      'Phone: ${_phoneController.text.trim()}',
       if (_attachedFileName != null) 'Attachment: $_attachedFileName',
       '',
       'Description:',
@@ -417,18 +424,22 @@ class _ContactScreenState extends State<ContactScreen> {
                 return SearchableDropdownField(
                   selectedValue: _selectedEvent,
                   labelText: 'Event',
-                  hintText: 'Not event specific',
-                  emptyOptionLabel: 'Not event specific',
-                  emptyOptionValue: 'Not event specific',
+                  hintText: _notEventSpecific,
+                  emptyOptionLabel: _notEventSpecific,
+                  emptyOptionValue: _notEventSpecific,
                   fillColor: Colors.white,
-                  items: events
-                      .map(
-                        (c) => SearchableDropdownItem(
-                          value: c.competitionName,
-                          label: c.competitionName,
-                        ),
-                      )
-                      .toList(),
+                  items: [
+                    const SearchableDropdownItem(
+                      value: _newEventEnquiry,
+                      label: _newEventEnquiry,
+                    ),
+                    ...events.map(
+                      (c) => SearchableDropdownItem(
+                        value: c.competitionName,
+                        label: c.competitionName,
+                      ),
+                    ),
+                  ],
                   onChanged: (v) => setState(() => _selectedEvent = v),
                 );
               }),
@@ -440,6 +451,22 @@ class _ContactScreenState extends State<ContactScreen> {
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Required';
                   if (!v.contains('@')) return 'Enter a valid email';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength: 10,
+                decoration: _fieldDecoration('Phone').copyWith(counterText: ''),
+                validator: (v) {
+                  final phone = v?.trim() ?? '';
+                  if (phone.isEmpty) return 'Required';
+                  if (phone.length != 10) {
+                    return 'Phone number must be exactly 10 digits';
+                  }
                   return null;
                 },
               ),
@@ -826,7 +853,7 @@ class _ContactDetailBlock extends StatelessWidget {
               const SizedBox(width: 10),
               _SocialIcon(
                 icon: Icons.email_outlined,
-                onTap: () => launchUrl(Uri.parse('mailto:praveen.sekar@glaum.in')),
+                onTap: () => launchUrl(Uri.parse('mailto:praveen@glaum.in')),
               ),
               const SizedBox(width: 10),
               _SocialIcon(

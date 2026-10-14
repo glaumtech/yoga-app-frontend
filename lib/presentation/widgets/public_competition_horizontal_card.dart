@@ -353,10 +353,11 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   }
 
   void _navigateToRegister(BuildContext context, String id) {
-    if (id.isEmpty) return;
+    final code = competition.registrationCode?.trim() ?? '';
+    if (code.isEmpty) return;
     context.pushNamed(
       'register-competition',
-      pathParameters: {'competitionId': id},
+      pathParameters: {'registrationCode': code},
     );
   }
 
@@ -426,11 +427,12 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   }
 
   void _copyLink(BuildContext context) {
-    final id = competition.idStr ?? '${competition.id}';
+    final code = competition.registrationCode?.trim() ?? '';
     final link = registrationShareUrlForCompetition(
       registrationUrl: competition.registrationUrl,
-      competitionId: id,
+      registrationCode: code,
     );
+    if (link.isEmpty) return;
     Clipboard.setData(ClipboardData(text: link));
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(

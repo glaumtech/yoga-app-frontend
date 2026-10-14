@@ -12,11 +12,17 @@ class StateModel {
   });
 
   factory StateModel.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'];
+    final id = rawId is int
+        ? rawId
+        : rawId is String
+            ? int.tryParse(rawId) ?? 0
+            : (rawId as num?)?.toInt() ?? 0;
     return StateModel(
-      id: json['id'] as int,
-      stateName: json['stateName'] as String,
-      stateCode: json['stateCode'] as String,
-      description: json['description'] as String?,
+      id: id,
+      stateName: json['stateName']?.toString() ?? '',
+      stateCode: json['stateCode']?.toString() ?? '',
+      description: json['description']?.toString(),
     );
   }
 

@@ -6,6 +6,7 @@ import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/searchable_dropdown_field.dart';
 import '../../widgets/pinned_scroll_views.dart';
+import '../../widgets/payment_inr_only_notice.dart';
 
 class SponsorCreateScreen extends StatelessWidget {
   const SponsorCreateScreen({super.key});
@@ -287,28 +288,7 @@ class SponsorCreateScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.grey[300]!),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '//Here use your usual payment options',
-                style: TextStyle(
-                  fontSize: isMobile ? 12 : 13,
-                  color: Colors.grey[700],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '//Also, provide QR',
-                style: TextStyle(
-                  fontSize: isMobile ? 12 : 13,
-                  color: Colors.grey[700],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
-          ),
+          child: const PaymentInrOnlyNotice(margin: EdgeInsets.zero),
         ),
       ],
     );

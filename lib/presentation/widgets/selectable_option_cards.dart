@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import 'payment_inr_only_notice.dart';
 
 /// A single option in [SelectableOptionCards].
 class SelectableOptionItem {
@@ -26,6 +27,7 @@ class SelectableOptionCards extends StatelessWidget {
     required this.onSelected,
     this.enabled = true,
     this.minCardWidth = 140,
+    this.showInrOnlyNotice = false,
   });
 
   final List<SelectableOptionItem> options;
@@ -33,47 +35,54 @@ class SelectableOptionCards extends StatelessWidget {
   final ValueChanged<String> onSelected;
   final bool enabled;
   final double minCardWidth;
+  final bool showInrOnlyNotice;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useRow = constraints.maxWidth >= 520 && options.length <= 4;
-        if (useRow) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: options.map((opt) {
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    right: opt == options.last ? 0 : 10,
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final useRow = constraints.maxWidth >= 520 && options.length <= 4;
+            if (useRow) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: options.map((opt) {
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        right: opt == options.last ? 0 : 10,
+                      ),
+                      child: _OptionCard(
+                        option: opt,
+                        selected: selectedValue == opt.value,
+                        enabled: enabled,
+                        onTap: () => onSelected(opt.value),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            }
+            return Column(
+              children: options.map((opt) {
+                return Padding(
+                  padding: EdgeInsets.only(bottom: opt == options.last ? 0 : 10),
                   child: _OptionCard(
                     option: opt,
                     selected: selectedValue == opt.value,
                     enabled: enabled,
                     onTap: () => onSelected(opt.value),
+                    expand: true,
                   ),
-                ),
-              );
-            }).toList(),
-          );
-        }
-        return Column(
-          children: options.map((opt) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: opt == options.last ? 0 : 10),
-              child: _OptionCard(
-                option: opt,
-                selected: selectedValue == opt.value,
-                enabled: enabled,
-                onTap: () => onSelected(opt.value),
-                expand: true,
-              ),
+                );
+              }).toList(),
             );
-          }).toList(),
-        );
-      },
+          },
+        ),
+        if (showInrOnlyNotice) const PaymentInrOnlyNotice(),
+      ],
     );
   }
 }

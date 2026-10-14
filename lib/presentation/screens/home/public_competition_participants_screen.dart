@@ -53,6 +53,7 @@ class _PublicCompetitionParticipantsScreenState
   int? _downloadingCertId;
   int? _downloadingDetailsId;
   bool _certificatesReleased = false;
+  String? _registrationCode;
 
   int _currentPage = 1;
   int _totalPages = 1;
@@ -96,6 +97,7 @@ class _PublicCompetitionParticipantsScreenState
     if (response.success && response.data != null) {
       setState(() {
         _certificatesReleased = response.data!.areCertificatesAvailable;
+        _registrationCode = response.data!.registrationCode;
       });
     }
   }
@@ -211,6 +213,10 @@ class _PublicCompetitionParticipantsScreenState
       address: '',
       yogaMasterName: reg['yogaTeacherName']?.toString() ?? '',
       yogaMasterContact: reg['yogaTeacherCell']?.toString() ?? '',
+      participantPhone:
+          reg['participantPhone']?.toString() ??
+          reg['participant_phone']?.toString() ??
+          '',
       registrationNo: reg['registrationNo']?.toString(),
       categoryMode: reg['categoryMode']?.toString(),
       optForECertificate:
@@ -270,6 +276,18 @@ class _PublicCompetitionParticipantsScreenState
     final regNo = p.registrationNo?.trim() ?? '';
     if (regNo.isEmpty) return;
     context.push(AppRoutes.participantVideoUploadPath(registrationNo: regNo));
+  }
+
+  void _onOpenPublicEdit(ParticipantModel p) {
+    final registrationId = p.id?.trim() ?? '';
+    final code = _registrationCode?.trim() ?? '';
+    if (registrationId.isEmpty || code.isEmpty) return;
+    context.push(
+      AppRoutes.registerCompetitionEditPath(
+        code,
+        registrationId: registrationId,
+      ),
+    );
   }
 
   bool _canDownloadCert(ParticipantModel p) {
@@ -610,6 +628,11 @@ class _PublicCompetitionParticipantsScreenState
           onLogin: _canOpenOnlineLogin(p)
               ? () => _onOpenOnlineLogin(p)
               : null,
+          onEdit: (_registrationCode?.trim().isNotEmpty == true &&
+                  p.id != null &&
+                  p.id!.trim().isNotEmpty)
+              ? () => _onOpenPublicEdit(p)
+              : null,
         );
       },
     );
@@ -625,6 +648,7 @@ class _ParticipantTile extends StatelessWidget {
   final VoidCallback? onDownloadCert;
   final VoidCallback? onDownloadDetails;
   final VoidCallback? onLogin;
+  final VoidCallback? onEdit;
 
   const _ParticipantTile({
     required this.participant,
@@ -635,6 +659,7 @@ class _ParticipantTile extends StatelessWidget {
     this.onDownloadCert,
     this.onDownloadDetails,
     this.onLogin,
+    this.onEdit,
   });
 
   @override
@@ -645,49 +670,99 @@ class _ParticipantTile extends StatelessWidget {
         feedbackText.isNotEmpty || (feedbackImageUrl?.isNotEmpty ?? false);
     final isNarrow = MediaQuery.sizeOf(context).width < 720;
 
-    final identity = Expanded(
-      flex: 2,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            participant.participantName,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
-            ),
+    final identityColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          participant.participantName,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppTheme.primaryColor,
           ),
-          if (participant.registrationNo != null &&
-              participant.registrationNo!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Reg: ${participant.registrationNo}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+        ),
+        if (participant.registrationNo != null &&
+            participant.registrationNo!.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
-            [
-              if (participant.category.isNotEmpty) participant.category,
-              if (participant.standard.isNotEmpty) participant.standard,
-              if (participant.schoolName.isNotEmpty) participant.schoolName,
-            ].join(' · '),
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+            'Reg: ${participant.registrationNo}',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          if (hasFeedback && isNarrow) ...[
-            const SizedBox(height: 10),
-            _PublicFeedbackPreview(
-              participantName: participant.participantName,
-              reviewText: feedbackText,
-              imageUrl: feedbackImageUrl,
-              compact: true,
-            ),
-          ],
         ],
-      ),
+        const SizedBox(height: 4),
+        Text(
+          [
+            if (participant.category.isNotEmpty) participant.category,
+            if (participant.standard.isNotEmpty) participant.standard,
+            if (participant.schoolName.isNotEmpty) participant.schoolName,
+          ].join(' · '),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+        ),
+        if (hasFeedback && isNarrow) ...[
+          const SizedBox(height: 10),
+          _PublicFeedbackPreview(
+            participantName: participant.participantName,
+            reviewText: feedbackText,
+            imageUrl: feedbackImageUrl,
+            compact: true,
+          ),
+        ],
+      ],
     );
+
+    final identity = Expanded(
+      flex: 2,
+      child: onEdit == null
+          ? identityColumn
+          : Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onEdit,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 2,
+                    horizontal: 2,
+                  ),
+                  child: identityColumn,
+                ),
+              ),
+            ),
+    );
+
+    final avatar = onEdit == null
+        ? CircleAvatar(
+            backgroundColor: AppTheme.primaryColor,
+            child: Text(
+              participant.participantName.isNotEmpty
+                  ? participant.participantName[0].toUpperCase()
+                  : '?',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          )
+        : Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onEdit,
+              customBorder: const CircleBorder(),
+              child: CircleAvatar(
+                backgroundColor: AppTheme.primaryColor,
+                child: Text(
+                  participant.participantName.isNotEmpty
+                      ? participant.participantName[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          );
 
     final actionWidgets = <Widget>[
       if (onDownloadDetails != null)
@@ -750,18 +825,7 @@ class _ParticipantTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: AppTheme.primaryColor,
-              child: Text(
-                participant.participantName.isNotEmpty
-                    ? participant.participantName[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            avatar,
             const SizedBox(width: 12),
             identity,
             if (hasFeedback && !isNarrow) ...[

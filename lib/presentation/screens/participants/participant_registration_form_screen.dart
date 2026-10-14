@@ -253,7 +253,7 @@ List<String> _groupsInCreatedOrder(
   return result;
 }
 
-class ParticipantRegistrationFormScreen extends StatelessWidget {
+class ParticipantRegistrationFormScreen extends StatefulWidget {
   final String? initialCompetitionId;
 
   /// When false (e.g. public registration from a specific competition route),
@@ -279,8 +279,40 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Fresh controller each visit (e.g. after logout) so competition data reloads.
+  State<ParticipantRegistrationFormScreen> createState() =>
+      _ParticipantRegistrationFormScreenState();
+}
+
+class _ParticipantRegistrationFormScreenState
+    extends State<ParticipantRegistrationFormScreen> {
+  /// Shown when name / DOB / category / group are locked on public edit.
+  // static const String _organizerPhone = '+91 9952825358';
+  static const String _lockedIdentityFieldMessage =
+      'This field can\'t be edited. Contact the organizer.';
+
+  Worker? _formResetWorker;
+  int _formResetToken = 0;
+
+  /// Public registration edit: identity fields stay fixed after registration.
+  bool _areIdentityFieldsLocked(ParticipantController controller) {
+    return widget.embeddedInLandingPage && controller.isEditMode;
+  }
+
+  Widget _wrapLockedIdentityField({
+    required bool locked,
+    required Widget child,
+  }) {
+    if (!locked) return child;
+    return Tooltip(
+      message: _lockedIdentityFieldMessage,
+      waitDuration: const Duration(milliseconds: 300),
+      child: child,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
     if (Get.isRegistered<ParticipantRegistrationFormController>(
       tag: kParticipantRegistrationFormControllerTag,
     )) {
@@ -291,55 +323,87 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     }
     Get.put(
       ParticipantRegistrationFormController(
-        initialCompetitionId: initialCompetitionId,
+        initialCompetitionId: widget.initialCompetitionId,
       ),
       tag: kParticipantRegistrationFormControllerTag,
     );
 
+    final participantController = Get.isRegistered<ParticipantController>()
+        ? Get.find<ParticipantController>()
+        : Get.put(ParticipantController());
+    _formResetToken = participantController.formResetTrigger.value;
+    // Remount Form only when reset intentionally fires — never wrap Form in Obx
+    // (Obx would rebuild on every field observable and duplicate GlobalKeys).
+    _formResetWorker = ever<int>(participantController.formResetTrigger, (
+      token,
+    ) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || token == _formResetToken) return;
+        setState(() => _formResetToken = token);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _formResetWorker?.dispose();
+    _formResetWorker = null;
+    if (Get.isRegistered<ParticipantRegistrationFormController>(
+      tag: kParticipantRegistrationFormControllerTag,
+    )) {
+      Get.delete<ParticipantRegistrationFormController>(
+        tag: kParticipantRegistrationFormControllerTag,
+        force: true,
+      );
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // Public registration screen can be opened after logout.
     // Ensure ParticipantController exists even if it was deleted on signOut().
     final participantController = Get.isRegistered<ParticipantController>()
         ? Get.find<ParticipantController>()
         : Get.put(ParticipantController());
     // Initialize CompetitionController if not already initialized
-    final competitionController = Get.put(CompetitionController());
+    final competitionController = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
-    final formPadding = embeddedInLandingPage
+    final formPadding = widget.embeddedInLandingPage
         ? EdgeInsets.zero
         : EdgeInsets.all(isMobile ? 12 : (isTablet ? 20 : 24));
 
     final formBody = Padding(
       padding: formPadding,
-      child: Obx(
-        () => KeyedSubtree(
-          // Remount form after save/cancel so per-field validators do not linger
-          // on cleared fields (AutovalidateMode.onUserInteraction).
-          key: ValueKey(
-            'participant-reg-form-${participantController.formResetTrigger.value}',
-          ),
-          child: Form(
-            key: participantController.formKey,
-            // Per-field `autovalidateMode: onUserInteraction` — Form-level
-            // `onUserInteraction` validates *all* fields after any field is touched
-            // (Flutter behavior; see flutter/flutter#107350).
-            autovalidateMode: AutovalidateMode.disabled,
-            child: PinnedVerticalScrollView(
-              physics: embeddedInLandingPage
-                  ? const NeverScrollableScrollPhysics()
-                  : null,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!embeddedInLandingPage)
-                    FormTitle(
-                      text: 'REGISTRATION',
-                      isMobile: isMobile,
-                      isTablet: isTablet,
-                    ),
+      child: KeyedSubtree(
+        // Remount form after save/cancel so per-field validators do not linger
+        // on cleared fields (AutovalidateMode.onUserInteraction).
+        key: ValueKey('participant-reg-form-$_formResetToken'),
+        child: Form(
+          key: participantController.formKey,
+          // Per-field `autovalidateMode: onUserInteraction` — Form-level
+          // `onUserInteraction` validates *all* fields after any field is touched
+          // (Flutter behavior; see flutter/flutter#107350).
+          autovalidateMode: AutovalidateMode.disabled,
+          // When embedded in the public landing page, avoid nested
+          // PinnedVerticalScrollView/LayoutBuilder — it remounts Form
+          // GlobalKeys mid-layout on Flutter web (Duplicate GlobalKey).
+          child: _embeddedOrScroll(
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!widget.embeddedInLandingPage)
+                  FormTitle(
+                    text: 'REGISTRATION',
+                    isMobile: isMobile,
+                    isTablet: isTablet,
+                  ),
 
                     // Main content: Left side (fields in columns) and Right side (Photo & Certificate)
                     isMobile
@@ -347,7 +411,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (showCompetitionDropdown) ...[
+                              if (widget.showCompetitionDropdown) ...[
                                 _buildCompetitionField(
                                   context,
                                   participantController,
@@ -435,12 +499,12 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                             children: [
                               // Left side: Fields in two columns
                               Expanded(
-                                flex: embeddedInLandingPage ? 4 : 3,
+                                flex: widget.embeddedInLandingPage ? 4 : 3,
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (showCompetitionDropdown) ...[
+                                    if (widget.showCompetitionDropdown) ...[
                                       _buildCompetitionField(
                                         context,
                                         participantController,
@@ -760,15 +824,15 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
                     Obx(() {
                       // Show cancel button in view mode, hide save button
                       if (participantController.isViewMode.value) {
-                        if (!showViewCancelButton) {
+                        if (!widget.showViewCancelButton) {
                           return const SizedBox.shrink();
                         }
                         return Center(
                           child: cancelButton(
                             onPressed: () {
                               participantController.errorMessage.value = '';
-                              if (onViewBack != null) {
-                                onViewBack!();
+                              if (widget.onViewBack != null) {
+                                widget.onViewBack!();
                                 return;
                               }
                               participantController.resetForm();
@@ -1054,10 +1118,9 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
               ),
             ),
           ),
-        ),
       );
 
-    if (embeddedInLandingPage) {
+    if (widget.embeddedInLandingPage) {
       return formBody;
     }
 
@@ -1067,6 +1130,11 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: formBody,
     );
+  }
+
+  Widget _embeddedOrScroll(Widget child) {
+    if (widget.embeddedInLandingPage) return child;
+    return PinnedVerticalScrollView(child: child);
   }
 
   Widget _buildCompetitionField(
@@ -1185,6 +1253,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.nameFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(
@@ -1192,42 +1261,46 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           hintText: '(This will reflect in your E-Certificate)',
           bottomSpacing: 6,
         ),
-        Obx(
-          () => TextFormField(
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            controller: controller.nameController,
-            readOnly: controller.isViewMode.value,
-            onChanged: controller.isViewMode.value
-                ? null
-                : (_) => controller.validateRegistrationFormOnFieldChange(),
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+        Obx(() {
+          final locked = controller.isViewMode.value ||
+              _areIdentityFieldsLocked(controller);
+          return _wrapLockedIdentityField(
+            locked: _areIdentityFieldsLocked(controller),
+            child: TextFormField(
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              controller: controller.nameController,
+              focusNode: controller.nameFocusNode,
+              readOnly: locked,
+              onChanged: locked
+                  ? null
+                  : (_) => controller.validateRegistrationFormOnFieldChange(),
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                filled: true,
+                fillColor: locked ? Colors.grey[200] : Colors.white,
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              filled: true,
-              fillColor: controller.isViewMode.value
-                  ? Colors.grey[200]
-                  : Colors.white,
+              validator: !locked
+                  ? (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Participant name is required';
+                      }
+                      // Validate: Only period symbol for separating initial and name
+                      final namePattern = RegExp(r'^[A-Za-z\s.]+$');
+                      if (!namePattern.hasMatch(value.trim())) {
+                        return 'Name can only contain letters, spaces, and periods';
+                      }
+                      return null;
+                    }
+                  : null,
             ),
-            validator: !controller.isViewMode.value
-                ? (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Participant name is required';
-                    }
-                    // Validate: Only period symbol for separating initial and name
-                    final namePattern = RegExp(r'^[A-Za-z\s.]+$');
-                    if (!namePattern.hasMatch(value.trim())) {
-                      return 'Name can only contain letters, spaces, and periods';
-                    }
-                    return null;
-                  }
-                : null,
-          ),
-        ),
+          );
+        }),
       ],
     );
   }
@@ -1239,6 +1312,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.phoneFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(
@@ -1250,6 +1324,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           () => TextFormField(
             autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.participantPhoneController,
+            focusNode: controller.phoneFocusNode,
             readOnly: controller.isViewMode.value,
             onChanged: controller.isViewMode.value
                 ? null
@@ -1302,60 +1377,64 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.dateOfBirthFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'Date of Birth :', bottomSpacing: 8),
-        Obx(
-          () => TextFormField(
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            readOnly: true,
-            controller: TextEditingController(
-              text: controller.dateOfBirth.value != null
-                  ? app_date_utils.AppDateUtils.formatDate(
-                      controller.dateOfBirth.value!,
-                    )
-                  : '',
-            ),
-            decoration: InputDecoration(
-              hintText: 'DD/MM/YYYY',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+        Obx(() {
+          final identityLocked = _areIdentityFieldsLocked(controller);
+          final locked = controller.isViewMode.value || identityLocked;
+          return _wrapLockedIdentityField(
+            locked: identityLocked,
+            child: TextFormField(
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              readOnly: true,
+              controller: TextEditingController(
+                text: controller.dateOfBirth.value != null
+                    ? app_date_utils.AppDateUtils.formatDate(
+                        controller.dateOfBirth.value!,
+                      )
+                    : '',
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
+              decoration: InputDecoration(
+                hintText: 'DD/MM/YYYY',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                suffixIcon: const Icon(Icons.calendar_today),
+                filled: true,
+                fillColor: locked ? Colors.grey[200] : Colors.white,
               ),
-              suffixIcon: Icon(Icons.calendar_today),
-              filled: true,
-              fillColor: controller.isViewMode.value
-                  ? Colors.grey[200]
-                  : Colors.white,
+              onTap: !locked
+                  ? () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate:
+                            controller.dateOfBirth.value ?? DateTime.now(),
+                        firstDate: DateTime(1900),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        controller.dateOfBirth.value = picked;
+                        controller.validateRegistrationFormOnFieldChange();
+                      }
+                    }
+                  : null,
+              validator: !locked
+                  ? (value) {
+                      if (controller.dateOfBirth.value == null) {
+                        return 'Please select date of birth';
+                      }
+                      return null;
+                    }
+                  : null,
             ),
-            onTap: !controller.isViewMode.value
-                ? () async {
-                    final DateTime? picked = await showDatePicker(
-                      context: context,
-                      initialDate:
-                          controller.dateOfBirth.value ?? DateTime.now(),
-                      firstDate: DateTime(1900),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null) {
-                      controller.dateOfBirth.value = picked;
-                      controller.validateRegistrationFormOnFieldChange();
-                    }
-                  }
-                : null,
-            validator: !controller.isViewMode.value
-                ? (value) {
-                    if (controller.dateOfBirth.value == null) {
-                      return 'Please select date of birth';
-                    }
-                    return null;
-                  }
-                : null,
-          ),
-        ),
+          );
+        }),
       ],
     );
   }
@@ -1401,6 +1480,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.photoFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(
@@ -1479,12 +1559,14 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
         if (!participantController.isViewMode.value &&
             !participantController.isEditMode) ...[
           RegistrationTermsSection(
+            key: participantController.termsFieldKey,
             controller: participantController,
             isMobile: isMobile,
           ),
           SizedBox(height: isMobile ? 20 : 24),
         ],
-        if (!participantController.isViewMode.value) ...[
+        if (!participantController.isViewMode.value &&
+            !participantController.isEditMode) ...[
           Obx(
             () => RegistrationPaymentSection(
               participantController: participantController,
@@ -1572,6 +1654,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.genderFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'Sex :', bottomSpacing: 8),
@@ -1752,6 +1835,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.categoryFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'Category :', bottomSpacing: 12),
@@ -1769,50 +1853,53 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             controller,
             availableCategories,
           );
+          final identityLocked = _areIdentityFieldsLocked(controller);
+          final locked = controller.isViewMode.value || identityLocked;
 
-          return DropdownButtonFormField<String>(
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            value: selectedValue,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              filled: true,
-              fillColor: controller.isViewMode.value
-                  ? Colors.grey[200]
-                  : Colors.white,
-            ),
-            hint: const Text('Select Category'),
-            items: availableCategories.map((option) {
-              return DropdownMenuItem<String>(
-                value: option.valueKey,
-                child: Text(
-                  option.displayLabel,
-                  overflow: TextOverflow.ellipsis,
+          return _wrapLockedIdentityField(
+            locked: identityLocked,
+            child: DropdownButtonFormField<String>(
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              value: selectedValue,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              );
-            }).toList(),
-            onChanged: !controller.isViewMode.value
-                ? (value) {
-                    final option = RegistrationCategoryOption.tryParse(value);
-                    if (option != null) {
-                      _applyRegistrationCategorySelection(controller, option);
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                filled: true,
+                fillColor: locked ? Colors.grey[200] : Colors.white,
+              ),
+              hint: const Text('Select Category'),
+              items: availableCategories.map((option) {
+                return DropdownMenuItem<String>(
+                  value: option.valueKey,
+                  child: Text(
+                    option.displayLabel,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+              onChanged: !locked
+                  ? (value) {
+                      final option = RegistrationCategoryOption.tryParse(value);
+                      if (option != null) {
+                        _applyRegistrationCategorySelection(controller, option);
+                      }
                     }
-                  }
-                : null,
-            validator: !controller.isViewMode.value
-                ? (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please select a category';
+                  : null,
+              validator: !locked
+                  ? (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please select a category';
+                      }
+                      return null;
                     }
-                    return null;
-                  }
-                : null,
-            isExpanded: true,
+                  : null,
+              isExpanded: true,
+            ),
           );
         }),
       ],
@@ -1827,6 +1914,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.groupFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'Select Group :', bottomSpacing: 8),
@@ -1876,55 +1964,66 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
             }
           }
 
-          return DropdownButtonFormField<String>(
-            key: ValueKey(
-              'group-for-category-$selectedCategory-$selectedCategoryMode',
-            ),
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            value: currentValue,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+          final identityLocked = _areIdentityFieldsLocked(controller);
+          final locked =
+              controller.isViewMode.value || identityLocked;
+
+          return _wrapLockedIdentityField(
+            locked: identityLocked,
+            child: DropdownButtonFormField<String>(
+              key: ValueKey(
+                'group-for-category-$selectedCategory-$selectedCategoryMode',
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              value: currentValue,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                filled: true,
+                fillColor: locked ? Colors.grey[200] : Colors.white,
               ),
+              hint: Text(
+                selectedCategory.isEmpty
+                    ? 'Select category first'
+                    : (allGroupsWithStage.isEmpty
+                        ? 'No groups for this category'
+                        : 'Select Group'),
+              ),
+              items: allGroupsWithStage.map((formattedGroup) {
+                return DropdownMenuItem<String>(
+                  value: formattedGroup,
+                  child: Text(formattedGroup),
+                );
+              }).toList(),
+              onChanged: locked || allGroupsWithStage.isEmpty
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        final groupName = value.split(' (GROUP').first.trim();
+                        final stagePart = value
+                            .split('GROUP ')
+                            .last
+                            .replaceAll(')', '');
+                        controller.standard.value = groupName;
+                        controller.selectedStage.value = stagePart;
+                        controller.validateRegistrationFormOnFieldChange();
+                      }
+                    },
+              validator: locked
+                  ? null
+                  : (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please select a group';
+                      }
+                      return null;
+                    },
+              isExpanded: true,
             ),
-            hint: Text(
-              selectedCategory.isEmpty
-                  ? 'Select category first'
-                  : (allGroupsWithStage.isEmpty
-                      ? 'No groups for this category'
-                      : 'Select Group'),
-            ),
-            items: allGroupsWithStage.map((formattedGroup) {
-              return DropdownMenuItem<String>(
-                value: formattedGroup,
-                child: Text(formattedGroup),
-              );
-            }).toList(),
-            onChanged: allGroupsWithStage.isEmpty
-                ? null
-                : (value) {
-                    if (value != null) {
-                      final groupName = value.split(' (GROUP').first.trim();
-                      final stagePart = value
-                          .split('GROUP ')
-                          .last
-                          .replaceAll(')', '');
-                      controller.standard.value = groupName;
-                      controller.selectedStage.value = stagePart;
-                      controller.validateRegistrationFormOnFieldChange();
-                    }
-                  },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please select a group';
-              }
-              return null;
-            },
-            isExpanded: true,
           );
         }),
       ],
@@ -1940,6 +2039,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     return Obx(() {
       final requiredField = controller.isInstitutionalRegistrationCategory;
       return Column(
+        key: controller.yogaTeacherNameFieldKey,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FormLabelWithHint(
@@ -1951,6 +2051,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           TextFormField(
             autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.yogaMasterNameController,
+            focusNode: controller.yogaTeacherNameFocusNode,
             readOnly: controller.isViewMode.value,
             onChanged: controller.isViewMode.value
                 ? null
@@ -1992,6 +2093,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     return Obx(() {
       final requiredField = controller.isInstitutionalRegistrationCategory;
       return Column(
+        key: controller.yogaTeacherCellFieldKey,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FormLabelWithHint(
@@ -2004,6 +2106,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
           TextFormField(
             autovalidateMode: AutovalidateMode.onUserInteraction,
             controller: controller.yogaMasterContactController,
+            focusNode: controller.yogaTeacherCellFocusNode,
             readOnly: controller.isViewMode.value,
             onChanged: controller.isViewMode.value
                 ? null
@@ -2232,6 +2335,7 @@ class ParticipantRegistrationFormScreen extends StatelessWidget {
     bool isTablet,
   ) {
     return Column(
+      key: controller.institutionFieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FormLabelWithHint(label: 'Institution Name :', bottomSpacing: 8),

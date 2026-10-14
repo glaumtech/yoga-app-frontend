@@ -251,7 +251,7 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
         return ElevatedButton.icon(
           onPressed: onLogin,
           icon: const Icon(Icons.login, size: 18),
-          label: const Text('Login'),
+          label: const Text('Organizer Login'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
             foregroundColor: AppTheme.primaryColor,
@@ -265,7 +265,7 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
       }
       return IconButton(
         onPressed: onLogin,
-        tooltip: 'Login',
+        tooltip: 'Organizer Login',
         style: IconButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: AppTheme.primaryColor,
@@ -1525,7 +1525,9 @@ class HomeEventCard extends StatelessWidget {
       );
       return;
     }
-    context.push(AppRoutes.registerCompetitionPath(id));
+    final code = competition.registrationCode?.trim() ?? '';
+    if (code.isEmpty) return;
+    context.push(AppRoutes.registerCompetitionPath(code));
   }
 
   @override
@@ -1599,13 +1601,16 @@ class HomeEventCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                      if (showShareLinkOption && id.isNotEmpty)
+                      if (showShareLinkOption &&
+                          (competition.registrationCode?.trim().isNotEmpty ==
+                                  true ||
+                              competition.registrationUrl?.trim().isNotEmpty ==
+                                  true))
                         Positioned(
                           top: 8,
                           right: 8,
                           child: _ShareRegistrationButton(
                             competition: competition,
-                            competitionId: id,
                           ),
                         ),
                       if (showResultsQr)
@@ -1734,18 +1739,18 @@ class HomeEventCard extends StatelessWidget {
 
 class _ShareRegistrationButton extends StatelessWidget {
   final HomeCompetitionModel competition;
-  final String competitionId;
 
   const _ShareRegistrationButton({
     required this.competition,
-    required this.competitionId,
   });
 
   void _onShare(BuildContext context) {
+    final code = competition.registrationCode?.trim() ?? '';
     final link = registrationShareUrlForCompetition(
       registrationUrl: competition.registrationUrl,
-      competitionId: competitionId,
+      registrationCode: code,
     );
+    if (link.isEmpty) return;
     Clipboard.setData(ClipboardData(text: link));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -1753,13 +1758,15 @@ class _ShareRegistrationButton extends StatelessWidget {
       SnackBar(
         content: const Text('Registration link copied'),
         duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'Register',
-          onPressed: () {
-            if (!context.mounted) return;
-            context.push(AppRoutes.registerCompetitionPath(competitionId));
-          },
-        ),
+        action: code.isEmpty
+            ? null
+            : SnackBarAction(
+                label: 'Register',
+                onPressed: () {
+                  if (!context.mounted) return;
+                  context.push(AppRoutes.registerCompetitionPath(code));
+                },
+              ),
       ),
     );
   }
@@ -2555,7 +2562,7 @@ class _HomeEnquireSectionState extends State<HomeEnquireSection> {
     }
     final uri = Uri(
       scheme: 'mailto',
-      path: 'praveen.sekar@glaum.in',
+      path: 'praveen@glaum.in',
       query: Uri(
         queryParameters: {
           'subject': '${AppConstants.appName} enquiry',
@@ -2941,7 +2948,7 @@ class _ContactColumn extends StatelessWidget {
       spacing: 32,
       runSpacing: 16,
       children: [
-        _contactItem(Icons.email_outlined, 'Email', 'praveen.sekar@glaum.in'),
+        _contactItem(Icons.email_outlined, 'Email', 'praveen@glaum.in'),
         _contactItem(Icons.phone_outlined, 'Phone', '+91 9952825358'),
         _contactItem(
           Icons.location_on_outlined,

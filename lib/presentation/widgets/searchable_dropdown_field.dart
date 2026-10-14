@@ -76,6 +76,13 @@ class _SearchableDropdownFieldState extends State<SearchableDropdownField> {
 
   @override
   void dispose() {
+    // Hide overlay first so the search TextField is removed before controllers
+    // are disposed (otherwise Flutter web throws "used after being disposed").
+    if (_isOpen) {
+      _searchFocusNode.unfocus();
+      _overlay.hide();
+      _isOpen = false;
+    }
     _searchController.dispose();
     _scrollController.dispose();
     _searchFocusNode.dispose();

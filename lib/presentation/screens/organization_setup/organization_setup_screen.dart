@@ -13,6 +13,7 @@ import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../widgets/organization/organization_proof_image_upload.dart';
 import '../../widgets/pinned_scroll_views.dart';
+import '../../widgets/payment_inr_only_notice.dart';
 
 class OrganizationSetupScreen extends StatelessWidget {
   const OrganizationSetupScreen({super.key});
@@ -703,6 +704,7 @@ class OrganizationSetupScreen extends StatelessWidget {
               enabled: !c.isLoading.value && !c.isProcessingPayment.value,
               onSelected: (value) => c.selectedCheckoutMethod.value = value,
             ),
+            const PaymentInrOnlyNotice(),
             if (c.selectedCheckoutMethod.value == 'CASH')
               Padding(
                 padding: const EdgeInsets.only(top: 8),

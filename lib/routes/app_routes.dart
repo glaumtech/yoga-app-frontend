@@ -48,11 +48,22 @@ class AppRoutes {
   }
 
   /// User-facing participant registration for a competition (anyone can access).
+  /// Uses opaque [registrationCode], not sequential competition id.
   static const String registerCompetition =
-      '/register/competition/:competitionId';
-  static String registerCompetitionPath(String competitionId) =>
-      '/register/competition/$competitionId';
+      '/register/competition/:registrationCode';
+  static String registerCompetitionPath(String registrationCode) =>
+      '/register/competition/$registrationCode';
 
+  /// Public registration form opened in edit mode for an existing registration.
+  static String registerCompetitionEditPath(
+    String registrationCode, {
+    required String registrationId,
+  }) {
+    return Uri(
+      path: '/register/competition/$registrationCode',
+      queryParameters: {'edit': registrationId},
+    ).toString();
+  }
   /// Public participant video URL / file upload.
   static const String participantVideoUpload = '/register/video-upload';
   static const String participantVideoUploadWithRegNo =

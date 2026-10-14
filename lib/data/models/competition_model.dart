@@ -43,6 +43,8 @@ class CompetitionModel {
   /// Display map from API `stageGroups`: stage name -> group names.
   final Map<String, List<String>>? stageGroupLabels;
   final String? brochureUrl;
+  /// Opaque public registration code used in share/QR URLs (not sequential id).
+  final String? registrationCode;
   final String? registrationUrl;
   /// SEPARATE_CATEGORY or FROM_FIRST_PLACE_WINNERS
   final String? championshipStyle;
@@ -93,6 +95,7 @@ class CompetitionModel {
     this.stageGroups,
     this.stageGroupLabels,
     this.brochureUrl,
+    this.registrationCode,
     this.registrationUrl,
     this.championshipStyle,
     this.competitionMode,
@@ -454,6 +457,8 @@ class CompetitionModel {
             ),
       brochureUrl:
           json['brochureUrl']?.toString() ?? json['brochure_url']?.toString(),
+      registrationCode: json['registrationCode']?.toString() ??
+          json['registration_code']?.toString(),
       registrationUrl: json['registrationUrl']?.toString(),
       championshipStyle:
           json['championshipStyle']?.toString() ??
@@ -612,6 +617,7 @@ class CompetitionModel {
     Map<String, List<int>>? stageGroups,
     Map<String, List<String>>? stageGroupLabels,
     String? brochureUrl,
+    String? registrationCode,
     String? registrationUrl,
     String? championshipStyle,
     String? competitionMode,
@@ -659,6 +665,7 @@ class CompetitionModel {
       stageGroups: stageGroups ?? this.stageGroups,
       stageGroupLabels: stageGroupLabels ?? this.stageGroupLabels,
       brochureUrl: brochureUrl ?? this.brochureUrl,
+      registrationCode: registrationCode ?? this.registrationCode,
       registrationUrl: registrationUrl ?? this.registrationUrl,
       championshipStyle: championshipStyle ?? this.championshipStyle,
       competitionMode: competitionMode ?? this.competitionMode,
@@ -766,6 +773,8 @@ class HomeCompetitionModel {
   final String? brochureUrl;
   final String? brochureFilePath;
   final String status;
+  /// Opaque public registration code used in share/QR URLs (not sequential id).
+  final String? registrationCode;
   final String? registrationUrl;
   final String? participantsUrl;
   final String? paymentModel;
@@ -794,6 +803,7 @@ class HomeCompetitionModel {
     this.brochureUrl,
     this.brochureFilePath,
     this.status = 'upcoming',
+    this.registrationCode,
     this.registrationUrl,
     this.participantsUrl,
     this.paymentModel,
@@ -851,6 +861,8 @@ class HomeCompetitionModel {
       brochureUrl: json['brochureUrl']?.toString(),
       brochureFilePath: json['brochureFilePath']?.toString(),
       status: json['status']?.toString() ?? 'upcoming',
+      registrationCode: json['registrationCode']?.toString() ??
+          json['registration_code']?.toString(),
       registrationUrl: json['registrationUrl']?.toString(),
       participantsUrl: json['participantsUrl']?.toString(),
       paymentModel: json['paymentModel']?.toString(),
