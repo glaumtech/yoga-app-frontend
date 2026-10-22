@@ -3,12 +3,14 @@ import 'package:get/get.dart';
 
 import '../../data/models/competition_model.dart';
 import '../../data/repositories/competition_repository.dart';
+import '../../data/repositories/organization_repository.dart';
 import '../../data/repositories/reports_repository.dart';
 import 'reports_participants_list_preset.dart';
 import 'reports_registered_participants_tab_controller.dart';
 
 class ReportsController extends GetxController {
   final CompetitionRepository _competitionRepository = CompetitionRepository();
+  final OrganizationRepository _organizationRepository = OrganizationRepository();
   final ReportsRepository _reportsRepository = ReportsRepository();
 
   final RxBool isLoading = false.obs;
@@ -16,6 +18,11 @@ class ReportsController extends GetxController {
 
   final RxList<CompetitionModel> competitions = <CompetitionModel>[].obs;
   final RxnString selectedCompetitionId = RxnString();
+
+  final RxList<OrganizationListItem> organizations = <OrganizationListItem>[].obs;
+  final RxnString selectedOrganizationId = RxnString();
+  final RxBool isLoadingOrganizations = false.obs;
+  final RxString organizationsError = ''.obs;
 
   /// Raw report payload returned by backend:
   /// {
@@ -29,6 +36,15 @@ class ReportsController extends GetxController {
 
   /// Reports tab id to open (e.g. [registeredParticipantsReportTabId]).
   final RxnString navigateToReportTabId = RxnString();
+
+  /// Prefill amount for Add transfer dialog opened from amount-request inbox.
+  final RxnDouble pendingTransferPrefillAmount = RxnDouble();
+
+  /// Amount request id to link when creating transfer from inbox / shortcut.
+  final RxnInt pendingTransferAmountRequestId = RxnInt();
+
+  /// Transfer row to highlight after navigating from amount request.
+  final RxnInt pendingHighlightTransferId = RxnInt();
 
   /// Applied when opening the registered participants tab from dashboard counts.
   final Rxn<ReportsParticipantsListPreset> pendingParticipantsPreset =
@@ -147,13 +163,68 @@ class ReportsController extends GetxController {
     await loadReport(competitionId);
   }
 
+  Future<void> loadOrganizations() async {
+    try {
+      isLoadingOrganizations.value = true;
+      organizationsError.value = '';
+
+      final resp = await _organizationRepository.listOrganizations();
+      if (!resp.success || resp.data == null) {
+        organizationsError.value =
+            resp.message ?? 'Failed to load organizations';
+        organizations.clear();
+        return;
+      }
+
+      organizations.value = resp.data!;
+
+      if (selectedOrganizationId.value == null && organizations.isNotEmpty) {
+        selectedOrganizationId.value = organizations.first.id.toString();
+      }
+    } catch (e) {
+      organizationsError.value =
+          'Error loading organizations: ${e.toString()}';
+      organizations.clear();
+    } finally {
+      isLoadingOrganizations.value = false;
+    }
+  }
+
+  void setSelectedOrganization(String? organizationId) {
+    if (organizationId == null || organizationId.isEmpty) return;
+    if (organizationId == selectedOrganizationId.value) return;
+    selectedOrganizationId.value = organizationId;
+  }
+
+  /// Opens Financial report tab for [competitionId] (amount-request inbox).
+  Future<void> openFinancialReport(
+    String competitionId, {
+    double? transferPrefillAmount,
+    int? amountRequestId,
+    int? highlightTransferId,
+  }) async {
+    selectedCompetitionId.value = competitionId;
+    pendingTransferPrefillAmount.value = transferPrefillAmount;
+    pendingTransferAmountRequestId.value = amountRequestId;
+    pendingHighlightTransferId.value = highlightTransferId;
+    navigateToReportTabId.value = 'financial';
+    await loadReport(competitionId);
+  }
+
   void resetSession() {
     isLoading.value = false;
     errorMessage.value = '';
     competitions.clear();
     selectedCompetitionId.value = null;
+    organizations.clear();
+    selectedOrganizationId.value = null;
+    isLoadingOrganizations.value = false;
+    organizationsError.value = '';
     report.value = null;
     navigateToReportTabId.value = null;
+    pendingTransferPrefillAmount.value = null;
+    pendingTransferAmountRequestId.value = null;
+    pendingHighlightTransferId.value = null;
     pendingParticipantsPreset.value = null;
   }
 }

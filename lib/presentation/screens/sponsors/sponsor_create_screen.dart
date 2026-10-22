@@ -4,7 +4,9 @@ import '../../controllers/sponsor_controller.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../widgets/pinned_scroll_views.dart';
+import '../../widgets/payment_inr_only_notice.dart';
 
 class SponsorCreateScreen extends StatelessWidget {
   const SponsorCreateScreen({super.key});
@@ -144,40 +146,27 @@ class SponsorCreateScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Obx(
-          () => DropdownButtonFormField<String>(
-            value: controller.selectedCompetitionId.value.isNotEmpty
+          () => SearchableDropdownField(
+            selectedValue: controller.selectedCompetitionId.value.isNotEmpty
                 ? controller.selectedCompetitionId.value
                 : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 16,
-              ),
-              filled: true,
-              fillColor: Colors.white,
+            hintText: 'Select Competition',
+            fillColor: Colors.white,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 16,
+              vertical: 16,
             ),
-            hint: Text(
-              'Select Competition',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
-            items: controller.competitions.where((c) => c.id != null).map((
-              competition,
-            ) {
-              return DropdownMenuItem<String>(
-                value: competition.id,
-                child: Text(
-                  competition.competitionName,
-                  style: TextStyle(fontSize: isMobile ? 14 : 16),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
+            items: controller.competitions
+                .where((c) => c.id != null)
+                .map(
+                  (competition) => SearchableDropdownItem(
+                    value: competition.id!,
+                    label: competition.competitionName,
+                  ),
+                )
+                .toList(),
             onChanged: (value) {
-              controller.selectedCompetitionId.value = value ?? '';
+              controller.selectedCompetitionId.value = value;
             },
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -299,28 +288,7 @@ class SponsorCreateScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.grey[300]!),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '//Here use your usual payment options',
-                style: TextStyle(
-                  fontSize: isMobile ? 12 : 13,
-                  color: Colors.grey[700],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '//Also, provide QR',
-                style: TextStyle(
-                  fontSize: isMobile ? 12 : 13,
-                  color: Colors.grey[700],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
-          ),
+          child: const PaymentInrOnlyNotice(margin: EdgeInsets.zero),
         ),
       ],
     );

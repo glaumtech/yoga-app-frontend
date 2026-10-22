@@ -31,7 +31,12 @@ class ParticipantRegistrationFormController extends GetxController {
   void onReady() {
     super.onReady();
     _bindListeners();
-    _prepareRegistrationForm();
+    // Defer loads until after the first frame so Form GlobalKeys are not
+    // remounted while LayoutBuilder is still performing layout.
+    Future<void>.delayed(Duration.zero, () async {
+      if (isClosed) return;
+      await _prepareRegistrationForm();
+    });
   }
 
   void _bindListeners() {
@@ -50,7 +55,8 @@ class ParticipantRegistrationFormController extends GetxController {
     final id = (initialCompetitionId ?? '').isNotEmpty
         ? initialCompetitionId!
         : participantController.selectedEventId.value;
-    if (id.isNotEmpty) {
+    if (id.isNotEmpty &&
+        participantController.selectedEventId.value != id) {
       participantController.selectedEventId.value = id;
     }
 
@@ -64,7 +70,9 @@ class ParticipantRegistrationFormController extends GetxController {
       await competitionController.loadSubscriptionPackages();
     }
 
-    await _loadCompetitionForRegistration(participantController.selectedEventId.value);
+    await _loadCompetitionForRegistration(
+      participantController.selectedEventId.value,
+    );
   }
 
   Future<void> _loadCompetitionForRegistration(String competitionId) async {

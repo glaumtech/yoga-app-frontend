@@ -208,6 +208,9 @@ class _CategoryAsanasConfigWizardState
 
   late TextEditingController _feeController;
   late TextEditingController _spotFeeController;
+  late TextEditingController _earlyBirdFeeController;
+  late TextEditingController _bulkDiscountFeeController;
+  late TextEditingController _bulkDiscountCountController;
   late TextEditingController _minTimeController;
   late TextEditingController _maxTimeController;
   late TextEditingController _stageCountController;
@@ -260,6 +263,15 @@ class _CategoryAsanasConfigWizardState
     // leftover groups/stages/fees from a previously configured category.
     if (!_config.configured) {
       _config.resetWizardFieldsToDefaults();
+      final ctrl = widget.competitionController;
+      if (ctrl != null) {
+        final mapped = ctrl.mappedAmountsFor(
+          _config.categoryId,
+          categoryName: _config.categoryName,
+        );
+        _config.feeAmount = mapped.amount;
+        _config.spotFeeAmount = mapped.spotAmount;
+      }
     }
 
     if (!_config.isOnlineMode) {
@@ -340,6 +352,17 @@ class _CategoryAsanasConfigWizardState
               initialSpot.truncateToDouble() == initialSpot ? 0 : 2,
             ),
     );
+    _earlyBirdFeeController = TextEditingController(
+      text: _moneyFieldText(_config.earlyBirdFeeAmount),
+    );
+    _bulkDiscountFeeController = TextEditingController(
+      text: _moneyFieldText(_config.bulkDiscountFeeAmount),
+    );
+    _bulkDiscountCountController = TextEditingController(
+      text: _config.bulkDiscountMinCount > 0
+          ? '${_config.bulkDiscountMinCount}'
+          : '',
+    );
     _minTimeController =
         TextEditingController(text: _config.minTime ?? '01:00');
     _maxTimeController =
@@ -358,6 +381,9 @@ class _CategoryAsanasConfigWizardState
   void dispose() {
     _feeController.dispose();
     _spotFeeController.dispose();
+    _earlyBirdFeeController.dispose();
+    _bulkDiscountFeeController.dispose();
+    _bulkDiscountCountController.dispose();
     _minTimeController.dispose();
     _maxTimeController.dispose();
     _stageCountController.dispose();
@@ -686,19 +712,27 @@ class _CategoryAsanasConfigWizardState
         .map((e) => e.toModel())
         .whereType<CompetitionGradeModel>()
         .toList();
-    _config.durationDays = int.tryParse(_durationDaysController.text.trim());
-    if (_config.durationDays == 1) {
-      _config.howManyTimes = int.tryParse(_howManyTimesController.text.trim());
+    if (_config.isAsanas) {
+      _config.durationDays = null;
+      _config.howManyTimes = null;
       _config.increaseCountEnabled = false;
       _config.increaseCountRanges = <IncreaseCountRangeModel>[];
     } else {
-      _config.howManyTimes = null;
-      _config.increaseCountRanges = _config.increaseCountEnabled
-          ? _increaseCountEntries
-              .map((e) => e.toModel())
-              .whereType<IncreaseCountRangeModel>()
-              .toList()
-          : <IncreaseCountRangeModel>[];
+      _config.durationDays = int.tryParse(_durationDaysController.text.trim());
+      if (_config.durationDays == 1) {
+        _config.howManyTimes =
+            int.tryParse(_howManyTimesController.text.trim());
+        _config.increaseCountEnabled = false;
+        _config.increaseCountRanges = <IncreaseCountRangeModel>[];
+      } else {
+        _config.howManyTimes = null;
+        _config.increaseCountRanges = _config.increaseCountEnabled
+            ? _increaseCountEntries
+                .map((e) => e.toModel())
+                .whereType<IncreaseCountRangeModel>()
+                .toList()
+            : <IncreaseCountRangeModel>[];
+      }
     }
     _config.minTime = _minTimeController.text.trim().isEmpty
         ? null
@@ -708,6 +742,19 @@ class _CategoryAsanasConfigWizardState
         : _maxTimeController.text.trim();
     _config.feeAmount =
         double.tryParse(_feeController.text.trim()) ?? _config.feeAmount;
+    final offerError = _applyAndValidateFeeOffers();
+    if (offerError != null) {
+      final feesIndex = _visibleSteps.indexWhere(
+        (s) => s.id == _WizardStepId.fees,
+      );
+      if (feesIndex >= 0) _goToStep(feesIndex + 1);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(offerError)),
+        );
+      }
+      return;
+    }
     if (_config.isOnlineMode) {
       _config.spotFeeAmount = _config.feeAmount;
     } else {
@@ -1706,13 +1753,24 @@ class _CategoryAsanasConfigWizardState
                                         fontWeight: FontWeight.w600,
                                         color: sel
                                             ? Colors.white
-                                            : Colors.grey.shade700,
+                                            : Colors.grey.shade800,
                                       ),
                                     ),
                                     selected: sel,
                                     showCheckmark: false,
                                     selectedColor: primary,
                                     backgroundColor: Colors.white,
+                                    color: WidgetStateProperty.resolveWith((
+                                      states,
+                                    ) {
+                                      if (states.contains(WidgetState.selected)) {
+                                        return primary;
+                                      }
+                                      return Colors.white;
+                                    }),
+                                    surfaceTintColor: Colors.transparent,
+                                    elevation: 0,
+                                    pressElevation: 0,
                                     visualDensity: VisualDensity.compact,
                                     materialTapTargetSize:
                                         MaterialTapTargetSize.shrinkWrap,
@@ -2120,13 +2178,33 @@ class _CategoryAsanasConfigWizardState
             runSpacing: 10,
             children: [
               FilterChip(
-                label: const Text(
+                label: Text(
                   'Enable Skipped Asana',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: _config.skippedAsanaEnabled
+                        ? Colors.white
+                        : Colors.grey.shade800,
+                  ),
                 ),
                 selected: _config.skippedAsanaEnabled,
-                selectedColor: primary.withValues(alpha: 0.15),
-                checkmarkColor: primary,
+                showCheckmark: true,
+                checkmarkColor: Colors.white,
+                backgroundColor: Colors.white,
+                selectedColor: primary,
+                color: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) return primary;
+                  return Colors.white;
+                }),
+                side: BorderSide(
+                  color: _config.skippedAsanaEnabled
+                      ? primary
+                      : Colors.grey.shade300,
+                ),
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                pressElevation: 0,
                 onSelected: _readOnly
                     ? null
                     : (v) => setState(() => _config.skippedAsanaEnabled = v),
@@ -2259,13 +2337,20 @@ class _CategoryAsanasConfigWizardState
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: sel ? Colors.white : Colors.grey.shade700,
+                      color: sel ? Colors.white : Colors.grey.shade800,
                     ),
                   ),
                   selected: sel,
                   showCheckmark: false,
                   selectedColor: primary,
                   backgroundColor: Colors.white,
+                  color: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) return primary;
+                    return Colors.white;
+                  }),
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                  pressElevation: 0,
                   side: BorderSide(
                     color: sel ? primary : Colors.grey.shade300,
                   ),
@@ -2425,117 +2510,140 @@ class _CategoryAsanasConfigWizardState
               );
             },
           ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 520;
-              final daysField = _labeledField(
-                label: 'Duration (days)',
-                child: TextFormField(
-                  controller: _durationDaysController,
-                  enabled: !_readOnly,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: _compactDecoration(hint: 'e.g. 40'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                  onChanged: (v) {
-                    setState(() {
-                      _config.durationDays = int.tryParse(v.trim());
-                      if (_config.durationDays == 1) {
-                        _config.increaseCountEnabled = false;
-                      }
-                    });
-                  },
-                ),
-              );
-              final timesField = _labeledField(
-                label: 'How many times',
-                child: TextFormField(
-                  controller: _howManyTimesController,
-                  enabled: !_readOnly,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: _compactDecoration(hint: 'e.g. 50'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                  onChanged: (v) {
-                    setState(() {
-                      _config.howManyTimes = int.tryParse(v.trim());
-                    });
-                  },
-                ),
-              );
-              final increaseCheckbox = Padding(
-                padding: const EdgeInsets.only(top: 22),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: _config.increaseCountEnabled,
-                      onChanged: _readOnly
-                          ? null
-                          : (v) {
-                              final enabled = v ?? false;
-                              setState(() {
-                                _config.increaseCountEnabled = enabled;
-                                if (enabled && _increaseCountEntries.isEmpty) {
-                                  _increaseCountEntries.add(
-                                    IncreaseCountRangeEntry(),
-                                  );
-                                }
-                              });
-                            },
-                      activeColor: primary,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
+          if (_config.isChallenge) ...[
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 520;
+                final daysField = _labeledField(
+                  label: 'Duration (days)',
+                  child: TextFormField(
+                    controller: _durationDaysController,
+                    enabled: !_readOnly,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: _compactDecoration(hint: 'e.g. 40'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
                     ),
-                    const Flexible(
-                      child: Text(
-                        'Increase count',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                    onChanged: (v) {
+                      setState(() {
+                        _config.durationDays = int.tryParse(v.trim());
+                        if (_config.durationDays == 1) {
+                          _config.increaseCountEnabled = false;
+                        }
+                      });
+                    },
+                  ),
+                );
+                final timesField = _labeledField(
+                  label: 'How many times',
+                  child: TextFormField(
+                    controller: _howManyTimesController,
+                    enabled: !_readOnly,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: _compactDecoration(hint: 'e.g. 50'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                    onChanged: (v) {
+                      setState(() {
+                        _config.howManyTimes = int.tryParse(v.trim());
+                      });
+                    },
+                  ),
+                );
+                final increaseCheckbox = Padding(
+                  padding: const EdgeInsets.only(top: 22),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: _config.increaseCountEnabled,
+                        onChanged: _readOnly
+                            ? null
+                            : (v) {
+                                final enabled = v ?? false;
+                                setState(() {
+                                  _config.increaseCountEnabled = enabled;
+                                  if (enabled &&
+                                      _increaseCountEntries.isEmpty) {
+                                    _increaseCountEntries.add(
+                                      IncreaseCountRangeEntry(),
+                                    );
+                                  }
+                                });
+                              },
+                        activeColor: primary,
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Increase count',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Tick this if the asana count should go up over the challenge days. '
+                                'Then add day ranges with a count (e.g. days 1 to 40 = 50 times).',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  height: 1.35,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-              if (wide) {
-                return Row(
+                    ],
+                  ),
+                );
+                if (wide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: daysField),
+                      const SizedBox(width: 12),
+                      if (_isSingleDayDuration)
+                        Expanded(child: timesField)
+                      else
+                        Expanded(child: increaseCheckbox),
+                    ],
+                  );
+                }
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: daysField),
-                    const SizedBox(width: 12),
-                    if (_isSingleDayDuration)
-                      Expanded(child: timesField)
-                    else
-                      Expanded(child: increaseCheckbox),
+                    daysField,
+                    if (_isSingleDayDuration) ...[
+                      const SizedBox(height: 12),
+                      timesField,
+                    ] else ...[
+                      const SizedBox(height: 4),
+                      increaseCheckbox,
+                    ],
                   ],
                 );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  daysField,
-                  if (_isSingleDayDuration) ...[
-                    const SizedBox(height: 12),
-                    timesField,
-                  ] else ...[
-                    const SizedBox(height: 4),
-                    increaseCheckbox,
-                  ],
-                ],
-              );
-            },
-          ),
-          if (!_isSingleDayDuration && _config.increaseCountEnabled) ...[
-            const SizedBox(height: 14),
-            _buildIncreaseCountRanges(primary),
+              },
+            ),
+            if (!_isSingleDayDuration && _config.increaseCountEnabled) ...[
+              const SizedBox(height: 14),
+              _buildIncreaseCountRanges(primary),
+            ],
           ],
         ],
       ),
@@ -2555,7 +2663,7 @@ class _CategoryAsanasConfigWizardState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Add from–to ranges with a count (e.g. 1 to 40 = 50).',
+            'Add day ranges with a count. Example: 1 to 40 = 50 means days 1–40 are performed 50 times.',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 12),
@@ -2742,16 +2850,27 @@ class _CategoryAsanasConfigWizardState
             (item) => FilterChip(
               label: Text(
                 item.label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
+                  color: item.value ? Colors.white : Colors.grey.shade800,
                 ),
               ),
               selected: item.value,
-              selectedColor: primary.withValues(alpha: 0.15),
-              checkmarkColor: primary,
-              backgroundColor: Colors.grey.shade50,
-              side: BorderSide(color: Colors.grey.shade300),
+              showCheckmark: true,
+              checkmarkColor: Colors.white,
+              backgroundColor: Colors.white,
+              selectedColor: primary,
+              color: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return primary;
+                return Colors.white;
+              }),
+              side: BorderSide(
+                color: item.value ? primary : Colors.grey.shade300,
+              ),
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              pressElevation: 0,
               onSelected: _readOnly ? null : (v) => item.onChanged(v),
             ),
           ),
@@ -2762,13 +2881,22 @@ class _CategoryAsanasConfigWizardState
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
+                  color: Colors.white,
                 ),
               ),
               selected: true,
-              selectedColor: primary.withValues(alpha: 0.15),
-              checkmarkColor: primary,
-              backgroundColor: Colors.grey.shade50,
-              side: BorderSide(color: Colors.grey.shade300),
+              showCheckmark: true,
+              checkmarkColor: Colors.white,
+              backgroundColor: Colors.white,
+              selectedColor: primary,
+              color: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return primary;
+                return Colors.white;
+              }),
+              side: BorderSide(color: primary),
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              pressElevation: 0,
               onSelected: _readOnly
                   ? null
                   : (_) {
@@ -3308,13 +3436,20 @@ class _CategoryAsanasConfigWizardState
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: sel ? Colors.white : Colors.grey.shade700,
+                color: sel ? Colors.white : Colors.grey.shade800,
               ),
             ),
             selected: sel,
             showCheckmark: false,
             selectedColor: primary,
-            backgroundColor: Colors.grey.shade100,
+            backgroundColor: Colors.white,
+            color: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) return primary;
+              return Colors.white;
+            }),
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            pressElevation: 0,
             side: BorderSide(color: sel ? primary : Colors.grey.shade300),
             onSelected: _readOnly
                 ? null
@@ -3501,113 +3636,455 @@ class _CategoryAsanasConfigWizardState
     final includePlatformFee = _config.includeFeeInRegistration;
     final showBreakdown = isOnDemand && ctrl != null;
 
+    final standardFees = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _labeledField(
+          label: 'Online fee per participant',
+          child: TextFormField(
+            controller: _feeController,
+            enabled: !_readOnly,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+            ],
+            decoration: _compactDecoration(prefixText: '₹ '),
+            style: const TextStyle(fontWeight: FontWeight.w900),
+            onChanged: (v) {
+              setState(() {
+                _config.feeAmount = double.tryParse(v.trim()) ?? 0;
+              });
+            },
+          ),
+        ),
+        if (showBreakdown)
+          _buildFeeBreakdown(
+            primary: primary,
+            feeCtrl: ctrl,
+            storedAmount: onlineAmount,
+            includePlatformFee: includePlatformFee,
+            title: 'Online calculation',
+          ),
+        if (!_config.isOnlineMode) ...[
+          const SizedBox(height: 12),
+          _labeledField(
+            label: 'Spot fee per participant',
+            child: TextFormField(
+              controller: _spotFeeController,
+              enabled: !_readOnly,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              ],
+              decoration: _compactDecoration(prefixText: '₹ '),
+              style: const TextStyle(fontWeight: FontWeight.w900),
+              onChanged: (v) {
+                setState(() {
+                  _config.spotFeeAmount = double.tryParse(v.trim()) ?? 0;
+                });
+              },
+            ),
+          ),
+          if (showBreakdown)
+            _buildFeeBreakdown(
+              primary: primary,
+              feeCtrl: ctrl,
+              storedAmount: spotAmount,
+              includePlatformFee: includePlatformFee,
+              title: 'Spot calculation',
+            ),
+        ],
+        if (isOnDemand) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Checkbox(
+                value: includePlatformFee,
+                onChanged: _readOnly
+                    ? null
+                    : (value) => _toggleIncludePlatformFee(value ?? false),
+                activeColor: primary,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+              const Text(
+                'INCLUDE FEE',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (showBreakdown) ...[
+          const SizedBox(height: 4),
+          Obx(() {
+            final gatewayPct = ctrl.onDemandPaymentGatewayFeePercent.value;
+            final platformPct = ctrl.onDemandPlatformFeePercent.value;
+            return Text(
+              'Platform ${platformPct.toStringAsFixed(1)}% + Gateway ${gatewayPct.toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+
+    final offers = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _feeOfferToggle(
+          label: 'Early Bird',
+          value: _config.earlyBirdEnabled,
+          primary: primary,
+          onChanged: (value) {
+            setState(() => _config.earlyBirdEnabled = value);
+          },
+        ),
+        if (_config.earlyBirdEnabled) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _offerDateField(
+                  label: 'From',
+                  value: _config.earlyBirdFrom,
+                  onPicked: (value) {
+                    setState(() => _config.earlyBirdFrom = value);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _offerDateField(
+                  label: 'To',
+                  value: _config.earlyBirdTo,
+                  onPicked: (value) {
+                    setState(() => _config.earlyBirdTo = value);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _labeledField(
+            label: 'Early bird fee per participant',
+            child: TextFormField(
+              controller: _earlyBirdFeeController,
+              enabled: !_readOnly,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              ],
+              decoration: _compactDecoration(prefixText: '₹ '),
+              style: const TextStyle(fontWeight: FontWeight.w900),
+              onChanged: (v) {
+                setState(() {
+                  _config.earlyBirdFeeAmount = double.tryParse(v.trim()) ?? 0;
+                });
+              },
+            ),
+          ),
+          if (showBreakdown)
+            _buildFeeBreakdown(
+              primary: primary,
+              feeCtrl: ctrl,
+              storedAmount: double.tryParse(_earlyBirdFeeController.text.trim()) ??
+                  _config.earlyBirdFeeAmount,
+              includePlatformFee: includePlatformFee,
+              title: 'Early bird calculation',
+            ),
+        ],
+        const SizedBox(height: 12),
+        _feeOfferToggle(
+          label: 'Bulk registration discount',
+          value: _config.bulkDiscountEnabled,
+          primary: primary,
+          onChanged: (value) {
+            setState(() => _config.bulkDiscountEnabled = value);
+          },
+        ),
+        if (_config.bulkDiscountEnabled) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _offerDateField(
+                  label: 'From',
+                  value: _config.bulkDiscountFrom,
+                  onPicked: (value) {
+                    setState(() => _config.bulkDiscountFrom = value);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _offerDateField(
+                  label: 'To',
+                  value: _config.bulkDiscountTo,
+                  onPicked: (value) {
+                    setState(() => _config.bulkDiscountTo = value);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _labeledField(
+            label: 'Minimum participants',
+            child: TextFormField(
+              controller: _bulkDiscountCountController,
+              enabled: !_readOnly,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: _compactDecoration(hint: 'Count'),
+              style: const TextStyle(fontWeight: FontWeight.w900),
+              onChanged: (v) {
+                setState(() {
+                  _config.bulkDiscountMinCount = int.tryParse(v.trim()) ?? 0;
+                });
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          _labeledField(
+            label: 'Bulk fee per participant',
+            child: TextFormField(
+              controller: _bulkDiscountFeeController,
+              enabled: !_readOnly,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              ],
+              decoration: _compactDecoration(prefixText: '₹ '),
+              style: const TextStyle(fontWeight: FontWeight.w900),
+              onChanged: (v) {
+                setState(() {
+                  _config.bulkDiscountFeeAmount =
+                      double.tryParse(v.trim()) ?? 0;
+                });
+              },
+            ),
+          ),
+          if (showBreakdown)
+            _buildFeeBreakdown(
+              primary: primary,
+              feeCtrl: ctrl,
+              storedAmount:
+                  double.tryParse(_bulkDiscountFeeController.text.trim()) ??
+                      _config.bulkDiscountFeeAmount,
+              includePlatformFee: includePlatformFee,
+              title: 'Bulk calculation',
+            ),
+        ],
+      ],
+    );
+
     return _stepCard(
       primary: primary,
       title: _numberedTitle('CATEGORY REGISTRATION FEES'),
       icon: Icons.currency_rupee_rounded,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _labeledField(
-              label: 'Online fee per participant',
-              child: TextFormField(
-                controller: _feeController,
-                enabled: !_readOnly,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                ],
-                decoration: _compactDecoration(prefixText: '₹ '),
-                style: const TextStyle(fontWeight: FontWeight.w900),
-                onChanged: (v) {
-                  setState(() {
-                    _config.feeAmount = double.tryParse(v.trim()) ?? 0;
-                  });
-                },
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final sideBySide = constraints.maxWidth >= 760;
+          if (!sideBySide) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                standardFees,
+                const SizedBox(height: 16),
+                offers,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 360, child: standardFees),
+              const SizedBox(width: 28),
+              Expanded(child: offers),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _feeOfferToggle({
+    required String label,
+    required bool value,
+    required Color primary,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      children: [
+        Checkbox(
+          value: value,
+          onChanged: _readOnly ? null : (next) => onChanged(next ?? false),
+          activeColor: primary,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+        ),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
             ),
-            if (showBreakdown)
-              _buildFeeBreakdown(
-                primary: primary,
-                feeCtrl: ctrl,
-                storedAmount: onlineAmount,
-                includePlatformFee: includePlatformFee,
-                title: 'Online calculation',
-              ),
-            if (!_config.isOnlineMode) ...[
-              const SizedBox(height: 12),
-              _labeledField(
-                label: 'Spot fee per participant',
-                child: TextFormField(
-                  controller: _spotFeeController,
-                  enabled: !_readOnly,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
-                  decoration: _compactDecoration(prefixText: '₹ '),
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                  onChanged: (v) {
-                    setState(() {
-                      _config.spotFeeAmount = double.tryParse(v.trim()) ?? 0;
-                    });
-                  },
-                ),
-              ),
-              if (showBreakdown)
-                _buildFeeBreakdown(
-                  primary: primary,
-                  feeCtrl: ctrl,
-                  storedAmount: spotAmount,
-                  includePlatformFee: includePlatformFee,
-                  title: 'Spot calculation',
-                ),
-            ],
-            if (isOnDemand) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Checkbox(
-                    value: includePlatformFee,
-                    onChanged: _readOnly
-                        ? null
-                        : (value) => _toggleIncludePlatformFee(value ?? false),
-                    activeColor: primary,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const Text(
-                    'INCLUDE FEE',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (showBreakdown) ...[
-              const SizedBox(height: 4),
-              Obx(() {
-                final gatewayPct =
-                    ctrl.onDemandPaymentGatewayFeePercent.value;
-                final platformPct = ctrl.onDemandPlatformFeePercent.value;
-                return Text(
-                  'Platform ${platformPct.toStringAsFixed(1)}% + Gateway ${gatewayPct.toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade500,
-                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _offerDateField({
+    required String label,
+    required String? value,
+    required ValueChanged<String> onPicked,
+  }) {
+    return _labeledField(
+      label: label,
+      child: InkWell(
+        onTap: _readOnly
+            ? null
+            : () async {
+                final initial = _parseOfferDate(value) ?? DateTime.now();
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: initial,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
                 );
-              }),
-            ],
-          ],
+                if (picked == null) return;
+                final month = picked.month.toString().padLeft(2, '0');
+                final day = picked.day.toString().padLeft(2, '0');
+                onPicked('${picked.year}-$month-$day');
+              },
+        child: InputDecorator(
+          decoration: _compactDecoration(
+            hint: 'Select date',
+            suffixIcon: const Icon(Icons.calendar_today, size: 18),
+          ),
+          child: Text(
+            _displayOfferDate(value),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: value == null || value.isEmpty
+                  ? Colors.grey.shade600
+                  : Colors.black,
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  String? _applyAndValidateFeeOffers() {
+    if (_config.earlyBirdEnabled) {
+      final dates = _validateOfferDates(
+        'Early Bird',
+        _config.earlyBirdFrom,
+        _config.earlyBirdTo,
+      );
+      if (dates != null) return dates;
+      final amountError = _readOfferAmount(
+        'Early bird fee',
+        _earlyBirdFeeController.text,
+        (value) => _config.earlyBirdFeeAmount = value,
+      );
+      if (amountError != null) return amountError;
+    } else {
+      _config.earlyBirdFeeAmount =
+          double.tryParse(_earlyBirdFeeController.text.trim()) ??
+              _config.earlyBirdFeeAmount;
+    }
+
+    if (_config.bulkDiscountEnabled) {
+      final dates = _validateOfferDates(
+        'Bulk registration discount',
+        _config.bulkDiscountFrom,
+        _config.bulkDiscountTo,
+      );
+      if (dates != null) return dates;
+      final count =
+          int.tryParse(_bulkDiscountCountController.text.trim());
+      if (count == null || count < 1) {
+        return 'Bulk registration discount count must be at least 1';
+      }
+      _config.bulkDiscountMinCount = count;
+      final amountError = _readOfferAmount(
+        'Bulk fee',
+        _bulkDiscountFeeController.text,
+        (value) => _config.bulkDiscountFeeAmount = value,
+      );
+      if (amountError != null) return amountError;
+    } else {
+      _config.bulkDiscountMinCount =
+          int.tryParse(_bulkDiscountCountController.text.trim()) ??
+              _config.bulkDiscountMinCount;
+      _config.bulkDiscountFeeAmount =
+          double.tryParse(_bulkDiscountFeeController.text.trim()) ??
+              _config.bulkDiscountFeeAmount;
+    }
+    return null;
+  }
+
+  String? _validateOfferDates(String label, String? from, String? to) {
+    final start = _parseOfferDate(from);
+    final end = _parseOfferDate(to);
+    if (start == null || end == null) {
+      return '$label needs a from date and a to date';
+    }
+    if (end.isBefore(start)) {
+      return '$label to date must be on or after the from date';
+    }
+    return null;
+  }
+
+  String? _readOfferAmount(
+    String label,
+    String raw,
+    ValueChanged<double> assign,
+  ) {
+    final value = double.tryParse(raw.trim());
+    if (value == null || value < 0) {
+      return '$label is required';
+    }
+    assign(value);
+    return null;
+  }
+
+  DateTime? _parseOfferDate(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final parts = raw.trim().split('-');
+    if (parts.length < 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    return DateTime(year, month, day);
+  }
+
+  String _displayOfferDate(String? raw) {
+    final date = _parseOfferDate(raw);
+    if (date == null) return 'Select date';
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day/$month/${date.year}';
+  }
+
+  String _moneyFieldText(double value) {
+    if (value == 0) return '0';
+    return value.toStringAsFixed(
+      value.truncateToDouble() == value ? 0 : 2,
     );
   }
 

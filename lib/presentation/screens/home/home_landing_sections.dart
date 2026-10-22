@@ -55,11 +55,13 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
         label: 'Home',
         icon: Icons.home_outlined,
         onTap: () => context.go(AppRoutes.home),
+        isActive: (state) => _isHomeRoute(state),
       ),
       _LandingNavItem(
         label: 'Competitions',
         icon: Icons.emoji_events_outlined,
         onTap: () => context.push(AppRoutes.competitions),
+        isActive: (state) => _isCompetitionsRoute(state),
       ),
       _LandingNavItem(
         label: 'Results',
@@ -67,27 +69,63 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
         onTap: () => context.push(
           AppRoutes.competitionsList(status: 'completed'),
         ),
+        isActive: (state) => _isResultsRoute(state),
       ),
       _LandingNavItem(
         label: 'About Us',
         icon: Icons.info_outline,
         onTap: () => context.push(AppRoutes.about),
+        isActive: (state) => state.uri.path == AppRoutes.about,
       ),
       _LandingNavItem(
         label: 'Contact Us',
         icon: Icons.mail_outline,
         onTap: () => context.push(AppRoutes.contact),
+        isActive: (state) => state.uri.path == AppRoutes.contact,
       ),
       _LandingNavItem(
         label: 'Online Participant login',
         icon: Icons.videocam_outlined,
         onTap: () => context.push(AppRoutes.participantVideoUpload),
+        isActive: (state) =>
+            state.uri.path == AppRoutes.participantVideoUpload ||
+            state.uri.path.startsWith('${AppRoutes.participantVideoUpload}/'),
       ),
     ];
   }
 
+  bool _isHomeRoute(GoRouterState state) {
+    final path = state.uri.path;
+    return path == AppRoutes.home || path == '/' || path.isEmpty;
+  }
+
+  bool _isParticipantListRoute(GoRouterState state) {
+    final path = state.uri.path;
+    return path.startsWith('${AppRoutes.competitions}/') &&
+        path.endsWith('/participants');
+  }
+
+  bool _isCompetitionsRoute(GoRouterState state) {
+    final path = state.uri.path;
+    if (path.startsWith('/register/competition')) return true;
+    if (_isParticipantListRoute(state)) {
+      return state.uri.queryParameters['past'] != '1';
+    }
+    if (path != AppRoutes.competitions) return false;
+    return state.uri.queryParameters['status']?.toLowerCase() != 'completed';
+  }
+
+  bool _isResultsRoute(GoRouterState state) {
+    if (_isParticipantListRoute(state)) {
+      return state.uri.queryParameters['past'] == '1';
+    }
+    return state.uri.path == AppRoutes.competitions &&
+        state.uri.queryParameters['status']?.toLowerCase() == 'completed';
+  }
+
   void _openMobileNav(BuildContext context) {
     final items = _navItems(context);
+    final routeState = GoRouterState.of(context);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -111,19 +149,34 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                ...items.map(
-                  (item) => ListTile(
-                    leading: Icon(item.icon, color: AppTheme.primaryColor),
+                ...items.map((item) {
+                  final selected = item.isActive(routeState);
+                  return ListTile(
+                    selected: selected,
+                    selectedTileColor: AppTheme.primaryColor.withValues(
+                      alpha: 0.12,
+                    ),
+                    selectedColor: AppTheme.primaryColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    leading: Icon(
+                      item.icon,
+                      color: AppTheme.primaryColor,
+                    ),
                     title: Text(
                       item.label,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w600,
+                      ),
                     ),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       item.onTap();
                     },
-                  ),
-                ),
+                  );
+                }),
               ],
             ),
           ),
@@ -137,6 +190,7 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= HomeLayout.tablet;
     final navItems = _navItems(context);
+    final routeState = GoRouterState.of(context);
 
     return Container(
       decoration: BoxDecoration(
@@ -163,7 +217,11 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
               if (isWide) ...[
                 const SizedBox(width: 16),
                 ...navItems.map(
-                  (item) => _NavLink(label: item.label, onTap: item.onTap),
+                  (item) => _NavLink(
+                    label: item.label,
+                    onTap: item.onTap,
+                    isActive: item.isActive(routeState),
+                  ),
                 ),
               ],
               const Spacer(),
@@ -193,7 +251,7 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
         return ElevatedButton.icon(
           onPressed: onLogin,
           icon: const Icon(Icons.login, size: 18),
-          label: const Text('Login'),
+          label: const Text('Organizer Login'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
             foregroundColor: AppTheme.primaryColor,
@@ -207,7 +265,7 @@ class HomeLandingNavBar extends StatelessWidget implements PreferredSizeWidget {
       }
       return IconButton(
         onPressed: onLogin,
-        tooltip: 'Login',
+        tooltip: 'Organizer Login',
         style: IconButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: AppTheme.primaryColor,
@@ -580,30 +638,52 @@ class _LandingNavItem {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
+  final bool Function(GoRouterState state) isActive;
 
   const _LandingNavItem({
     required this.label,
     required this.icon,
     required this.onTap,
+    required this.isActive,
   });
 }
 
 class _NavLink extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
+  final bool isActive;
 
-  const _NavLink({required this.label, required this.onTap});
+  const _NavLink({
+    required this.label,
+    required this.onTap,
+    this.isActive = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onTap,
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w500,
-          fontSize: 14,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: isActive
+              ? Colors.white.withValues(alpha: 0.22)
+              : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+            fontSize: 14,
+          ),
         ),
       ),
     );
@@ -1445,7 +1525,9 @@ class HomeEventCard extends StatelessWidget {
       );
       return;
     }
-    context.push(AppRoutes.registerCompetitionPath(id));
+    final code = competition.registrationCode?.trim() ?? '';
+    if (code.isEmpty) return;
+    context.push(AppRoutes.registerCompetitionPath(code));
   }
 
   @override
@@ -1519,13 +1601,16 @@ class HomeEventCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                      if (showShareLinkOption && id.isNotEmpty)
+                      if (showShareLinkOption &&
+                          (competition.registrationCode?.trim().isNotEmpty ==
+                                  true ||
+                              competition.registrationUrl?.trim().isNotEmpty ==
+                                  true))
                         Positioned(
                           top: 8,
                           right: 8,
                           child: _ShareRegistrationButton(
                             competition: competition,
-                            competitionId: id,
                           ),
                         ),
                       if (showResultsQr)
@@ -1654,18 +1739,18 @@ class HomeEventCard extends StatelessWidget {
 
 class _ShareRegistrationButton extends StatelessWidget {
   final HomeCompetitionModel competition;
-  final String competitionId;
 
   const _ShareRegistrationButton({
     required this.competition,
-    required this.competitionId,
   });
 
   void _onShare(BuildContext context) {
+    final code = competition.registrationCode?.trim() ?? '';
     final link = registrationShareUrlForCompetition(
       registrationUrl: competition.registrationUrl,
-      competitionId: competitionId,
+      registrationCode: code,
     );
+    if (link.isEmpty) return;
     Clipboard.setData(ClipboardData(text: link));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -1673,13 +1758,15 @@ class _ShareRegistrationButton extends StatelessWidget {
       SnackBar(
         content: const Text('Registration link copied'),
         duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'Register',
-          onPressed: () {
-            if (!context.mounted) return;
-            context.push(AppRoutes.registerCompetitionPath(competitionId));
-          },
-        ),
+        action: code.isEmpty
+            ? null
+            : SnackBarAction(
+                label: 'Register',
+                onPressed: () {
+                  if (!context.mounted) return;
+                  context.push(AppRoutes.registerCompetitionPath(code));
+                },
+              ),
       ),
     );
   }
@@ -2475,7 +2562,7 @@ class _HomeEnquireSectionState extends State<HomeEnquireSection> {
     }
     final uri = Uri(
       scheme: 'mailto',
-      path: 'praveen.sekar@glaum.in',
+      path: 'praveen@glaum.in',
       query: Uri(
         queryParameters: {
           'subject': '${AppConstants.appName} enquiry',
@@ -2861,7 +2948,7 @@ class _ContactColumn extends StatelessWidget {
       spacing: 32,
       runSpacing: 16,
       children: [
-        _contactItem(Icons.email_outlined, 'Email', 'praveen.sekar@glaum.in'),
+        _contactItem(Icons.email_outlined, 'Email', 'praveen@glaum.in'),
         _contactItem(Icons.phone_outlined, 'Phone', '+91 9952825358'),
         _contactItem(
           Icons.location_on_outlined,

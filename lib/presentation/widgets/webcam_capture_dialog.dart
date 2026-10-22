@@ -80,11 +80,11 @@ class _WebcamCaptureDialogState extends State<WebcamCaptureDialog> {
         _controller = controller;
         _initializing = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _error =
-            'Could not access the camera. Allow camera permission in the browser or system settings.\n\n$e';
+            'Could not access the camera. Allow camera permission in the browser or system settings.';
         _initializing = false;
       });
     }

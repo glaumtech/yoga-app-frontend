@@ -10,6 +10,7 @@ import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../../data/models/competition_model.dart';
 import '../../widgets/competition_registration_qr_panel.dart';
+import '../../widgets/linkified_description.dart';
 
 class CompetitionsListScreen extends StatelessWidget {
   const CompetitionsListScreen({super.key});
@@ -23,7 +24,7 @@ class CompetitionsListScreen extends StatelessWidget {
     5: FlexColumnWidth(1.5),
     6: FlexColumnWidth(1.5),
     7: FlexColumnWidth(1.5),
-    8: FixedColumnWidth(132),
+    8: FixedColumnWidth(168),
   };
 
   // Helper method to get prize names from competition (handles both IDs and names)
@@ -469,7 +470,11 @@ class CompetitionsListScreen extends StatelessWidget {
                     ),
                   ),
                   const Divider(height: 24),
-                  _buildInfoRow('Description', competition.description),
+                  _buildInfoRow(
+                    'Description',
+                    competition.description,
+                    linkify: true,
+                  ),
                   _buildInfoRow('Address', competition.address),
                   _buildDateInfoRow(competition),
                   if (competition.displayAdFrom != null)
@@ -500,6 +505,11 @@ class CompetitionsListScreen extends StatelessWidget {
                     _buildInfoRow('Created', _buildCreatedCell(competition)),
                   if (competition.updatedAt != null)
                     _buildInfoRow('Updated', _buildUpdatedCell(competition)),
+                  const Divider(height: 24),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _buildActionCell(context, competition, controller),
+                  ),
                 ],
               ),
             ),
@@ -678,6 +688,20 @@ class CompetitionsListScreen extends StatelessWidget {
           );
         }),
         IconButton(
+          icon: Icon(
+            Icons.copy_outlined,
+            size: 18,
+            color: AppTheme.primaryColor,
+          ),
+          onPressed: () async {
+            await controller.duplicateCompetition(context, competition);
+          },
+          tooltip: 'Duplicate',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          visualDensity: VisualDensity.compact,
+        ),
+        IconButton(
           icon: Icon(Icons.edit, size: 18, color: AppTheme.primaryColor),
           onPressed: () async {
             await controller.editCompetition(context, competition);
@@ -778,7 +802,11 @@ class CompetitionsListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(
+    String label,
+    String value, {
+    bool linkify = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -795,7 +823,15 @@ class CompetitionsListScreen extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
+          Expanded(
+            child: linkify
+                ? LinkifiedDescription(
+                    text: value,
+                    maxHeight: 140,
+                    style: const TextStyle(fontSize: 14, height: 1.45),
+                  )
+                : Text(value, style: const TextStyle(fontSize: 14)),
+          ),
         ],
       ),
     );

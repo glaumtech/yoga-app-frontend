@@ -6,6 +6,7 @@ import '../../config/app_config.dart';
 import '../../data/models/competition_model.dart';
 import '../controllers/competition_controller.dart';
 import '../controllers/participant_controller.dart';
+import 'payment_inr_only_notice.dart';
 
 /// Payment UI that adapts to organization payment model (Models 1–2 manual, Model 3 online).
 class AdaptivePaymentSection extends StatelessWidget {
@@ -53,6 +54,7 @@ class AdaptivePaymentSection extends StatelessWidget {
             'Amount: ₹${fee.toStringAsFixed(0)}',
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
+        const PaymentInrOnlyNotice(margin: EdgeInsets.only(top: 8, bottom: 4)),
         const SizedBox(height: 12),
         Obx(
           () {
@@ -187,6 +189,7 @@ class AdaptivePaymentSection extends StatelessWidget {
             title: Text('Online Payment (Razorpay)'),
             subtitle: Text('Pay after submitting the registration form'),
           ),
+          const PaymentInrOnlyNotice(margin: EdgeInsets.only(top: 4)),
         ],
       ],
     );

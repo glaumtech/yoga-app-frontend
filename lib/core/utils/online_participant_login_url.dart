@@ -55,8 +55,16 @@ bool _isUnreachableLocalUrl(String url) {
 /// Location GoRouter should open on web so QR / pasted hash URLs are not sent to /home.
 String flutterWebInitialLocation() {
   final fragment = Uri.base.fragment.trim();
-  if (fragment.startsWith('/')) {
-    return fragment;
+  if (fragment.isNotEmpty) {
+    // `/#/register/competition/{code}` or `/#register/...`
+    final normalized = fragment.startsWith('/') ? fragment : '/$fragment';
+    final fragmentUri = Uri.tryParse(normalized);
+    if (fragmentUri != null && fragmentUri.path.isNotEmpty) {
+      final path = fragmentUri.path;
+      if (path != '/') {
+        return fragmentUri.hasQuery ? '$path?${fragmentUri.query}' : path;
+      }
+    }
   }
   final path = Uri.base.path;
   if (path.isNotEmpty && path != '/' && !path.endsWith('index.html')) {

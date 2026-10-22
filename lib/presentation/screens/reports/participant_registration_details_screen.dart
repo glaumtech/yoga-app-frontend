@@ -160,6 +160,19 @@ class _ParticipantRegistrationDetailsScreenState
         _text(reg['razorpayPaymentId']) != '—';
   }
 
+  String _feeTypeLabel(dynamic value) {
+    switch (value?.toString().trim().toUpperCase()) {
+      case 'EARLY_BIRD':
+        return 'Early Bird';
+      case 'BULK_DISCOUNT':
+        return 'Bulk discount';
+      case 'SPOT':
+        return 'Spot';
+      default:
+        return 'Normal';
+    }
+  }
+
   String _formatYesNo(dynamic value) {
     if (value == null) return '—';
     if (value is bool) return value ? 'Yes' : 'No';
@@ -408,6 +421,10 @@ class _ParticipantRegistrationDetailsScreenState
                 ),
               if (reg['amount'] != null)
                 _DetailRow('Amount', _formatAmount(reg['amount'])),
+              if (_text(reg['feeType']) != '—')
+                _DetailRow('Registration fee', _feeTypeLabel(reg['feeType'])),
+              if (_text(reg['paymentCode']) != '—')
+                _DetailRow('Payment code', _text(reg['paymentCode'])),
               if (_text(reg['razorpayPaymentId']) != '—')
                 _DetailRow(
                   'Transaction ID',

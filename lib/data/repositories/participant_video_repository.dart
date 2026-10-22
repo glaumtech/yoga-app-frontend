@@ -27,6 +27,47 @@ class ParticipantVideoRepository {
     return headers;
   }
 
+  Future<ApiResponse<ParticipantVideoLoginPreview>> loginPreview({
+    required String registrationNo,
+  }) {
+    final encoded = Uri.encodeQueryComponent(registrationNo.trim());
+    return _apiService.getResponse<ParticipantVideoLoginPreview>(
+      url: '${EndPoints.participantVideoLoginPreview}?registrationNo=$encoded',
+      apiType: APIType.aGet,
+      header: {'Content-Type': 'application/json'},
+      fromJson: (json) => ParticipantVideoLoginPreview.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      ),
+    );
+  }
+
+  Future<ApiResponse<ParticipantVideoToppers>> toppers({
+    required int competitionId,
+    String? registrationNo,
+  }) {
+    final params = <String, String>{
+      'competitionId': '$competitionId',
+    };
+    final reg = registrationNo?.trim() ?? '';
+    if (reg.isNotEmpty) {
+      params['registrationNo'] = reg;
+    }
+    final query = params.entries
+        .map(
+          (e) =>
+              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+        )
+        .join('&');
+    return _apiService.getResponse<ParticipantVideoToppers>(
+      url: '${EndPoints.participantVideoToppers}?$query',
+      apiType: APIType.aGet,
+      header: {'Content-Type': 'application/json'},
+      fromJson: (json) => ParticipantVideoToppers.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      ),
+    );
+  }
+
   Future<ApiResponse<ParticipantVideoSession>> login({
     required String registrationNo,
     required String dateOfBirth,

@@ -51,6 +51,7 @@ class SettingsController extends GetxController {
   static const Set<String> themeableRoleKeys = {
     'BRANCH_ADMIN',
     'ORG_ADMIN',
+    'APPLICATION_ADMIN',
     'SUB_ADMIN',
     'JURY',
     'SPOT_REG_ADMIN',
@@ -60,6 +61,7 @@ class SettingsController extends GetxController {
   static const Map<String, String> roleDefaultThemeColors = {
     'BRANCH_ADMIN': '#4CAF50',
     'ORG_ADMIN': '#1565C0',
+    'APPLICATION_ADMIN': '#37474F',
     'SUB_ADMIN': '#5E35B1',
     'JURY': '#7B1FA2',
     'SPOT_REG_ADMIN': '#EF6C00',

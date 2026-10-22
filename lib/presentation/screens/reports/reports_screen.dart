@@ -9,13 +9,23 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../data/repositories/reports_repository.dart';
+import '../../controllers/reports_amount_request_tab_controller.dart';
 import '../../controllers/reports_controller.dart';
+import '../../controllers/reports_financial_tab_controller.dart';
+import '../../controllers/reports_organization_tab_controller.dart';
+import '../../controllers/reports_participants_tab_controller.dart';
+import '../../controllers/reports_registered_participants_tab_controller.dart';
+import '../../controllers/reports_users_tab_controller.dart';
+import '../../controllers/user_management_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../controllers/reports_participants_list_preset.dart';
 import 'reports_users_tab.dart';
 import 'reports_participants_tab.dart';
 import 'reports_registered_participants_tab.dart';
 import 'reports_financial_tab.dart';
+import 'reports_amount_request_tab.dart';
+import 'reports_organization_tab.dart';
 import 'reports_registered_participants_popup.dart';
 import 'reports_institutions_details_popup.dart';
 import 'reports_masters_details_popup.dart';
@@ -51,7 +61,9 @@ class _ReportsScreenState extends State<ReportsScreen>
   TabController? _tabController;
   List<_ReportTabItem> _visibleTabs = const [];
   String? _pendingReportTabId;
+  String? _activeReportTabId;
   Worker? _tabNavWorker;
+  bool _scopeRefreshing = false;
 
   @override
   void initState() {
@@ -68,6 +80,9 @@ class _ReportsScreenState extends State<ReportsScreen>
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       controller.loadCompetitionsAndMaybeReport();
+      if (_isApplicationAdmin) {
+        controller.loadOrganizations();
+      }
     });
   }
 
@@ -77,6 +92,56 @@ class _ReportsScreenState extends State<ReportsScreen>
     _tabController?.dispose();
     _tabController = null;
     super.dispose();
+  }
+
+  Future<void> _refreshCurrentView() async {
+    if (_scopeRefreshing) return;
+    setState(() => _scopeRefreshing = true);
+    try {
+      final tabId = _activeReportTabId ??
+          (_visibleTabs.isNotEmpty ? _visibleTabs.first.id : 'dashboard');
+      if (tabId == 'organization') {
+        await controller.loadOrganizations();
+        if (Get.isRegistered<ReportsOrganizationTabController>()) {
+          await Get.find<ReportsOrganizationTabController>().load();
+        }
+        return;
+      }
+      await controller.loadCompetitionsAndMaybeReport();
+      switch (tabId) {
+        case 'amount_request':
+          if (Get.isRegistered<ReportsAmountRequestTabController>()) {
+            await Get.find<ReportsAmountRequestTabController>().load();
+          }
+          break;
+        case 'financial':
+          if (Get.isRegistered<ReportsFinancialTabController>()) {
+            await Get.find<ReportsFinancialTabController>().load();
+          }
+          break;
+        case ReportsController.registeredParticipantsReportTabId:
+          if (Get.isRegistered<ReportsRegisteredParticipantsTabController>(
+            tag: ReportsRegisteredParticipantsTab.defaultControllerTag,
+          )) {
+            await Get.find<ReportsRegisteredParticipantsTabController>(
+              tag: ReportsRegisteredParticipantsTab.defaultControllerTag,
+            ).refresh();
+          }
+          break;
+        case 'scores':
+          if (Get.isRegistered<ReportsParticipantsTabController>()) {
+            await Get.find<ReportsParticipantsTabController>().refresh();
+          }
+          break;
+        case 'users':
+          if (Get.isRegistered<ReportsUsersTabController>()) {
+            await Get.find<ReportsUsersTabController>().refresh();
+          }
+          break;
+      }
+    } finally {
+      if (mounted) setState(() => _scopeRefreshing = false);
+    }
   }
 
   void _ensureTabController(int length) {
@@ -92,6 +157,21 @@ class _ReportsScreenState extends State<ReportsScreen>
       vsync: this,
       initialIndex: previousIndex.clamp(0, length - 1),
     );
+    _activeReportTabId = _visibleTabs.isNotEmpty
+        ? _visibleTabs[_tabController!.index.clamp(0, _visibleTabs.length - 1)].id
+        : null;
+    _tabController!.addListener(() {
+      if (_tabController!.indexIsChanging) return;
+      final tabs = _visibleTabs;
+      if (tabs.isEmpty) return;
+      final idx = _tabController!.index.clamp(0, tabs.length - 1);
+      final nextId = tabs[idx].id;
+      if (_activeReportTabId == nextId) return;
+      if (nextId == 'organization' && controller.organizations.isEmpty) {
+        controller.loadOrganizations();
+      }
+      setState(() => _activeReportTabId = nextId);
+    });
     if (oldController != null) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         oldController.dispose();
@@ -199,9 +279,20 @@ class _ReportsScreenState extends State<ReportsScreen>
         child: const ReportsParticipantsTab(),
       ),
       _ReportTabItem(
+        id: 'amount_request',
+        label: 'Amount request',
+        child: const ReportsAmountRequestTab(),
+      ),
+      _ReportTabItem(
         id: 'financial',
         label: 'Financial report',
+        requiredKey: 'REPORTS_FINANCIAL',
         child: const ReportsFinancialTab(),
+      ),
+      _ReportTabItem(
+        id: 'organization',
+        label: 'Organization report',
+        child: const ReportsOrganizationTab(),
       ),
     ];
   }
@@ -214,6 +305,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     required bool isMobile,
     required bool isWideWeb,
   }) {
+    final isApplicationAdmin = _isApplicationAdmin;
     return _buildAllReportTabs(
       isLoading: isLoading,
       error: error,
@@ -221,10 +313,42 @@ class _ReportsScreenState extends State<ReportsScreen>
       isMobile: isMobile,
       isWideWeb: isWideWeb,
     ).where((tab) {
+      if (tab.id == 'amount_request') {
+        return _canManageOrganizerAmountRequests;
+      }
+      if (tab.id == 'organization') {
+        return isApplicationAdmin;
+      }
+      // Application Admin: financial + organization oversight tabs only.
+      if (isApplicationAdmin) {
+        return tab.id == 'financial' || tab.id == 'organization';
+      }
       final key = tab.requiredKey;
       if (key == null || key.isEmpty) return true;
       return permissionStore.has(key);
     }).toList();
+  }
+
+  String get _currentRole {
+    final userController = Get.isRegistered<UserManagementController>()
+        ? Get.find<UserManagementController>()
+        : null;
+    return (userController?.currentUser.value?.userTypeName ??
+            userController?.currentUser.value?.type ??
+            '')
+        .trim()
+        .toUpperCase();
+  }
+
+  bool get _isApplicationAdmin => _currentRole == 'APPLICATION_ADMIN';
+
+  bool get _canManageOrganizerAmountRequests {
+    const organizerRoles = {
+      'BRANCH_ADMIN',
+      'ORG_ADMIN',
+      'SUPER_ADMIN',
+    };
+    return organizerRoles.contains(_currentRole);
   }
 
   void _openRegisteredParticipants(ReportsParticipantsListPreset preset) {
@@ -329,7 +453,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                   isMobile ? 12 : 16,
                   0,
                 ),
-                child: _buildCompetitionSelector(isMobile),
+                child: _buildReportScopeSelector(isMobile),
               ),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 5),
@@ -464,6 +588,103 @@ class _ReportsScreenState extends State<ReportsScreen>
     );
   }
 
+  Widget _buildReportScopeSelector(bool isMobile) {
+    final activeId = _activeReportTabId ??
+        (_visibleTabs.isNotEmpty ? _visibleTabs.first.id : 'financial');
+    if (activeId == 'organization') {
+      return _buildOrganizationSelector(isMobile);
+    }
+    return _buildCompetitionSelector(isMobile);
+  }
+
+  Widget _buildOrganizationSelector(bool isMobile) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        child: Obx(() {
+          final orgs = controller.organizations;
+          final selectedId = controller.selectedOrganizationId.value;
+          final loading = controller.isLoadingOrganizations.value;
+          final orgError = controller.organizationsError.value;
+
+          if (loading && orgs.isEmpty) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          if (orgError.isNotEmpty && orgs.isEmpty) {
+            return Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    orgError,
+                    style: TextStyle(
+                      color: Colors.red[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh',
+                  onPressed: () => controller.loadOrganizations(),
+                  icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
+                ),
+              ],
+            );
+          }
+
+          final dropdown = SearchableDropdownField(
+            items: orgs
+                .map(
+                  (o) => SearchableDropdownItem(
+                    value: o.id.toString(),
+                    label: o.organizationCode != null &&
+                            o.organizationCode!.isNotEmpty
+                        ? '${o.organizationName} (${o.organizationCode})'
+                        : o.organizationName,
+                  ),
+                )
+                .toList(),
+            selectedValue: selectedId,
+            labelText: 'Organization',
+            hintText: 'Select organization',
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: isMobile ? 10 : 12,
+            ),
+            onChanged: (v) => controller.setSelectedOrganization(v),
+          );
+
+          final refreshButton = IconButton(
+            tooltip: 'Refresh',
+            onPressed: () => controller.loadOrganizations(),
+            icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            constraints: BoxConstraints(
+              minWidth: isMobile ? 36 : 40,
+              minHeight: isMobile ? 36 : 40,
+            ),
+          );
+
+          return Row(
+            children: [
+              Expanded(child: dropdown),
+              SizedBox(width: isMobile ? 8 : 12),
+              refreshButton,
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _buildCompetitionSelector(bool isMobile) {
     return Card(
       elevation: 2,
@@ -474,39 +695,39 @@ class _ReportsScreenState extends State<ReportsScreen>
           final competitions = controller.competitions;
           final selectedId = controller.selectedCompetitionId.value;
 
-          final dropdown = DropdownButtonFormField<String>(
-            value: selectedId,
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: 'Competition',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: isMobile ? 10 : 12,
-              ),
-            ),
+          final dropdown = SearchableDropdownField(
             items: competitions
+                .where((c) => (c.id ?? '').isNotEmpty)
                 .map(
-                  (CompetitionModel c) => DropdownMenuItem<String>(
-                    value: c.id,
-                    child: Text(
-                      c.competitionName,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
+                  (CompetitionModel c) => SearchableDropdownItem(
+                    value: c.id!,
+                    label: c.competitionName,
                   ),
                 )
                 .toList(),
+            selectedValue: selectedId,
+            labelText: 'Competition',
+            hintText: 'Select competition',
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: isMobile ? 10 : 12,
+            ),
             onChanged: (v) => controller.setSelectedCompetition(v),
           );
 
           final refreshButton = IconButton(
             tooltip: 'Refresh',
-            onPressed: () => controller.loadCompetitionsAndMaybeReport(),
-            icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
+            onPressed: _scopeRefreshing ? null : _refreshCurrentView,
+            icon: _scopeRefreshing
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primaryColor,
+                    ),
+                  )
+                : Icon(Icons.refresh, color: AppTheme.primaryColor),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
             constraints: BoxConstraints(
@@ -547,6 +768,9 @@ class _ReportsScreenState extends State<ReportsScreen>
     final girls = totals['girls'] ?? 0;
     final onlineRegistrations = totals['onlineRegistrations'] ?? 0;
     final spotRegistrations = totals['spotRegistrations'] ?? 0;
+    final earlyBirdRegistrations = totals['earlyBirdRegistrations'] ?? 0;
+    final groupDiscountRegistrations =
+        totals['groupDiscountRegistrations'] ?? 0;
 
     final common = categoryCounts['COMMON'] ?? 0;
     final special = categoryCounts['SPECIAL'] ?? 0;
@@ -620,6 +844,20 @@ class _ReportsScreenState extends State<ReportsScreen>
                   '$spotRegistrations',
                   onTap: () => _openRegisteredParticipants(
                     ReportsParticipantsListPreset.spotRegistration(),
+                  ),
+                ),
+                _statTile(
+                  'Early Bird',
+                  '$earlyBirdRegistrations',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.earlyBird(),
+                  ),
+                ),
+                _statTile(
+                  'Group discount',
+                  '$groupDiscountRegistrations',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.groupDiscount(),
                   ),
                 ),
               ],

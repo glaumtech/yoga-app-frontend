@@ -735,26 +735,14 @@ class SchoolController extends GetxController {
   }
 
   Future<void> _applyDefaultTamilNaduStateIfEmpty() async {
-    if (isListView.value) {
-      if (reportState.value.trim().isNotEmpty ||
-          listFilterStateTextController.text.trim().isNotEmpty) {
-        return;
-      }
-      final tn = StateDefaults.findTamilNadu(states);
-      if (tn != null) {
-        await setListFilterState(tn.id);
-      }
-      return;
-    }
-
-    if (isEditMode.value) return;
-    if (selectedStateId.value > 0 ||
-        createFormStateTextController.text.trim().isNotEmpty) {
+    if (!isListView.value) return;
+    if (reportState.value.trim().isNotEmpty ||
+        listFilterStateTextController.text.trim().isNotEmpty) {
       return;
     }
     final tn = StateDefaults.findTamilNadu(states);
     if (tn != null) {
-      await setCreateFormState(tn.id);
+      await setListFilterState(tn.id);
     }
   }
 

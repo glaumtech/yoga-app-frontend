@@ -305,6 +305,22 @@ class CompetitionController extends GetxController {
   final descriptionController = TextEditingController();
   final addressController = TextEditingController();
 
+  /// Survives Flutter web TextField remount/dispose, which can wipe controllers.
+  String _draftCompetitionName = '';
+  String _draftDescription = '';
+  String _draftAddress = '';
+  String _draftGoogleDriveFolderUrl = '';
+  String _draftBestSchoolAwardMinParticipants = '';
+  bool _isApplyingDraftText = false;
+
+  /// After the form unmounts, Flutter web often emits `onChanged('')` during
+  /// TextField dispose. That must not overwrite drafts captured moments earlier.
+  bool _draftCaptureSuspended = false;
+
+  /// After drafts are re-applied, Flutter web may emit focused `onChanged('')`
+  /// and wipe every field except the one that "wins" the focus race.
+  DateTime? _ignoreEmptyDraftUntil;
+
   // Observable state
   final RxBool isLoading = false.obs;
   /// Loading flag for Add More prize/category/stage/group dialogs only.
@@ -361,6 +377,8 @@ class CompetitionController extends GetxController {
   final RxBool isOnDemandOrg = true.obs;
   final RxBool isLoadingOnDemandContext = false.obs;
   final RxInt onDemandMaintenanceFeePaise = 0.obs;
+  final RxInt onDemandAsanasFeePaise = 500000.obs;
+  final RxInt onDemandChallengeFeePaise = 100000.obs;
   final RxDouble onDemandPaymentGatewayFeePercent = 3.0.obs;
   final RxDouble onDemandPlatformFeePercent = 3.0.obs;
   final RxBool onDemandExtraFeeForCompetition = true.obs;
@@ -369,14 +387,19 @@ class CompetitionController extends GetxController {
   final RxString organizationPaymentModel =
       SubscriptionCatalogFilter.onDemandModeKey.obs;
   final RxBool isProcessingCompetitionPayment = false.obs;
+  final RxBool maintenancePaidAsanas = false.obs;
+  final RxBool maintenancePaidChallenge = false.obs;
 
-  /// On Demand only: new competitions require maintenance payment before save.
-  bool get requiresPrepaidCompetitionPayment => !isEditMode.value;
+  /// On Demand: pay when creating, or when edit adds a format that is not paid yet.
+  bool get requiresPrepaidCompetitionPayment {
+    if (isViewMode.value || !isOnDemandOrg.value) return false;
+    return unpaidAsanasForPayment || unpaidChallengeForPayment;
+  }
 
   String get createCompetitionButtonLabel =>
       requiresPrepaidCompetitionPayment
           ? 'Pay and Finalize'
-          : 'Finalize';
+          : (isEditMode.value ? 'Save changes' : 'Finalize');
 
   // Search controller and debounce
   final TextEditingController searchController = TextEditingController();
@@ -713,6 +736,111 @@ class CompetitionController extends GetxController {
 
   final RxBool isLoadingRegistrationCompetition = false.obs;
 
+  /// Loads full competition data for the public registration form by opaque code.
+  /// Returns the resolved competition id, or null if the link is invalid.
+  Future<String?> ensureCompetitionLoadedForRegistrationCode(
+    String registrationCode,
+  ) async {
+    final code = registrationCode.trim();
+    if (code.isEmpty) return null;
+
+    final fromHome = homeCompetitions.firstWhereOrNull(
+      (c) => (c.registrationCode?.trim() ?? '') == code,
+    );
+    if (fromHome?.id != null) {
+      final id = fromHome!.id.toString();
+      await ensureCompetitionLoadedForRegistration(id);
+      return id;
+    }
+
+    isLoadingRegistrationCompetition.value = true;
+    try {
+      final response =
+          await _repository.getCompetitionByRegistrationCode(code);
+      if (response.success && response.data != null) {
+        final competition = response.data!;
+        _upsertCompetition(competition);
+        _syncCategoryIncludeFeeFromModel(competition);
+        _upsertHomeFromCompetition(competition);
+        return competition.id;
+      }
+    } catch (e) {
+      print('Error loading competition by registration code: $e');
+    } finally {
+      isLoadingRegistrationCompetition.value = false;
+    }
+    return null;
+  }
+
+  void _upsertHomeFromCompetition(CompetitionModel competition) {
+    final id = int.tryParse(competition.id ?? '');
+    if (id == null) return;
+    final index = homeCompetitions.indexWhere((c) => c.id == id);
+    if (index >= 0) {
+      final existing = homeCompetitions[index];
+      homeCompetitions[index] = HomeCompetitionModel(
+        id: existing.id,
+        competitionName: existing.competitionName.isNotEmpty
+            ? existing.competitionName
+            : competition.competitionName,
+        description: existing.description.isNotEmpty
+            ? existing.description
+            : competition.description,
+        address: existing.address.isNotEmpty
+            ? existing.address
+            : competition.address,
+        eventStartDate: existing.eventStartDate,
+        eventEndDate: existing.eventEndDate,
+        eventEndTime: existing.eventEndTime,
+        publishResultNow: existing.publishResultNow,
+        resultsPublishDate: existing.resultsPublishDate,
+        resultsPublishTime: existing.resultsPublishTime,
+        displayAdFrom: existing.displayAdFrom,
+        categories: existing.categories.isNotEmpty
+            ? existing.categories
+            : (competition.categories ?? const []),
+        categoryAmounts: existing.categoryAmounts.isNotEmpty
+            ? existing.categoryAmounts
+            : (competition.categoryAmounts ?? const {}),
+        categoryModes: existing.categoryModes,
+        categoryExtraFeeIncluded: existing.categoryExtraFeeIncluded.isNotEmpty
+            ? existing.categoryExtraFeeIncluded
+            : (competition.categoryExtraFeeIncluded ?? const {}),
+        brochureUrl: existing.brochureUrl ?? competition.brochureUrl,
+        brochureFilePath: existing.brochureFilePath,
+        status: existing.status,
+        registrationCode:
+            competition.registrationCode ?? existing.registrationCode,
+        registrationUrl:
+            competition.registrationUrl ?? existing.registrationUrl,
+        participantsUrl: existing.participantsUrl,
+        paymentModel: existing.paymentModel,
+        allowedPaymentModes: existing.allowedPaymentModes,
+        manualPaymentUpiId: existing.manualPaymentUpiId,
+        manualPaymentQrUrl: existing.manualPaymentQrUrl,
+        maintenanceFeePaid: existing.maintenanceFeePaid,
+        registrationOpen: existing.registrationOpen,
+      );
+    } else {
+      homeCompetitions.add(
+        HomeCompetitionModel(
+          id: id,
+          competitionName: competition.competitionName,
+          description: competition.description,
+          address: competition.address,
+          categories: competition.categories ?? const [],
+          categoryAmounts: competition.categoryAmounts ?? const {},
+          categoryExtraFeeIncluded:
+              competition.categoryExtraFeeIncluded ?? const {},
+          brochureUrl: competition.brochureUrl,
+          registrationCode: competition.registrationCode,
+          registrationUrl: competition.registrationUrl,
+        ),
+      );
+    }
+    homeCompetitions.refresh();
+  }
+
   /// Loads full competition data for the public/admin registration form.
   /// Safe after logout: does not rely on a prior [loadCompetitions] admin list call.
   Future<void> ensureCompetitionLoadedForRegistration(
@@ -823,6 +951,8 @@ class CompetitionController extends GetxController {
       stageIds: existing?.stageIds,
       stages: existing?.stages,
       brochureUrl: home.brochureUrl ?? existing?.brochureUrl,
+      registrationCode: home.registrationCode ?? existing?.registrationCode,
+      registrationUrl: home.registrationUrl ?? existing?.registrationUrl,
     );
   }
 
@@ -880,6 +1010,26 @@ class CompetitionController extends GetxController {
         onDemandMaintenanceFeePaise.value = feePaise is int
             ? feePaise
             : int.tryParse(feePaise?.toString() ?? '') ?? 0;
+        onDemandAsanasFeePaise.value = _parsePaise(
+          data['asanasMaintenanceFeeAmountPaise'],
+          onDemandAsanasFeePaise.value > 0 ? onDemandAsanasFeePaise.value : 500000,
+        );
+        onDemandChallengeFeePaise.value = _parsePaise(
+          data['challengeMaintenanceFeeAmountPaise'],
+          onDemandChallengeFeePaise.value > 0
+              ? onDemandChallengeFeePaise.value
+              : 100000,
+        );
+        // Prefer rupee fields when present so Decimal JSON values are not lost.
+        final asanasRupee = _parseRupeeToPaise(data['asanasMaintenanceFeeAmount']);
+        final challengeRupee =
+            _parseRupeeToPaise(data['challengeMaintenanceFeeAmount']);
+        if (asanasRupee != null) {
+          onDemandAsanasFeePaise.value = asanasRupee;
+        }
+        if (challengeRupee != null) {
+          onDemandChallengeFeePaise.value = challengeRupee;
+        }
         onDemandPaymentGatewayFeePercent.value =
             _parsePercent(data['paymentGatewayFeePercent'], 3.0);
         onDemandPlatformFeePercent.value =
@@ -897,6 +1047,13 @@ class CompetitionController extends GetxController {
     } finally {
       isLoadingOnDemandContext.value = false;
     }
+  }
+
+  int? _parseRupeeToPaise(dynamic raw) {
+    if (raw == null) return null;
+    final value = raw is num ? raw.toDouble() : double.tryParse(raw.toString());
+    if (value == null || value <= 0) return null;
+    return (value * 100).round();
   }
 
   void _syncCategoryPlatformFeeDefault() {
@@ -957,6 +1114,41 @@ class CompetitionController extends GetxController {
   }
 
   double _roundMoney(double value) => double.parse(value.toStringAsFixed(2));
+
+  /// Settings → Amount Configuration mapping for a category.
+  ({double amount, double spotAmount}) mappedAmountsFor(
+    int? categoryId, {
+    String? categoryName,
+  }) {
+    CompetitionOptionModel? option;
+    if (categoryId != null) {
+      option = categoryOptions.firstWhereOrNull((o) => o.id == categoryId);
+    }
+    if (option == null && categoryName != null && categoryName.trim().isNotEmpty) {
+      final name = categoryName.trim().toUpperCase();
+      option = categoryOptions.firstWhereOrNull(
+        (o) => o.name.trim().toUpperCase() == name,
+      );
+    }
+    final amount = option?.amount ?? 0;
+    final spot = (option?.spotAmount ?? 0) > 0 ? option!.spotAmount : amount;
+    return (amount: amount, spotAmount: spot);
+  }
+
+  void _applyMappedAmountsToSelection(int categoryId, {bool overwriteZero = true}) {
+    final mapped = mappedAmountsFor(categoryId);
+    final key = categoryId.toString();
+    final current = categoryAmounts[key] ?? 0;
+    final currentSpot = categorySpotAmounts[key] ?? 0;
+    if (overwriteZero || current <= 0) {
+      categoryAmounts[key] = current > 0 ? current : mapped.amount;
+    }
+    if (overwriteZero || currentSpot <= 0) {
+      categorySpotAmounts[key] =
+          currentSpot > 0 ? currentSpot : mapped.spotAmount;
+    }
+    _ensureCategoryIncludeFeeDefault(categoryId);
+  }
 
   /// Splits or totals a stored category amount based on include/exclude mode.
   ({
@@ -1026,10 +1218,18 @@ class CompetitionController extends GetxController {
   void _applyOnDemandDefaults() {
     isOnDemandOrg.value = true;
     organizationPaymentModel.value = SubscriptionCatalogFilter.onDemandModeKey;
+    onDemandAsanasFeePaise.value = 500000;
+    onDemandChallengeFeePaise.value = 100000;
     onDemandPaymentGatewayFeePercent.value = 3.0;
     onDemandPlatformFeePercent.value = 3.0;
     onDemandExtraFeeForCompetition.value = true;
     onDemandExtraFeeForParticipantReg.value = false;
+  }
+
+  int _parsePaise(dynamic raw, int fallback) {
+    if (raw is int) return raw;
+    if (raw is num) return raw.round();
+    return int.tryParse(raw?.toString() ?? '') ?? fallback;
   }
 
   double _parsePercent(dynamic raw, double fallback) {
@@ -1055,11 +1255,46 @@ class CompetitionController extends GetxController {
     return baseAmount + gateway + platform;
   }
 
-  double maintenanceFeeRupees() =>
-      onDemandMaintenanceFeePaise.value / 100.0;
+  bool get hasAsanasCategoryDraft {
+    if (categoryConfigDrafts.isEmpty) {
+      return selectedCategoryIds.isNotEmpty;
+    }
+    return categoryConfigDrafts.any((c) => c.isAsanas);
+  }
+
+  bool get hasChallengeCategoryDraft =>
+      categoryConfigDrafts.any((c) => c.isChallenge);
+
+  bool get unpaidAsanasForPayment =>
+      hasAsanasCategoryDraft && !maintenancePaidAsanas.value;
+
+  bool get unpaidChallengeForPayment =>
+      hasChallengeCategoryDraft && !maintenancePaidChallenge.value;
+
+  double maintenanceFeeRupees() {
+    double base = 0;
+    if (unpaidAsanasForPayment) {
+      base += onDemandAsanasFeePaise.value / 100.0;
+    }
+    if (unpaidChallengeForPayment) {
+      base += onDemandChallengeFeePaise.value / 100.0;
+    }
+    return base;
+  }
+
+  ({double baseAmount, double feeAmount, double totalAmount})
+      competitionMaintenanceBreakdown() {
+    final base = maintenanceFeeRupees();
+    final total = calculateOnDemandTotalWithFees(base);
+    return (
+      baseAmount: _roundMoney(base),
+      feeAmount: _roundMoney(total - base),
+      totalAmount: _roundMoney(total),
+    );
+  }
 
   double calculateCompetitionMaintenanceTotal() =>
-      calculateOnDemandTotalWithFees(maintenanceFeeRupees());
+      competitionMaintenanceBreakdown().totalAmount;
 
   // Load all options (categories, prizes, stages, groups) from API
   Future<void> loadOptions() async {
@@ -1222,8 +1457,14 @@ class CompetitionController extends GetxController {
   Future<String?> _completeOnDemandPaymentBeforeCreate({
     required String description,
   }) async {
+    if (!unpaidAsanasForPayment && !unpaidChallengeForPayment) {
+      _notifyError('Add at least one Asanas or Challenge category before payment');
+      return null;
+    }
     final orderResponse = await _paymentRepository.createApiOrder(
       purpose: PaymentRepository.onDemandCompetitionPurpose,
+      hasAsanas: unpaidAsanasForPayment,
+      hasChallenge: unpaidChallengeForPayment,
     );
     if (!orderResponse.success || orderResponse.data == null) {
       _notifyError(orderResponse.message ?? 'Failed to create payment order');
@@ -1743,6 +1984,9 @@ class CompetitionController extends GetxController {
     String competitionId,
     int categoryId, {
     bool spotRegistration = false,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    bool applyOffers = true,
   }) {
     if (spotRegistration) {
       var spotFee = _feeFromAmountMap(
@@ -1766,18 +2010,70 @@ class CompetitionController extends GetxController {
           : Map<String, double>.from(categoryAmounts),
       categoryId,
     );
-    if (fee > 0) return fee;
+    if (fee <= 0) {
+      final home = homeCompetitions.firstWhereOrNull(
+        (c) => c.id?.toString() == competitionId,
+      );
+      fee = _feeFromAmountMap(home?.categoryAmounts, categoryId);
+    }
+    if (fee <= 0) {
+      final competition = competitions.firstWhereOrNull(
+        (c) => c.id == competitionId,
+      );
+      fee = _feeFromAmountMap(competition?.categoryAmounts, categoryId);
+    }
+    if (fee <= 0) {
+      final mapped = mappedAmountsFor(categoryId);
+      if (spotRegistration && mapped.spotAmount > 0) return mapped.spotAmount;
+      fee = mapped.amount;
+    }
+    if (spotRegistration || !applyOffers) return fee;
+    return _applyCategoryFeeOffers(
+      competitionId,
+      categoryId,
+      fee,
+      bulkCategoryCount: bulkCategoryCount,
+      categoryMode: categoryMode,
+    );
+  }
 
-    final home = homeCompetitions.firstWhereOrNull(
+  double _applyCategoryFeeOffers(
+    String competitionId,
+    int categoryId,
+    double onlineFee, {
+    int? bulkCategoryCount,
+    String? categoryMode,
+  }) {
+    final config = _categoryConfigForFee(
+      competitionId,
+      categoryId,
+      categoryMode: categoryMode,
+    );
+    if (config == null) return onlineFee;
+    return config.resolveDiscountedOnlineFee(
+      onlineFee,
+      bulkCategoryCount: bulkCategoryCount,
+    );
+  }
+
+  CompetitionCategoryConfigModel? _categoryConfigForFee(
+    String competitionId,
+    int categoryId, {
+    String? categoryMode,
+  }) {
+    final mode = categoryMode?.trim().toUpperCase();
+    final competition = competitions.firstWhereOrNull(
       (c) => c.id?.toString() == competitionId,
     );
-    fee = _feeFromAmountMap(home?.categoryAmounts, categoryId);
-    if (fee > 0) return fee;
-
-    final competition = competitions.firstWhereOrNull(
-      (c) => c.id == competitionId,
-    );
-    return _feeFromAmountMap(competition?.categoryAmounts, categoryId);
+    final configs = competition?.categoryConfigs;
+    if (configs == null || configs.isEmpty) return null;
+    if (mode == 'ONLINE' || mode == 'OFFLINE') {
+      final exact = configs.firstWhereOrNull(
+        (c) => c.categoryId == categoryId && c.mode.toUpperCase() == mode,
+      );
+      if (exact != null) return exact;
+    }
+    return configs.firstWhereOrNull((c) => c.categoryId == categoryId);
   }
 
   bool resolveCategoryExtraFeeIncluded(String competitionId, int categoryId) {
@@ -1816,11 +2112,17 @@ class CompetitionController extends GetxController {
     String competitionId,
     int categoryId, {
     bool spotRegistration = false,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    bool applyOffers = true,
   }) {
     final stored = resolveCategoryFeeRupees(
       competitionId,
       categoryId,
       spotRegistration: spotRegistration,
+      bulkCategoryCount: bulkCategoryCount,
+      categoryMode: categoryMode,
+      applyOffers: applyOffers,
     );
     if (stored <= 0) return 0;
     final include = resolveCategoryExtraFeeIncluded(competitionId, categoryId);
@@ -2093,9 +2395,7 @@ class CompetitionController extends GetxController {
       categoryIncludeFee.remove(categoryIdStr);
     } else {
       selectedCategoryIds.add(categoryId);
-      categoryAmounts[categoryIdStr] = 0.0;
-      categorySpotAmounts[categoryIdStr] = 0.0;
-      _ensureCategoryIncludeFeeDefault(categoryId);
+      _applyMappedAmountsToSelection(categoryId);
     }
   }
 
@@ -2147,10 +2447,8 @@ class CompetitionController extends GetxController {
         categoryOptions.refresh();
         if (!selectedCategoryIds.contains(created.id)) {
           selectedCategoryIds.add(created.id);
-          categoryAmounts[created.id.toString()] = 0.0;
-          categorySpotAmounts[created.id.toString()] = 0.0;
-          _ensureCategoryIncludeFeeDefault(created.id);
         }
+        _applyMappedAmountsToSelection(created.id);
 
         if (showFeedback) {
           Get.snackbar(
@@ -2270,6 +2568,11 @@ class CompetitionController extends GetxController {
       format: format,
       mode: normalizedMode,
     );
+    final mapped = mappedAmountsFor(categoryId, categoryName: normalizedName);
+    draft.feeAmount = mapped.amount;
+    draft.spotFeeAmount = mapped.spotAmount;
+    categoryAmounts[categoryId.toString()] = mapped.amount;
+    categorySpotAmounts[categoryId.toString()] = mapped.spotAmount;
     categoryConfigDrafts.add(draft);
     categoryConfigDrafts.refresh();
     _syncCategorySelectionFromDrafts();
@@ -2337,7 +2640,9 @@ class CompetitionController extends GetxController {
       upsertCategoryDraft(draft);
 
       final competitionId = int.tryParse(competitionToEdit.value?.id ?? '');
-      if (competitionId != null && competitionId > 0) {
+      final unpaidNewFormat = (draft.isChallenge && !maintenancePaidChallenge.value) ||
+          (draft.isAsanas && !maintenancePaidAsanas.value);
+      if (competitionId != null && competitionId > 0 && !unpaidNewFormat) {
         final response = await _repository.upsertCategoryConfig(
           competitionId: competitionId,
           config: draft,
@@ -2893,6 +3198,45 @@ class CompetitionController extends GetxController {
         validateDisplayAdFrom(displayAdFrom.value, requireWhenEmpty: forSubmit);
   }
 
+  Future<bool> _ensureCompetitionNameIsAvailable() async {
+    final name = competitionNameController.text.trim();
+    if (name.isEmpty) {
+      _notifyError('Competition name is required');
+      scrollToSection(
+        competitionNameFieldKey,
+        focusNode: competitionNameFocusNode,
+      );
+      return false;
+    }
+    int? excludeId;
+    if (isEditMode.value) {
+      excludeId = int.tryParse(competitionToEdit.value?.id ?? '');
+    }
+    final response = await _repository.isCompetitionNameAvailable(
+      name: name,
+      excludeId: excludeId,
+    );
+    if (!response.success) {
+      _notifyError(
+        response.message ?? 'Could not verify competition name. Try again.',
+      );
+      scrollToSection(
+        competitionNameFieldKey,
+        focusNode: competitionNameFocusNode,
+      );
+      return false;
+    }
+    if (response.data == false) {
+      _notifyError("Competition with name '$name' already exists!");
+      scrollToSection(
+        competitionNameFieldKey,
+        focusNode: competitionNameFocusNode,
+      );
+      return false;
+    }
+    return true;
+  }
+
   void alertCompetitionDateValidationIssue() {
     final message = validateCompetitionDates();
     if (message == null) return;
@@ -2991,6 +3335,11 @@ class CompetitionController extends GetxController {
 
       isLoading.value = true;
       errorMessage.value = '';
+
+      if (!await _ensureCompetitionNameIsAvailable()) {
+        isLoading.value = false;
+        return false;
+      }
 
       await loadOnDemandContext();
 
@@ -3123,6 +3472,9 @@ class CompetitionController extends GetxController {
 
   // Update competition
   Future<bool> updateCompetition() async {
+    if (isProcessingCompetitionPayment.value) {
+      return false;
+    }
     try {
       if (competitionToEdit.value == null) {
         _notifyError('No competition selected for update');
@@ -3202,6 +3554,32 @@ class CompetitionController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
+      if (!await _ensureCompetitionNameIsAvailable()) {
+        isLoading.value = false;
+        return false;
+      }
+
+      await loadOnDemandContext();
+
+      String? maintenancePaymentOrderId;
+      if (requiresPrepaidCompetitionPayment) {
+        isLoading.value = false;
+        isProcessingCompetitionPayment.value = true;
+        try {
+          maintenancePaymentOrderId =
+              await _completeOnDemandPaymentBeforeCreate(
+                description: competitionNameController.text.trim(),
+              );
+          if (maintenancePaymentOrderId == null) {
+            return false;
+          }
+        } finally {
+          isProcessingCompetitionPayment.value = false;
+          _razorpayCheckout.dispose();
+        }
+        isLoading.value = true;
+      }
+
       final configs = categoryConfigsForSubmit;
       if (configs.isNotEmpty) {
         _applyFirstAsanasFlatFieldsFromDrafts();
@@ -3250,6 +3628,7 @@ class CompetitionController extends GetxController {
 
       final response = await _repository.updateCompetition(
         competition: competition,
+        maintenancePaymentOrderId: maintenancePaymentOrderId,
         brochureFile: hasNewBrochure ? brochureFile.value : null,
         brochureFileLocal: hasNewBrochure ? brochureFileLocal.value : null,
         brochureBytes: hasNewBrochure ? brochureBytes.value : null,
@@ -3261,6 +3640,14 @@ class CompetitionController extends GetxController {
       if (response.success) {
         if (response.data != null) {
           competitionToEdit.value = response.data;
+          _applyPaidFormatsFromCompetition(response.data!);
+        } else {
+          if (unpaidAsanasForPayment) {
+            maintenancePaidAsanas.value = true;
+          }
+          if (unpaidChallengeForPayment) {
+            maintenancePaidChallenge.value = true;
+          }
         }
         // Update timestamp to force brochure reload after update
         brochureUpdateTimestamp.value = DateTime.now().millisecondsSinceEpoch;
@@ -3429,6 +3816,7 @@ class CompetitionController extends GetxController {
   Future<void> loadCompetitionForEdit(
     CompetitionModel competition, {
     bool isView = false,
+    bool asCreateDuplicate = false,
   }) async {
     // Ensure options are loaded before converting IDs to names.
     // (Prizes/Categories/Stagers are needed to map IDs -> labels and populate checkboxes.)
@@ -3450,16 +3838,32 @@ class CompetitionController extends GetxController {
       }
     }
 
-    _loadCompetitionData(competitionToLoad, isView: isView);
+    _loadCompetitionData(
+      competitionToLoad,
+      isView: isView,
+      asCreateDuplicate: asCreateDuplicate,
+    );
   }
 
   void _loadCompetitionData(
     CompetitionModel competition, {
     bool isView = false,
+    bool asCreateDuplicate = false,
   }) {
-    isEditMode.value = !isView; // true for edit, false for view
-    isViewMode.value = isView; // true for view-only
-    competitionToEdit.value = competition;
+    if (asCreateDuplicate) {
+      isEditMode.value = false;
+      isViewMode.value = false;
+      competitionToEdit.value = null;
+      maintenancePaidAsanas.value = false;
+      maintenancePaidChallenge.value = false;
+      hasAttemptedSubmit.value = false;
+      lastSavedCompetitionForQr.value = null;
+    } else {
+      isEditMode.value = !isView; // true for edit, false for view
+      isViewMode.value = isView; // true for view-only
+      competitionToEdit.value = competition;
+      _applyPaidFormatsFromCompetition(competition);
+    }
 
     // Load data into form fields
     competitionNameController.text = competition.competitionName;
@@ -3469,6 +3873,9 @@ class CompetitionController extends GetxController {
     addressController.text = competition.address;
     addressTouched.value = false;
     addressText.value = competition.address;
+    _draftCompetitionName = competition.competitionName;
+    _draftDescription = competition.description;
+    _draftAddress = competition.address;
     eventStartDate.value = competition.eventStartDate;
     eventEndDate.value = competition.eventEndDate;
     eventStartTime.value = CompetitionModel.parseTime(
@@ -3490,6 +3897,7 @@ class CompetitionController extends GetxController {
             : 'OFFLINE';
     googleDriveFolderUrlController.text =
         competition.googleDriveFolderUrl?.trim() ?? '';
+    _draftGoogleDriveFolderUrl = googleDriveFolderUrlController.text;
     if ((competition.googleDriveServiceAccountEmail ?? '').trim().isNotEmpty) {
       googleDriveServiceAccountEmail.value =
           competition.googleDriveServiceAccountEmail!.trim();
@@ -3504,6 +3912,8 @@ class CompetitionController extends GetxController {
             competition.bestSchoolAwardMinParticipants! > 0
         ? '${competition.bestSchoolAwardMinParticipants}'
         : '';
+    _draftBestSchoolAwardMinParticipants =
+        bestSchoolAwardMinParticipantsController.text;
     // Load IDs if available, otherwise convert names to IDs
     if (competition.prizeIds != null && competition.prizeIds!.isNotEmpty) {
       selectedPrizeIds.value = List<int>.from(competition.prizeIds!);
@@ -3740,6 +4150,76 @@ class CompetitionController extends GetxController {
     await loadCompetitionForEdit(competition, isView: false);
   }
 
+  /// Opens the Create form filled with this competition's details.
+  /// Save creates a new competition and runs the same create validation.
+  Future<void> duplicateCompetition(
+    BuildContext context,
+    CompetitionModel competition,
+  ) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+      brochureFile.value = null;
+      brochureFileLocal.value = null;
+      brochureBytes.value = null;
+
+      final sourceId = competition.id?.trim();
+      await loadCompetitionForEdit(
+        competition,
+        isView: false,
+        asCreateDuplicate: true,
+      );
+
+      final stamp = DateTime.now().microsecondsSinceEpoch;
+      categoryConfigDrafts.value = [
+        for (var i = 0; i < categoryConfigDrafts.length; i++)
+          categoryConfigDrafts[i].clone(newDraftId: 'dup-$stamp-$i'),
+      ];
+
+      if (sourceId != null && sourceId.isNotEmpty) {
+        await _copyBrochureFromCompetition(sourceId);
+      }
+      if (brochureBytes.value == null || brochureBytes.value!.isEmpty) {
+        brochureUrl.value = '';
+        brochureFileName.value = '';
+      }
+
+      isListView.value = false;
+      prepareFormAfterShowing();
+    } catch (e) {
+      _notifyError('Unable to duplicate competition: ${e.toString()}');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> _copyBrochureFromCompetition(String competitionId) async {
+    try {
+      final response = await _repository.downloadBrochureBytes(competitionId);
+      final bytes = response.data;
+      if (!response.success || bytes == null || bytes.isEmpty) {
+        return;
+      }
+      if (brochureBytesLookLikeJson(bytes)) {
+        return;
+      }
+      var fileName = brochureFileName.value.trim();
+      if (fileName.isEmpty) {
+        final kind = brochureKindFromBytes(bytes);
+        fileName = kind == BrochureFileKind.pdf
+            ? 'competition_brochure.pdf'
+            : 'competition_brochure.jpg';
+      }
+      brochureBytes.value = bytes;
+      brochureFile.value = null;
+      brochureFileLocal.value = null;
+      brochureFileName.value = fileName;
+      brochureUrl.value = 'copied_file';
+    } catch (_) {
+      // Create validation still requires a brochure if copy fails.
+    }
+  }
+
   // Delete competition — DELETE /competition/{id}
   Future<void> deleteCompetition(
     BuildContext context,
@@ -3974,23 +4454,196 @@ class CompetitionController extends GetxController {
     return List<CompetitionModel>.from(competitions);
   }
 
+  /// Re-attaches the form after the create screen is shown again (sidebar
+  /// navigation or Create/List toggle) without wiping in-progress values.
+  ///
+  /// Do not refresh [formKey] here: remounting TextFields on Flutter web can
+  /// clear [TextEditingController]s. Restore from drafts instead.
+  void prepareFormAfterShowing() {
+    restoreDraftTextFields();
+    descriptionText.value = descriptionController.text;
+    addressText.value = addressController.text;
+    // Keep capture suspended until after this frame so remounted web inputs
+    // cannot wipe drafts with a spurious empty onChanged.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isClosed) return;
+      restoreDraftTextFields();
+      descriptionText.value = descriptionController.text;
+      addressText.value = addressController.text;
+      _draftCaptureSuspended = false;
+      // Ignore focused '' onChanged while web re-attaches inputs / caret.
+      _ignoreEmptyDraftUntil =
+          DateTime.now().add(const Duration(milliseconds: 800));
+      // Do not requestFocus here — app-wide caret restore owns which field
+      // gets `|` after tab switches (this used to jump back to the name field).
+      // Re-apply once more after focus settles — web may clear non-first fields.
+      Future<void>.delayed(const Duration(milliseconds: 100), () {
+        if (isClosed) return;
+        restoreDraftTextFields();
+        descriptionText.value = descriptionController.text;
+        addressText.value = addressController.text;
+      });
+    });
+  }
+
+  bool _shouldIgnoreDraftCapture(String value, {FocusNode? focusNode}) {
+    if (_isApplyingDraftText || _draftCaptureSuspended) return true;
+    if (value.isEmpty) {
+      final until = _ignoreEmptyDraftUntil;
+      if (until != null && DateTime.now().isBefore(until)) {
+        return true;
+      }
+      // Remount/dispose clears often emit '' without focus; keep the last draft.
+      if (focusNode != null && !focusNode.hasFocus) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void captureCompetitionNameDraft(String value) {
+    if (_shouldIgnoreDraftCapture(
+      value,
+      focusNode: competitionNameFocusNode,
+    )) {
+      if (value.isEmpty && _draftCompetitionName.isNotEmpty) {
+        _setControllerText(competitionNameController, _draftCompetitionName);
+      }
+      return;
+    }
+    _draftCompetitionName = value;
+  }
+
+  void captureDescriptionDraft(String value) {
+    if (_shouldIgnoreDraftCapture(value, focusNode: descriptionFocusNode)) {
+      if (value.isEmpty && _draftDescription.isNotEmpty) {
+        _setControllerText(descriptionController, _draftDescription);
+        descriptionText.value = _draftDescription;
+      }
+      return;
+    }
+    _draftDescription = value;
+    descriptionText.value = value;
+  }
+
+  void captureAddressDraft(String value) {
+    if (_shouldIgnoreDraftCapture(value, focusNode: addressFocusNode)) {
+      if (value.isEmpty && _draftAddress.isNotEmpty) {
+        _setControllerText(addressController, _draftAddress);
+        addressText.value = _draftAddress;
+      }
+      return;
+    }
+    _draftAddress = value;
+    addressText.value = value;
+  }
+
+  void captureGoogleDriveFolderUrlDraft(String value) {
+    if (_shouldIgnoreDraftCapture(value)) {
+      if (value.isEmpty && _draftGoogleDriveFolderUrl.isNotEmpty) {
+        _setControllerText(
+          googleDriveFolderUrlController,
+          _draftGoogleDriveFolderUrl,
+        );
+      }
+      return;
+    }
+    _draftGoogleDriveFolderUrl = value;
+  }
+
+  void captureBestSchoolAwardMinParticipantsDraft(String value) {
+    if (_shouldIgnoreDraftCapture(value)) {
+      if (value.isEmpty && _draftBestSchoolAwardMinParticipants.isNotEmpty) {
+        _setControllerText(
+          bestSchoolAwardMinParticipantsController,
+          _draftBestSchoolAwardMinParticipants,
+        );
+      }
+      return;
+    }
+    _draftBestSchoolAwardMinParticipants = value;
+  }
+
+  /// Call before the create form unmounts so drafts are kept if controllers
+  /// still hold text. Empty controller values are ignored (Flutter web may
+  /// clear them during dispose).
+  void preserveDraftTextFieldsBeforeUnmount() {
+    final name = competitionNameController.text;
+    final description = descriptionController.text;
+    final address = addressController.text;
+    final drive = googleDriveFolderUrlController.text;
+    final award = bestSchoolAwardMinParticipantsController.text;
+    if (name.isNotEmpty) _draftCompetitionName = name;
+    if (description.isNotEmpty) _draftDescription = description;
+    if (address.isNotEmpty) _draftAddress = address;
+    if (drive.isNotEmpty) _draftGoogleDriveFolderUrl = drive;
+    if (award.isNotEmpty) _draftBestSchoolAwardMinParticipants = award;
+    // Block dispose-time onChanged('') from erasing the drafts above.
+    _draftCaptureSuspended = true;
+  }
+
+  void _clearDraftTextFields() {
+    _draftCompetitionName = '';
+    _draftDescription = '';
+    _draftAddress = '';
+    _draftGoogleDriveFolderUrl = '';
+    _draftBestSchoolAwardMinParticipants = '';
+  }
+
+  void _setControllerText(TextEditingController controller, String text) {
+    if (controller.text == text) {
+      final sel = controller.selection;
+      final offset = (!sel.isValid ||
+              sel.extentOffset < 0 ||
+              sel.extentOffset > text.length)
+          ? text.length
+          : sel.extentOffset;
+      if (!sel.isValid || !sel.isCollapsed || sel.extentOffset != offset) {
+        controller.selection = TextSelection.collapsed(offset: offset);
+      }
+      return;
+    }
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  /// Restores typed values after route changes / web input remounts.
+  void restoreDraftTextFields() {
+    if (_isApplyingDraftText) return;
+    _isApplyingDraftText = true;
+    try {
+      _setControllerText(competitionNameController, _draftCompetitionName);
+      _setControllerText(descriptionController, _draftDescription);
+      _setControllerText(addressController, _draftAddress);
+      _setControllerText(
+        googleDriveFolderUrlController,
+        _draftGoogleDriveFolderUrl,
+      );
+      _setControllerText(
+        bestSchoolAwardMinParticipantsController,
+        _draftBestSchoolAwardMinParticipants,
+      );
+    } finally {
+      _isApplyingDraftText = false;
+    }
+  }
+
   // Toggle view mode
   void toggleViewMode(bool isList) {
     if (isList && _isFirstCompetitionGateActive()) {
       return;
     }
+    if (isList) {
+      // Form unmounts when switching to list; keep typed values in drafts.
+      preserveDraftTextFieldsBeforeUnmount();
+    }
     isListView.value = isList;
     if (isList) {
-      // Reset edit mode when switching to list view
-      isEditMode.value = false;
-      competitionToEdit.value = null;
       loadCompetitions();
     } else {
-      _refreshFormKeys();
-      // Clear form when switching to create view (if not in edit mode)
-      if (!isEditMode.value) {
-        clearForm(refreshFormKeys: false);
-      }
+      prepareFormAfterShowing();
     }
   }
 
@@ -3999,6 +4652,9 @@ class CompetitionController extends GetxController {
     if (refreshFormKeys) {
       _refreshFormKeys();
     }
+
+    _draftCaptureSuspended = false;
+    _clearDraftTextFields();
 
     // Clear text controllers first
     competitionNameController.clear();
@@ -4046,6 +4702,22 @@ class CompetitionController extends GetxController {
     isEditMode.value = false;
     isViewMode.value = false;
     competitionToEdit.value = null;
+    maintenancePaidAsanas.value = false;
+    maintenancePaidChallenge.value = false;
+  }
+
+  void _applyPaidFormatsFromCompetition(CompetitionModel competition) {
+    var paidAsanas = competition.maintenancePaidAsanas;
+    var paidChallenge = competition.maintenancePaidChallenge;
+    if (!paidAsanas && !paidChallenge) {
+      final configs = competition.categoryConfigs;
+      if (configs != null && configs.isNotEmpty) {
+        paidAsanas = configs.any((c) => c.isAsanas);
+        paidChallenge = configs.any((c) => c.isChallenge);
+      }
+    }
+    maintenancePaidAsanas.value = paidAsanas;
+    maintenancePaidChallenge.value = paidChallenge;
   }
 
   bool _isFirstCompetitionGateActive() {

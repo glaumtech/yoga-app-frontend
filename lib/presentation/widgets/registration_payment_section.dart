@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../data/models/competition_model.dart';
 import '../controllers/competition_controller.dart';
 import '../controllers/participant_controller.dart';
+import 'payment_inr_only_notice.dart';
 
 /// Online registration fee summary for On Demand (pay-per-participant) competitions.
 class RegistrationPaymentSection extends StatelessWidget {
@@ -60,6 +61,7 @@ class RegistrationPaymentSection extends StatelessWidget {
             'Payment is collected online when you click Pay & Register Now.',
             style: TextStyle(fontSize: 13, color: Colors.black87),
           ),
+          const PaymentInrOnlyNotice(),
         ],
       ],
     );

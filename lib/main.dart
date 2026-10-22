@@ -9,14 +9,18 @@ import 'core/services/first_competition_gate_service.dart';
 import 'core/utils/storage_service.dart';
 import 'presentation/controllers/auth_controller.dart';
 import 'presentation/controllers/participant_controller.dart';
+import 'presentation/controllers/participant_video_controller.dart';
 import 'presentation/controllers/competition_controller.dart';
 import 'routes/app_router.dart';
 import 'core/constants/app_constants.dart';
 import 'core/keyboard/app_keyboard_scroll_scope.dart';
+import 'core/keyboard/app_text_caret_restore_scope.dart';
+import 'core/utils/configure_app_url_strategy.dart';
 import 'core/utils/permission_store.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  configureAppUrlStrategy();
 
   // Initialize storage (await to ensure it's ready)
   await StorageService.init();
@@ -24,6 +28,7 @@ void main() async {
   // Initialize GetX controllers (permanent to survive browser refresh)
   Get.put(AuthController(), permanent: true);
   Get.put(ParticipantController(), permanent: true);
+  Get.put(ParticipantVideoController(), permanent: true);
   Get.put(CompetitionController(), permanent: true);
   await Get.put(PermissionStore(), permanent: true).init();
 
@@ -68,7 +73,9 @@ class MyApp extends StatelessWidget {
         WidgetsApp.defaultShortcuts,
       ),
       builder: (context, child) {
-        return AppKeyboardScrollScope(child: child);
+        return AppTextCaretRestoreScope(
+          child: AppKeyboardScrollScope(child: child),
+        );
       },
     ),
     );

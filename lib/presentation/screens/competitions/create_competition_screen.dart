@@ -23,9 +23,11 @@ import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/toggle_button_group.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/form_label_with_hint.dart';
+import '../../widgets/linkified_description.dart';
 import '../../widgets/competition_registration_qr_panel.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/subscription/subscription_plan_picker.dart';
+import '../../widgets/payment_inr_only_notice.dart';
 import '../../../data/models/subscription_package_model.dart';
 import 'competitions_list_screen.dart';
 import 'widgets/add_category_dialog.dart';
@@ -49,10 +51,24 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
     // CompetitionController is kept alive across routes, so onInit/loadOptions
     // may not run again. Refresh prizes/categories/stages whenever this screen opens.
     final controller = Get.put(CompetitionController());
+    // Restore before first paint so typed values survive route changes.
+    controller.prepareFormAfterShowing();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Flutter web may remount empty inputs after the first frame.
+      controller.prepareFormAfterShowing();
       controller.loadOptions();
+      // Fees live in a long-lived controller; always refresh after Amount Config changes.
+      controller.loadOnDemandContext();
     });
+  }
+
+  @override
+  void deactivate() {
+    if (Get.isRegistered<CompetitionController>()) {
+      Get.find<CompetitionController>().preserveDraftTextFieldsBeforeUnmount();
+    }
+    super.deactivate();
   }
 
   @override
@@ -400,27 +416,38 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                   );
                 }),
 
-                if (controller.showSubscriptionTopUp.value &&
-                    !controller.isEditMode.value &&
-                    !controller.isViewMode.value)
-                  _buildSubscriptionTopUpSection(
-                    context,
-                    controller,
-                    isMobile,
-                  ),
+                Obx(() {
+                  if (controller.showSubscriptionTopUp.value &&
+                      !controller.isEditMode.value &&
+                      !controller.isViewMode.value) {
+                    return _buildSubscriptionTopUpSection(
+                      context,
+                      controller,
+                      isMobile,
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }),
 
                 Obx(() {
-                  if (controller.isEditMode.value ||
-                      controller.isViewMode.value ||
+                  if (controller.isViewMode.value ||
                       !controller.isOnDemandOrg.value) {
                     return const SizedBox.shrink();
                   }
-                  controller.onDemandMaintenanceFeePaise.value;
+                  controller.categoryConfigDrafts.length;
+                  controller.categoryConfigDrafts.toList();
+                  controller.selectedCategoryIds.length;
+                  controller.maintenancePaidAsanas.value;
+                  controller.maintenancePaidChallenge.value;
+                  controller.onDemandAsanasFeePaise.value;
+                  controller.onDemandChallengeFeePaise.value;
                   controller.onDemandExtraFeeForCompetition.value;
                   controller.onDemandPaymentGatewayFeePercent.value;
                   controller.onDemandPlatformFeePercent.value;
-                  final total = controller.calculateCompetitionMaintenanceTotal();
-                  if (total <= 0) return const SizedBox.shrink();
+                  final breakdown = controller.competitionMaintenanceBreakdown();
+                  if (breakdown.totalAmount <= 0) {
+                    return const SizedBox.shrink();
+                  }
                   return Container(
                     width: double.infinity,
                     margin: EdgeInsets.only(
@@ -444,15 +471,34 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                             size: 18, color: AppTheme.primaryColor),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(
-                            'Total payable: ₹${total.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color.lerp(
-                                      AppTheme.primaryColor, Colors.black, 0.25) ??
-                                  AppTheme.primaryColor,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                breakdown.feeAmount > 0
+                                    ? '₹${breakdown.baseAmount.toStringAsFixed(2)}'
+                                        ' + ₹${breakdown.feeAmount.toStringAsFixed(2)}'
+                                    : '₹${breakdown.baseAmount.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Total payable: ₹${breakdown.totalAmount.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color.lerp(
+                                          AppTheme.primaryColor,
+                                          Colors.black,
+                                          0.25) ??
+                                      AppTheme.primaryColor,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -463,6 +509,35 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                 SizedBox(height: isMobile ? 20 : 28),
                 const Divider(height: 1, color: AppColors.divider),
                 SizedBox(height: isMobile ? 16 : 20),
+                Obx(() {
+                  if (controller.isViewMode.value) {
+                    return const SizedBox.shrink();
+                  }
+                  controller.isOnDemandOrg.value;
+                  controller.maintenancePaidAsanas.value;
+                  controller.maintenancePaidChallenge.value;
+                  controller.categoryConfigDrafts.length;
+                  controller.showSubscriptionTopUp.value;
+
+                  final needsPrepaid = controller.requiresPrepaidCompetitionPayment;
+                  final onDemandPayable =
+                      controller.isOnDemandOrg.value &&
+                      controller.competitionMaintenanceBreakdown().totalAmount >
+                          0;
+                  final subscriptionCheckout =
+                      controller.showSubscriptionTopUp.value;
+
+                  // Subscription top-up panel includes its own INR notice.
+                  if (subscriptionCheckout ||
+                      (!needsPrepaid && !onDemandPayable)) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: PaymentInrOnlyNotice(margin: EdgeInsets.zero),
+                  );
+                }),
                 _buildFormActions(context, controller, isMobile),
                 SizedBox(height: isMobile ? 8 : 12),
               ],
@@ -576,15 +651,23 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
             : Row(mainAxisAlignment: MainAxisAlignment.end, children: [btn]);
       }
 
+      controller.isOnDemandOrg.value;
+      controller.isEditMode.value;
+      controller.maintenancePaidAsanas.value;
+      controller.maintenancePaidChallenge.value;
+      controller.categoryConfigDrafts.length;
+
       final primary = controller.isEditMode.value
           ? saveButton(
               onPressed: () async {
                 await controller.updateCompetition();
               },
               isLoading: controller.isLoading,
-              text: 'Save changes',
+              text: controller.createCompetitionButtonLabel,
               isFullWidth: isMobile,
-              width: isMobile ? null : 200,
+              width: isMobile
+                  ? null
+                  : (controller.requiresPrepaidCompetitionPayment ? 300 : 200),
             )
           : saveButton(
               onPressed: () async {
@@ -672,6 +755,7 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                 isRequired: true,
                 isMobile: isMobile,
                 isTablet: isTablet,
+                onLengthWarningChanged: controller.captureCompetitionNameDraft,
               ),
               fieldGap,
               _buildTextField(
@@ -682,16 +766,19 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                 fieldKey: controller.descriptionFieldKey,
                 focusNode: controller.descriptionFocusNode,
                 isRequired: true,
-                maxLines: 3,
+                minLines: 4,
+                maxLines: 8,
                 isMobile: isMobile,
                 isTablet: isTablet,
+                isolateVerticalScroll: true,
+                linkifyWhenReadOnly: true,
                 minTrimmedLength: CompetitionController.descriptionMinLength,
                 minLengthMessage: CompetitionController.descriptionMinLengthMessage,
                 lengthWarningTouched: controller.descriptionTouched,
                 lengthWarningText: controller.descriptionText,
                 onLengthWarningChanged: (value) {
                   controller.markDescriptionTouched();
-                  controller.descriptionText.value = value;
+                  controller.captureDescriptionDraft(value);
                 },
               ),
               fieldGap,
@@ -712,7 +799,7 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                 lengthWarningText: controller.addressText,
                 onLengthWarningChanged: (value) {
                   controller.markAddressTouched();
-                  controller.addressText.value = value;
+                  controller.captureAddressDraft(value);
                 },
               ),
             ],
@@ -901,6 +988,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
             ],
           ),
         ),
+        SizedBox(height: isMobile ? 10 : 12),
+        _buildCertificateTemplateLinkCard(context, isMobile: isMobile),
         gap,
         _buildSectionCard(
           key: controller.categoriesSectionKey,
@@ -950,6 +1039,62 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
     );
   }
 
+  Widget _buildCertificateTemplateLinkCard(
+    BuildContext context, {
+    required bool isMobile,
+  }) {
+    final permissionStore = Get.isRegistered<PermissionStore>()
+        ? Get.find<PermissionStore>()
+        : Get.put(PermissionStore());
+    if (!permissionStore.has('MENU_SETTINGS')) {
+      return const SizedBox.shrink();
+    }
+
+    final primary = AppTheme.primaryColor;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.push(
+            AppRoutes.settingsPath(tab: AppRoutes.settingsCertificateTab),
+          ),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.workspace_premium_outlined,
+                  size: isMobile ? 15 : 16,
+                  color: primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Certificate template',
+                  style: TextStyle(
+                    fontSize: isMobile ? 12.5 : 13,
+                    fontWeight: FontWeight.w700,
+                    color: primary,
+                    decoration: TextDecoration.underline,
+                    decorationColor: primary.withValues(alpha: 0.45),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 13,
+                  color: primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionCard({Key? key, required Widget child}) {
     return Container(
       key: key,
@@ -970,7 +1115,6 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
     bool isMobile,
     bool isTablet,
   ) {
-    final readOnly = controller.isViewMode.value;
     final primary = AppTheme.primaryColor;
 
     return Column(
@@ -1000,8 +1144,11 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                 ),
               ),
             ),
-            if (!readOnly)
-              FilledButton.icon(
+            Obx(() {
+              if (controller.isViewMode.value) {
+                return const SizedBox.shrink();
+              }
+              return FilledButton.icon(
                 onPressed: () => _onAddCategory(context, controller),
                 icon: const Icon(Icons.add_rounded, size: 18),
                 label: const Text('Add Category'),
@@ -1019,11 +1166,13 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
+              );
+            }),
           ],
         ),
         const SizedBox(height: 16),
         Obx(() {
+          final readOnly = controller.isViewMode.value;
           final drafts = controller.categoryConfigDrafts.toList();
           if (drafts.isEmpty) {
             return Container(
@@ -1806,8 +1955,12 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
           }),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: isMobile
-                ? Column(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const PaymentInrOnlyNotice(margin: EdgeInsets.only(bottom: 12)),
+                if (isMobile)
+                  Column(
                     children: [
                       saveButton(
                         onPressed: () async {
@@ -1829,7 +1982,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                       ),
                     ],
                   )
-                : Row(
+                else
+                  Row(
                     children: [
                       Expanded(
                         child: saveButton(
@@ -1853,6 +2007,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                       ),
                     ],
                   ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1958,10 +2114,13 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
     Key? fieldKey,
     FocusNode? focusNode,
     bool isRequired = false,
+    int minLines = 1,
     int maxLines = 1,
     bool isMobile = false,
     bool isTablet = false,
     TextAlign textAlign = TextAlign.left,
+    bool isolateVerticalScroll = false,
+    bool linkifyWhenReadOnly = false,
     int? minTrimmedLength,
     String? minLengthMessage,
     RxBool? lengthWarningTouched,
@@ -1982,53 +2141,38 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
           ),
           bottomSpacing: 8,
         ),
-        Obx(
-          () => TextFormField(
-            controller: textController,
+        if (linkifyWhenReadOnly)
+          _CompetitionDescriptionInput(
+            label: label,
+            textController: textController,
+            competitionController: competitionController,
             focusNode: focusNode,
+            isRequired: isRequired,
+            minLines: minLines,
             maxLines: maxLines,
-            textAlign: textAlign,
-            readOnly: competitionController.isViewMode.value,
+            isMobile: isMobile,
+            isolateVerticalScroll: isolateVerticalScroll,
+            minTrimmedLength: minTrimmedLength,
+            minLengthMessage: minLengthMessage,
+            lengthWarningText: lengthWarningText,
             onChanged: onLengthWarningChanged,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
-              ),
-              filled: true,
-              fillColor: competitionController.isViewMode.value
-                  ? Colors.grey[200]
-                  : Colors.white,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: isMobile ? 12 : 14,
-              ),
-              isDense: isMobile,
-              errorStyle: minTrimmedLength != null
-                  ? const TextStyle(height: 0, fontSize: 0)
-                  : null,
-            ),
-            validator: isRequired && !competitionController.isViewMode.value
-                ? (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return minLengthMessage ?? 'This field is required';
-                    }
-                    if (minTrimmedLength != null &&
-                        value.trim().length < minTrimmedLength) {
-                      return minLengthMessage;
-                    }
-                    return null;
-                  }
-                : null,
+          )
+        else
+          _StableCompetitionTextFormField(
+            label: label,
+            textController: textController,
+            competitionController: competitionController,
+            focusNode: focusNode,
+            isRequired: isRequired,
+            minLines: minLines,
+            maxLines: maxLines,
+            isMobile: isMobile,
+            textAlign: textAlign,
+            isolateVerticalScroll: isolateVerticalScroll,
+            minTrimmedLength: minTrimmedLength,
+            minLengthMessage: minLengthMessage,
+            onChanged: onLengthWarningChanged,
           ),
-        ),
         if (minTrimmedLength != null &&
             minLengthMessage != null &&
             lengthWarningTouched != null &&
@@ -2136,24 +2280,24 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
     CompetitionController controller,
     bool isMobile,
   ) {
-    return Obx(() {
-      final email = controller.googleDriveServiceAccountEmail.value.trim();
-      final serverReason = controller.googleDriveServerReason.value.trim();
-      final String hint;
-      if (!controller.googleDriveServerConfigured.value &&
-          serverReason.isNotEmpty) {
-        hint = serverReason;
-      } else if (email.isEmpty) {
-        hint =
-            'Share this folder with the app Google service account as Editor, then paste the folder link.';
-      } else {
-        hint =
-            'Share this folder with $email as Editor, then paste the folder link.';
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FormLabelWithHint(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Obx(() {
+          final email = controller.googleDriveServiceAccountEmail.value.trim();
+          final serverReason = controller.googleDriveServerReason.value.trim();
+          final String hint;
+          if (!controller.googleDriveServerConfigured.value &&
+              serverReason.isNotEmpty) {
+            hint = serverReason;
+          } else if (email.isEmpty) {
+            hint =
+                'Share this folder with the app Google service account as Editor, then paste the folder link.';
+          } else {
+            hint =
+                'Share this folder with $email as Editor, then paste the folder link.';
+          }
+          return FormLabelWithHint(
             label: 'Google Drive folder URL',
             hintText: hint,
             labelStyle: TextStyle(
@@ -2168,41 +2312,18 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
               height: 1.35,
             ),
             bottomSpacing: 8,
-          ),
-          TextFormField(
-            controller: controller.googleDriveFolderUrlController,
-            readOnly: controller.isViewMode.value,
-            decoration: InputDecoration(
-              hintText: 'https://drive.google.com/drive/folders/...',
-              hintStyle: TextStyle(
-                fontSize: 13,
-                color: AppColors.textMuted.withValues(alpha: 0.8),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
-              ),
-              filled: true,
-              fillColor: controller.isViewMode.value
-                  ? Colors.grey[200]
-                  : Colors.white,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: isMobile ? 12 : 14,
-              ),
-              isDense: isMobile,
-            ),
-          ),
-        ],
-      );
-    });
+          );
+        }),
+        _StableCompetitionTextFormField(
+          label: 'Google Drive folder URL',
+          textController: controller.googleDriveFolderUrlController,
+          competitionController: controller,
+          isMobile: isMobile,
+          decorationHint: 'https://drive.google.com/drive/folders/...',
+          onChanged: controller.captureGoogleDriveFolderUrlDraft,
+        ),
+      ],
+    );
   }
 
   Widget _buildBrochureUpload(
@@ -2217,13 +2338,15 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (showOuterLabel) const FormLabelWithHint(label: 'Upload brochure'),
-        FormField<bool>(
-          initialValue:
+        Obx(() {
+          final hasBrochure =
               controller.brochureFile.value != null ||
               controller.brochureFileLocal.value != null ||
               controller.brochureBytes.value != null ||
               (controller.isEditMode.value &&
-                  controller.competitionToEdit.value?.id != null),
+                  controller.competitionToEdit.value?.id != null);
+          return FormField<bool>(
+            initialValue: hasBrochure,
           validator: (value) {
             // In edit mode, if there's already a brochure URL, it's valid
             if (controller.isEditMode.value &&
@@ -2320,7 +2443,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
               ],
             );
           },
-        ),
+        );
+        }),
       ],
     );
   }
@@ -3681,72 +3805,66 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
           ),
-          child: Obx(() {
-            final readOnly = controller.isViewMode.value;
-            final labelStyle = TextStyle(
-              fontSize: isMobile ? 13.5 : 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            );
-
-            final inputField = SizedBox(
-              width: isMobile ? 72 : 84,
-              child: TextFormField(
-                controller: controller.bestSchoolAwardMinParticipantsController,
-                readOnly: readOnly,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(
-                  hintText: 'e.g. 15',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  filled: true,
-                  fillColor: readOnly ? Colors.grey[200] : AppColors.inputFill,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: isMobile ? 12 : 14,
-                  ),
-                  isDense: isMobile,
+          child: Builder(
+            builder: (context) {
+              final labelStyle = TextStyle(
+                fontSize: isMobile ? 13.5 : 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              );
+              final inputField = SizedBox(
+                width: isMobile ? 72 : 84,
+                child: _StableCompetitionTextFormField(
+                  label: 'Best school award participants',
+                  textController:
+                      controller.bestSchoolAwardMinParticipantsController,
+                  competitionController: controller,
+                  isMobile: isMobile,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decorationHint: 'e.g. 15',
+                  fillColorWhenEditable: AppColors.inputFill,
+                  onChanged:
+                      controller.captureBestSchoolAwardMinParticipantsDraft,
                 ),
-              ),
-            );
+              );
 
-            if (isMobile) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Show award for schools with at least',
+                      style: labelStyle,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        inputField,
+                        const SizedBox(width: 8),
+                        Text('participants', style: labelStyle),
+                      ],
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
                     'Show award for schools with at least',
                     style: labelStyle,
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      inputField,
-                      const SizedBox(width: 8),
-                      Text('participants', style: labelStyle),
-                    ],
-                  ),
+                  const SizedBox(width: 10),
+                  inputField,
+                  const SizedBox(width: 8),
+                  Text('participants', style: labelStyle),
                 ],
               );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  'Show award for schools with at least',
-                  style: labelStyle,
-                ),
-                const SizedBox(width: 10),
-                inputField,
-                const SizedBox(width: 8),
-                Text('participants', style: labelStyle),
-              ],
-            );
-          }),
+            },
+          ),
         ),
       ],
     );
@@ -5083,6 +5201,327 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
         ],
       ),
     );
+  }
+}
+
+class _CompetitionDescriptionInput extends StatefulWidget {
+  const _CompetitionDescriptionInput({
+    required this.label,
+    required this.textController,
+    required this.competitionController,
+    required this.isMobile,
+    this.focusNode,
+    this.isRequired = false,
+    this.minLines = 4,
+    this.maxLines = 8,
+    this.isolateVerticalScroll = true,
+    this.minTrimmedLength,
+    this.minLengthMessage,
+    this.lengthWarningText,
+    this.onChanged,
+  });
+
+  final String label;
+  final TextEditingController textController;
+  final CompetitionController competitionController;
+  final FocusNode? focusNode;
+  final bool isRequired;
+  final int minLines;
+  final int maxLines;
+  final bool isMobile;
+  final bool isolateVerticalScroll;
+  final int? minTrimmedLength;
+  final String? minLengthMessage;
+  final RxString? lengthWarningText;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  State<_CompetitionDescriptionInput> createState() =>
+      _CompetitionDescriptionInputState();
+}
+
+class _CompetitionDescriptionInputState
+    extends State<_CompetitionDescriptionInput> {
+  bool _editing = false;
+  FocusNode? _ownedFocusNode;
+  late FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    if (widget.focusNode == null) {
+      _ownedFocusNode = _focusNode;
+    }
+    _focusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChange);
+    _ownedFocusNode?.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (!_focusNode.hasFocus && _editing) {
+      setState(() => _editing = false);
+    }
+  }
+
+  void _startEditing() {
+    setState(() => _editing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  Widget _readOnlyDescription(String text, {required bool canEdit}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        14,
+        widget.isMobile ? 12 : 14,
+        canEdit ? 4 : 14,
+        widget.isMobile ? 12 : 14,
+      ),
+      decoration: BoxDecoration(
+        color: canEdit ? Colors.white : Colors.grey[200],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: LinkifiedDescription(
+              text: text,
+              maxHeight: widget.isMobile ? 220 : 280,
+              style: TextStyle(
+                fontSize: widget.isMobile ? 14 : 15,
+                height: 1.5,
+                color: AppColors.textBody,
+              ),
+            ),
+          ),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Edit description',
+              visualDensity: VisualDensity.compact,
+              onPressed: _startEditing,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final isView = widget.competitionController.isViewMode.value;
+      if (isView) {
+        final text =
+            widget.lengthWarningText?.value ?? widget.textController.text;
+        return _readOnlyDescription(text, canEdit: false);
+      }
+      if (_editing || widget.textController.text.trim().isEmpty) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _StableCompetitionTextFormField(
+              label: widget.label,
+              textController: widget.textController,
+              competitionController: widget.competitionController,
+              focusNode: _focusNode,
+              isRequired: widget.isRequired,
+              minLines: widget.minLines,
+              maxLines: widget.maxLines,
+              isMobile: widget.isMobile,
+              isolateVerticalScroll: widget.isolateVerticalScroll,
+              minTrimmedLength: widget.minTrimmedLength,
+              minLengthMessage: widget.minLengthMessage,
+              onChanged: widget.onChanged,
+            ),
+            Obx(
+              () => DescriptionUrlChips(
+                text: widget.lengthWarningText?.value ??
+                    widget.textController.text,
+              ),
+            ),
+          ],
+        );
+      }
+      final text =
+          widget.lengthWarningText?.value ?? widget.textController.text;
+      return _readOnlyDescription(text, canEdit: true);
+    });
+  }
+}
+
+/// Text field that reads view-mode outside the parent Form [Obx], so typing
+/// and tab-switch hover rebuilds do not remount the input on Flutter web.
+class _StableCompetitionTextFormField extends StatefulWidget {
+  const _StableCompetitionTextFormField({
+    required this.label,
+    required this.textController,
+    required this.competitionController,
+    this.focusNode,
+    this.isRequired = false,
+    this.minLines = 1,
+    this.maxLines = 1,
+    this.isMobile = false,
+    this.textAlign = TextAlign.left,
+    this.isolateVerticalScroll = false,
+    this.minTrimmedLength,
+    this.minLengthMessage,
+    this.onChanged,
+    this.decorationHint,
+    this.keyboardType,
+    this.inputFormatters,
+    this.fillColorWhenEditable,
+  });
+
+  final String label;
+  final TextEditingController textController;
+  final CompetitionController competitionController;
+  final FocusNode? focusNode;
+  final bool isRequired;
+  final int minLines;
+  final int maxLines;
+  final bool isMobile;
+  final TextAlign textAlign;
+  final bool isolateVerticalScroll;
+  final int? minTrimmedLength;
+  final String? minLengthMessage;
+  final ValueChanged<String>? onChanged;
+  final String? decorationHint;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final Color? fillColorWhenEditable;
+
+  @override
+  State<_StableCompetitionTextFormField> createState() =>
+      _StableCompetitionTextFormFieldState();
+}
+
+class _StableCompetitionTextFormFieldState
+    extends State<_StableCompetitionTextFormField> {
+  ScrollController? _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isolateVerticalScroll) {
+      _scrollController = ScrollController();
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Restore drafts first in case Flutter web cleared controllers on remount.
+      widget.competitionController.restoreDraftTextFields();
+      _syncExistingTextToInput();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController?.dispose();
+    super.dispose();
+  }
+
+  /// Flutter web can remount an empty HTML input even when the controller
+  /// still holds the previously typed value. Re-assigning the value forces
+  /// the visible field to match the controller.
+  void _syncExistingTextToInput() {
+    if (!mounted) return;
+    final controller = widget.textController;
+    final text = controller.text;
+    if (text.isEmpty) return;
+    final selection = controller.selection;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: selection.isValid
+          ? selection
+          : TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final readOnly = widget.competitionController.isViewMode.value;
+    Widget field = TextFormField(
+      key: ValueKey('competition-field-${widget.label}'),
+      controller: widget.textController,
+      focusNode: widget.focusNode,
+      scrollController: _scrollController,
+      minLines: widget.maxLines > 1 ? widget.minLines : null,
+      maxLines: widget.maxLines,
+      textAlign: widget.textAlign,
+      readOnly: readOnly,
+      showCursor: !readOnly,
+      scrollPhysics: widget.isolateVerticalScroll
+          ? const ClampingScrollPhysics()
+          : null,
+      // Flutter web fades the caret to 0 while the browser tab is hidden
+      // and never paints `|` again when you return.
+      cursorOpacityAnimates: false,
+      onChanged: widget.onChanged,
+      keyboardType: widget.keyboardType ??
+          (widget.maxLines > 1 ? TextInputType.multiline : null),
+      inputFormatters: widget.inputFormatters,
+      decoration: InputDecoration(
+        hintText: widget.decorationHint,
+        hintStyle: widget.decorationHint == null
+            ? null
+            : TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted.withValues(alpha: 0.8),
+              ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
+        ),
+        filled: true,
+        fillColor: readOnly
+            ? Colors.grey[200]
+            : (widget.fillColorWhenEditable ?? Colors.white),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: widget.isMobile ? 12 : 14,
+        ),
+        isDense: widget.isMobile,
+        errorStyle: widget.minTrimmedLength != null
+            ? const TextStyle(height: 0, fontSize: 0)
+            : null,
+      ),
+      validator: widget.isRequired && !readOnly
+          ? (value) {
+              if (value == null || value.trim().isEmpty) {
+                return widget.minLengthMessage ?? 'This field is required';
+              }
+              final minLength = widget.minTrimmedLength;
+              if (minLength != null && value.trim().length < minLength) {
+                return widget.minLengthMessage;
+              }
+              return null;
+            }
+          : null,
+    );
+    final scrollController = _scrollController;
+    if (widget.isolateVerticalScroll && scrollController != null) {
+      return IsolatedScrollListener(
+        controller: scrollController,
+        child: field,
+      );
+    }
+    return field;
   }
 }
 

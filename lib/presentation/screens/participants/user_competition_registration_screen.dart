@@ -13,18 +13,22 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/registration_success_panel.dart';
-import '../../widgets/pinned_scroll_views.dart';
 import '../home/home_landing_sections.dart';
 import 'participant_registration_form_screen.dart';
 import 'registration_event_landing.dart';
 
 /// Public registration screen styled like an event landing page.
+/// Opened via opaque [registrationCode] (not sequential competition id).
 class UserCompetitionRegistrationScreen extends StatefulWidget {
-  final String competitionId;
+  final String registrationCode;
+
+  /// When set, loads this registration into the form for public edit.
+  final String? editRegistrationId;
 
   const UserCompetitionRegistrationScreen({
     super.key,
-    required this.competitionId,
+    required this.registrationCode,
+    this.editRegistrationId,
   });
 
   @override
@@ -40,29 +44,104 @@ class _UserCompetitionRegistrationScreenState
   static const double _bannerAspectRatio = 16 / 9;
   static const double _sidebarWidth = 320;
 
+  bool _isResolving = true;
+  bool _resolveFailed = false;
+  bool _registrationSaved = false;
+  String? _resolvedCompetitionId;
+  HomeCompetitionModel? _competition;
+  CompetitionModel? _fullCompetition;
+  Worker? _registrationSavedWorker;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final competitionController = Get.isRegistered<CompetitionController>()
-          ? Get.find<CompetitionController>()
-          : Get.put(CompetitionController());
-      final participantController = Get.isRegistered<ParticipantController>()
-          ? Get.find<ParticipantController>()
-          : Get.put(ParticipantController());
-
-      participantController.clearRegistrationConfirmation();
-      participantController.selectedEventId.value = widget.competitionId;
-
-      if (competitionController.homeCompetitions.isEmpty &&
-          !competitionController.isLoadingHomeCompetitions.value) {
-        await competitionController.ensureHomeCompetitionsLoaded();
-      }
-      await competitionController.loadOnDemandContext();
-      await competitionController.ensureCompetitionLoadedForRegistration(
-        widget.competitionId,
-      );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _resolveRegistrationLink();
     });
+  }
+
+  @override
+  void dispose() {
+    _registrationSavedWorker?.dispose();
+    _registrationSavedWorker = null;
+    super.dispose();
+  }
+
+  Future<void> _resolveRegistrationLink() async {
+    final competitionController = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
+    final participantController = Get.isRegistered<ParticipantController>()
+        ? Get.find<ParticipantController>()
+        : Get.put(ParticipantController());
+
+    participantController.clearRegistrationConfirmation();
+    _registrationSavedWorker?.dispose();
+    _registrationSavedWorker = ever<bool>(
+      participantController.registrationSaved,
+      (saved) {
+        if (!mounted) return;
+        setState(() => _registrationSaved = saved);
+      },
+    );
+
+    if (competitionController.homeCompetitions.isEmpty &&
+        !competitionController.isLoadingHomeCompetitions.value) {
+      await competitionController.ensureHomeCompetitionsLoaded();
+    }
+    await competitionController.loadOnDemandContext();
+
+    final resolvedId = await competitionController
+        .ensureCompetitionLoadedForRegistrationCode(widget.registrationCode);
+
+    if (!mounted) return;
+
+    if (resolvedId == null || resolvedId.isEmpty) {
+      setState(() {
+        _isResolving = false;
+        _resolveFailed = true;
+        _resolvedCompetitionId = null;
+        _competition = null;
+        _fullCompetition = null;
+      });
+      return;
+    }
+
+    participantController.selectedEventId.value = resolvedId;
+
+    final editId = widget.editRegistrationId?.trim();
+    if (editId != null && editId.isNotEmpty) {
+      participantController.clearRegistrationConfirmation();
+      await participantController.fetchParticipantById(editId);
+    } else if (participantController.isEditMode ||
+        participantController.isViewMode.value) {
+      // Fresh registration link should not keep a prior edit/view session.
+      participantController.resetForm();
+    }
+
+    final code = widget.registrationCode.trim();
+    final competition = competitionController.homeCompetitions.firstWhereOrNull(
+      (c) =>
+          (c.registrationCode?.trim() ?? '') == code || c.idStr == resolvedId,
+    );
+    final fullCompetition = competitionController.competitions
+        .firstWhereOrNull((c) => c.id == resolvedId);
+
+    setState(() {
+      _isResolving = false;
+      _resolveFailed = competition == null;
+      _resolvedCompetitionId = resolvedId;
+      _competition = competition;
+      _fullCompetition = fullCompetition;
+      _registrationSaved = participantController.registrationSaved.value;
+    });
+
+    if (editId != null && editId.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollToRegistrationForm();
+      });
+    }
   }
 
   void _scrollToRegistrationForm() {
@@ -78,16 +157,18 @@ class _UserCompetitionRegistrationScreenState
 
   @override
   Widget build(BuildContext context) {
-    final competitionController = Get.put(CompetitionController());
+    final competitionController = Get.isRegistered<CompetitionController>()
+        ? Get.find<CompetitionController>()
+        : Get.put(CompetitionController());
     final participantController = Get.isRegistered<ParticipantController>()
         ? Get.find<ParticipantController>()
         : Get.put(ParticipantController());
-    final userController = Get.put(UserManagementController());
+    final userController = Get.isRegistered<UserManagementController>()
+        ? Get.find<UserManagementController>()
+        : Get.put(UserManagementController());
     final authController = Get.isRegistered<AuthController>()
         ? Get.find<AuthController>()
         : Get.put(AuthController());
-
-    competitionController.ensureHomeCompetitionsLoaded();
 
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < HomeLayout.mobile;
@@ -112,54 +193,43 @@ class _UserCompetitionRegistrationScreenState
           );
         }),
       ),
-      body: Obx(() {
-        final isLoading =
-            competitionController.isLoadingHomeCompetitions.value &&
-            competitionController.homeCompetitions.isEmpty;
-
-        if (isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final competition = competitionController.homeCompetitions
-            .firstWhereOrNull((c) => c.idStr == widget.competitionId);
-        final fullCompetition = competitionController.competitions
-            .firstWhereOrNull((c) => c.id == widget.competitionId);
-
-        return PinnedVerticalScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1280),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(padH, 24, padH, 32),
-                    child: competition == null
-                        ? _buildMissingCompetition(context)
-                        : isMobile
-                        ? _buildMobileContent(
-                            context,
-                            competition,
-                            fullCompetition,
-                            competitionController,
-                            participantController,
-                          )
-                        : _buildDesktopContent(
-                            context,
-                            competition,
-                            fullCompetition,
-                            competitionController,
-                            participantController,
-                          ),
+      body: _isResolving
+          ? const Center(child: CircularProgressIndicator())
+          // SingleChildScrollView avoids LayoutBuilder remount conflicts with
+          // Form GlobalKeys on Flutter web (PinnedVerticalScrollView uses it).
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1280),
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(padH, 24, padH, 32),
+                        child: _resolveFailed || _competition == null
+                            ? _buildMissingCompetition(context)
+                            : isMobile
+                            ? _buildMobileContent(
+                                context,
+                                _competition!,
+                                _fullCompetition,
+                                competitionController,
+                                participantController,
+                              )
+                            : _buildDesktopContent(
+                                context,
+                                _competition!,
+                                _fullCompetition,
+                                competitionController,
+                                participantController,
+                              ),
+                      ),
+                    ),
                   ),
-                ),
+                  const FooterSection(),
+                ],
               ),
-              const FooterSection(),
-            ],
-          ),
-        );
-      }),
+            ),
     );
   }
 
@@ -386,24 +456,24 @@ class _UserCompetitionRegistrationScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const RegistrationSectionTitle('Participant Registration'),
-          Obx(() {
-            if (participantController.registrationSaved.value) {
-              return RegistrationSuccessPanel(
-                participantController: participantController,
-                participant:
-                    participantController.lastRegisteredParticipant.value,
-                onRegisterAnother: () {
-                  participantController.clearRegistrationConfirmation();
-                  participantController.resetForm();
-                },
-              );
-            }
-            return ParticipantRegistrationFormScreen(
-              initialCompetitionId: widget.competitionId,
+          if (_registrationSaved)
+            RegistrationSuccessPanel(
+              participantController: participantController,
+              participant: participantController.lastRegisteredParticipant.value,
+              onRegisterAnother: () {
+                participantController.clearRegistrationConfirmation();
+                participantController.resetForm();
+              },
+            )
+          else
+            ParticipantRegistrationFormScreen(
+              key: ValueKey(
+                'embedded-reg-form-${_resolvedCompetitionId ?? ''}',
+              ),
+              initialCompetitionId: _resolvedCompetitionId ?? '',
               showCompetitionDropdown: false,
               embeddedInLandingPage: true,
-            );
-          }),
+            ),
         ],
       ),
     );
