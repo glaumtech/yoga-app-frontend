@@ -28,6 +28,7 @@ class ReportsRepository {
     bool? hasInstitution,
     String? yogaTeacherName,
     String? yogaTeacherCell,
+    String? feeType,
     String? search,
   }) {
     final segments = <String>[];
@@ -105,6 +106,11 @@ class ReportsRepository {
         'yogaTeacherCell=${Uri.encodeQueryComponent(yogaTeacherCell.trim())}',
       );
     }
+    if (feeType != null && feeType.trim().isNotEmpty) {
+      segments.add(
+        'feeType=${Uri.encodeQueryComponent(feeType.trim().toUpperCase())}',
+      );
+    }
     if (search != null && search.trim().isNotEmpty) {
       segments.add('search=${Uri.encodeQueryComponent(search.trim())}');
     }
@@ -133,6 +139,7 @@ class ReportsRepository {
     bool? hasInstitution,
     String? yogaTeacherName,
     String? yogaTeacherCell,
+    String? feeType,
   }) {
     final segments = <String>[];
     final filter = participantReportQuery(
@@ -152,6 +159,7 @@ class ReportsRepository {
       hasInstitution: hasInstitution,
       yogaTeacherName: yogaTeacherName,
       yogaTeacherCell: yogaTeacherCell,
+      feeType: feeType,
     );
     if (filter.isNotEmpty) {
       segments.add(filter.substring(1));
@@ -400,6 +408,7 @@ class ReportsRepository {
     bool? hasInstitution,
     String? yogaTeacherName,
     String? yogaTeacherCell,
+    String? feeType,
   }) async {
     final q = participantsTableQuery(
       page: page,
@@ -421,6 +430,7 @@ class ReportsRepository {
       hasInstitution: hasInstitution,
       yogaTeacherName: yogaTeacherName,
       yogaTeacherCell: yogaTeacherCell,
+      feeType: feeType,
     );
 
     final response = await _apiService.getResponse<Map<String, dynamic>>(
@@ -1119,6 +1129,49 @@ class ReportsRepository {
       message: response.message ?? 'Failed to load organization report',
       statusCode: response.statusCode,
     );
+  }
+
+  Future<ApiResponse<Uint8List>> getOrganizationReportExcel(
+    int organizationId,
+  ) async {
+    try {
+      final path = EndPoints.organizationReportExcel(organizationId);
+      final uri = Uri.parse(BaseUrl.baseUrl + path);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept':
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to generate organization Excel (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error generating organization Excel: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
   }
 
   Future<ApiResponse<Map<String, dynamic>>> getCompetitionFinancialReport(

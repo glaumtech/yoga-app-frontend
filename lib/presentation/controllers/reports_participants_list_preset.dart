@@ -11,6 +11,7 @@ class ReportsParticipantsListPreset {
     this.age,
     this.yogaTeacherName,
     this.yogaTeacherCell,
+    this.feeType,
     this.label,
   });
 
@@ -28,6 +29,9 @@ class ReportsParticipantsListPreset {
   final int? age;
   final String? yogaTeacherName;
   final String? yogaTeacherCell;
+
+  /// Stored fee type: EARLY_BIRD or BULK_DISCOUNT.
+  final String? feeType;
   final String? label;
 
   static const ReportsParticipantsListPreset all = ReportsParticipantsListPreset(
@@ -62,6 +66,18 @@ class ReportsParticipantsListPreset {
       const ReportsParticipantsListPreset(
         spotRegistration: true,
         label: 'Spot Registration',
+      );
+
+  factory ReportsParticipantsListPreset.earlyBird() =>
+      const ReportsParticipantsListPreset(
+        feeType: 'EARLY_BIRD',
+        label: 'Early Bird',
+      );
+
+  factory ReportsParticipantsListPreset.groupDiscount() =>
+      const ReportsParticipantsListPreset(
+        feeType: 'BULK_DISCOUNT',
+        label: 'Group discount',
       );
 
   factory ReportsParticipantsListPreset.institution(

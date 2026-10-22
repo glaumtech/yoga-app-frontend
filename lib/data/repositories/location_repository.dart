@@ -1,8 +1,14 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
 import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/storage_service.dart';
 import '../models/state_model.dart';
 import '../models/city_model.dart';
 import '../models/district_model.dart';
+import '../models/location_import_result.dart';
 import '../models/api_response.dart';
 
 class LocationRepository {
@@ -595,6 +601,68 @@ class LocationRepository {
       return ApiResponse(
         success: false,
         message: 'Error deleting district: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<ApiResponse<LocationImportResult>> importLocations({
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    try {
+      final uri = Uri.parse(BaseUrl.baseUrl + EndPoints.locationImport);
+      final request = http.MultipartRequest('POST', uri);
+      final token = StorageService.getString(AppConstants.tokenKey);
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: filename.trim().isEmpty ? 'locations.csv' : filename.trim(),
+        ),
+      );
+
+      final streamed = await request.send().timeout(const Duration(minutes: 2));
+      final body = await http.Response.fromStream(streamed);
+      Map<String, dynamic> jsonBody = {};
+      try {
+        final decoded = jsonDecode(body.body);
+        if (decoded is Map<String, dynamic>) {
+          jsonBody = decoded;
+        } else if (decoded is Map) {
+          jsonBody = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        return ApiResponse(
+          success: false,
+          message: 'Import failed (${body.statusCode})',
+          statusCode: body.statusCode,
+        );
+      }
+
+      if (body.statusCode == 200 && jsonBody['success'] == true) {
+        final data = jsonBody['data'];
+        if (data is Map) {
+          return ApiResponse(
+            success: true,
+            message: jsonBody['message']?.toString(),
+            data: LocationImportResult.fromJson(Map<String, dynamic>.from(data)),
+          );
+        }
+      }
+
+      return ApiResponse(
+        success: false,
+        message: jsonBody['message']?.toString() ?? 'Failed to import locations',
+        statusCode: body.statusCode,
+      );
+    } catch (e) {
+      print('Error in importLocations: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error importing locations: ${e.toString()}',
       );
     }
   }

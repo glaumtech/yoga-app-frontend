@@ -1984,6 +1984,9 @@ class CompetitionController extends GetxController {
     String competitionId,
     int categoryId, {
     bool spotRegistration = false,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    bool applyOffers = true,
   }) {
     if (spotRegistration) {
       var spotFee = _feeFromAmountMap(
@@ -2007,23 +2010,70 @@ class CompetitionController extends GetxController {
           : Map<String, double>.from(categoryAmounts),
       categoryId,
     );
-    if (fee > 0) return fee;
+    if (fee <= 0) {
+      final home = homeCompetitions.firstWhereOrNull(
+        (c) => c.id?.toString() == competitionId,
+      );
+      fee = _feeFromAmountMap(home?.categoryAmounts, categoryId);
+    }
+    if (fee <= 0) {
+      final competition = competitions.firstWhereOrNull(
+        (c) => c.id == competitionId,
+      );
+      fee = _feeFromAmountMap(competition?.categoryAmounts, categoryId);
+    }
+    if (fee <= 0) {
+      final mapped = mappedAmountsFor(categoryId);
+      if (spotRegistration && mapped.spotAmount > 0) return mapped.spotAmount;
+      fee = mapped.amount;
+    }
+    if (spotRegistration || !applyOffers) return fee;
+    return _applyCategoryFeeOffers(
+      competitionId,
+      categoryId,
+      fee,
+      bulkCategoryCount: bulkCategoryCount,
+      categoryMode: categoryMode,
+    );
+  }
 
-    final home = homeCompetitions.firstWhereOrNull(
+  double _applyCategoryFeeOffers(
+    String competitionId,
+    int categoryId,
+    double onlineFee, {
+    int? bulkCategoryCount,
+    String? categoryMode,
+  }) {
+    final config = _categoryConfigForFee(
+      competitionId,
+      categoryId,
+      categoryMode: categoryMode,
+    );
+    if (config == null) return onlineFee;
+    return config.resolveDiscountedOnlineFee(
+      onlineFee,
+      bulkCategoryCount: bulkCategoryCount,
+    );
+  }
+
+  CompetitionCategoryConfigModel? _categoryConfigForFee(
+    String competitionId,
+    int categoryId, {
+    String? categoryMode,
+  }) {
+    final mode = categoryMode?.trim().toUpperCase();
+    final competition = competitions.firstWhereOrNull(
       (c) => c.id?.toString() == competitionId,
     );
-    fee = _feeFromAmountMap(home?.categoryAmounts, categoryId);
-    if (fee > 0) return fee;
-
-    final competition = competitions.firstWhereOrNull(
-      (c) => c.id == competitionId,
-    );
-    fee = _feeFromAmountMap(competition?.categoryAmounts, categoryId);
-    if (fee > 0) return fee;
-
-    final mapped = mappedAmountsFor(categoryId);
-    if (spotRegistration && mapped.spotAmount > 0) return mapped.spotAmount;
-    return mapped.amount;
+    final configs = competition?.categoryConfigs;
+    if (configs == null || configs.isEmpty) return null;
+    if (mode == 'ONLINE' || mode == 'OFFLINE') {
+      final exact = configs.firstWhereOrNull(
+        (c) => c.categoryId == categoryId && c.mode.toUpperCase() == mode,
+      );
+      if (exact != null) return exact;
+    }
+    return configs.firstWhereOrNull((c) => c.categoryId == categoryId);
   }
 
   bool resolveCategoryExtraFeeIncluded(String competitionId, int categoryId) {
@@ -2062,11 +2112,17 @@ class CompetitionController extends GetxController {
     String competitionId,
     int categoryId, {
     bool spotRegistration = false,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    bool applyOffers = true,
   }) {
     final stored = resolveCategoryFeeRupees(
       competitionId,
       categoryId,
       spotRegistration: spotRegistration,
+      bulkCategoryCount: bulkCategoryCount,
+      categoryMode: categoryMode,
+      applyOffers: applyOffers,
     );
     if (stored <= 0) return 0;
     final include = resolveCategoryExtraFeeIncluded(competitionId, categoryId);

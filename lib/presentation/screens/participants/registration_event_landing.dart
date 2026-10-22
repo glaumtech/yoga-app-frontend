@@ -182,7 +182,8 @@ class RegistrationCategoryCards extends StatelessWidget {
       );
       if (cfg != null) {
         if (option.isOnline) {
-          if (cfg.feeAmount > 0) return cfg.feeAmount;
+          final fee = cfg.resolveDiscountedOnlineFee(cfg.feeAmount);
+          if (fee > 0 || fee != cfg.feeAmount) return fee;
         } else {
           final spot =
               cfg.spotFeeAmount > 0 ? cfg.spotFeeAmount : cfg.feeAmount;

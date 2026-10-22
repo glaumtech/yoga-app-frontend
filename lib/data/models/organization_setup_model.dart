@@ -78,6 +78,8 @@ class BranchRequestModel {
   final String? bankBranch;
   final String? bankName;
   final String? gstNumber;
+  final String? participantCodePrefix;
+  final String? paymentCodePrefix;
 
   BranchRequestModel({
     this.organizationId,
@@ -101,6 +103,8 @@ class BranchRequestModel {
     this.bankBranch,
     this.bankName,
     this.gstNumber,
+    this.participantCodePrefix,
+    this.paymentCodePrefix,
   });
 
   Map<String, dynamic> toJson() => {
@@ -125,6 +129,9 @@ class BranchRequestModel {
     if (bankBranch != null) 'bankBranch': bankBranch,
     if (bankName != null) 'bankName': bankName,
     if (gstNumber != null) 'gstNumber': gstNumber,
+    if (participantCodePrefix != null)
+      'participantCodePrefix': participantCodePrefix,
+    if (paymentCodePrefix != null) 'paymentCodePrefix': paymentCodePrefix,
   };
 }
 
@@ -213,6 +220,8 @@ class BranchDtoModel {
   final String? bankBranch;
   final String? bankName;
   final String? gstNumber;
+  final String? participantCodePrefix;
+  final String? paymentCodePrefix;
 
   BranchDtoModel({
     required this.id,
@@ -245,6 +254,8 @@ class BranchDtoModel {
     this.bankBranch,
     this.bankName,
     this.gstNumber,
+    this.participantCodePrefix,
+    this.paymentCodePrefix,
   });
 
   factory BranchDtoModel.fromJson(Map<String, dynamic> json) {
@@ -284,6 +295,8 @@ class BranchDtoModel {
       bankBranch: json['bankBranch']?.toString(),
       bankName: json['bankName']?.toString(),
       gstNumber: json['gstNumber']?.toString(),
+      participantCodePrefix: json['participantCodePrefix']?.toString(),
+      paymentCodePrefix: json['paymentCodePrefix']?.toString(),
     );
   }
 }

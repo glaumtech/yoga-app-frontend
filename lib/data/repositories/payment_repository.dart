@@ -221,11 +221,36 @@ class PaymentRepository {
   Future<PaymentOrderModel> createRegistrationCheckoutOrder({
     required int competitionId,
     required int categoryId,
+    bool spotRegistration = false,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    int? participantCount,
   }) async {
     final response = await createApiOrder(
       purpose: registrationTicketPurpose,
       competitionId: competitionId,
       categoryId: categoryId,
+      spotRegistration: spotRegistration,
+      bulkCategoryCount: bulkCategoryCount,
+      categoryMode: categoryMode,
+      participantCount: participantCount,
+    );
+    if (!response.success || response.data == null) {
+      throw Exception(response.message ?? 'Failed to create registration payment order');
+    }
+    return PaymentOrderModel.fromJson(response.data!);
+  }
+
+  Future<PaymentOrderModel> createBulkRegistrationCheckoutOrder({
+    required int competitionId,
+    required List<Map<String, dynamic>> lines,
+    bool spotRegistration = false,
+  }) async {
+    final response = await createApiOrder(
+      purpose: registrationTicketPurpose,
+      competitionId: competitionId,
+      spotRegistration: spotRegistration,
+      lines: lines,
     );
     if (!response.success || response.data == null) {
       throw Exception(response.message ?? 'Failed to create registration payment order');
@@ -355,11 +380,29 @@ class PaymentRepository {
     String? receipt,
     bool? hasAsanas,
     bool? hasChallenge,
+    bool? spotRegistration,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    int? participantCount,
+    List<Map<String, dynamic>>? lines,
   }) async {
     final body = <String, dynamic>{};
     if (amountPaise != null) body['amount'] = amountPaise;
     if (competitionId != null) body['competitionId'] = competitionId;
     if (categoryId != null) body['categoryId'] = categoryId;
+    if (spotRegistration != null) body['spotRegistration'] = spotRegistration;
+    if (bulkCategoryCount != null) {
+      body['bulkCategoryCount'] = bulkCategoryCount;
+    }
+    if (participantCount != null && participantCount > 1) {
+      body['participantCount'] = participantCount;
+    }
+    if (lines != null && lines.isNotEmpty) {
+      body['lines'] = lines;
+    }
+    if (categoryMode != null && categoryMode.trim().isNotEmpty) {
+      body['categoryMode'] = categoryMode.trim();
+    }
     if (purpose != null && purpose.trim().isNotEmpty) {
       body['purpose'] = purpose.trim();
     }

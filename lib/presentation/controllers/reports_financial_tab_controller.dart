@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
@@ -18,6 +19,9 @@ class ReportsFinancialTabController extends GetxController {
   final RxString error = ''.obs;
   final Rxn<Map<String, dynamic>> report = Rxn<Map<String, dynamic>>();
   final RxnInt highlightedTransferId = RxnInt();
+  final RxInt highlightScrollTick = 0.obs;
+  final Map<int, GlobalKey> _transferRowKeys = {};
+  int _appliedHighlightTick = 0;
 
   Worker? _competitionWatcher;
 
@@ -48,10 +52,54 @@ class ReportsFinancialTabController extends GetxController {
   void highlightTransfer(int? transferId) {
     highlightedTransferId.value = transferId;
     if (transferId == null) return;
+    highlightScrollTick.value++;
     Future.delayed(const Duration(seconds: 5), () {
       if (highlightedTransferId.value == transferId) {
         highlightedTransferId.value = null;
       }
+    });
+  }
+
+  GlobalKey transferRowKey(int id) =>
+      _transferRowKeys.putIfAbsent(id, GlobalKey.new);
+
+  /// Scrolls the highlighted transfer row into view. Call from the table
+  /// build so the row key is already in the tree.
+  void revealHighlightedTransfer() {
+    final tick = highlightScrollTick.value;
+    final id = highlightedTransferId.value;
+    if (id == null || tick == 0 || tick == _appliedHighlightTick) return;
+    _appliedHighlightTick = tick;
+    _scrollToTransferRow(id);
+  }
+
+  void _ensureVerticallyVisible(BuildContext context) {
+    RenderObject? targetRenderObject;
+    ScrollableState? scrollable = Scrollable.maybeOf(context);
+    while (scrollable != null) {
+      if (scrollable.position.axis == Axis.vertical) {
+        scrollable.position.ensureVisible(
+          context.findRenderObject()!,
+          alignment: 0.22,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeInOut,
+          targetRenderObject: targetRenderObject,
+        );
+      }
+      targetRenderObject ??= context.findRenderObject();
+      context = scrollable.context;
+      scrollable = Scrollable.maybeOf(context);
+    }
+  }
+
+  void _scrollToTransferRow(int id, {int attempt = 0}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _transferRowKeys[id]?.currentContext;
+      if (target == null || !target.mounted) {
+        if (attempt < 3) _scrollToTransferRow(id, attempt: attempt + 1);
+        return;
+      }
+      _ensureVerticallyVisible(target);
     });
   }
 

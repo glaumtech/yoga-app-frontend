@@ -19,7 +19,7 @@ class _SavedField {
   final int caretOffset;
 }
 
-/// App-wide caret restore after browser-tab / window / sidebar returns.
+/// App-wide caret restore after the browser tab is hidden and shown again.
 ///
 /// Flutter web uses a **single shared** DOM text-input overlay. Focusing that
 /// DOM node does NOT select a Flutter field — it follows whichever
@@ -29,6 +29,10 @@ class _SavedField {
 /// - Remember the field only after real click / key press
 /// - Freeze that field when the tab hides (ignore first-field focus steals)
 /// - On return, [requestFocus] that same node and re-apply the caret
+///
+/// Do not call [EditableTextState.requestKeyboard] here. Focus already opens
+/// the input connection. A second show/detach races Flutter web and asserts
+/// in the engine (`Could not find View`, `isEnabled`, disposed view render).
 class AppTextCaretRestoreScope extends StatefulWidget {
   const AppTextCaretRestoreScope({super.key, required this.child});
 
@@ -194,6 +198,7 @@ class _AppTextCaretRestoreScopeState extends State<AppTextCaretRestoreScope>
       if (!node.canRequestFocus) return false;
       final ctx = node.context;
       if (ctx == null || !ctx.mounted) return false;
+      if (!_viewIsAlive(ctx)) return false;
       final renderObject = ctx.findRenderObject();
       if (renderObject == null || !renderObject.attached) return false;
       // IndexedStack offstage pages are not "current"; skip those.
@@ -205,32 +210,51 @@ class _AppTextCaretRestoreScopeState extends State<AppTextCaretRestoreScope>
     }
   }
 
+  /// False after the engine view was disposed (hot restart, or the web text
+  /// input connection tore the view down). Focusing then asserts in
+  /// `EngineFlutterView.render`.
+  bool _viewIsAlive(BuildContext context) {
+    final view = View.maybeOf(context);
+    if (view == null) return false;
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    return views.any((candidate) => candidate.viewId == view.viewId);
+  }
+
   void _scheduleRestore(_SavedField saved) {
     _restoreDebounce?.cancel();
     final generation = ++_restoreGeneration;
     _frozenActive = true;
     AppTextCaretRestore.suppressFocusTracking = true;
 
-    // Flutter often assigns focus to the first field a moment after the tab
-    // becomes visible — retry until our field wins.
-    const delays = <int>[0, 50, 120, 250, 450];
-    for (final ms in delays) {
-      Future<void>.delayed(Duration(milliseconds: ms), () {
-        if (!mounted || generation != _restoreGeneration) return;
-        _applyRestore(saved);
-      });
-    }
-
-    Future<void>.delayed(const Duration(milliseconds: 600), () {
+    // One attempt after layout, then a single retry if the first field stole
+    // focus. Overlapping requestFocus/requestKeyboard calls race Flutter web's
+    // one text-input element (enable vs disable).
+    _restoreDebounce = Timer(const Duration(milliseconds: 50), () {
       if (!mounted || generation != _restoreGeneration) return;
-      _clearFreeze();
-      // Keep remembered field as the one we restored.
-      if (saved.node.hasFocus) {
-        _lastField = saved.node;
-        _lastCaretOffset = saved.caretOffset;
-        _byRoute[_currentPath()] = saved;
-      }
+      _applyRestore(saved);
+      _restoreDebounce = Timer(const Duration(milliseconds: 200), () {
+        if (!mounted || generation != _restoreGeneration) return;
+        if (!saved.node.hasFocus) {
+          _applyRestore(saved);
+        }
+        _finishRestore(saved);
+      });
     });
+  }
+
+  void _finishRestore(_SavedField saved) {
+    _clearFreeze();
+    if (_canRestore(saved.node) && saved.node.hasFocus) {
+      _lastField = saved.node;
+      _lastCaretOffset = saved.caretOffset;
+      _byRoute[_currentPath()] = saved;
+    }
+  }
+
+  void _abortRestore() {
+    _restoreGeneration++;
+    _restoreDebounce?.cancel();
+    _clearFreeze();
   }
 
   void _applyRestore(_SavedField saved) {
@@ -238,29 +262,27 @@ class _AppTextCaretRestoreScopeState extends State<AppTextCaretRestoreScope>
     if (!_canRestore(node)) return;
 
     try {
-      // Drop whatever first-field focus Flutter assigned, then take ours.
-      final primary = FocusManager.instance.primaryFocus;
-      if (primary != null && !identical(primary, node) && primary.hasFocus) {
-        primary.unfocus(disposition: UnfocusDisposition.scope);
-      }
-
-      node.requestFocus();
-      if (!_canRestore(node)) return;
-
       final editable = _editableOf(node);
       if (editable == null || !editable.mounted) return;
 
       final renderObject = editable.context.findRenderObject();
       if (renderObject == null || !renderObject.attached) return;
 
+      if (!node.hasFocus) {
+        node.requestFocus();
+      }
+      if (!_canRestore(node) || !node.hasFocus) return;
+
       final controller = editable.widget.controller;
       final text = controller.text;
       final offset = saved.caretOffset.clamp(0, text.length);
-      controller.value = TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: offset),
-      );
-      editable.requestKeyboard();
+      final selection = controller.selection;
+      final caretOk = selection.isValid &&
+          selection.isCollapsed &&
+          selection.extentOffset == offset;
+      if (!caretOk) {
+        controller.selection = TextSelection.collapsed(offset: offset);
+      }
 
       if (kDebugMode) {
         debugPrint(
@@ -272,6 +294,7 @@ class _AppTextCaretRestoreScopeState extends State<AppTextCaretRestoreScope>
       if (kDebugMode) {
         debugPrint('[AppTextCaretRestore] restore skipped: $e');
       }
+      _abortRestore();
     }
   }
 

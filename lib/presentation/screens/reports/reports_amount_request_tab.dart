@@ -16,13 +16,28 @@ class ReportsAmountRequestTab extends StatelessWidget {
   }
 
   static bool isPaid(Map<String, dynamic> request) {
-    if (request['paid'] == true || request['hasTransfer'] == true) {
-      return true;
-    }
+    if (request['hasTransfer'] == true) return true;
     final transferId = request['transferId'];
     if (transferId == null) return false;
     if (transferId is num) return true;
     return int.tryParse(transferId.toString()) != null;
+  }
+
+  /// PENDING, PARTIAL, or PAID.
+  /// Partially paid only when the paid amount is below the request amount.
+  static String paymentStatus(Map<String, dynamic> request) {
+    final requestAmt = asDouble(request['requestAmount']);
+    final paidAmt = paidAmount(request);
+    if (paidAmt <= 0.009) return 'PENDING';
+    if (paidAmt + 0.009 < requestAmt) return 'PARTIAL';
+    return 'PAID';
+  }
+
+  static double paidAmount(Map<String, dynamic> request) {
+    if (request.containsKey('paidAmount') && request['paidAmount'] != null) {
+      return asDouble(request['paidAmount']);
+    }
+    return isPaid(request) ? asDouble(request['requestAmount']) : 0;
   }
 
   @override
@@ -78,6 +93,10 @@ class ReportsAmountRequestTab extends StatelessWidget {
           .toList();
       final organizerTotal = asDouble(report['organizerTotal']);
       final pending = asDouble(report['pending']);
+      final detailLines = ((report['lines'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
       final defaultFrom = (report['defaultFromParty'] ?? 'CYS').toString();
       final defaultTo = (report['defaultToParty'] ?? '').toString();
 
@@ -87,7 +106,7 @@ class ReportsAmountRequestTab extends StatelessWidget {
           tabController,
           defaultFrom: defaultFrom,
           defaultTo: defaultTo,
-          defaultTotalAmount: organizerTotal,
+          defaultTotalAmount: pending > 0 ? pending : 0,
           defaultRequestAmount: pending > 0 ? pending : 0,
         );
       }
@@ -103,6 +122,11 @@ class ReportsAmountRequestTab extends StatelessWidget {
             28,
           ),
           children: [
+            if (tabController.isLoading.value)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: LinearProgressIndicator(minHeight: 3),
+              ),
             _HeaderCard(
               isMobile: isMobile,
               money: money,
@@ -112,6 +136,14 @@ class ReportsAmountRequestTab extends StatelessWidget {
               saving: tabController.isSaving.value,
               onNewRequest: openCreate,
             ),
+            if (detailLines.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _CategoryAmountDetails(
+                lines: detailLines,
+                money: money,
+                organizerTotal: organizerTotal,
+              ),
+            ],
             const SizedBox(height: 14),
             if (requests.isEmpty)
               _EmptyState(onNewRequest: tabController.isSaving.value
@@ -125,7 +157,7 @@ class ReportsAmountRequestTab extends StatelessWidget {
                 controller: tabController,
                 defaultFrom: defaultFrom,
                 defaultTo: defaultTo,
-                defaultTotalAmount: organizerTotal,
+                defaultTotalAmount: pending > 0 ? pending : 0,
                 defaultRequestAmount: pending > 0 ? pending : 0,
               ),
           ],
@@ -268,6 +300,240 @@ class _StatChip extends StatelessWidget {
   }
 }
 
+class _CategoryAmountDetails extends StatelessWidget {
+  const _CategoryAmountDetails({
+    required this.lines,
+    required this.money,
+    required this.organizerTotal,
+  });
+
+  final List<Map<String, dynamic>> lines;
+  final NumberFormat money;
+  final double organizerTotal;
+
+  static String _feeTypeLabel(String? raw) {
+    switch ((raw ?? '').trim().toUpperCase()) {
+      case 'EARLY_BIRD':
+        return 'Early Bird';
+      case 'BULK_DISCOUNT':
+        return 'Group discount';
+      case 'SPOT':
+        return 'Spot';
+      case 'NORMAL':
+      case 'ONLINE':
+        return 'Online';
+      default:
+        return raw == null || raw.trim().isEmpty ? 'Online' : raw.trim();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    final order = <String>[];
+    for (final line in lines) {
+      final name = (line['categoryName']?.toString().trim().isNotEmpty == true)
+          ? line['categoryName'].toString().trim()
+          : 'Category';
+      if (!groups.containsKey(name)) {
+        groups[name] = [];
+        order.add(name);
+      }
+      groups[name]!.add(line);
+    }
+
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Amount details',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Organizer amount split by category.',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 12),
+            for (var i = 0; i < order.length; i++) ...[
+              if (i > 0) Divider(height: 28, color: Colors.grey.shade300),
+              _CategoryBlock(
+                categoryName: order[i],
+                lines: groups[order[i]]!,
+                money: money,
+              ),
+            ],
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Organizer amount',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  Text(
+                    money.format(organizerTotal),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primaryColor,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryBlock extends StatelessWidget {
+  const _CategoryBlock({
+    required this.categoryName,
+    required this.lines,
+    required this.money,
+  });
+
+  final String categoryName;
+  final List<Map<String, dynamic>> lines;
+  final NumberFormat money;
+
+  @override
+  Widget build(BuildContext context) {
+    final categoryTotal = lines.fold<double>(
+      0,
+      (sum, line) =>
+          sum + ReportsAmountRequestTab.asDouble(line['withoutTotal']),
+    );
+    final participants = lines.fold<int>(
+      0,
+      (sum, line) =>
+          sum + (ReportsAmountRequestTab.asDouble(line['participants']).round()),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                categoryName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Text(
+              '$participants participant${participants == 1 ? '' : 's'}',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              money.format(categoryTotal),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: AppTheme.primaryColor,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Table(
+          columnWidths: const {
+            0: FlexColumnWidth(2.2),
+            1: FlexColumnWidth(1.2),
+            2: FlexColumnWidth(1.6),
+            3: FlexColumnWidth(1.6),
+          },
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: [
+            TableRow(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              children: [
+                _cell('Fee type', header: true),
+                _cell('Participants', header: true, align: TextAlign.center),
+                _cell('Rate', header: true, align: TextAlign.right),
+                _cell('Amount', header: true, align: TextAlign.right),
+              ],
+            ),
+            ...lines.map((line) {
+              final count =
+                  ReportsAmountRequestTab.asDouble(line['participants']).round();
+              final rate = ReportsAmountRequestTab.asDouble(
+                line['unitWithoutAmount'] ?? line['regAmount'],
+              );
+              final amount = ReportsAmountRequestTab.asDouble(
+                line['withoutTotal'],
+              );
+              return TableRow(
+                children: [
+                  _cell(_CategoryAmountDetails._feeTypeLabel(
+                    line['channel']?.toString(),
+                  )),
+                  _cell('$count', align: TextAlign.center),
+                  _cell(money.format(rate), align: TextAlign.right),
+                  _cell(
+                    money.format(amount),
+                    align: TextAlign.right,
+                    bold: true,
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _cell(
+    String text, {
+    bool header = false,
+    bool bold = false,
+    TextAlign align = TextAlign.left,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Text(
+        text,
+        textAlign: align,
+        style: TextStyle(
+          fontSize: header ? 11.5 : 13,
+          fontWeight: header || bold ? FontWeight.w800 : FontWeight.w600,
+          color: header ? Colors.grey.shade800 : Colors.black87,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onNewRequest});
 
@@ -384,7 +650,7 @@ class _RequestTable extends StatelessWidget {
           final available = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : MediaQuery.of(context).size.width;
-          final tableWidth = available < 980 ? 980.0 : available;
+          final tableWidth = available < 1120 ? 1120.0 : available;
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SizedBox(
@@ -397,9 +663,10 @@ class _RequestTable extends StatelessWidget {
                   2: FlexColumnWidth(1.2),
                   3: FixedColumnWidth(120),
                   4: FixedColumnWidth(130),
-                  5: FixedColumnWidth(118),
-                  6: FixedColumnWidth(100),
-                  7: FixedColumnWidth(96),
+                  5: FixedColumnWidth(130),
+                  6: FixedColumnWidth(118),
+                  7: FixedColumnWidth(124),
+                  8: FixedColumnWidth(96),
                 },
                 defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                 children: [
@@ -408,8 +675,9 @@ class _RequestTable extends StatelessWidget {
                       header('S.No', align: TextAlign.center),
                       header('From'),
                       header('To'),
-                      header('Total amount', align: TextAlign.right),
+                      header('Balance amount', align: TextAlign.right),
                       header('Request amount', align: TextAlign.right),
+                      header('Paid amount', align: TextAlign.right),
                       header('Date', align: TextAlign.center),
                       header('Status', align: TextAlign.center),
                       header('Actions', align: TextAlign.center),
@@ -442,10 +710,26 @@ class _RequestTable extends StatelessWidget {
                           align: Alignment.centerRight,
                         ),
                         cell(
+                          Text(
+                            money.format(
+                              ReportsAmountRequestTab.paidAmount(request),
+                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          align: Alignment.centerRight,
+                        ),
+                        cell(
                           Text(request['requestDate']?.toString() ?? '-'),
                           align: Alignment.center,
                         ),
-                        cell(_StatusChip(paid: paid), align: Alignment.center),
+                        cell(
+                          _StatusChip(
+                            status: ReportsAmountRequestTab.paymentStatus(
+                              request,
+                            ),
+                          ),
+                          align: Alignment.center,
+                        ),
                         cell(
                           _RequestActions(
                             paid: paid,
@@ -522,7 +806,9 @@ class _RequestCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _StatusChip(paid: paid),
+              _StatusChip(
+                status: ReportsAmountRequestTab.paymentStatus(request),
+              ),
               const Spacer(),
               Text(
                 money.format(ReportsAmountRequestTab.asDouble(
@@ -541,7 +827,11 @@ class _RequestCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Total: ${money.format(ReportsAmountRequestTab.asDouble(request['totalAmount']))}',
+            'Balance: ${money.format(ReportsAmountRequestTab.asDouble(request['totalAmount']))}',
+            style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+          ),
+          Text(
+            'Paid: ${money.format(ReportsAmountRequestTab.paidAmount(request))}',
             style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
           ),
           Text(
@@ -570,14 +860,31 @@ class _RequestCard extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.paid});
+  const _StatusChip({required this.status});
 
-  final bool paid;
+  final String status;
 
   @override
   Widget build(BuildContext context) {
-    final color = paid ? const Color(0xFF2E7D32) : const Color(0xFFE65100);
-    final bg = paid ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0);
+    final Color color;
+    final Color bg;
+    final String label;
+    switch (status) {
+      case 'PAID':
+        color = const Color(0xFF2E7D32);
+        bg = const Color(0xFFE8F5E9);
+        label = 'Paid';
+        break;
+      case 'PARTIAL':
+        color = const Color(0xFFEF6C00);
+        bg = const Color(0xFFFFF3E0);
+        label = 'Partially paid';
+        break;
+      default:
+        color = const Color(0xFF616161);
+        bg = const Color(0xFFF5F5F5);
+        label = 'Pending';
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -586,7 +893,7 @@ class _StatusChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
-        paid ? 'Paid' : 'Pending',
+        label,
         style: TextStyle(
           color: color,
           fontSize: 12,
@@ -725,6 +1032,217 @@ int? _requestId(Map<String, dynamic> request) {
   return int.tryParse(id?.toString() ?? '');
 }
 
+const _dialogValueStyle = TextStyle(
+  fontSize: 15,
+  fontWeight: FontWeight.w700,
+  color: Color(0xFF1F2933),
+);
+
+InputDecoration _dialogInput({String? prefix}) {
+  const borderColor = Color(0xFFE4E7EB);
+  return InputDecoration(
+    isDense: true,
+    filled: true,
+    fillColor: const Color(0xFFF7F8F8),
+    prefixText: prefix == null ? null : '$prefix ',
+    prefixStyle: _dialogValueStyle,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: borderColor),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: borderColor),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.6),
+    ),
+  );
+}
+
+class _DialogField extends StatelessWidget {
+  const _DialogField({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.grey.shade700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+class _DialogCategoryBreakdown extends StatelessWidget {
+  const _DialogCategoryBreakdown({
+    required this.lines,
+    required this.money,
+  });
+
+  final List<Map<String, dynamic>> lines;
+  final NumberFormat money;
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    final order = <String>[];
+    for (final line in lines) {
+      final name = (line['categoryName']?.toString().trim().isNotEmpty == true)
+          ? line['categoryName'].toString().trim()
+          : 'Category';
+      groups.putIfAbsent(name, () {
+        order.add(name);
+        return [];
+      }).add(line);
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE4E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'By category',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final name in order) ...[
+            _DialogCategoryGroup(
+              name: name,
+              lines: groups[name]!,
+              money: money,
+            ),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DialogCategoryGroup extends StatelessWidget {
+  const _DialogCategoryGroup({
+    required this.name,
+    required this.lines,
+    required this.money,
+  });
+
+  final String name;
+  final List<Map<String, dynamic>> lines;
+  final NumberFormat money;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = lines.fold<double>(
+      0,
+      (sum, line) =>
+          sum + ReportsAmountRequestTab.asDouble(line['withoutTotal']),
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE4E7EB)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              Text(
+                money.format(total),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: AppTheme.primaryColor,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final line in lines)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _CategoryAmountDetails._feeTypeLabel(
+                        line['channel']?.toString(),
+                      ),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${ReportsAmountRequestTab.asDouble(line['participants']).round()}',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 88,
+                    child: Text(
+                      money.format(
+                        ReportsAmountRequestTab.asDouble(line['withoutTotal']),
+                      ),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 Future<void> _openAmountRequestDialog(
   BuildContext context,
   ReportsAmountRequestTabController controller, {
@@ -773,92 +1291,239 @@ Future<void> _openAmountRequestDialog(
   await showDialog<void>(
     context: context,
     builder: (ctx) {
-      final fieldDecoration = InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: Colors.grey.shade50,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
-        ),
-      );
-
       return StatefulBuilder(
         builder: (ctx, setState) {
+          final lines = ((controller.data.value?['lines'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          final money = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
           final screenWidth = MediaQuery.of(ctx).size.width;
-          final isNarrow = screenWidth < 600;
+          final isNarrow = screenWidth < 640;
+          final dialogWidth = isNarrow
+              ? (screenWidth - 48).clamp(280.0, 560.0)
+              : 560.0;
+
+          Future<void> save() async {
+            final from = fromCtrl.text.trim();
+            final to = toCtrl.text.trim();
+            if (from.isEmpty) {
+              SnackbarHelper.showError(ctx, 'Enter From');
+              return;
+            }
+            if (to.isEmpty) {
+              SnackbarHelper.showError(ctx, 'Enter To');
+              return;
+            }
+            final total = double.tryParse(totalCtrl.text.trim());
+            if (total == null || total < 0) {
+              SnackbarHelper.showError(ctx, 'Enter a valid total amount');
+              return;
+            }
+            final requestAmt = double.tryParse(requestCtrl.text.trim());
+            if (requestAmt == null || requestAmt <= 0) {
+              SnackbarHelper.showError(ctx, 'Enter a valid request amount');
+              return;
+            }
+            if (requestAmt > total + 0.009) {
+              await showDialog<void>(
+                context: ctx,
+                builder: (popupCtx) => AlertDialog(
+                  title: const Text(
+                    'Amount request',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  content: const Text(
+                    'Request amount cannot be greater than the balance amount.',
+                  ),
+                  actions: [
+                    FilledButton(
+                      onPressed: () => Navigator.of(popupCtx).pop(),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+              return;
+            }
+            final ok = await controller.saveAmountRequest(
+              requestId: existing == null ? null : _requestId(existing),
+              fromParty: from,
+              toParty: to,
+              totalAmount: total,
+              requestAmount: requestAmt,
+              requestDate: requestDate,
+            );
+            if (ok && ctx.mounted) Navigator.of(ctx).pop();
+          }
+
+          Widget pair(Widget left, Widget right) {
+            if (isNarrow) {
+              return Column(
+                children: [
+                  left,
+                  const SizedBox(height: 14),
+                  right,
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: left),
+                const SizedBox(width: 12),
+                Expanded(child: right),
+              ],
+            );
+          }
+
           return AlertDialog(
-            title: Text(existing == null
-                ? 'Amount request'
-                : 'Edit amount request'),
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: isNarrow ? 16 : 32,
+              vertical: 24,
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
+            contentPadding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        existing == null
+                            ? 'Amount request'
+                            : 'Edit amount request',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Ask for this competition amount to be released.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  icon: Icon(Icons.close, color: Colors.grey.shade700),
+                ),
+              ],
+            ),
             content: SizedBox(
-              width: isNarrow ? screenWidth - 80 : 520,
+              width: dialogWidth,
               child: SingleChildScrollView(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
-                      controller: fromCtrl,
-                      decoration: fieldDecoration.copyWith(labelText: 'From'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: toCtrl,
-                      decoration: fieldDecoration.copyWith(labelText: 'To'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: totalCtrl,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                        amountFormatter(),
-                      ],
-                      decoration: fieldDecoration.copyWith(
-                        labelText: 'Total amount (₹)',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: requestCtrl,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                        amountFormatter(),
-                      ],
-                      decoration: fieldDecoration.copyWith(
-                        labelText: 'Request amount (₹)',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: ctx,
-                          initialDate: requestDate ?? DateTime.now(),
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
-                        );
-                        if (picked != null) setState(() => requestDate = picked);
-                      },
-                      child: InputDecorator(
-                        decoration: fieldDecoration.copyWith(
-                          labelText: 'Date',
-                          suffixIcon: const Icon(Icons.calendar_today, size: 18),
+                    pair(
+                      _DialogField(
+                        label: 'From',
+                        child: TextField(
+                          controller: fromCtrl,
+                          style: _dialogValueStyle,
+                          decoration: _dialogInput(),
                         ),
-                        child: Text(DateFormat('yyyy-MM-dd').format(requestDate!)),
+                      ),
+                      _DialogField(
+                        label: 'To',
+                        child: TextField(
+                          controller: toCtrl,
+                          style: _dialogValueStyle,
+                          decoration: _dialogInput(),
+                        ),
+                      ),
+                    ),
+                    if (lines.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _DialogCategoryBreakdown(lines: lines, money: money),
+                    ],
+                    const SizedBox(height: 16),
+                    pair(
+                      _DialogField(
+                        label: 'Balance amount',
+                        child: TextField(
+                          controller: totalCtrl,
+                          style: _dialogValueStyle,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9.]'),
+                            ),
+                            amountFormatter(),
+                          ],
+                          decoration: _dialogInput(prefix: '₹'),
+                        ),
+                      ),
+                      _DialogField(
+                        label: 'Request amount',
+                        child: TextField(
+                          controller: requestCtrl,
+                          style: _dialogValueStyle,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9.]'),
+                            ),
+                            amountFormatter(),
+                          ],
+                          decoration: _dialogInput(prefix: '₹'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _DialogField(
+                      label: 'Date',
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: ctx,
+                            initialDate: requestDate ?? DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate:
+                                DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) {
+                            setState(() => requestDate = picked);
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: InputDecorator(
+                          decoration: _dialogInput().copyWith(
+                            suffixIcon: Icon(
+                              Icons.calendar_today_outlined,
+                              size: 18,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          child: Text(
+                            DateFormat('d MMM yyyy').format(requestDate!),
+                            style: _dialogValueStyle,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -868,58 +1533,35 @@ Future<void> _openAmountRequestDialog(
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey.shade800,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
                 child: const Text('Cancel'),
               ),
               Obx(() {
                 final saving = controller.isSaving.value;
-                return ElevatedButton(
-                  onPressed: saving
-                      ? null
-                      : () async {
-                          final from = fromCtrl.text.trim();
-                          final to = toCtrl.text.trim();
-                          if (from.isEmpty) {
-                            SnackbarHelper.showError(ctx, 'Enter From');
-                            return;
-                          }
-                          if (to.isEmpty) {
-                            SnackbarHelper.showError(ctx, 'Enter To');
-                            return;
-                          }
-                          final total = double.tryParse(totalCtrl.text.trim());
-                          if (total == null || total < 0) {
-                            SnackbarHelper.showError(
-                              ctx,
-                              'Enter a valid total amount',
-                            );
-                            return;
-                          }
-                          final requestAmt =
-                              double.tryParse(requestCtrl.text.trim());
-                          if (requestAmt == null || requestAmt <= 0) {
-                            SnackbarHelper.showError(
-                              ctx,
-                              'Enter a valid request amount',
-                            );
-                            return;
-                          }
-                          final ok = await controller.saveAmountRequest(
-                            requestId: existing == null
-                                ? null
-                                : _requestId(existing),
-                            fromParty: from,
-                            toParty: to,
-                            totalAmount: total,
-                            requestAmount: requestAmt,
-                            requestDate: requestDate,
-                          );
-                          if (ok && ctx.mounted) Navigator.of(ctx).pop();
-                        },
+                return FilledButton(
+                  onPressed: saving ? null : save,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 12,
+                    ),
+                  ),
                   child: saving
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text('Save'),
                 );

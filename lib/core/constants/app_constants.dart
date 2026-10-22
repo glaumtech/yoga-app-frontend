@@ -231,6 +231,7 @@ class EndPoints {
   static String cityList = '/city';
   static String cityCreate = '/city';
   static String cityById(int id) => '/city/$id';
+  static String locationImport = '/city/import';
   static String cityListByState(int stateId) => '/city/state/$stateId';
   static String districtList = '/district';
   static String districtCreate = '/district';
@@ -311,6 +312,9 @@ class EndPoints {
 
   static String organizationReport(int organizationId) =>
       '/reports/organization/$organizationId';
+
+  static String organizationReportExcel(int organizationId) =>
+      '/reports/organization/$organizationId/excel';
 
   static const String organizations = '/organization';
 

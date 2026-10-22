@@ -9,7 +9,13 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/permission_store.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../data/repositories/reports_repository.dart';
+import '../../controllers/reports_amount_request_tab_controller.dart';
 import '../../controllers/reports_controller.dart';
+import '../../controllers/reports_financial_tab_controller.dart';
+import '../../controllers/reports_organization_tab_controller.dart';
+import '../../controllers/reports_participants_tab_controller.dart';
+import '../../controllers/reports_registered_participants_tab_controller.dart';
+import '../../controllers/reports_users_tab_controller.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/searchable_dropdown_field.dart';
@@ -57,6 +63,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   String? _pendingReportTabId;
   String? _activeReportTabId;
   Worker? _tabNavWorker;
+  bool _scopeRefreshing = false;
 
   @override
   void initState() {
@@ -85,6 +92,56 @@ class _ReportsScreenState extends State<ReportsScreen>
     _tabController?.dispose();
     _tabController = null;
     super.dispose();
+  }
+
+  Future<void> _refreshCurrentView() async {
+    if (_scopeRefreshing) return;
+    setState(() => _scopeRefreshing = true);
+    try {
+      final tabId = _activeReportTabId ??
+          (_visibleTabs.isNotEmpty ? _visibleTabs.first.id : 'dashboard');
+      if (tabId == 'organization') {
+        await controller.loadOrganizations();
+        if (Get.isRegistered<ReportsOrganizationTabController>()) {
+          await Get.find<ReportsOrganizationTabController>().load();
+        }
+        return;
+      }
+      await controller.loadCompetitionsAndMaybeReport();
+      switch (tabId) {
+        case 'amount_request':
+          if (Get.isRegistered<ReportsAmountRequestTabController>()) {
+            await Get.find<ReportsAmountRequestTabController>().load();
+          }
+          break;
+        case 'financial':
+          if (Get.isRegistered<ReportsFinancialTabController>()) {
+            await Get.find<ReportsFinancialTabController>().load();
+          }
+          break;
+        case ReportsController.registeredParticipantsReportTabId:
+          if (Get.isRegistered<ReportsRegisteredParticipantsTabController>(
+            tag: ReportsRegisteredParticipantsTab.defaultControllerTag,
+          )) {
+            await Get.find<ReportsRegisteredParticipantsTabController>(
+              tag: ReportsRegisteredParticipantsTab.defaultControllerTag,
+            ).refresh();
+          }
+          break;
+        case 'scores':
+          if (Get.isRegistered<ReportsParticipantsTabController>()) {
+            await Get.find<ReportsParticipantsTabController>().refresh();
+          }
+          break;
+        case 'users':
+          if (Get.isRegistered<ReportsUsersTabController>()) {
+            await Get.find<ReportsUsersTabController>().refresh();
+          }
+          break;
+      }
+    } finally {
+      if (mounted) setState(() => _scopeRefreshing = false);
+    }
   }
 
   void _ensureTabController(int length) {
@@ -660,8 +717,17 @@ class _ReportsScreenState extends State<ReportsScreen>
 
           final refreshButton = IconButton(
             tooltip: 'Refresh',
-            onPressed: () => controller.loadCompetitionsAndMaybeReport(),
-            icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
+            onPressed: _scopeRefreshing ? null : _refreshCurrentView,
+            icon: _scopeRefreshing
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primaryColor,
+                    ),
+                  )
+                : Icon(Icons.refresh, color: AppTheme.primaryColor),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
             constraints: BoxConstraints(
@@ -702,6 +768,9 @@ class _ReportsScreenState extends State<ReportsScreen>
     final girls = totals['girls'] ?? 0;
     final onlineRegistrations = totals['onlineRegistrations'] ?? 0;
     final spotRegistrations = totals['spotRegistrations'] ?? 0;
+    final earlyBirdRegistrations = totals['earlyBirdRegistrations'] ?? 0;
+    final groupDiscountRegistrations =
+        totals['groupDiscountRegistrations'] ?? 0;
 
     final common = categoryCounts['COMMON'] ?? 0;
     final special = categoryCounts['SPECIAL'] ?? 0;
@@ -775,6 +844,20 @@ class _ReportsScreenState extends State<ReportsScreen>
                   '$spotRegistrations',
                   onTap: () => _openRegisteredParticipants(
                     ReportsParticipantsListPreset.spotRegistration(),
+                  ),
+                ),
+                _statTile(
+                  'Early Bird',
+                  '$earlyBirdRegistrations',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.earlyBird(),
+                  ),
+                ),
+                _statTile(
+                  'Group discount',
+                  '$groupDiscountRegistrations',
+                  onTap: () => _openRegisteredParticipants(
+                    ReportsParticipantsListPreset.groupDiscount(),
                   ),
                 ),
               ],

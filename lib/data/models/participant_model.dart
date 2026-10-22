@@ -54,6 +54,8 @@ class ParticipantModel {
   final double? amount;
   final String? razorpayOrderId;
   final String? razorpayPaymentId;
+  /// Assigned after payment, for example PAYCBC002.
+  final String? paymentCode;
   final String? competitionName;
   final String? competitionAddress;
   final String? competitionEventDateDisplay;
@@ -106,6 +108,7 @@ class ParticipantModel {
     this.amount,
     this.razorpayOrderId,
     this.razorpayPaymentId,
+    this.paymentCode,
     this.competitionName,
     this.competitionAddress,
     this.competitionEventDateDisplay,
@@ -273,6 +276,7 @@ class ParticipantModel {
       razorpayPaymentId:
           (json['razorpayPaymentId'] ?? json['razorpay_payment_id'])
               ?.toString(),
+      paymentCode: (json['paymentCode'] ?? json['payment_code'])?.toString(),
       competitionName: json['competitionName']?.toString(),
       competitionAddress: json['competitionAddress']?.toString(),
       competitionEventDateDisplay:
@@ -342,6 +346,7 @@ class ParticipantModel {
         'bonafiedCertificate': bonafiedCertificate,
       if (participantCode != null) 'participantCode': participantCode,
       if (registrationNo != null) 'registrationNo': registrationNo,
+      if (paymentCode != null) 'paymentCode': paymentCode,
       if (includeCreatedAt) 'createdAt': createdAt.toIso8601String(),
       if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       if (juryScores != null) 'juryScores': juryScores,
@@ -407,6 +412,7 @@ class ParticipantModel {
     double? amount,
     String? razorpayOrderId,
     String? razorpayPaymentId,
+    String? paymentCode,
   }) {
     return ParticipantModel(
       id: id ?? this.id,
@@ -452,6 +458,7 @@ class ParticipantModel {
       amount: amount ?? this.amount,
       razorpayOrderId: razorpayOrderId ?? this.razorpayOrderId,
       razorpayPaymentId: razorpayPaymentId ?? this.razorpayPaymentId,
+      paymentCode: paymentCode ?? this.paymentCode,
     );
   }
 

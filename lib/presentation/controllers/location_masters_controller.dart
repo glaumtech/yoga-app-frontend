@@ -1,9 +1,14 @@
+import 'dart:convert';
+import 'dart:html' as html show AnchorElement, Blob, Url;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../core/navigation/root_scaffold_messenger_key.dart';
 import '../../data/models/city_model.dart';
 import '../../data/models/district_model.dart';
+import '../../data/models/location_import_result.dart';
 import '../../data/models/state_model.dart';
 import '../../data/repositories/location_repository.dart';
 
@@ -14,6 +19,8 @@ class LocationMastersController extends GetxController {
   final RxBool isLoadingDistricts = false.obs;
   final RxBool isLoadingCities = false.obs;
   final RxBool isSaving = false.obs;
+  final RxBool isImporting = false.obs;
+  final RxBool showCityImport = false.obs;
 
   final RxList<StateModel> states = <StateModel>[].obs;
   final RxList<DistrictModel> districts = <DistrictModel>[].obs;
@@ -447,6 +454,7 @@ class LocationMastersController extends GetxController {
       filterDistrictStateId.value = stateId;
       startCreateDistrict();
       await loadDistrictsForFilter();
+      _setStateHasDistricts(stateId, true);
       if (filterCityStateId.value == stateId) {
         await loadCitiesForFilter();
       }
@@ -458,6 +466,7 @@ class LocationMastersController extends GetxController {
   }
 
   Future<void> deleteDistrict(int id) async {
+    final existing = districts.firstWhereOrNull((d) => d.id == id);
     final res = await _repo.deleteDistrict(id);
     if (!res.success) {
       _toastError(res.message ?? 'Failed to delete district');
@@ -467,6 +476,25 @@ class LocationMastersController extends GetxController {
     if (editingDistrictId.value == id) startCreateDistrict();
     await loadDistrictsForFilter();
     await loadCitiesForFilter();
+    if (existing != null) {
+      _setStateHasDistricts(
+        existing.stateId,
+        districts.any((d) => d.stateId == existing.stateId),
+      );
+    }
+  }
+
+  void _setStateHasDistricts(int stateId, bool hasDistricts) {
+    final index = states.indexWhere((s) => s.id == stateId);
+    if (index < 0 || states[index].hasDistricts == hasDistricts) return;
+    final current = states[index];
+    states[index] = StateModel(
+      id: current.id,
+      stateName: current.stateName,
+      stateCode: current.stateCode,
+      description: current.description,
+      hasDistricts: hasDistricts,
+    );
   }
 
   void startCreateCity() {
@@ -483,6 +511,7 @@ class LocationMastersController extends GetxController {
   }
 
   void startEditCity(CityModel c) {
+    showCityImport.value = false;
     editingCityId.value = c.id;
     cityNameController.text = c.cityName;
     cityPincodeController.text = c.pincode;
@@ -516,6 +545,9 @@ class LocationMastersController extends GetxController {
       return;
     }
     if (isSaving.value) return;
+    final previous = editingCityId.value == null
+        ? null
+        : cities.firstWhereOrNull((city) => city.id == editingCityId.value);
     try {
       isSaving.value = true;
       final id = editingCityId.value;
@@ -544,6 +576,15 @@ class LocationMastersController extends GetxController {
       filterCityDistrictId.value = districtId;
       startCreateCity();
       await loadCitiesForFilter();
+      _setDistrictHasCities(districtId, true);
+      if (previous != null &&
+          previous.districtId > 0 &&
+          previous.districtId != districtId) {
+        _setDistrictHasCities(
+          previous.districtId,
+          cities.any((city) => city.districtId == previous.districtId),
+        );
+      }
     } catch (e) {
       _toastError(e.toString());
     } finally {
@@ -552,6 +593,7 @@ class LocationMastersController extends GetxController {
   }
 
   Future<void> deleteCity(int id) async {
+    final existing = cities.firstWhereOrNull((city) => city.id == id);
     final res = await _repo.deleteCity(id);
     if (!res.success) {
       _toastError(res.message ?? 'Failed to delete city');
@@ -560,5 +602,86 @@ class LocationMastersController extends GetxController {
     _toastSuccess('City deleted');
     if (editingCityId.value == id) startCreateCity();
     await loadCitiesForFilter();
+    if (existing != null && existing.districtId > 0) {
+      _setDistrictHasCities(
+        existing.districtId,
+        cities.any((city) => city.districtId == existing.districtId),
+      );
+    }
+  }
+
+  void _setDistrictHasCities(int districtId, bool hasCities) {
+    final index = districts.indexWhere((d) => d.id == districtId);
+    if (index < 0 || districts[index].hasCities == hasCities) return;
+    final current = districts[index];
+    districts[index] = DistrictModel(
+      id: current.id,
+      districtName: current.districtName,
+      stateId: current.stateId,
+      stateName: current.stateName,
+      description: current.description,
+      hasCities: hasCities,
+    );
+  }
+
+  void downloadLocationImportTemplate() {
+    final bytes = utf8.encode('\uFEFF$_locationImportTemplate');
+    final blob = html.Blob([bytes], 'text/csv;charset=utf-8');
+    final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: blobUrl)
+      ..setAttribute('download', 'location_import_template.csv')
+      ..click();
+    html.Url.revokeObjectUrl(blobUrl);
+  }
+
+  Future<LocationImportResult?> importLocationCsv({
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    if (isImporting.value) return null;
+    if (bytes.isEmpty) {
+      _toastError('The selected CSV file is empty');
+      return null;
+    }
+    if (bytes.length > 5 * 1024 * 1024) {
+      _toastError('CSV file must be 5 MB or smaller');
+      return null;
+    }
+    try {
+      isImporting.value = true;
+      final res = await _repo.importLocations(bytes: bytes, filename: filename);
+      if (!res.success || res.data == null) {
+        _toastError(res.message ?? 'Failed to import locations');
+        return null;
+      }
+      final result = res.data!;
+      final focusStateId = result.focusStateId;
+      if (focusStateId != null && focusStateId > 0) {
+        filterDistrictStateId.value = focusStateId;
+        filterCityStateId.value = focusStateId;
+        filterCityDistrictId.value = null;
+        districtFormStateId.value = focusStateId;
+        cityFormStateId.value = focusStateId;
+        cityFormDistrictId.value = null;
+      }
+      await loadStates();
+      if (result.failedRows > 0 &&
+          result.citiesCreated == 0 &&
+          result.citiesUpdated == 0 &&
+          result.citiesReused == 0) {
+        _toastError(res.message ?? 'No rows were imported');
+      } else {
+        _toastSuccess(res.message ?? 'Locations imported');
+      }
+      return result;
+    } catch (e) {
+      _toastError(e.toString());
+      return null;
+    } finally {
+      isImporting.value = false;
+    }
   }
 }
+
+const String _locationImportTemplate = '''state_name,state_code,district_name,city_name,pincode,description
+''';

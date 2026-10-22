@@ -90,24 +90,27 @@ class ReportsOrganizationTab extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (isMobile)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _orgTitleRow(orgName),
-                          if (orgCode.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            _orgCodeLine(orgCode),
-                          ],
-                          const SizedBox(height: 10),
-                          _orgContactBlock(
-                            phone: phone,
-                            aadhar: aadhar,
-                            address: address,
-                          ),
-                        ],
-                      )
-                    else
+                    if (isMobile) ...[
+                      _orgTitleRow(orgName),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _downloadExcelButton(
+                          tabController,
+                          isMobile: true,
+                        ),
+                      ),
+                      if (orgCode.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _orgCodeLine(orgCode),
+                      ],
+                      const SizedBox(height: 10),
+                      _orgContactBlock(
+                        phone: phone,
+                        aadhar: aadhar,
+                        address: address,
+                      ),
+                    ] else
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -127,10 +130,23 @@ class ReportsOrganizationTab extends StatelessWidget {
                           const SizedBox(width: 16),
                           Expanded(
                             flex: 3,
-                            child: _orgContactBlock(
-                              phone: phone,
-                              aadhar: aadhar,
-                              address: address,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: _downloadExcelButton(
+                                    tabController,
+                                    isMobile: false,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                _orgContactBlock(
+                                  phone: phone,
+                                  aadhar: aadhar,
+                                  address: address,
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -298,6 +314,38 @@ class ReportsOrganizationTab extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _downloadExcelButton(
+    ReportsOrganizationTabController controller, {
+    required bool isMobile,
+  }) {
+    final downloading = controller.isDownloading.value;
+    return ElevatedButton.icon(
+      onPressed: downloading ? null : controller.downloadExcel,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: AppTheme.primaryColor.withOpacity(0.6),
+        disabledForegroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 10 : 14,
+          vertical: 10,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      icon: downloading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.download_rounded, size: 18),
+      label: Text(isMobile ? 'Excel' : 'Download Excel'),
     );
   }
 

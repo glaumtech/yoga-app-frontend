@@ -4,6 +4,7 @@ class DistrictModel {
   final int stateId;
   final String? stateName;
   final String? description;
+  final bool hasCities;
 
   DistrictModel({
     required this.id,
@@ -11,6 +12,7 @@ class DistrictModel {
     required this.stateId,
     this.stateName,
     this.description,
+    this.hasCities = false,
   });
 
   factory DistrictModel.fromJson(Map<String, dynamic> json) {
@@ -32,6 +34,7 @@ class DistrictModel {
       stateId: stateId,
       stateName: json['stateName']?.toString(),
       description: json['description']?.toString(),
+      hasCities: json['hasCities'] == true,
     );
   }
 

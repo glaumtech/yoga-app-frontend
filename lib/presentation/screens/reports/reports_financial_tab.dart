@@ -23,6 +23,45 @@ class ReportsFinancialTab extends StatefulWidget {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
+
+  static String amountRequestStatusLabel(Map<String, dynamic> request) {
+    final requestAmt = _asDouble(request['requestAmount']);
+    final hasTransfer =
+        request['hasTransfer'] == true || request['transferId'] != null;
+    final paidAmt = request['paidAmount'] != null
+        ? _asDouble(request['paidAmount'])
+        : (hasTransfer ? requestAmt : 0);
+    if (paidAmt <= 0.009) return 'Pending';
+    if (paidAmt + 0.009 < requestAmt) return 'Partially paid';
+    return 'Paid';
+  }
+
+  static Color amountRequestStatusColor(Map<String, dynamic> request) {
+    switch (amountRequestStatusLabel(request)) {
+      case 'Partially paid':
+        return const Color(0xFFEF6C00);
+      case 'Pending':
+        return const Color(0xFF616161);
+      default:
+        return const Color(0xFF2E7D32);
+    }
+  }
+
+  static String feeTypeLabel(String? raw) {
+    switch ((raw ?? '').trim().toUpperCase()) {
+      case 'EARLY_BIRD':
+        return 'Early Bird';
+      case 'BULK_DISCOUNT':
+        return 'Group discount';
+      case 'SPOT':
+        return 'Spot';
+      case 'NORMAL':
+      case 'ONLINE':
+        return 'Online';
+      default:
+        return raw == null || raw.trim().isEmpty ? 'Online' : raw.trim();
+    }
+  }
 }
 
 class _ReportsFinancialTabState extends State<ReportsFinancialTab> {
@@ -131,7 +170,7 @@ class _ReportsFinancialTabState extends State<ReportsFinancialTab> {
             tabController,
             defaultFrom: defaultFrom,
             defaultTo: defaultTo,
-            defaultTotalAmount: organizerTotal,
+            defaultTotalAmount: pending > 0 ? pending : 0,
             defaultRequestAmount: pending,
           );
 
@@ -190,7 +229,52 @@ class _ReportsFinancialTabState extends State<ReportsFinancialTab> {
                 withoutTotal: withoutTotal,
                 money: money,
                 isMobile: isMobile,
+                forApplicationAdmin: _isApplicationAdmin,
               ),
+            ),
+            const SizedBox(height: 14),
+            _ReportSection(
+              title: 'Amount requests',
+              subtitle: requestList.isEmpty
+                  ? 'No requests yet'
+                  : '${requestList.length} request${requestList.length == 1 ? '' : 's'}',
+              actions: [
+                TextButton.icon(
+                  onPressed: tabController.isSaving.value
+                      ? null
+                      : openAmountRequest,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('New request'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.accent,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+              child: requestList.isEmpty
+                  ? _EmptyState(
+                      icon: Icons.request_quote_outlined,
+                      title: 'No amount requests',
+                      message:
+                          'Create a request when you need funds released for this competition.',
+                      primaryLabel: 'New request',
+                      onPrimary: tabController.isSaving.value
+                          ? null
+                          : openAmountRequest,
+                    )
+                  : _AmountRequestsTable(
+                      requests: requestList,
+                      money: money,
+                      isMobile: isMobile,
+                      isCompact: isCompact,
+                      controller: tabController,
+                      canAddTransfer: canAddTransfer,
+                      lockPaidEdits: lockPaidEdits,
+                      defaultFrom: defaultFrom,
+                      defaultTo: defaultTo,
+                      defaultTotalAmount: pending > 0 ? pending : 0,
+                      defaultRequestAmount: pending,
+                    ),
             ),
             const SizedBox(height: 14),
             _ReportSection(
@@ -256,50 +340,6 @@ class _ReportsFinancialTabState extends State<ReportsFinancialTab> {
                       isCompact: isCompact,
                       controller: tabController,
                       canEditTransfers: canAddTransfer,
-                    ),
-            ),
-            const SizedBox(height: 14),
-            _ReportSection(
-              title: 'Amount requests',
-              subtitle: requestList.isEmpty
-                  ? 'No requests yet'
-                  : '${requestList.length} request${requestList.length == 1 ? '' : 's'}',
-              actions: [
-                TextButton.icon(
-                  onPressed: tabController.isSaving.value
-                      ? null
-                      : openAmountRequest,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('New request'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.accent,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-              ],
-              child: requestList.isEmpty
-                  ? _EmptyState(
-                      icon: Icons.request_quote_outlined,
-                      title: 'No amount requests',
-                      message:
-                          'Create a request when you need funds released for this competition.',
-                      primaryLabel: 'New request',
-                      onPrimary: tabController.isSaving.value
-                          ? null
-                          : openAmountRequest,
-                    )
-                  : _AmountRequestsTable(
-                      requests: requestList,
-                      money: money,
-                      isMobile: isMobile,
-                      isCompact: isCompact,
-                      controller: tabController,
-                      canAddTransfer: canAddTransfer,
-                      lockPaidEdits: lockPaidEdits,
-                      defaultFrom: defaultFrom,
-                      defaultTo: defaultTo,
-                      defaultTotalAmount: organizerTotal,
-                      defaultRequestAmount: pending,
                     ),
             ),
             const SizedBox(height: 14),
@@ -869,6 +909,7 @@ class _RegistrationTable extends StatelessWidget {
     required this.withoutTotal,
     required this.money,
     required this.isMobile,
+    this.forApplicationAdmin = false,
   });
 
   final List<Map<String, dynamic>> lines;
@@ -877,11 +918,12 @@ class _RegistrationTable extends StatelessWidget {
   final double withoutTotal;
   final NumberFormat money;
   final bool isMobile;
+  final bool forApplicationAdmin;
 
   static const double _tableMinWidth = 980;
   static const double _snoW = 56;
   static const double _participantsW = 100;
-  static const double _channelW = 100;
+  static const double _channelW = 188;
 
   @override
   Widget build(BuildContext context) {
@@ -965,6 +1007,17 @@ class _RegistrationTable extends StatelessWidget {
         final withoutAmt = ReportsFinancialTab._asDouble(
           line['withoutTotal'] ?? line['totalAmount'],
         );
+        final count = ReportsFinancialTab._asDouble(participants);
+        var unit = ReportsFinancialTab._asDouble(
+          line['unitWithAmount'] ?? line['regAmount'],
+        );
+        if (unit <= 0 && count > 0) {
+          unit = withAmt / count;
+        }
+        final typeName = ReportsFinancialTab.feeTypeLabel(channel);
+        final typeLabel = unit > 0
+            ? '$typeName (${_plainAmount(unit)})'
+            : typeName;
         return dataRow(
           cells: [
             textCell(
@@ -979,7 +1032,7 @@ class _RegistrationTable extends StatelessWidget {
               geometry: Alignment.center,
             ),
             textCell(
-              channel == 'SPOT' ? 'Spot' : 'Online',
+              typeLabel,
               align: TextAlign.center,
               geometry: Alignment.center,
             ),
@@ -1036,7 +1089,12 @@ class _RegistrationTable extends StatelessWidget {
                             _headerBox('S.No', width: _snoW, style: headerStyle, borderColor: borderColor),
                             _headerBox('Category', flex: 2, style: headerStyle, borderColor: borderColor),
                             _headerBox('Participants', width: _participantsW, style: headerStyle, borderColor: borderColor),
-                            _headerBox('Online/Spot', width: _channelW, style: headerStyle, borderColor: borderColor),
+                            _headerBox(
+                              forApplicationAdmin ? 'Registration type' : 'Fee type',
+                              width: _channelW,
+                              style: headerStyle,
+                              borderColor: borderColor,
+                            ),
                             Expanded(
                               flex: 3,
                               child: Column(
@@ -1051,7 +1109,7 @@ class _RegistrationTable extends StatelessWidget {
                                       ),
                                     ),
                                     child: Text(
-                                      'Amount Details',
+                                      forApplicationAdmin ? 'Collection' : 'Amount Details',
                                       textAlign: TextAlign.center,
                                       style: headerStyle.copyWith(fontSize: 12),
                                     ),
@@ -1060,7 +1118,7 @@ class _RegistrationTable extends StatelessWidget {
                                     child: Row(
                                       children: [
                                         _headerBox(
-                                          'With fee',
+                                          forApplicationAdmin ? 'Collected' : 'With fee',
                                           flex: 1,
                                           style: headerStyle,
                                           borderColor: borderColor,
@@ -1068,7 +1126,7 @@ class _RegistrationTable extends StatelessWidget {
                                           align: Alignment.centerRight,
                                         ),
                                         _headerBox(
-                                          'Fee',
+                                          forApplicationAdmin ? 'Service fee' : 'Fee',
                                           flex: 1,
                                           style: headerStyle,
                                           borderColor: borderColor,
@@ -1076,7 +1134,9 @@ class _RegistrationTable extends StatelessWidget {
                                           align: Alignment.centerRight,
                                         ),
                                         _headerBox(
-                                          'Without fee',
+                                          forApplicationAdmin
+                                              ? 'Organizer amount'
+                                              : 'Without fee',
                                           flex: 1,
                                           style: headerStyle,
                                           borderColor: borderColor,
@@ -1122,6 +1182,13 @@ class _RegistrationTable extends StatelessWidget {
         );
       },
     );
+  }
+
+  static String _plainAmount(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(2);
   }
 
   Widget _headerBox(
@@ -1181,6 +1248,7 @@ class _TransfersTable extends StatelessWidget {
     if (isCompact) {
       return Obx(() {
         final highlightedId = controller.highlightedTransferId.value;
+        controller.revealHighlightedTransfer();
         return Column(
         children: [
           ...transfers.map((t) {
@@ -1193,6 +1261,7 @@ class _TransfersTable extends StatelessWidget {
                 : int.tryParse(t['id']?.toString() ?? '');
             final isHighlighted = tid != null && tid == highlightedId;
             return Container(
+              key: tid == null ? null : controller.transferRowKey(tid),
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(12),
@@ -1373,8 +1442,13 @@ class _TransfersTable extends StatelessWidget {
           child: Text(text, textAlign: align, style: headerStyle),
         );
 
-    Widget cell(Widget child, {Alignment align = Alignment.centerLeft}) =>
+    Widget cell(
+      Widget child, {
+      Alignment align = Alignment.centerLeft,
+      Key? key,
+    }) =>
         Container(
+          key: key,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           alignment: align,
           child: child,
@@ -1382,6 +1456,7 @@ class _TransfersTable extends StatelessWidget {
 
     return Obx(() {
       final highlightedId = controller.highlightedTransferId.value;
+      controller.revealHighlightedTransfer();
       return LayoutBuilder(
       builder: (context, constraints) {
         final available = constraints.maxWidth.isFinite
@@ -1432,6 +1507,7 @@ class _TransfersTable extends StatelessWidget {
                       cell(
                         Text('${t['sno'] ?? ''}', textAlign: TextAlign.center),
                         align: Alignment.center,
+                        key: tid == null ? null : controller.transferRowKey(tid),
                       ),
                       cell(Text(money.format(amount))),
                       cell(
@@ -1654,7 +1730,15 @@ class _AmountRequestsTable extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Total: ${money.format(total)}',
+                  'Balance: ${money.format(total)}',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Paid: ${money.format(ReportsFinancialTab._asDouble(r['paidAmount']))}',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: Colors.grey.shade700,
@@ -1714,9 +1798,9 @@ class _AmountRequestsTable extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
-                          'Paid',
+                          ReportsFinancialTab.amountRequestStatusLabel(r),
                           style: TextStyle(
-                            color: const Color(0xFF2E7D32),
+                            color: ReportsFinancialTab.amountRequestStatusColor(r),
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
                           ),
@@ -1829,7 +1913,7 @@ class _AmountRequestsTable extends StatelessWidget {
         final available = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.of(context).size.width;
-        final minWidth = isMobile ? 820.0 : 920.0;
+        final minWidth = isMobile ? 940.0 : 1040.0;
         final tableWidth = available < minWidth ? minWidth : available;
 
         return SingleChildScrollView(
@@ -1844,8 +1928,9 @@ class _AmountRequestsTable extends StatelessWidget {
                 2: const FlexColumnWidth(1.2),
                 3: const FixedColumnWidth(120),
                 4: const FixedColumnWidth(120),
-                5: const FixedColumnWidth(118),
-                6: FixedColumnWidth(canAddTransfer ? 148 : 110),
+                5: const FixedColumnWidth(120),
+                6: const FixedColumnWidth(118),
+                7: FixedColumnWidth(canAddTransfer ? 148 : 110),
               },
               defaultVerticalAlignment: TableCellVerticalAlignment.middle,
               children: [
@@ -1854,8 +1939,9 @@ class _AmountRequestsTable extends StatelessWidget {
                     header('S.No', align: TextAlign.center),
                     header('From'),
                     header('To'),
-                    header('Total amount', align: TextAlign.right),
+                    header('Balance amount', align: TextAlign.right),
                     header('Request amount', align: TextAlign.right),
+                    header('Paid amount', align: TextAlign.right),
                     header('Date', align: TextAlign.center),
                     header('Actions', align: TextAlign.center),
                   ],
@@ -1893,6 +1979,18 @@ class _AmountRequestsTable extends StatelessWidget {
                       cell(
                         Text(
                           money.format(requestAmt),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        align: Alignment.centerRight,
+                      ),
+                      cell(
+                        Text(
+                          money.format(
+                            ReportsFinancialTab._asDouble(r['paidAmount']),
+                          ),
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontFeatures: [FontFeature.tabularFigures()],
@@ -1960,12 +2058,13 @@ class _AmountRequestsTable extends StatelessWidget {
                                     .highlightTransfer(linkedTransferId),
                               ),
                             if (hasTransfer && lockPaidEdits)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 6),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
                                 child: Text(
-                                  'Paid',
+                                  ReportsFinancialTab.amountRequestStatusLabel(r),
                                   style: TextStyle(
-                                    color: Color(0xFF2E7D32),
+                                    color: ReportsFinancialTab
+                                        .amountRequestStatusColor(r),
                                     fontWeight: FontWeight.w700,
                                     fontSize: 12,
                                   ),
@@ -2344,7 +2443,7 @@ Future<void> _openAmountRequestDialog(
                     const SizedBox(height: 14),
                     fieldPair(
                       labeledField(
-                        label: 'Total amount (₹)',
+                        label: 'Balance amount (₹)',
                         field: TextField(
                           controller: totalCtrl,
                           style: valueStyle,
@@ -2453,6 +2552,32 @@ Future<void> _openAmountRequestDialog(
                             SnackbarHelper.showError(
                               ctx,
                               'Enter a valid request amount',
+                            );
+                            return;
+                          }
+                          if (requestAmt > total + 0.009) {
+                            await showDialog<void>(
+                              context: ctx,
+                              builder: (popupCtx) => AlertDialog(
+                                title: const Text(
+                                  'Amount request',
+                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                                content: const Text(
+                                  'Request amount cannot be greater than the balance amount.',
+                                ),
+                                actions: [
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.of(popupCtx).pop(),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppTheme.primaryColor,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
                             );
                             return;
                           }

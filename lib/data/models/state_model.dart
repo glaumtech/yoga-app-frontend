@@ -3,12 +3,14 @@ class StateModel {
   final String stateName;
   final String stateCode;
   final String? description;
+  final bool hasDistricts;
 
   StateModel({
     required this.id,
     required this.stateName,
     required this.stateCode,
     this.description,
+    this.hasDistricts = false,
   });
 
   factory StateModel.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,7 @@ class StateModel {
       stateName: json['stateName']?.toString() ?? '',
       stateCode: json['stateCode']?.toString() ?? '',
       description: json['description']?.toString(),
+      hasDistricts: json['hasDistricts'] == true,
     );
   }
 

@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../data/models/location_import_result.dart';
 import '../../../controllers/location_masters_controller.dart';
 import '../../../widgets/form_title.dart';
 import '../../../widgets/pinned_scroll_views.dart';
@@ -58,16 +62,23 @@ class LocationStatesPanel extends StatelessWidget {
                           onPressed: () => c.startEditState(s),
                         ),
                         IconButton(
-                          tooltip: 'Delete',
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            final ok = await _confirmDelete(
-                              context,
-                              title: 'Delete state',
-                              message: 'Delete "${s.stateName}"?',
-                            );
-                            if (ok) await c.deleteState(s.id);
-                          },
+                          tooltip: s.hasDistricts
+                              ? '${s.stateName} is mapped to a district and cannot be deleted'
+                              : 'Delete',
+                          icon: Icon(
+                            Icons.delete,
+                            color: s.hasDistricts ? Colors.grey : Colors.red,
+                          ),
+                          onPressed: s.hasDistricts
+                              ? null
+                              : () async {
+                                  final ok = await _confirmDelete(
+                                    context,
+                                    title: 'Delete state',
+                                    message: 'Delete "${s.stateName}"?',
+                                  );
+                                  if (ok) await c.deleteState(s.id);
+                                },
                         ),
                       ],
                     ),
@@ -80,21 +91,13 @@ class LocationStatesPanel extends StatelessWidget {
       ),
     );
 
-    final formCard = _panelCard(
-      child: PinnedVerticalScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Obx(
-              () => FormTitle(
-                text: c.editingStateId.value == null
-                    ? 'Add State'
-                    : 'Edit State',
-                isMobile: isMobile,
-                isTablet: false,
-              ),
-            ),
-            const SizedBox(height: 12),
+    final formCard = _locationFormCard(
+      isMobile: isMobile,
+      addTitle: () =>
+          c.editingStateId.value == null ? 'Add State' : 'Edit State',
+      form: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             TextField(
               controller: c.stateNameController,
               decoration: const InputDecoration(labelText: 'State name *'),
@@ -127,8 +130,7 @@ class LocationStatesPanel extends StatelessWidget {
               isEdit: () => c.editingStateId.value != null,
               isSaving: () => c.isSaving.value,
             ),
-          ],
-        ),
+        ],
       ),
     );
 
@@ -228,16 +230,23 @@ class LocationDistrictsPanel extends StatelessWidget {
                           onPressed: () => c.startEditDistrict(d),
                         ),
                         IconButton(
-                          tooltip: 'Delete',
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            final ok = await _confirmDelete(
-                              context,
-                              title: 'Delete district',
-                              message: 'Delete "${d.districtName}"?',
-                            );
-                            if (ok) await c.deleteDistrict(d.id);
-                          },
+                          tooltip: d.hasCities
+                              ? '${d.districtName} is mapped to a city and cannot be deleted'
+                              : 'Delete',
+                          icon: Icon(
+                            Icons.delete,
+                            color: d.hasCities ? Colors.grey : Colors.red,
+                          ),
+                          onPressed: d.hasCities
+                              ? null
+                              : () async {
+                                  final ok = await _confirmDelete(
+                                    context,
+                                    title: 'Delete district',
+                                    message: 'Delete "${d.districtName}"?',
+                                  );
+                                  if (ok) await c.deleteDistrict(d.id);
+                                },
                         ),
                       ],
                     ),
@@ -250,21 +259,14 @@ class LocationDistrictsPanel extends StatelessWidget {
       ),
     );
 
-    final formCard = _panelCard(
-      child: PinnedVerticalScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Obx(
-              () => FormTitle(
-                text: c.editingDistrictId.value == null
-                    ? 'Add District'
-                    : 'Edit District',
-                isMobile: isMobile,
-                isTablet: false,
-              ),
-            ),
-            const SizedBox(height: 12),
+    final formCard = _locationFormCard(
+      isMobile: isMobile,
+      addTitle: () => c.editingDistrictId.value == null
+          ? 'Add District'
+          : 'Edit District',
+      form: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             Obx(() {
               final stateIds = c.states.map((s) => s.id).toSet();
               final formValue = _safeIntValue(
@@ -310,8 +312,7 @@ class LocationDistrictsPanel extends StatelessWidget {
               isEdit: () => c.editingDistrictId.value != null,
               isSaving: () => c.isSaving.value,
             ),
-          ],
-        ),
+        ],
       ),
     );
 
@@ -483,21 +484,16 @@ class LocationCitiesPanel extends StatelessWidget {
       ),
     );
 
-    final formCard = _panelCard(
-      child: PinnedVerticalScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Obx(
-              () => FormTitle(
-                text: c.editingCityId.value == null
-                    ? 'Add City / Pincode'
-                    : 'Edit City / Pincode',
-                isMobile: isMobile,
-                isTablet: false,
-              ),
-            ),
-            const SizedBox(height: 12),
+    final formCard = _locationFormCard(
+      isMobile: isMobile,
+      importMode: c.showCityImport,
+      importTitle: 'Import City / Pincode',
+      addTitle: () => c.editingCityId.value == null
+          ? 'Add City / Pincode'
+          : 'Edit City / Pincode',
+      form: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             Obx(() {
               final stateIds = c.states.map((s) => s.id).toSet();
               final formValue = _safeIntValue(
@@ -590,8 +586,7 @@ class LocationCitiesPanel extends StatelessWidget {
               isEdit: () => c.editingCityId.value != null,
               isSaving: () => c.isSaving.value,
             ),
-          ],
-        ),
+        ],
       ),
     );
 
@@ -599,6 +594,345 @@ class LocationCitiesPanel extends StatelessWidget {
       isMobile: isMobile,
       listCard: listCard,
       formCard: formCard,
+    );
+  }
+}
+
+Widget _locationFormCard({
+  required bool isMobile,
+  RxBool? importMode,
+  String importTitle = '',
+  required String Function() addTitle,
+  required Widget form,
+}) {
+  final mode = importMode;
+  final header = Obx(() {
+    final importing = mode?.value ?? false;
+    final title = importing ? importTitle : addTitle();
+    if (mode == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Center(
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
+      );
+    }
+    return _formModeHeader(
+      title: title,
+      importSelected: importing,
+      onAdd: () => mode.value = false,
+      onImport: () => mode.value = true,
+    );
+  });
+
+  final body = mode == null
+      ? form
+      : Obx(() => mode.value ? const _LocationImportPanel() : form);
+
+  if (isMobile) {
+    return _panelCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          body,
+        ],
+      ),
+    );
+  }
+
+  return _panelCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        Expanded(
+          child: PinnedVerticalScrollView(child: body),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _formModeHeader({
+  required String title,
+  required bool importSelected,
+  required VoidCallback onAdd,
+  required VoidCallback onImport,
+}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Row(
+      children: [
+        _modeActionButton(
+          label: 'Add',
+          icon: Icons.add,
+          selected: !importSelected,
+          onPressed: onAdd,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _modeActionButton(
+          label: 'Import',
+          icon: Icons.upload_file,
+          selected: importSelected,
+          onPressed: onImport,
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _modeActionButton({
+  required String label,
+  required IconData icon,
+  required bool selected,
+  required VoidCallback onPressed,
+}) {
+  return TextButton.icon(
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      backgroundColor: selected ? AppTheme.primaryColor : Colors.white,
+      foregroundColor: selected ? Colors.white : AppTheme.primaryColor,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: AppTheme.primaryColor),
+      ),
+    ),
+    icon: Icon(icon, size: 18),
+    label: Text(label),
+  );
+}
+
+class _LocationImportPanel extends StatefulWidget {
+  const _LocationImportPanel();
+
+  @override
+  State<_LocationImportPanel> createState() => _LocationImportPanelState();
+}
+
+class _LocationImportPanelState extends State<_LocationImportPanel> {
+  Uint8List? _bytes;
+  String? _filename;
+  String? _pickError;
+  LocationImportResult? _result;
+
+  Future<void> _pickFile() async {
+    try {
+      final picked = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['csv'],
+        allowMultiple: false,
+        withData: true,
+      );
+      if (!mounted || picked == null || picked.files.isEmpty) return;
+      final file = picked.files.first;
+      final bytes = file.bytes ?? await file.xFile.readAsBytes();
+      if (!mounted) return;
+      final name = file.name.trim().isEmpty ? 'locations.csv' : file.name.trim();
+      if (!name.toLowerCase().endsWith('.csv')) {
+        setState(() {
+          _pickError = 'Choose a .csv file';
+          _bytes = null;
+          _filename = null;
+          _result = null;
+        });
+        return;
+      }
+      if (bytes.isEmpty) {
+        setState(() {
+          _pickError = 'The selected file is empty';
+          _bytes = null;
+          _filename = null;
+          _result = null;
+        });
+        return;
+      }
+      setState(() {
+        _bytes = bytes;
+        _filename = name;
+        _pickError = null;
+        _result = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _pickError = 'Could not read the selected file');
+    }
+  }
+
+  Future<void> _upload() async {
+    final bytes = _bytes;
+    final filename = _filename;
+    if (bytes == null || filename == null) {
+      setState(() => _pickError = 'Choose a CSV file first');
+      return;
+    }
+    final controller = Get.find<LocationMastersController>();
+    final result = await controller.importLocationCsv(
+      bytes: bytes,
+      filename: filename,
+    );
+    if (!mounted) return;
+    setState(() => _result = result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = Get.find<LocationMastersController>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // const Text(
+        //   'Download the template, fill one row for each city, then upload the CSV. '
+        //   'Columns are state name, state code, district, city, pincode, and description.',
+        // ),
+        // const SizedBox(height: 10),
+        // const Text(
+        //   'If the state already exists, that state is used. If the district already exists in that state, that district is used. If the same city and pincode already exist in that district, the row is skipped.',
+        // ),
+        const SizedBox(height: 14),
+        OutlinedButton(
+          onPressed: _pickFile,
+          child: Row(
+            children: [
+              const Icon(Icons.attach_file, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _filename ?? 'Choose CSV file',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_pickError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _pickError!,
+            style: TextStyle(color: Colors.red.shade700),
+          ),
+        ],
+        if (_result != null) ...[
+          const SizedBox(height: 14),
+          _ImportSummary(result: _result!),
+        ],
+        const SizedBox(height: 14),
+        Obx(() {
+          final importing = controller.isImporting.value;
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: importing
+                    ? null
+                    : controller.downloadLocationImportTemplate,
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('Template'),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton.icon(
+                onPressed: importing || _bytes == null ? null : _upload,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                ),
+                icon: importing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.upload_file, size: 18),
+                label: const Text('Import'),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _ImportSummary extends StatelessWidget {
+  const _ImportSummary({required this.result});
+
+  final LocationImportResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${result.totalRows} rows processed',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'States: ${result.statesCreated} created, ${result.statesReused} reused',
+          ),
+          Text(
+            'Districts: ${result.districtsCreated} created, ${result.districtsReused} reused',
+          ),
+          Text(
+            'Cities: ${result.citiesCreated} created, ${result.citiesReused} already existed, ${result.citiesUpdated} updated',
+          ),
+          if (result.failedRows > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${result.failedRows} row${result.failedRows == 1 ? '' : 's'} failed',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...result.errors.map(
+              (error) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'Row ${error.row}: ${error.message}',
+                  style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

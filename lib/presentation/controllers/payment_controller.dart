@@ -34,6 +34,11 @@ class PaymentController extends GetxController {
     required int competitionId,
     required int categoryId,
     required String description,
+    bool spotRegistration = false,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    int? participantCount,
+    List<Map<String, dynamic>>? lines,
   }) async {
     isPaymentInProgress.value = true;
     paymentError.value = '';
@@ -41,10 +46,20 @@ class PaymentController extends GetxController {
 
     PaymentOrderModel? order;
     try {
-      order = await _paymentRepository.createRegistrationCheckoutOrder(
-        competitionId: competitionId,
-        categoryId: categoryId,
-      );
+      order = lines != null && lines.isNotEmpty
+          ? await _paymentRepository.createBulkRegistrationCheckoutOrder(
+              competitionId: competitionId,
+              lines: lines,
+              spotRegistration: spotRegistration,
+            )
+          : await _paymentRepository.createRegistrationCheckoutOrder(
+              competitionId: competitionId,
+              categoryId: categoryId,
+              spotRegistration: spotRegistration,
+              bulkCategoryCount: bulkCategoryCount,
+              categoryMode: categoryMode,
+              participantCount: participantCount,
+            );
 
       if (order.orderId.isEmpty || order.amount < 100) {
         throw Exception('Invalid payment order details');
