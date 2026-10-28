@@ -24,6 +24,7 @@ class ReportsFinancialTabController extends GetxController {
   int _appliedHighlightTick = 0;
 
   Worker? _competitionWatcher;
+  int _loadRequest = 0;
 
   @override
   void onInit() {
@@ -107,16 +108,19 @@ class ReportsFinancialTabController extends GetxController {
       int.tryParse(reportsController.selectedCompetitionId.value ?? '');
 
   Future<void> load() async {
+    final requestId = ++_loadRequest;
     final id = competitionId;
     if (id == null) {
       report.value = null;
       error.value = '';
+      isLoading.value = false;
       return;
     }
     isLoading.value = true;
     error.value = '';
     try {
       final resp = await _repository.getCompetitionFinancialReport(id);
+      if (requestId != _loadRequest) return;
       if (resp.success && resp.data != null) {
         report.value = resp.data;
       } else {
@@ -124,10 +128,13 @@ class ReportsFinancialTabController extends GetxController {
         error.value = resp.message ?? 'Failed to load financial report';
       }
     } catch (e) {
+      if (requestId != _loadRequest) return;
       report.value = null;
       error.value = e.toString();
     } finally {
-      isLoading.value = false;
+      if (requestId == _loadRequest) {
+        isLoading.value = false;
+      }
     }
   }
 

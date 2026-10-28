@@ -24,6 +24,14 @@ class ReportsController extends GetxController {
   final RxBool isLoadingOrganizations = false.obs;
   final RxString organizationsError = ''.obs;
 
+  /// Competitions for the organization selected on the financial report.
+  final RxList<Map<String, String>> organizationCompetitions =
+      <Map<String, String>>[].obs;
+  final RxnString organizationCompetitionsOrgId = RxnString();
+  final RxBool isLoadingOrganizationCompetitions = false.obs;
+  final RxString organizationCompetitionsError = ''.obs;
+  int _organizationCompetitionRequest = 0;
+
   /// Raw report payload returned by backend:
   /// {
   ///   totals: {...},
@@ -106,8 +114,9 @@ class ReportsController extends GetxController {
 
       competitions.value = resp.data!.competitions;
 
-      // Default selection
-      if (selectedCompetitionId.value == null && competitions.isNotEmpty) {
+      // Default selection. A blank id is unset, same as null.
+      if ((selectedCompetitionId.value ?? '').trim().isEmpty &&
+          competitions.isNotEmpty) {
         selectedCompetitionId.value = competitions.first.id;
       }
 
@@ -194,6 +203,87 @@ class ReportsController extends GetxController {
     if (organizationId == null || organizationId.isEmpty) return;
     if (organizationId == selectedOrganizationId.value) return;
     selectedOrganizationId.value = organizationId;
+    // Competition belongs to one organization. Clear it so the financial
+    // report does not keep showing another organization's competition.
+    organizationCompetitions.clear();
+    organizationCompetitionsOrgId.value = null;
+    organizationCompetitionsError.value = '';
+    if ((selectedCompetitionId.value ?? '').isNotEmpty) {
+      selectedCompetitionId.value = '';
+    }
+  }
+
+  /// Loads competition names for [organizationId]. Keeps the current
+  /// competition when it still belongs to that organization. An empty
+  /// selection ("All competitions") is kept only when [preserveEmptySelection]
+  /// is true. Otherwise the first competition is selected.
+  Future<void> loadCompetitionsForOrganization(
+    String? organizationId, {
+    bool preserveEmptySelection = false,
+  }) async {
+    final requestId = ++_organizationCompetitionRequest;
+    final normalized = (organizationId ?? '').trim();
+    organizationCompetitionsOrgId.value =
+        normalized.isEmpty ? null : normalized;
+    if (normalized.isEmpty) {
+      organizationCompetitions.clear();
+      organizationCompetitionsError.value = '';
+      if ((selectedCompetitionId.value ?? '').isNotEmpty) {
+        selectedCompetitionId.value = '';
+      }
+      return;
+    }
+
+    final id = int.tryParse(normalized);
+    if (id == null) {
+      organizationCompetitions.clear();
+      organizationCompetitionsError.value = 'Invalid organization';
+      return;
+    }
+
+    isLoadingOrganizationCompetitions.value = true;
+    organizationCompetitionsError.value = '';
+    try {
+      final resp = await _competitionRepository.listCompetitionOptions(id);
+      if (requestId != _organizationCompetitionRequest) return;
+      if (!resp.success || resp.data == null) {
+        organizationCompetitions.clear();
+        organizationCompetitionsError.value =
+            resp.message ?? 'Failed to load competitions';
+        return;
+      }
+
+      final items = List<Map<String, String>>.from(resp.data!);
+      organizationCompetitions.assignAll(items);
+      final ids = items.map((item) => item['id']).whereType<String>().toSet();
+      final previous = selectedCompetitionId.value;
+      if (preserveEmptySelection && (previous == null || previous.isEmpty)) {
+        if (selectedCompetitionId.value != '') {
+          selectedCompetitionId.value = '';
+        }
+        return;
+      }
+      if (previous != null && previous.isNotEmpty && ids.contains(previous)) {
+        return;
+      }
+      if (items.isNotEmpty) {
+        final first = items.first['id'] ?? '';
+        if (first.isNotEmpty && selectedCompetitionId.value != first) {
+          selectedCompetitionId.value = first;
+        }
+      } else if ((selectedCompetitionId.value ?? '').isNotEmpty) {
+        selectedCompetitionId.value = '';
+      }
+    } catch (e) {
+      if (requestId != _organizationCompetitionRequest) return;
+      organizationCompetitions.clear();
+      organizationCompetitionsError.value =
+          'Error loading competitions: ${e.toString()}';
+    } finally {
+      if (requestId == _organizationCompetitionRequest) {
+        isLoadingOrganizationCompetitions.value = false;
+      }
+    }
   }
 
   /// Opens Financial report tab for [competitionId] (amount-request inbox).
@@ -220,6 +310,11 @@ class ReportsController extends GetxController {
     selectedOrganizationId.value = null;
     isLoadingOrganizations.value = false;
     organizationsError.value = '';
+    organizationCompetitions.clear();
+    organizationCompetitionsOrgId.value = null;
+    isLoadingOrganizationCompetitions.value = false;
+    organizationCompetitionsError.value = '';
+    _organizationCompetitionRequest++;
     report.value = null;
     navigateToReportTabId.value = null;
     pendingTransferPrefillAmount.value = null;

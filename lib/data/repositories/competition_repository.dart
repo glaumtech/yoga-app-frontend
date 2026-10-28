@@ -404,6 +404,47 @@ class CompetitionRepository {
     }
   }
 
+  Future<ApiResponse<List<Map<String, String>>>> listCompetitionOptions(
+    int organizationId,
+  ) async {
+    try {
+      final response = await _apiService.getResponse<Map<String, dynamic>>(
+        url: '${EndPoints.competitionOptions}?organizationId=$organizationId',
+        apiType: APIType.aGet,
+        fromJson: (json) => json is Map<String, dynamic>
+            ? json
+            : Map<String, dynamic>.from(json as Map),
+      );
+      if (!response.success || response.data == null) {
+        return ApiResponse(
+          success: false,
+          message: response.message ?? 'Failed to load competitions',
+          statusCode: response.statusCode,
+        );
+      }
+      final raw = response.data!['competitions'];
+      if (raw is! List) {
+        return ApiResponse(
+          success: false,
+          message: 'Invalid competitions response',
+        );
+      }
+      final items = raw.whereType<Map>().map((item) {
+        final map = Map<String, dynamic>.from(item);
+        return {
+          'id': (map['id'] ?? '').toString(),
+          'name': (map['name'] ?? '').toString(),
+        };
+      }).where((item) => item['id']!.isNotEmpty).toList();
+      return ApiResponse(success: true, data: items, message: response.message);
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error loading competitions: ${e.toString()}',
+      );
+    }
+  }
+
   Future<ApiResponse<CompetitionsListResponse>> getAllCompetitions({
     String? search,
     String? status,

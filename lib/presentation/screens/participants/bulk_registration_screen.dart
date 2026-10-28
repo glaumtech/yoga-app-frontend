@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -23,140 +22,10 @@ import '../../../data/models/competition_model.dart';
 import '../../../data/models/district_model.dart';
 import '../../../core/utils/registration_category_options.dart';
 import '../../models/bulk_registration_row.dart';
+import 'bulk_registration_options.dart';
+import 'bulk_registration_template.dart';
 
-List<({String groupName, String stageName})> _groupStageEntriesForBulk(
-  CompetitionModel? competition,
-  CompetitionController competitionController, {
-  String? categoryName,
-  String? categoryMode,
-}) {
-  if (competition == null) return const [];
-
-  final selectedCategory = categoryName?.trim() ?? '';
-  if (selectedCategory.isNotEmpty &&
-      competition.categoryConfigs != null &&
-      competition.categoryConfigs!.isNotEmpty) {
-    final cfg = findCategoryConfig(
-      configs: competition.categoryConfigs!,
-      categoryName: selectedCategory,
-      mode: categoryMode,
-    );
-    if (cfg != null) {
-      final fromAllotment = <({String groupName, String stageName})>[];
-      if (cfg.stageAllotment.isNotEmpty) {
-        final stages = cfg.stageAllotment.keys.toList()
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        for (final stageName in stages) {
-          final groups = _groupsInCreatedOrderForBulk(
-            cfg.stageAllotment[stageName] ?? const [],
-            selectedGroups: cfg.selectedGroups,
-          );
-          for (final groupName in groups) {
-            fromAllotment.add((groupName: groupName, stageName: stageName));
-          }
-        }
-        if (fromAllotment.isNotEmpty) return fromAllotment;
-      }
-      if (cfg.selectedGroups.isNotEmpty) {
-        final stageByGroup = <String, String>{};
-        final labels = competition.stageGroupLabels;
-        if (labels != null) {
-          for (final e in labels.entries) {
-            for (final g in e.value) {
-              stageByGroup[g.trim().toLowerCase()] = e.key;
-            }
-          }
-        }
-        final groups = _groupsInCreatedOrderForBulk(cfg.selectedGroups);
-        for (final groupName in groups) {
-          final stageName =
-              stageByGroup[groupName.trim().toLowerCase()] ?? 'Stage';
-          fromAllotment.add((groupName: groupName, stageName: stageName));
-        }
-        if (fromAllotment.isNotEmpty) return fromAllotment;
-      }
-    }
-  }
-
-  final entries = <({String groupName, String stageName})>[];
-
-  if (competition.stageGroups != null && competition.stageGroups!.isNotEmpty) {
-    final sortedStageIds =
-        competition.stageGroups!.keys
-            .map((id) => int.tryParse(id))
-            .whereType<int>()
-            .toList()
-          ..sort((a, b) {
-            final stageA =
-                competitionController.getStageNameById(a)?.toLowerCase() ?? '';
-            final stageB =
-                competitionController.getStageNameById(b)?.toLowerCase() ?? '';
-            return stageA.compareTo(stageB);
-          });
-
-    for (final stageId in sortedStageIds) {
-      final stageName = competitionController.getStageNameById(stageId);
-      if (stageName == null) continue;
-
-      final groupIds = List<int>.from(
-        competition.stageGroups![stageId.toString()] ?? const [],
-      );
-
-      for (final groupId in groupIds) {
-        final groupName = competitionController.getGroupNameById(groupId);
-        if (groupName != null) {
-          entries.add((groupName: groupName, stageName: stageName));
-        }
-      }
-    }
-  }
-
-  if (entries.isEmpty && competition.stageGroupLabels != null) {
-    final sortedStages = competition.stageGroupLabels!.keys.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    for (final stageName in sortedStages) {
-      final groups = _groupsInCreatedOrderForBulk(
-        competition.stageGroupLabels![stageName] ?? const [],
-      );
-      for (final groupName in groups) {
-        entries.add((groupName: groupName, stageName: stageName));
-      }
-    }
-  }
-
-  return entries;
-}
-
-/// Registration group list in Challenge Config / created order, not A–Z.
-List<String> _groupsInCreatedOrderForBulk(
-  Iterable<String> groups, {
-  List<String> selectedGroups = const [],
-}) {
-  final seen = <String>{};
-  final result = <String>[];
-
-  void add(String raw) {
-    final name = raw.trim();
-    if (name.isEmpty) return;
-    if (seen.add(name.toLowerCase())) {
-      result.add(name);
-    }
-  }
-
-  if (selectedGroups.isNotEmpty) {
-    final wanted = {
-      for (final g in groups)
-        if (g.trim().isNotEmpty) g.trim().toLowerCase(),
-    };
-    for (final g in selectedGroups) {
-      if (wanted.contains(g.trim().toLowerCase())) add(g);
-    }
-  }
-  for (final g in groups) {
-    add(g);
-  }
-  return result;
-}
+part 'bulk_registration_import_dialog.dart';
 
 class BulkRegistrationScreen extends StatelessWidget {
   const BulkRegistrationScreen({super.key});
@@ -214,11 +83,11 @@ class BulkRegistrationScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title
-                FormTitle(
-                  text: 'BULK REGISTRATION',
-                  isMobile: isMobile,
-                  isTablet: isTablet,
+                _buildBulkTitle(
+                  context,
+                  isMobile,
+                  isTablet,
+                  screenWidth,
                 ),
 
                 // Common Fields Section
@@ -240,40 +109,50 @@ class BulkRegistrationScreen extends StatelessWidget {
                   isTablet,
                 ),
                 SizedBox(height: isMobile ? 24 : 32),
-
-                // Error Message
-                Obx(() {
-                  if (participantController.errorMessage.value.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline, color: Colors.red),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            participantController.errorMessage.value,
-                            style: TextStyle(color: Colors.red[700]),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-                SizedBox(height: isMobile ? 16 : 24),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBulkTitle(
+    BuildContext context,
+    bool isMobile,
+    bool isTablet,
+    double screenWidth,
+  ) {
+    final importButton = OutlinedButton.icon(
+      onPressed: () => _showBulkImportDialog(context),
+      icon: const Icon(Icons.file_upload_outlined, size: 18),
+      label: const Text('Import'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppTheme.primaryColor,
+        side: BorderSide(color: AppTheme.primaryColor),
+      ),
+    );
+    final title = FormTitle(
+      text: 'BULK REGISTRATION',
+      isMobile: isMobile,
+      isTablet: isTablet,
+    );
+    if (screenWidth < 800) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(alignment: Alignment.centerRight, child: importButton),
+          const SizedBox(height: 8),
+          title,
+        ],
+      );
+    }
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        title,
+        Align(alignment: Alignment.topRight, child: importButton),
+      ],
     );
   }
 
@@ -400,33 +279,37 @@ class BulkRegistrationScreen extends StatelessWidget {
                         ),
                       ],
                     )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
-                            context,
-                            label: institutional
-                                ? 'Yoga Teacher Name :'
-                                : 'Yoga Teacher Name (optional) :',
-                            controller:
-                                controller.bulkYogaTeacherNameController,
-                            participantController: controller,
-                            isRequired: institutional,
-                            isMobile: isMobile,
-                            isTablet: isTablet,
+                  : IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: _buildTextField(
+                              context,
+                              label: institutional
+                                  ? 'Yoga Teacher Name :'
+                                  : 'Yoga Teacher Name (optional) :',
+                              controller:
+                                  controller.bulkYogaTeacherNameController,
+                              participantController: controller,
+                              isRequired: institutional,
+                              isMobile: isMobile,
+                              isTablet: isTablet,
+                              pinFieldToBottom: true,
+                            ),
                           ),
-                        ),
-                        SizedBox(width: isTablet ? 16 : 20),
-                        Expanded(
-                          child: _buildYogaTeacherCellField(
-                            context,
-                            controller,
-                            isMobile,
-                            isTablet,
+                          SizedBox(width: isTablet ? 16 : 20),
+                          Expanded(
+                            child: _buildYogaTeacherCellField(
+                              context,
+                              controller,
+                              isMobile,
+                              isTablet,
+                              pinFieldToBottom: true,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
             ],
           );
@@ -618,10 +501,11 @@ class BulkRegistrationScreen extends StatelessWidget {
     BuildContext context,
     ParticipantController controller,
     bool isMobile,
-    bool isTablet,
-  ) {
+    bool isTablet, {
+    bool pinFieldToBottom = false,
+  }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Obx(
           () => FormLabelWithHint(
@@ -629,10 +513,10 @@ class BulkRegistrationScreen extends StatelessWidget {
                 ? 'Yoga Teacher Cell :'
                 : 'Yoga Teacher Cell (optional) :',
             hintText: '(Without +91)',
-            bottomSpacing: 5,
+            bottomSpacing: 8,
           ),
         ),
-        const SizedBox(height: 8),
+        if (pinFieldToBottom) const Spacer(),
         TextFormField(
           autovalidateMode: AutovalidateMode.onUserInteraction,
           controller: controller.bulkYogaTeacherCellController,
@@ -671,18 +555,17 @@ class BulkRegistrationScreen extends StatelessWidget {
     bool isRequired = false,
     bool isMobile = false,
     bool isTablet = false,
+    bool pinFieldToBottom = false,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: isMobile ? 14 : 16,
-          ),
+        FormLabelWithHint(
+          label: label,
+          reserveHintSpace: pinFieldToBottom,
+          bottomSpacing: 8,
         ),
-        const SizedBox(height: 8),
+        if (pinFieldToBottom) const Spacer(),
         TextFormField(
           autovalidateMode: isRequired
               ? AutovalidateMode.onUserInteraction
@@ -734,38 +617,44 @@ class BulkRegistrationScreen extends StatelessWidget {
       );
     }
 
-    // Match competition/category row: filters on the left, institution on the right
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              FormLabelWithHint(
-                label: 'Filter institution',
-                hintText: 'Optional state & district before search',
-                bottomSpacing: 8,
-              ),
-              _buildStateDistrictColumn(
-                context,
-                controller,
-                isMobile,
-                isTablet,
-              ),
-            ],
+    // Match competition/category row: filters on the left, institution on the right.
+    // IntrinsicHeight + Spacer keep the search boxes on one baseline when the
+    // filter label has a hint line and the institution label does not.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FormLabelWithHint(
+                  label: 'Filter institution',
+                  hintText: 'Optional state & district before search',
+                  bottomSpacing: 8,
+                ),
+                const Spacer(),
+                _buildStateDistrictColumn(
+                  context,
+                  controller,
+                  isMobile,
+                  isTablet,
+                ),
+              ],
+            ),
           ),
-        ),
-        SizedBox(width: rowGap),
-        Expanded(
-          child: _buildInstitutionField(
-            context,
-            controller,
-            isMobile,
-            isTablet,
+          SizedBox(width: rowGap),
+          Expanded(
+            child: _buildInstitutionField(
+              context,
+              controller,
+              isMobile,
+              isTablet,
+              pinFieldToBottom: true,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -885,19 +774,18 @@ class BulkRegistrationScreen extends StatelessWidget {
     BuildContext context,
     ParticipantController controller,
     bool isMobile,
-    bool isTablet,
-  ) {
+    bool isTablet, {
+    bool pinFieldToBottom = false,
+  }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Institution Name :',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: isMobile ? 14 : 16,
-          ),
+        FormLabelWithHint(
+          label: 'Institution Name :',
+          reserveHintSpace: pinFieldToBottom,
+          bottomSpacing: 8,
         ),
-        const SizedBox(height: 8),
+        if (pinFieldToBottom) const Spacer(),
         Obx(
           () => InstitutionNameAutocompleteField(
             autocompleteKey:
@@ -1132,6 +1020,33 @@ class BulkRegistrationScreen extends StatelessWidget {
             ),
           ),
         ),
+        Obx(() {
+          if (controller.errorMessage.value.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(top: 16),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    controller.errorMessage.value,
+                    style: TextStyle(color: Colors.red[700]),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
         _buildAmountAndPaymentSection(
           context,
           controller,
@@ -1393,15 +1308,22 @@ class BulkRegistrationScreen extends StatelessWidget {
                 _buildMobileField(
                   'SEX',
                   Obx(
-                    () => DropdownButtonFormField<String>(
-                      value: row.gender.value.isNotEmpty
+                    () {
+                      final options = _sexOptionsForRow(
+                        controller,
+                        competitionController,
+                        row,
+                      );
+                      final selected = options.contains(row.gender.value)
                           ? row.gender.value
-                          : null,
+                          : null;
+                      return DropdownButtonFormField<String>(
+                      value: selected,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: ['Male', 'Female'].map((gender) {
+                      items: options.map((gender) {
                         return DropdownMenuItem<String>(
                           value: gender,
                           child: Text(gender),
@@ -1414,7 +1336,8 @@ class BulkRegistrationScreen extends StatelessWidget {
                                 row.gender.value = value;
                               }
                             },
-                    ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1533,14 +1456,21 @@ class BulkRegistrationScreen extends StatelessWidget {
               child: SizedBox(
                 height: _kBulkTableFieldHeight,
                 child: Obx(
-                  () => DropdownButtonFormField<String>(
-                    value: row.gender.value.isNotEmpty
+                  () {
+                    final options = _sexOptionsForRow(
+                      controller,
+                      competitionController,
+                      row,
+                    );
+                    final selected = options.contains(row.gender.value)
                         ? row.gender.value
-                        : null,
+                        : null;
+                    return DropdownButtonFormField<String>(
+                    value: selected,
                     isExpanded: true,
                     style: const TextStyle(fontSize: 12, color: Colors.black),
                     decoration: _bulkTableFieldDecoration(hintText: 'Select'),
-                    items: ['Male', 'Female'].map((gender) {
+                    items: options.map((gender) {
                       return DropdownMenuItem<String>(
                         value: gender,
                         child: Text(
@@ -1556,7 +1486,8 @@ class BulkRegistrationScreen extends StatelessWidget {
                               row.gender.value = value;
                             }
                           },
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -1618,6 +1549,21 @@ class BulkRegistrationScreen extends StatelessWidget {
     );
   }
 
+  List<String> _sexOptionsForRow(
+    ParticipantController controller,
+    CompetitionController competitionController,
+    BulkRegistrationRow row,
+  ) {
+    final selectedCompetition = competitionController.competitions
+        .firstWhereOrNull((c) => c.id == controller.selectedEventId.value);
+    return bulkSexOptions(
+      selectedCompetition,
+      categoryName: row.category.value,
+      categoryMode: row.categoryMode.value,
+      includeValue: row.gender.value,
+    );
+  }
+
   Widget _buildGroupDropdown(
     BuildContext context,
     ParticipantController controller,
@@ -1631,7 +1577,7 @@ class BulkRegistrationScreen extends StatelessWidget {
       final selectedCategory = row.category.value;
       final selectedCategoryMode = row.categoryMode.value;
 
-      final groupStageEntries = _groupStageEntriesForBulk(
+      final groupStageEntries = groupStageEntriesForBulk(
         selectedCompetition,
         competitionController,
         categoryName: selectedCategory,
@@ -1639,27 +1585,38 @@ class BulkRegistrationScreen extends StatelessWidget {
       );
 
       final allGroupsWithStage = groupStageEntries
-          .map((e) => '${e.groupName} (GROUP ${e.stageName})')
+          .map((e) => bulkGroupStageLabel(e.groupName, e.stageName))
           .toList();
 
       final readOnly = row.isRegistered.value;
 
       String? currentValue;
       if (row.group.value.isNotEmpty) {
-        final stage = row.stage.value.isNotEmpty
-            ? row.stage.value
-            : controller.selectedStage.value;
-        if (stage.isNotEmpty) {
-          final formatted = '${row.group.value} (GROUP $stage)';
-          currentValue = allGroupsWithStage.contains(formatted)
-              ? formatted
-              : allGroupsWithStage.firstWhereOrNull(
-                  (item) => item.startsWith('${row.group.value} (GROUP'),
-                );
+        final rawGroup = row.group.value.trim();
+        final exactLabel = allGroupsWithStage.firstWhereOrNull(
+          (item) => item.toLowerCase() == rawGroup.toLowerCase(),
+        );
+        if (exactLabel != null) {
+          currentValue = exactLabel;
         } else {
-          currentValue = allGroupsWithStage.firstWhereOrNull(
-            (item) => item.startsWith('${row.group.value} (GROUP'),
-          );
+          final stage = row.stage.value.isNotEmpty
+              ? row.stage.value
+              : controller.selectedStage.value;
+          if (stage.isNotEmpty) {
+            final formatted = bulkGroupStageLabel(rawGroup, stage);
+            if (!allGroupsWithStage.any(
+              (item) => item.toLowerCase() == formatted.toLowerCase(),
+            )) {
+              allGroupsWithStage.add(formatted);
+            }
+            currentValue = allGroupsWithStage.firstWhereOrNull(
+              (item) => item.toLowerCase() == formatted.toLowerCase(),
+            );
+          } else {
+            currentValue = allGroupsWithStage.firstWhereOrNull(
+              (item) => item.startsWith('$rawGroup (GROUP'),
+            );
+          }
         }
       }
 

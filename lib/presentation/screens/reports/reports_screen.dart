@@ -10,6 +10,7 @@ import '../../../core/utils/permission_store.dart';
 import '../../../data/models/competition_model.dart';
 import '../../../data/repositories/reports_repository.dart';
 import '../../controllers/reports_amount_request_tab_controller.dart';
+import '../../controllers/reports_feedback_tab_controller.dart';
 import '../../controllers/reports_controller.dart';
 import '../../controllers/reports_financial_tab_controller.dart';
 import '../../controllers/reports_organization_tab_controller.dart';
@@ -25,6 +26,7 @@ import 'reports_participants_tab.dart';
 import 'reports_registered_participants_tab.dart';
 import 'reports_financial_tab.dart';
 import 'reports_amount_request_tab.dart';
+import 'reports_feedback_tab.dart';
 import 'reports_organization_tab.dart';
 import 'reports_registered_participants_popup.dart';
 import 'reports_institutions_details_popup.dart';
@@ -107,16 +109,34 @@ class _ReportsScreenState extends State<ReportsScreen>
         }
         return;
       }
+      if (tabId == 'feedback') {
+        if (!_isApplicationAdmin) {
+          await controller.loadCompetitionsAndMaybeReport();
+        }
+        if (Get.isRegistered<ReportsFeedbackTabController>()) {
+          await Get.find<ReportsFeedbackTabController>().load();
+        }
+        return;
+      }
+      if (tabId == 'financial') {
+        if (_isApplicationAdmin) {
+          await controller.loadCompetitionsForOrganization(
+            controller.selectedOrganizationId.value,
+            preserveEmptySelection: true,
+          );
+        } else {
+          await controller.loadCompetitionsAndMaybeReport();
+        }
+        if (Get.isRegistered<ReportsFinancialTabController>()) {
+          await Get.find<ReportsFinancialTabController>().load();
+        }
+        return;
+      }
       await controller.loadCompetitionsAndMaybeReport();
       switch (tabId) {
         case 'amount_request':
           if (Get.isRegistered<ReportsAmountRequestTabController>()) {
             await Get.find<ReportsAmountRequestTabController>().load();
-          }
-          break;
-        case 'financial':
-          if (Get.isRegistered<ReportsFinancialTabController>()) {
-            await Get.find<ReportsFinancialTabController>().load();
           }
           break;
         case ReportsController.registeredParticipantsReportTabId:
@@ -167,8 +187,16 @@ class _ReportsScreenState extends State<ReportsScreen>
       final idx = _tabController!.index.clamp(0, tabs.length - 1);
       final nextId = tabs[idx].id;
       if (_activeReportTabId == nextId) return;
-      if (nextId == 'organization' && controller.organizations.isEmpty) {
+      if ((nextId == 'organization' ||
+              nextId == 'feedback' ||
+              nextId == 'financial') &&
+          _isApplicationAdmin &&
+          controller.organizations.isEmpty) {
         controller.loadOrganizations();
+      }
+      if (nextId == 'feedback' &&
+          Get.isRegistered<ReportsFeedbackTabController>()) {
+        Get.find<ReportsFeedbackTabController>().load();
       }
       setState(() => _activeReportTabId = nextId);
     });
@@ -284,6 +312,11 @@ class _ReportsScreenState extends State<ReportsScreen>
         child: const ReportsAmountRequestTab(),
       ),
       _ReportTabItem(
+        id: 'feedback',
+        label: 'Feedback report',
+        child: const ReportsFeedbackTab(),
+      ),
+      _ReportTabItem(
         id: 'financial',
         label: 'Financial report',
         requiredKey: 'REPORTS_FINANCIAL',
@@ -306,7 +339,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     required bool isWideWeb,
   }) {
     final isApplicationAdmin = _isApplicationAdmin;
-    return _buildAllReportTabs(
+    final tabs = _buildAllReportTabs(
       isLoading: isLoading,
       error: error,
       report: report,
@@ -316,17 +349,31 @@ class _ReportsScreenState extends State<ReportsScreen>
       if (tab.id == 'amount_request') {
         return _canManageOrganizerAmountRequests;
       }
+      if (tab.id == 'feedback') {
+        return _canManageOrganizerAmountRequests || isApplicationAdmin;
+      }
       if (tab.id == 'organization') {
         return isApplicationAdmin;
       }
-      // Application Admin: financial + organization oversight tabs only.
+      // Application Admin: organization, financial, and feedback tabs.
       if (isApplicationAdmin) {
-        return tab.id == 'financial' || tab.id == 'organization';
+        return tab.id == 'financial' ||
+            tab.id == 'organization' ||
+            tab.id == 'feedback';
       }
       final key = tab.requiredKey;
       if (key == null || key.isEmpty) return true;
       return permissionStore.has(key);
     }).toList();
+    if (isApplicationAdmin) {
+      const order = ['organization', 'financial', 'feedback'];
+      tabs.sort((a, b) {
+        final ai = order.indexOf(a.id);
+        final bi = order.indexOf(b.id);
+        return (ai < 0 ? 99 : ai).compareTo(bi < 0 ? 99 : bi);
+      });
+    }
+    return tabs;
   }
 
   String get _currentRole {
@@ -594,6 +641,12 @@ class _ReportsScreenState extends State<ReportsScreen>
     if (activeId == 'organization') {
       return _buildOrganizationSelector(isMobile);
     }
+    if (activeId == 'feedback' && _isApplicationAdmin) {
+      return _buildFeedbackAdminScope(isMobile);
+    }
+    if (activeId == 'financial' && _isApplicationAdmin) {
+      return _buildFinancialAdminScope(isMobile);
+    }
     return _buildCompetitionSelector(isMobile);
   }
 
@@ -677,6 +730,341 @@ class _ReportsScreenState extends State<ReportsScreen>
             children: [
               Expanded(child: dropdown),
               SizedBox(width: isMobile ? 8 : 12),
+              refreshButton,
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildFeedbackAdminScope(bool isMobile) {
+    final feedbackController = Get.put(
+      ReportsFeedbackTabController(),
+      permanent: false,
+    );
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        child: Obx(() {
+          final orgs = controller.organizations;
+          final selectedOrgId = controller.selectedOrganizationId.value;
+          final loadingOrgs = controller.isLoadingOrganizations.value;
+          final orgError = controller.organizationsError.value;
+          final competitions = feedbackController.competitionOptions;
+          final selectedCompetitionId = feedbackController.competitionFilter.value;
+          final loadedFor = feedbackController.loadedOrganizationId.value;
+
+          if (selectedOrgId != null &&
+              selectedOrgId.isNotEmpty &&
+              loadedFor != selectedOrgId &&
+              !loadingOrgs &&
+              !feedbackController.isLoading.value) {
+            final orgId = selectedOrgId;
+            SchedulerBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              if (controller.selectedOrganizationId.value != orgId) return;
+              feedbackController.load();
+            });
+          }
+
+          if (loadingOrgs && orgs.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          if (orgError.isNotEmpty && orgs.isEmpty) {
+            return Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    orgError,
+                    style: TextStyle(
+                      color: Colors.red[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh',
+                  onPressed: () => controller.loadOrganizations(),
+                  icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
+                ),
+              ],
+            );
+          }
+
+          final organizationField = SearchableDropdownField(
+            items: orgs
+                .map(
+                  (o) => SearchableDropdownItem(
+                    value: o.id.toString(),
+                    label: o.organizationCode != null &&
+                            o.organizationCode!.isNotEmpty
+                        ? '${o.organizationName} (${o.organizationCode})'
+                        : o.organizationName,
+                  ),
+                )
+                .toList(),
+            selectedValue: selectedOrgId,
+            labelText: 'Organization',
+            hintText: 'Select organization',
+            searchHint: 'Search organization...',
+            emptyListMessage: 'No organizations found',
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: isMobile ? 10 : 12,
+            ),
+            onChanged: (value) => controller.setSelectedOrganization(value),
+          );
+
+          final competitionField = SearchableDropdownField(
+            items: competitions
+                .map(
+                  (c) => SearchableDropdownItem(
+                    value: c['id'] ?? '',
+                    label: (c['name'] ?? '').isEmpty
+                        ? 'Competition ${c['id']}'
+                        : c['name']!,
+                  ),
+                )
+                .where((item) => item.value.isNotEmpty)
+                .toList(),
+            emptyOptionLabel: 'All competitions',
+            emptyOptionValue: '',
+            selectedValue: selectedCompetitionId,
+            labelText: 'Competition',
+            hintText: 'All competitions',
+            searchHint: 'Search competition...',
+            emptyListMessage: 'No competitions for this organization',
+            enabled: selectedOrgId != null && selectedOrgId.isNotEmpty,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: isMobile ? 10 : 12,
+            ),
+            onChanged: feedbackController.selectCompetition,
+          );
+
+          final refreshButton = IconButton(
+            tooltip: 'Refresh',
+            onPressed: _scopeRefreshing ? null : _refreshCurrentView,
+            icon: _scopeRefreshing
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primaryColor,
+                    ),
+                  )
+                : Icon(Icons.refresh, color: AppTheme.primaryColor),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            constraints: BoxConstraints(
+              minWidth: isMobile ? 36 : 40,
+              minHeight: isMobile ? 36 : 40,
+            ),
+          );
+
+          if (isMobile) {
+            return Column(
+              children: [
+                organizationField,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: competitionField),
+                    const SizedBox(width: 8),
+                    refreshButton,
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: organizationField),
+              const SizedBox(width: 12),
+              Expanded(child: competitionField),
+              const SizedBox(width: 12),
+              refreshButton,
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildFinancialAdminScope(bool isMobile) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        child: Obx(() {
+          final orgs = controller.organizations;
+          final selectedOrgId = controller.selectedOrganizationId.value;
+          final loadingOrgs = controller.isLoadingOrganizations.value;
+          final orgError = controller.organizationsError.value;
+          final competitions = controller.organizationCompetitions;
+          final selectedCompetitionId =
+              controller.selectedCompetitionId.value ?? '';
+          final loadingCompetitions =
+              controller.isLoadingOrganizationCompetitions.value;
+          final competitionError = controller.organizationCompetitionsError.value;
+          final loadedFor = controller.organizationCompetitionsOrgId.value;
+
+          if (selectedOrgId != null &&
+              selectedOrgId.isNotEmpty &&
+              loadedFor != selectedOrgId &&
+              !loadingCompetitions) {
+            final orgId = selectedOrgId;
+            SchedulerBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              controller.loadCompetitionsForOrganization(orgId);
+            });
+          }
+
+          if (loadingOrgs && orgs.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          if (orgError.isNotEmpty && orgs.isEmpty) {
+            return Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    orgError,
+                    style: TextStyle(
+                      color: Colors.red[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh',
+                  onPressed: () => controller.loadOrganizations(),
+                  icon: Icon(Icons.refresh, color: AppTheme.primaryColor),
+                ),
+              ],
+            );
+          }
+
+          final organizationField = SearchableDropdownField(
+            items: orgs
+                .map(
+                  (o) => SearchableDropdownItem(
+                    value: o.id.toString(),
+                    label: o.organizationCode != null &&
+                            o.organizationCode!.isNotEmpty
+                        ? '${o.organizationName} (${o.organizationCode})'
+                        : o.organizationName,
+                  ),
+                )
+                .toList(),
+            selectedValue: selectedOrgId,
+            labelText: 'Organization',
+            hintText: 'Select organization',
+            searchHint: 'Search organization...',
+            emptyListMessage: 'No organizations found',
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: isMobile ? 10 : 12,
+            ),
+            onChanged: (value) => controller.setSelectedOrganization(value),
+          );
+
+          final competitionField = SearchableDropdownField(
+            items: competitions
+                .map(
+                  (c) => SearchableDropdownItem(
+                    value: c['id'] ?? '',
+                    label: (c['name'] ?? '').isEmpty
+                        ? 'Competition ${c['id']}'
+                        : c['name']!,
+                  ),
+                )
+                .where((item) => item.value.isNotEmpty)
+                .toList(),
+            emptyOptionLabel: 'All competitions',
+            emptyOptionValue: '',
+            selectedValue: selectedCompetitionId,
+            labelText: 'Competition',
+            hintText: 'All competitions',
+            searchHint: 'Search competition...',
+            emptyListMessage: competitionError.isNotEmpty
+                ? competitionError
+                : 'No competitions for this organization',
+            enabled: selectedOrgId != null &&
+                selectedOrgId.isNotEmpty &&
+                !loadingCompetitions,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: isMobile ? 10 : 12,
+            ),
+            onChanged: (value) {
+              if (value.isEmpty) {
+                if ((controller.selectedCompetitionId.value ?? '').isEmpty) {
+                  return;
+                }
+                controller.selectedCompetitionId.value = '';
+                return;
+              }
+              controller.setSelectedCompetition(value);
+            },
+          );
+
+          final refreshButton = IconButton(
+            tooltip: 'Refresh',
+            onPressed: _scopeRefreshing ? null : _refreshCurrentView,
+            icon: _scopeRefreshing
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primaryColor,
+                    ),
+                  )
+                : Icon(Icons.refresh, color: AppTheme.primaryColor),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            constraints: BoxConstraints(
+              minWidth: isMobile ? 36 : 40,
+              minHeight: isMobile ? 36 : 40,
+            ),
+          );
+
+          if (isMobile) {
+            return Column(
+              children: [
+                organizationField,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: competitionField),
+                    const SizedBox(width: 8),
+                    refreshButton,
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: organizationField),
+              const SizedBox(width: 12),
+              Expanded(child: competitionField),
+              const SizedBox(width: 12),
               refreshButton,
             ],
           );

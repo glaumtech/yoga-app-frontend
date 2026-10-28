@@ -140,6 +140,7 @@ class EndPoints {
   /// COMPETITIONS
   static String competitionCreate = '/competition';
   static String competitionList = '/competition/list';
+  static String competitionOptions = '/competition/options';
   static String competitionNameAvailable = '/competition/name-available';
   static String competitionUpdate(String id) => '/competition/$id';
   static String competitionById(String id) => '/competition/$id';
@@ -344,6 +345,13 @@ class EndPoints {
       '/reports/competition/$competitionId/amount-requests/$requestId/view';
 
   static const String pendingAmountRequests = '/reports/amount-requests/pending';
+
+  static const String competitionFeedbacks = '/reports/feedbacks';
+
+  static const String competitionFeedbacksExcel = '/reports/feedbacks/excel';
+
+  static String competitionFeedbackById(int feedbackId) =>
+      '/reports/feedbacks/$feedbackId';
 
   static String legalDocument(String docType) => '/legal/$docType';
 

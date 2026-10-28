@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
@@ -23,6 +24,7 @@ import '../../data/models/competition_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/utils/state_defaults.dart';
+import '../../core/navigation/root_navigator_key.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/photo_capture_service.dart';
 import '../../core/utils/photo_upload_processor.dart';
@@ -30,6 +32,10 @@ import '../../core/utils/upload_filename_helper.dart';
 import '../../core/utils/registration_category_options.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
+import '../widgets/app_dialog.dart';
+import '../screens/participants/bulk_registration_options.dart';
+import '../screens/participants/bulk_registration_template.dart';
+import '../screens/participants/bulk_registration_xlsx.dart';
 import 'competition_controller.dart';
 
 // Web-specific imports
@@ -1172,6 +1178,367 @@ class ParticipantController extends GetxController {
     }
   }
 
+  Future<void> downloadBulkRegistrationTemplate(
+    BulkRegistrationTemplateSelection selection, {
+    required List<String> sexes,
+    required List<String> categories,
+    required List<String> groups,
+  }) async {
+    final bytes = buildBulkRegistrationTemplateXlsx(
+      selection: selection,
+      sexes: sexes,
+      categories: categories,
+      groups: groups,
+    );
+    final filename = _bulkTemplateFilename(selection.competitionName);
+    try {
+      if (kIsWeb) {
+        final blob = html.Blob([
+          bytes,
+        ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+        html.AnchorElement(href: blobUrl)
+          ..setAttribute('download', filename)
+          ..click();
+        html.Url.revokeObjectUrl(blobUrl);
+        SnackbarHelper.showSuccessMessage('Template download started');
+        return;
+      }
+
+      final directory =
+          await getDownloadsDirectory() ?? await getTemporaryDirectory();
+      final file = File('${directory.path}${Platform.pathSeparator}$filename');
+      await file.writeAsBytes(bytes, flush: true);
+      SnackbarHelper.showSuccessMessage('Template saved to ${file.path}');
+    } catch (e) {
+      SnackbarHelper.showErrorMessage('Could not download the template');
+    }
+  }
+
+  Future<bool> importBulkRegistrationTemplateFile() async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx', 'csv'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return false;
+
+    final file = picked.files.single;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      SnackbarHelper.showErrorMessage('The selected file is empty');
+      return false;
+    }
+    if (bytes.length > 2 * 1024 * 1024) {
+      SnackbarHelper.showErrorMessage(
+        'The template file must be 2 MB or smaller',
+      );
+      return false;
+    }
+
+    final ParsedBulkRegistrationTemplate parsed;
+    final extension = file.extension?.toLowerCase() ?? '';
+    if (extension == 'xlsx') {
+      try {
+        parsed = parseBulkRegistrationRows(
+          readBulkRegistrationXlsxRows(bytes),
+        );
+      } catch (_) {
+        SnackbarHelper.showErrorMessage(
+          'Could not read the Excel template. Download it again.',
+        );
+        return false;
+      }
+    } else {
+      parsed = parseBulkRegistrationTemplate(bytes);
+    }
+    if (parsed.error != null) {
+      SnackbarHelper.showErrorMessage(parsed.error!);
+      return false;
+    }
+
+    final selection = parsed.selection!;
+    final competitionController = Get.find<CompetitionController>();
+    final competition = _competitionForBulkTemplate(
+      competitionController,
+      selection,
+    );
+    if (competition?.id == null || competition!.id!.isEmpty) {
+      SnackbarHelper.showErrorMessage(
+        'Competition "${selection.competitionName}" was not found',
+      );
+      return false;
+    }
+
+    final competitionId = competition.id!;
+    if (selectedEventId.value != competitionId) {
+      selectedEventId.value = competitionId;
+      for (final row in bulkRegistrationRows) {
+        if (row.isRegistered.value) continue;
+        row.category.value = '';
+        row.categoryMode.value = '';
+        row.group.value = '';
+        row.stage.value = '';
+      }
+    }
+    await competitionController.ensureCompetitionLoadedForRegistration(
+      competitionId,
+    );
+    final loadedCompetition =
+        competitionController.competitions.firstWhereOrNull(
+          (item) => item.id == competitionId,
+        ) ??
+        competition;
+    applySpotRegistrationRulesForSelectedEvent();
+
+    if (bulkRegistrationRows.every(
+      (row) => row.isRegistered.value || !_bulkRowHasEntry(row),
+    )) {
+      final pending = bulkRegistrationRows
+          .where((row) => !row.isRegistered.value)
+          .toList();
+      for (final row in pending) {
+        row.dispose();
+        bulkRegistrationRows.remove(row);
+      }
+    }
+
+    var unmatchedRows = 0;
+    for (final participant in parsed.participants) {
+      final dob = participant.dateOfBirth;
+      final resolved = _resolveBulkTemplateFields(
+        loadedCompetition,
+        competitionController,
+        participant,
+      );
+      if (!resolved.complete) unmatchedRows++;
+      bulkRegistrationRows.add(
+        BulkRegistrationRow(
+          nameController: TextEditingController(text: participant.name),
+          phoneController: TextEditingController(text: participant.phone),
+          dateOfBirthController: TextEditingController(
+            text: dob == null
+                ? ''
+                : '${dob.year.toString().padLeft(4, '0')}-'
+                      '${dob.month.toString().padLeft(2, '0')}-'
+                      '${dob.day.toString().padLeft(2, '0')}',
+          ),
+          dateOfBirth: dob,
+          gender: resolved.sex,
+          category: resolved.categoryName,
+          categoryMode: resolved.categoryMode,
+          group: resolved.groupName,
+          stage: resolved.stageName,
+        ),
+      );
+    }
+    if (bulkRegistrationRows.isEmpty) {
+      addBulkRegistrationRow();
+    }
+    bulkRegistrationRows.refresh();
+    validateRegistrationFormOnFieldChange();
+
+    final notes = <String>[
+      'Imported ${parsed.participants.length} participants for ${competition.competitionName}. Add a photo on each row before you register.',
+    ];
+    if (parsed.invalidPhones > 0) {
+      notes.add(
+        '${parsed.invalidPhones} phone number${parsed.invalidPhones == 1 ? '' : 's'} must be 10 digits.',
+      );
+    }
+    if (parsed.invalidDates > 0) {
+      notes.add(
+        '${parsed.invalidDates} date${parsed.invalidDates == 1 ? '' : 's'} of birth could not be read. Use dd/MM/yyyy.',
+      );
+    }
+    if (unmatchedRows > 0) {
+      notes.add(
+        '$unmatchedRows row${unmatchedRows == 1 ? '' : 's'} ${unmatchedRows == 1 ? 'has' : 'have'} a missing or unknown sex, category, or group. Set those columns to values from this competition.',
+      );
+    }
+    SnackbarHelper.showSuccessMessage(notes.join(' '));
+    return true;
+  }
+
+  ({
+    String sex,
+    String categoryName,
+    String categoryMode,
+    String groupName,
+    String stageName,
+    bool complete,
+  })
+  _resolveBulkTemplateFields(
+    CompetitionModel competition,
+    CompetitionController competitionController,
+    ParsedBulkParticipant participant,
+  ) {
+    final category = _matchTemplateCategory(
+      buildRegistrationCategoryOptions(
+        configs: competition.categoryConfigs,
+        categoryNames: competition.categories,
+        competitionMode: competition.competitionMode,
+      ),
+      participant.categoryName,
+      participant.categoryMode,
+    );
+    final sexOptions = bulkSexOptions(
+      competition,
+      categoryName: category?.categoryName ?? participant.categoryName,
+      categoryMode: category?.mode ?? participant.categoryMode,
+    );
+    final sex = _matchTemplateLabel(sexOptions, participant.sex);
+    final categoryGroupName =
+        category?.categoryName ?? participant.categoryName;
+    final categoryGroupMode = category?.mode ?? participant.categoryMode;
+    final group =
+        _matchTemplateGroup(
+          groupStageEntriesForBulk(
+            competition,
+            competitionController,
+            categoryName: categoryGroupName,
+            categoryMode: categoryGroupMode,
+          ),
+          participant.groupName,
+          participant.stageName,
+        ) ??
+        _matchTemplateGroup(
+          groupStageEntriesForBulk(competition, competitionController),
+          participant.groupName,
+          participant.stageName,
+        );
+    final sexValue = sex ?? participant.sex.trim();
+    final categoryName = category?.categoryName ?? participant.categoryName.trim();
+    final categoryMode = category?.mode ??
+        (participant.categoryMode.trim().isEmpty
+            ? ''
+            : RegistrationCategoryOption.normalizeMode(participant.categoryMode));
+    final parsedGroup = _splitGroupStageLabel(
+      participant.groupName,
+      participant.stageName,
+    );
+    final groupName = group?.groupName ?? parsedGroup.groupName;
+    final stageName = group?.stageName ?? parsedGroup.stageName;
+    final complete = participant.sex.trim().isNotEmpty &&
+        sex != null &&
+        category != null &&
+        group != null;
+    return (
+      sex: sexValue,
+      categoryName: categoryName,
+      categoryMode: categoryMode,
+      groupName: groupName,
+      stageName: stageName,
+      complete: complete,
+    );
+  }
+
+  RegistrationCategoryOption? _matchTemplateCategory(
+    List<RegistrationCategoryOption> options,
+    String categoryRaw,
+    String modeRaw,
+  ) {
+    final raw = categoryRaw.trim();
+    if (raw.isEmpty) return null;
+    var name = raw;
+    var modeText = modeRaw.trim();
+    final labeled = RegExp(
+      r'^(.*?)\s*\((online|offline)\)\s*$',
+      caseSensitive: false,
+    ).firstMatch(raw);
+    if (labeled != null) {
+      name = labeled.group(1)!.trim();
+      if (modeText.isEmpty) modeText = labeled.group(2)!;
+    }
+    final mode = modeText.isEmpty
+        ? null
+        : RegistrationCategoryOption.normalizeMode(modeText);
+    final matches = options
+        .where(
+          (option) => option.categoryName.toLowerCase() == name.toLowerCase(),
+        )
+        .where((option) => mode == null || option.mode == mode)
+        .toList();
+    if (mode != null) return matches.isEmpty ? null : matches.first;
+    if (matches.length == 1) return matches.first;
+    return null;
+  }
+
+  String? _matchTemplateLabel(List<String> options, String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+    for (final option in options) {
+      if (option.toLowerCase() == text.toLowerCase()) return option;
+    }
+    return null;
+  }
+
+  ({String groupName, String stageName}) _splitGroupStageLabel(
+    String groupRaw,
+    String stageRaw,
+  ) {
+    var group = groupRaw.replaceAll('\u00a0', ' ').trim();
+    var stage = stageRaw.replaceAll('\u00a0', ' ').trim();
+    final labeled = RegExp(
+      r'^(.*?)\s*\(\s*group\s+(.+?)\)\s*$',
+      caseSensitive: false,
+    ).firstMatch(group);
+    if (labeled != null) {
+      group = labeled.group(1)!.trim();
+      if (stage.isEmpty) stage = labeled.group(2)!.trim();
+    }
+    return (groupName: group, stageName: stage);
+  }
+
+  ({String groupName, String stageName})? _matchTemplateGroup(
+    List<({String groupName, String stageName})> entries,
+    String groupRaw,
+    String stageRaw,
+  ) {
+    final parsed = _splitGroupStageLabel(groupRaw, stageRaw);
+    final group = parsed.groupName;
+    final stage = parsed.stageName;
+    if (group.isEmpty) return null;
+    final matches = entries
+        .where(
+          (entry) =>
+              entry.groupName.toLowerCase() == group.toLowerCase() &&
+              (stage.isEmpty ||
+                  entry.stageName.toLowerCase() == stage.toLowerCase()),
+        )
+        .toList();
+    if (matches.length == 1) return matches.first;
+    if (stage.isNotEmpty && matches.isNotEmpty) return matches.first;
+    return null;
+  }
+
+  CompetitionModel? _competitionForBulkTemplate(
+    CompetitionController competitionController,
+    BulkRegistrationTemplateSelection selection,
+  ) {
+    final id = selection.competitionId.trim();
+    if (id.isNotEmpty) {
+      final byId = competitionController.competitions.firstWhereOrNull(
+        (competition) => competition.id == id,
+      );
+      if (byId != null) return byId;
+    }
+    final name = selection.competitionName.trim().toLowerCase();
+    if (name.isEmpty) return null;
+    return competitionController.competitions.firstWhereOrNull(
+      (competition) => competition.competitionName.trim().toLowerCase() == name,
+    );
+  }
+
+  String _bulkTemplateFilename(String competitionName) {
+    final safe = competitionName
+        .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (safe.isEmpty) return 'bulk_registration_template.xlsx';
+    return 'bulk_registration_$safe.xlsx';
+  }
+
   void resetBulkRegistrationForm() {
     bulkYogaTeacherNameController.clear();
     bulkYogaTeacherCellController.clear();
@@ -1485,12 +1852,7 @@ class ParticipantController extends GetxController {
           errorMessage.value = savedCount == 0
               ? (response.message ?? 'Failed to register participant')
               : 'Payment succeeded. $savedCount of ${prepared.length} participants were saved. ${response.message ?? ''}';
-          Get.snackbar(
-            'Error',
-            errorMessage.value,
-            backgroundColor: Colors.red,
-            colorText: Colors.white,
-          );
+          SnackbarHelper.showErrorMessage(errorMessage.value);
           return false;
         }
         item.row.isRegistered.value = true;
@@ -1508,38 +1870,28 @@ class ParticipantController extends GetxController {
           resetPage: true,
         );
       }
-      await Get.dialog<bool>(
-        AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Text(
-            'Registration completed',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            '$savedCount participant(s) registered successfully.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Get.back(result: true),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-        barrierDismissible: false,
-      );
+      await _showBulkRegistrationCompletedDialog(savedCount);
       resetBulkRegistrationForm();
       return true;
     } catch (e) {
       isLoading.value = false;
       errorMessage.value = 'Error registering participant: ${e.toString()}';
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      SnackbarHelper.showErrorMessage(errorMessage.value);
       return false;
     }
+  }
+
+  /// GetX dialogs need [GetMaterialApp]. This app uses GoRouter, so a missing
+  /// overlay throws "Unexpected null value" after a successful save.
+  Future<void> _showBulkRegistrationCompletedDialog(int savedCount) async {
+    final context = rootNavigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    await AppDialog.show(
+      context,
+      title: 'Registration completed',
+      message: '$savedCount participant(s) registered successfully.',
+      confirmText: 'OK',
+    );
   }
 
   Future<void> submitBulkRegistration() async {

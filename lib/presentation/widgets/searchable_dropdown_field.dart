@@ -179,8 +179,10 @@ class _SearchableDropdownFieldState extends State<SearchableDropdownField> {
   Widget _buildPortal({required String? errorText}) {
     final selectedLabel = _selectedLabel;
     final isOpen = _isOpen;
-    final hasValue = (widget.selectedValue ?? '').isNotEmpty ||
-        widget.emptyOptionLabel != null;
+    // Keep the label on the border whenever the field shows a value or a hint.
+    // An empty decorator draws the label through that text.
+    final hasVisibleText =
+        selectedLabel != null || widget.hintText.trim().isNotEmpty;
 
     return OverlayPortal(
       controller: _overlay,
@@ -193,7 +195,7 @@ class _SearchableDropdownFieldState extends State<SearchableDropdownField> {
             onTap: widget.enabled ? _toggle : null,
             borderRadius: BorderRadius.circular(8),
             child: InputDecorator(
-              isEmpty: !hasValue || selectedLabel == null,
+              isEmpty: !hasVisibleText,
               decoration: InputDecoration(
                 labelText: widget.labelText,
                 errorText: errorText,
