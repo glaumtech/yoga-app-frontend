@@ -56,6 +56,10 @@ class OrganizationUpdateController extends GetxController {
   final FocusNode districtSearchFocusNode = FocusNode();
   final TextEditingController addressController = TextEditingController();
   final TextEditingController pincodeController = TextEditingController();
+  final TextEditingController participantCodePrefixController =
+      TextEditingController();
+  final TextEditingController paymentCodePrefixController =
+      TextEditingController();
 
   final TextEditingController panNumberController = TextEditingController();
   final TextEditingController aadharNumberController = TextEditingController();
@@ -123,6 +127,8 @@ class OrganizationUpdateController extends GetxController {
       districtSearchTextController,
       addressController,
       pincodeController,
+      participantCodePrefixController,
+      paymentCodePrefixController,
     ]) {
       controller.addListener(bump);
     }
@@ -180,6 +186,8 @@ class OrganizationUpdateController extends GetxController {
     districtSearchFocusNode.dispose();
     addressController.dispose();
     pincodeController.dispose();
+    participantCodePrefixController.dispose();
+    paymentCodePrefixController.dispose();
     panNumberController.dispose();
     aadharNumberController.dispose();
     bankAccountNumberController.dispose();
@@ -304,6 +312,26 @@ class OrganizationUpdateController extends GetxController {
     return null;
   }
 
+  String? codePrefixValidator(
+    String? value, {
+    required String fieldName,
+    bool required = true,
+  }) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return required ? '$fieldName is required' : null;
+    }
+    if (!RegExp(r'^[A-Za-z0-9]{1,10}$').hasMatch(text)) {
+      return '$fieldName must be 1–10 letters or digits';
+    }
+    return null;
+  }
+
+  String? _normalizedCodePrefix(String raw) {
+    final text = raw.trim().toUpperCase();
+    return text.isEmpty ? null : text;
+  }
+
   String? districtValidator(String? value) {
     if (_findDistrictIdFromText() == null) {
       return requiredValidator(value, fieldName: 'District');
@@ -346,6 +374,20 @@ class OrganizationUpdateController extends GetxController {
     if (_findDistrictIdFromText() == null) return false;
     if (pincodeValidator(pincodeController.text) != null) return false;
     if (requiredValidator(addressController.text, fieldName: 'Address') !=
+        null) {
+      return false;
+    }
+    if (codePrefixValidator(
+          participantCodePrefixController.text,
+          fieldName: 'Participant code',
+        ) !=
+        null) {
+      return false;
+    }
+    if (codePrefixValidator(
+          paymentCodePrefixController.text,
+          fieldName: 'Payment code',
+        ) !=
         null) {
       return false;
     }
@@ -525,6 +567,10 @@ class OrganizationUpdateController extends GetxController {
       countryController.text = branch.country ?? '';
       addressController.text = branch.address ?? '';
       pincodeController.text = branch.pincode ?? '';
+      participantCodePrefixController.text =
+          (branch.participantCodePrefix ?? '').toUpperCase();
+      paymentCodePrefixController.text =
+          (branch.paymentCodePrefix ?? '').toUpperCase();
 
       panNumberController.text = branch.panNumber ?? '';
       aadharNumberController.text = branch.aadharNumber ?? '';
@@ -697,6 +743,22 @@ class OrganizationUpdateController extends GetxController {
       errorMessage.value = addressErr;
       return false;
     }
+    final participantCodeErr = codePrefixValidator(
+      participantCodePrefixController.text,
+      fieldName: 'Participant code',
+    );
+    if (participantCodeErr != null) {
+      errorMessage.value = participantCodeErr;
+      return false;
+    }
+    final paymentCodeErr = codePrefixValidator(
+      paymentCodePrefixController.text,
+      fieldName: 'Payment code',
+    );
+    if (paymentCodeErr != null) {
+      errorMessage.value = paymentCodeErr;
+      return false;
+    }
     return true;
   }
 
@@ -849,6 +911,9 @@ class OrganizationUpdateController extends GetxController {
       gstNumber: gstNumberController.text.trim().isEmpty
           ? null
           : gstNumberController.text.trim().toUpperCase(),
+      participantCodePrefix:
+          _normalizedCodePrefix(participantCodePrefixController.text),
+      paymentCodePrefix: _normalizedCodePrefix(paymentCodePrefixController.text),
     );
   }
 

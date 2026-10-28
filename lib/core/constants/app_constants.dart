@@ -7,6 +7,10 @@ class AppConstants {
   // Storage Keys
   static const String tokenKey = 'token_key';
   static const String participantVideoTokenKey = 'participant_video_token';
+  static const String participantVideoLoginDobKey =
+      'participant_video_login_dob';
+  static const String participantVideoLoginRegNoKey =
+      'participant_video_login_reg_no';
   static const String userKey = 'user_data';
   static const String roleKey = 'user_role';
   static const String permissionKeysKey = 'permission_keys';
@@ -32,6 +36,13 @@ class AppConstants {
 
   // Categories
   static const int juryCount = 5;
+
+  /// Shown on all payment method / checkout UIs.
+  static const String paymentInrOnlyMessage = 'Only INR accepted';
+
+  /// Shown beside participant registration payment.
+  static const String paymentOnlineModeNote =
+      'The fees can be paid only through online mode using Net Banking, Credit Card, Debit Card and UPI. Processing charges and GST as applicable are chargeable to the candidates (in addition to the participation fees) by the concerned Bank/Payment Gateway Integrator.';
 }
 
 class BaseUrl {
@@ -81,6 +92,8 @@ class EndPoints {
 
   /// PARTICIPANT REGISTRATIONS (New API)
   static String participantRegistrationCreate = '/participant-registration';
+  static String participantRegistrationValidate =
+      '/participant-registration/validate';
   static String participantRegistrationList = '/participant-registration/list';
   static String participantRegistrationById(String id) =>
       '/participant-registration/$id';
@@ -131,6 +144,8 @@ class EndPoints {
   /// COMPETITIONS
   static String competitionCreate = '/competition';
   static String competitionList = '/competition/list';
+  static String competitionOptions = '/competition/options';
+  static String competitionNameAvailable = '/competition/name-available';
   static String competitionUpdate(String id) => '/competition/$id';
   static String competitionById(String id) => '/competition/$id';
   static String competitionCategoryConfig(String id) =>
@@ -153,10 +168,14 @@ class EndPoints {
 
   /// Public competitions list (home / unauthenticated)
   static String competitionPublic = '/competition/public';
+  static String competitionByRegistrationCode(String registrationCode) =>
+      '/competition/public/registration/$registrationCode';
   static String competitionGoogleDriveConfig = '/competition/google-drive-config';
 
   /// Participant video upload (public)
   static String participantVideoLogin = '/participant-video/login';
+  static String participantVideoLoginPreview = '/participant-video/login-preview';
+  static String participantVideoToppers = '/participant-video/toppers';
   static String participantVideoMe = '/participant-video/me';
   static String participantVideoStart = '/participant-video/start';
   static String participantVideoCount = '/participant-video/count';
@@ -186,6 +205,7 @@ class EndPoints {
   static String apiVerifyPayment = '/api/verify-payment';
   static String apiMarkPaymentFailed = '/api/mark-payment-failed';
   static String paymentOnDemandContext = '/payment/on-demand/context';
+  static String paymentSettings = '/payment/settings';
   static String participantRegistrationPaymentVerify(String id) =>
       '/participant-registration/$id/payment/verify';
   static String participantRegistrationPaymentReject(String id) =>
@@ -194,6 +214,7 @@ class EndPoints {
   /// COMPETITION OPTIONS
   static String categoryList = '/category';
   static String categoryCreate = '/category';
+  static String categoryAmountConfig = '/category/amount-config';
   static String categoryById(int id) => '/category/$id';
   static String categoryByCompetition(int competitionId) =>
       '/category/competition/$competitionId';
@@ -210,8 +231,16 @@ class EndPoints {
 
   /// LOCATIONS
   static String stateList = '/state';
+  static String stateCreate = '/state';
+  static String stateById(int id) => '/state/$id';
+  static String cityList = '/city';
   static String cityCreate = '/city';
+  static String cityById(int id) => '/city/$id';
+  static String locationImport = '/city/import';
   static String cityListByState(int stateId) => '/city/state/$stateId';
+  static String districtList = '/district';
+  static String districtCreate = '/district';
+  static String districtById(int id) => '/district/$id';
   static String districtListByState(int stateId) => '/district/state/$stateId';
   static String villageListByStateAndDistrict(int stateId, int districtId) =>
       '/city/villages/state/$stateId/district/$districtId';
@@ -253,6 +282,9 @@ class EndPoints {
   static String competitionParticipantScoreDetails(int competitionId) =>
       '/reports/competition/$competitionId/participant-scores/details';
 
+  static String competitionParticipantCountStatus(int competitionId) =>
+      '/reports/competition/$competitionId/participant-scores/count-status';
+
   /// REPORTS PRINT (PDF / Excel as blob)
   static String competitionPrizeWinnersPrint(int competitionId) =>
       '/reports/competition/$competitionId/print/prize-winners';
@@ -283,6 +315,14 @@ class EndPoints {
   static String competitionParticipantECertificatePrint(int competitionId) =>
       '/reports/competition/$competitionId/print/participant-e-certificate';
 
+  static String organizationReport(int organizationId) =>
+      '/reports/organization/$organizationId';
+
+  static String organizationReportExcel(int organizationId) =>
+      '/reports/organization/$organizationId/excel';
+
+  static const String organizations = '/organization';
+
   static String competitionFinancialReport(int competitionId) =>
       '/reports/competition/$competitionId/financial';
 
@@ -298,6 +338,26 @@ class EndPoints {
   static String competitionCysTransferScreenshot(
           int competitionId, int transferId) =>
       '/reports/competition/$competitionId/cys-transfers/$transferId/screenshot';
+
+  static String competitionAmountRequests(int competitionId) =>
+      '/reports/competition/$competitionId/amount-requests';
+
+  static String competitionAmountRequestById(int competitionId, int requestId) =>
+      '/reports/competition/$competitionId/amount-requests/$requestId';
+
+  static String competitionAmountRequestView(int competitionId, int requestId) =>
+      '/reports/competition/$competitionId/amount-requests/$requestId/view';
+
+  static const String pendingAmountRequests = '/reports/amount-requests/pending';
+
+  static const String competitionFeedbacks = '/reports/feedbacks';
+
+  static const String competitionFeedbacksExcel = '/reports/feedbacks/excel';
+
+  static String competitionFeedbackById(int feedbackId) =>
+      '/reports/feedbacks/$feedbackId';
+
+  static String legalDocument(String docType) => '/legal/$docType';
 
   /// ORGANIZATION / BRANCH SETUP
   static String organizationSetupFoundation = '/organization/setup/foundation';

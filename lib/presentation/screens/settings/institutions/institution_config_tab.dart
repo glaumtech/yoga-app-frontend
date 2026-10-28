@@ -3,8 +3,10 @@ import 'package:get/get.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../controllers/institution_config_controller.dart';
+import '../../../controllers/location_masters_controller.dart';
 import '../../../widgets/form_title.dart';
 import '../../../widgets/pinned_scroll_views.dart';
+import '../location/location_masters_tab.dart';
 
 class InstitutionConfigTab extends StatefulWidget {
   const InstitutionConfigTab({super.key});
@@ -18,6 +20,18 @@ class _InstitutionConfigTabState extends State<InstitutionConfigTab> {
   void initState() {
     super.initState();
     Get.put(InstitutionConfigController(), permanent: false);
+    Get.put(LocationMastersController(), permanent: false);
+  }
+
+  @override
+  void dispose() {
+    if (Get.isRegistered<LocationMastersController>()) {
+      Get.delete<LocationMastersController>(force: true);
+    }
+    if (Get.isRegistered<InstitutionConfigController>()) {
+      Get.delete<InstitutionConfigController>(force: true);
+    }
+    super.dispose();
   }
 
   @override
@@ -27,7 +41,7 @@ class _InstitutionConfigTabState extends State<InstitutionConfigTab> {
     final isMobile = screenWidth < 600;
 
     return DefaultTabController(
-      length: 2,
+      length: 5,
       child: Column(
         children: [
           Padding(
@@ -42,6 +56,9 @@ class _InstitutionConfigTabState extends State<InstitutionConfigTab> {
               children: [
                 _TypesTab(controller: c),
                 _CategoriesTab(controller: c),
+                LocationStatesPanel(isMobile: isMobile),
+                LocationDistrictsPanel(isMobile: isMobile),
+                LocationCitiesPanel(isMobile: isMobile),
               ],
             ),
           ),
@@ -92,6 +109,27 @@ class _InstitutionConfigTabState extends State<InstitutionConfigTab> {
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 15),
               child: Text('Categories'),
+            ),
+          ),
+          Tab(
+            height: isMobile ? 30 : 34,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 15),
+              child: Text('States'),
+            ),
+          ),
+          Tab(
+            height: isMobile ? 30 : 34,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 15),
+              child: Text('Districts'),
+            ),
+          ),
+          Tab(
+            height: isMobile ? 30 : 34,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 15),
+              child: Text('Cities / Pincode'),
             ),
           ),
         ],

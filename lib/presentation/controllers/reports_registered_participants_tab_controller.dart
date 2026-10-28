@@ -16,6 +16,7 @@ class ReportsRegisteredParticipantsTabController
   final RxnString yogaTeacherNameFilter = RxnString();
   final RxnString yogaTeacherCellFilter = RxnString();
   final RxnString yogaTeacherDisplayName = RxnString();
+  final RxnString feeTypeFilter = RxnString();
 
   Worker? _presetWatcher;
 
@@ -79,6 +80,7 @@ class ReportsRegisteredParticipantsTabController
           yogaTeacherNameFilter.value = null;
           yogaTeacherCellFilter.value = null;
           yogaTeacherDisplayName.value = null;
+          feeTypeFilter.value = null;
         }
       },
     );
@@ -152,6 +154,10 @@ class ReportsRegisteredParticipantsTabController
           ? preset.label!.trim()
           : preset.yogaTeacherName!.trim();
     }
+    final feeType = preset.feeType?.trim().toUpperCase() ?? '';
+    if (feeType.isNotEmpty) {
+      feeTypeFilter.value = feeType;
+    }
     tablePage.value = 0;
     final id = int.tryParse(
       reportsController.selectedCompetitionId.value ?? '',
@@ -174,6 +180,7 @@ class ReportsRegisteredParticipantsTabController
     yogaTeacherNameFilter.value = null;
     yogaTeacherCellFilter.value = null;
     yogaTeacherDisplayName.value = null;
+    feeTypeFilter.value = null;
   }
 
   @override
@@ -189,6 +196,7 @@ class ReportsRegisteredParticipantsTabController
     yogaTeacherNameFilter.value = null;
     yogaTeacherCellFilter.value = null;
     yogaTeacherDisplayName.value = null;
+    feeTypeFilter.value = null;
     _lastCompetitionId = null;
     _competitionLoadGeneration = 0;
   }
@@ -207,6 +215,9 @@ class ReportsRegisteredParticipantsTabController
     if (requireInstitutionFilter.value) n++;
     if (yogaTeacherNameFilter.value != null &&
         yogaTeacherNameFilter.value!.trim().isNotEmpty) {
+      n++;
+    }
+    if (feeTypeFilter.value != null && feeTypeFilter.value!.trim().isNotEmpty) {
       n++;
     }
     return n;
@@ -228,6 +239,18 @@ class ReportsRegisteredParticipantsTabController
       chips.add(ReportsActiveFilterChip(
         key: 'spotRegistration',
         label: spot ? 'Spot registration' : 'Online registration',
+      ));
+    }
+
+    final feeType = feeTypeFilter.value?.trim().toUpperCase() ?? '';
+    if (feeType.isNotEmpty) {
+      chips.add(ReportsActiveFilterChip(
+        key: 'feeType',
+        label: feeType == 'EARLY_BIRD'
+            ? 'Early Bird'
+            : feeType == 'BULK_DISCOUNT'
+                ? 'Group discount'
+                : feeType,
       ));
     }
 
@@ -305,6 +328,8 @@ class ReportsRegisteredParticipantsTabController
       selectedCategoryTypes.remove(key.substring('categoryType:'.length));
     } else if (key == 'spotRegistration') {
       spotRegistrationFilter.value = null;
+    } else if (key == 'feeType') {
+      feeTypeFilter.value = null;
     } else if (key == 'agePrefix') {
       filterAge.value = null;
       registrationPrefix.value = '';
@@ -375,6 +400,7 @@ class ReportsRegisteredParticipantsTabController
             requireInstitutionFilter.value ? true : null,
         yogaTeacherName: yogaTeacherNameFilter.value,
         yogaTeacherCell: yogaTeacherCellFilter.value,
+        feeType: feeTypeFilter.value,
       );
 
       if (!resp.success || resp.data == null) {

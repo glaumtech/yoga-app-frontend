@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
@@ -23,6 +24,7 @@ import '../../data/models/competition_model.dart';
 import '../../core/utils/date_utils.dart' as app_date_utils;
 import '../../core/utils/storage_service.dart';
 import '../../core/utils/state_defaults.dart';
+import '../../core/navigation/root_navigator_key.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/photo_capture_service.dart';
 import '../../core/utils/photo_upload_processor.dart';
@@ -30,6 +32,10 @@ import '../../core/utils/upload_filename_helper.dart';
 import '../../core/utils/registration_category_options.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/bulk_registration_row.dart';
+import '../widgets/app_dialog.dart';
+import '../screens/participants/bulk_registration_options.dart';
+import '../screens/participants/bulk_registration_template.dart';
+import '../screens/participants/bulk_registration_xlsx.dart';
 import 'competition_controller.dart';
 
 // Web-specific imports
@@ -110,6 +116,8 @@ class ParticipantController extends GetxController {
 
   // Form state
   final TextEditingController nameController = TextEditingController();
+  final TextEditingController participantPhoneController =
+      TextEditingController();
   final TextEditingController schoolNameController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
   final TextEditingController yogaMasterNameController =
@@ -117,9 +125,28 @@ class ParticipantController extends GetxController {
   final TextEditingController yogaMasterContactController =
       TextEditingController();
 
+  /// Scroll-to-error targets. Renewed with [formKey] on reset so remounts
+  /// never keep two widgets attached to the same GlobalKey.
+  GlobalKey nameFieldKey = GlobalKey();
+  GlobalKey phoneFieldKey = GlobalKey();
+  GlobalKey dateOfBirthFieldKey = GlobalKey();
+  GlobalKey genderFieldKey = GlobalKey();
+  GlobalKey photoFieldKey = GlobalKey();
+  GlobalKey categoryFieldKey = GlobalKey();
+  GlobalKey groupFieldKey = GlobalKey();
+  GlobalKey institutionFieldKey = GlobalKey();
+  GlobalKey yogaTeacherNameFieldKey = GlobalKey();
+  GlobalKey yogaTeacherCellFieldKey = GlobalKey();
+  GlobalKey termsFieldKey = GlobalKey();
+
+  final nameFocusNode = FocusNode();
+  final phoneFocusNode = FocusNode();
+  final yogaTeacherNameFocusNode = FocusNode();
+  final yogaTeacherCellFocusNode = FocusNode();
+
   final Rx<DateTime?> dateOfBirth = Rx<DateTime?>(null);
   final RxString gender = ''.obs;
-  /// INSTITUTIONAL (requires institution + yoga teacher) or OPEN (those fields skipped).
+  /// INSTITUTIONAL (requires institution + yoga teacher) or OPEN (yoga teacher optional).
   final RxString registrationCategory = 'INSTITUTIONAL'.obs;
   final RxBool isSpotRegistration = false.obs;
   final RxString selectedPaymentMode = 'GPAY'.obs;
@@ -127,9 +154,10 @@ class ParticipantController extends GetxController {
 
   /// Server path from existing registration (edit mode — no re-upload required).
   final RxString existingPaymentProofPath = ''.obs;
-  final RxBool optForECertificate = false.obs;
+  final RxBool optForECertificate = true.obs;
   final RxBool termsAccepted = false.obs;
   final RxBool showTermsError = false.obs;
+  final RxBool showPhotoError = false.obs;
   final RxList<String> selectedCategories = <String>[].obs;
   /// ONLINE or OFFLINE for the selected category (same name can exist in both).
   final RxString selectedCategoryMode = ''.obs;
@@ -198,8 +226,6 @@ class ParticipantController extends GetxController {
       TextEditingController();
   final TextEditingController bulkInstitutionNameController =
       TextEditingController();
-  final RxString bulkCategory = ''.obs;
-  final RxString bulkCategoryMode = ''.obs;
   final RxList<BulkRegistrationRow> bulkRegistrationRows =
       <BulkRegistrationRow>[].obs;
 
@@ -709,6 +735,156 @@ class ParticipantController extends GetxController {
 
   bool get isInstitutionalRegistrationCategory => !isOpenRegistrationCategory;
 
+  static final RegExp _namePattern = RegExp(r'^[A-Za-z\s.]+$');
+  static final RegExp _repeatedDigitPhone = RegExp(r'^(\d)\1{9}$');
+
+  bool _isParticipantNameInvalid() {
+    final value = nameController.text.trim();
+    if (value.isEmpty) return true;
+    return !_namePattern.hasMatch(value);
+  }
+
+  bool _isTenDigitPhoneInvalid(String raw) {
+    final cell = raw.trim();
+    if (cell.isEmpty) return true;
+    if (cell.length != 10) return true;
+    if (_repeatedDigitPhone.hasMatch(cell)) return true;
+    return cell == '9876543210' || cell == '0123456789';
+  }
+
+  /// Scrolls to the first missing/invalid mandatory field and focuses text inputs.
+  void scrollToFirstMissingRegistrationField() {
+    if (_isParticipantNameInvalid()) {
+      scrollToSection(nameFieldKey, focusNode: nameFocusNode);
+      return;
+    }
+    if (_isTenDigitPhoneInvalid(participantPhoneController.text)) {
+      scrollToSection(phoneFieldKey, focusNode: phoneFocusNode);
+      return;
+    }
+    if (dateOfBirth.value == null) {
+      scrollToSection(dateOfBirthFieldKey);
+      return;
+    }
+    if (gender.value.isEmpty) {
+      scrollToSection(genderFieldKey);
+      return;
+    }
+    if (!isViewMode.value && !hasParticipantPhotoSelected) {
+      scrollToSection(photoFieldKey);
+      return;
+    }
+    if (selectedCategories.isEmpty) {
+      scrollToSection(categoryFieldKey);
+      return;
+    }
+    if (standard.value.isEmpty) {
+      scrollToSection(groupFieldKey);
+      return;
+    }
+    if (isInstitutionalRegistrationCategory) {
+      if (schoolNameController.text.trim().isEmpty) {
+        scrollToSection(institutionFieldKey);
+        return;
+      }
+      if (yogaMasterNameController.text.trim().isEmpty) {
+        scrollToSection(
+          yogaTeacherNameFieldKey,
+          focusNode: yogaTeacherNameFocusNode,
+        );
+        return;
+      }
+      if (_isTenDigitPhoneInvalid(yogaMasterContactController.text)) {
+        scrollToSection(
+          yogaTeacherCellFieldKey,
+          focusNode: yogaTeacherCellFocusNode,
+        );
+        return;
+      }
+    } else {
+      final teacherCell = yogaMasterContactController.text.trim();
+      if (teacherCell.isNotEmpty && _isTenDigitPhoneInvalid(teacherCell)) {
+        scrollToSection(
+          yogaTeacherCellFieldKey,
+          focusNode: yogaTeacherCellFocusNode,
+        );
+        return;
+      }
+    }
+    if (!isEditMode && !termsAccepted.value) {
+      scrollToSection(termsFieldKey);
+      return;
+    }
+    scrollToFirstInvalidFormField();
+  }
+
+  void scrollToFirstInvalidFormField() {
+    final formContext = formKey.currentContext;
+    if (formContext == null) return;
+
+    BuildContext? firstInvalid;
+    void visit(Element element) {
+      if (firstInvalid != null) return;
+      if (element is StatefulElement) {
+        final fieldState = element.state;
+        if (fieldState is FormFieldState &&
+            fieldState.mounted &&
+            fieldState.hasError) {
+          firstInvalid = element;
+          return;
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    formContext.visitChildElements(visit);
+    final target = firstInvalid;
+    if (target == null) return;
+    _scrollToAndFocus(target);
+  }
+
+  void scrollToSection(GlobalKey key, {FocusNode? focusNode}) {
+    final context = key.currentContext;
+    if (context == null) {
+      scrollToFirstInvalidFormField();
+      return;
+    }
+    _scrollToAndFocus(context, focusNode: focusNode);
+  }
+
+  void _scrollToAndFocus(BuildContext context, {FocusNode? focusNode}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.12,
+      );
+      if (focusNode != null) {
+        focusNode.requestFocus();
+        return;
+      }
+      _requestTextFocusIn(context);
+    });
+  }
+
+  void _requestTextFocusIn(BuildContext context) {
+    var focused = false;
+    void visit(Element element) {
+      if (focused) return;
+      final widget = element.widget;
+      if (widget is EditableText) {
+        widget.focusNode.requestFocus();
+        focused = true;
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    context.visitChildElements(visit);
+  }
+
   void setRegistrationCategory(String category) {
     final normalized = category.trim().toUpperCase();
     if (normalized != 'INSTITUTIONAL' && normalized != 'OPEN') {
@@ -723,14 +899,32 @@ class ParticipantController extends GetxController {
       selectedInstitution.value = null;
       participantInstitutionId.value = null;
       schoolNameController.text = '';
-      yogaMasterNameController.text = '';
-      yogaMasterContactController.text = '';
+      bulkInstitutionNameController.clear();
       institutionSuggestions.clear();
       _resetInstitutionSearchFilters();
       _clearBonafideCertificateFiles();
       institutionFieldRevision.value++;
     }
     validateRegistrationFormOnFieldChange();
+  }
+
+  bool get hasParticipantPhotoSelected =>
+      selectedImage.value != null ||
+      photoFile.value != null ||
+      existingPhotoUrl.value.trim().isNotEmpty;
+
+  bool validateParticipantPhotoBeforeSave() {
+    if (isViewMode.value) {
+      showPhotoError.value = false;
+      return true;
+    }
+    if (hasParticipantPhotoSelected) {
+      showPhotoError.value = false;
+      return true;
+    }
+    showPhotoError.value = true;
+    errorMessage.value = "Participant's photo is required";
+    return false;
   }
 
   Future<bool> validateBonafideBeforeSave() async {
@@ -939,21 +1133,418 @@ class ParticipantController extends GetxController {
     bulkRegistrationRows.add(BulkRegistrationRow());
   }
 
+  /// Filled rows of [row]'s category on this bulk form, including registered rows.
+  int filledBulkCountForCategory(BulkRegistrationRow row) {
+    final name = row.category.value.trim().toLowerCase();
+    final mode = row.categoryMode.value.trim().toUpperCase();
+    var count = 0;
+    for (final candidate in bulkRegistrationRows) {
+      if (candidate.category.value.trim().toLowerCase() != name) continue;
+      if (mode.isNotEmpty &&
+          candidate.categoryMode.value.trim().toUpperCase() != mode) {
+        continue;
+      }
+      final filled = candidate.isRegistered.value ||
+          candidate.nameController.text.trim().isNotEmpty;
+      if (filled) count++;
+    }
+    return count;
+  }
+
+  bool _bulkRowHasEntry(BulkRegistrationRow row) {
+    return row.nameController.text.trim().isNotEmpty ||
+        row.phoneController.text.trim().isNotEmpty ||
+        row.dateOfBirth.value != null ||
+        row.gender.value.isNotEmpty ||
+        row.category.value.trim().isNotEmpty ||
+        row.group.value.isNotEmpty ||
+        row.hasPhoto;
+  }
+
+  bool _bulkPaysOnline(CompetitionController competitionController) {
+    return competitionController.organizationPaymentModel.value
+            .trim()
+            .toUpperCase() ==
+        'PAY_PER_PARTICIPANT';
+  }
+
   void removeBulkRegistrationRow(int index) {
     if (index >= 0 && index < bulkRegistrationRows.length) {
       bulkRegistrationRows[index].dispose();
       bulkRegistrationRows.removeAt(index);
     }
+    if (bulkRegistrationRows.isEmpty) {
+      addBulkRegistrationRow();
+    }
+  }
+
+  Future<void> downloadBulkRegistrationTemplate(
+    BulkRegistrationTemplateSelection selection, {
+    required List<String> sexes,
+    required List<String> categories,
+    required List<String> groups,
+  }) async {
+    final bytes = buildBulkRegistrationTemplateXlsx(
+      selection: selection,
+      sexes: sexes,
+      categories: categories,
+      groups: groups,
+    );
+    final filename = _bulkTemplateFilename(selection.competitionName);
+    try {
+      if (kIsWeb) {
+        final blob = html.Blob([
+          bytes,
+        ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+        html.AnchorElement(href: blobUrl)
+          ..setAttribute('download', filename)
+          ..click();
+        html.Url.revokeObjectUrl(blobUrl);
+        SnackbarHelper.showSuccessMessage('Template download started');
+        return;
+      }
+
+      final directory =
+          await getDownloadsDirectory() ?? await getTemporaryDirectory();
+      final file = File('${directory.path}${Platform.pathSeparator}$filename');
+      await file.writeAsBytes(bytes, flush: true);
+      SnackbarHelper.showSuccessMessage('Template saved to ${file.path}');
+    } catch (e) {
+      SnackbarHelper.showErrorMessage('Could not download the template');
+    }
+  }
+
+  Future<bool> importBulkRegistrationTemplateFile() async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx', 'csv'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return false;
+
+    final file = picked.files.single;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      SnackbarHelper.showErrorMessage('The selected file is empty');
+      return false;
+    }
+    if (bytes.length > 2 * 1024 * 1024) {
+      SnackbarHelper.showErrorMessage(
+        'The template file must be 2 MB or smaller',
+      );
+      return false;
+    }
+
+    final ParsedBulkRegistrationTemplate parsed;
+    final extension = file.extension?.toLowerCase() ?? '';
+    if (extension == 'xlsx') {
+      try {
+        parsed = parseBulkRegistrationRows(
+          readBulkRegistrationXlsxRows(bytes),
+        );
+      } catch (_) {
+        SnackbarHelper.showErrorMessage(
+          'Could not read the Excel template. Download it again.',
+        );
+        return false;
+      }
+    } else {
+      parsed = parseBulkRegistrationTemplate(bytes);
+    }
+    if (parsed.error != null) {
+      SnackbarHelper.showErrorMessage(parsed.error!);
+      return false;
+    }
+
+    final selection = parsed.selection!;
+    final competitionController = Get.find<CompetitionController>();
+    final competition = _competitionForBulkTemplate(
+      competitionController,
+      selection,
+    );
+    if (competition?.id == null || competition!.id!.isEmpty) {
+      SnackbarHelper.showErrorMessage(
+        'Competition "${selection.competitionName}" was not found',
+      );
+      return false;
+    }
+
+    final competitionId = competition.id!;
+    if (selectedEventId.value != competitionId) {
+      selectedEventId.value = competitionId;
+      for (final row in bulkRegistrationRows) {
+        if (row.isRegistered.value) continue;
+        row.category.value = '';
+        row.categoryMode.value = '';
+        row.group.value = '';
+        row.stage.value = '';
+      }
+    }
+    await competitionController.ensureCompetitionLoadedForRegistration(
+      competitionId,
+    );
+    final loadedCompetition =
+        competitionController.competitions.firstWhereOrNull(
+          (item) => item.id == competitionId,
+        ) ??
+        competition;
+    applySpotRegistrationRulesForSelectedEvent();
+
+    if (bulkRegistrationRows.every(
+      (row) => row.isRegistered.value || !_bulkRowHasEntry(row),
+    )) {
+      final pending = bulkRegistrationRows
+          .where((row) => !row.isRegistered.value)
+          .toList();
+      for (final row in pending) {
+        row.dispose();
+        bulkRegistrationRows.remove(row);
+      }
+    }
+
+    var unmatchedRows = 0;
+    for (final participant in parsed.participants) {
+      final dob = participant.dateOfBirth;
+      final resolved = _resolveBulkTemplateFields(
+        loadedCompetition,
+        competitionController,
+        participant,
+      );
+      if (!resolved.complete) unmatchedRows++;
+      bulkRegistrationRows.add(
+        BulkRegistrationRow(
+          nameController: TextEditingController(text: participant.name),
+          phoneController: TextEditingController(text: participant.phone),
+          dateOfBirthController: TextEditingController(
+            text: dob == null
+                ? ''
+                : '${dob.year.toString().padLeft(4, '0')}-'
+                      '${dob.month.toString().padLeft(2, '0')}-'
+                      '${dob.day.toString().padLeft(2, '0')}',
+          ),
+          dateOfBirth: dob,
+          gender: resolved.sex,
+          category: resolved.categoryName,
+          categoryMode: resolved.categoryMode,
+          group: resolved.groupName,
+          stage: resolved.stageName,
+        ),
+      );
+    }
+    if (bulkRegistrationRows.isEmpty) {
+      addBulkRegistrationRow();
+    }
+    bulkRegistrationRows.refresh();
+    validateRegistrationFormOnFieldChange();
+
+    final notes = <String>[
+      'Imported ${parsed.participants.length} participants for ${competition.competitionName}. Add a photo on each row before you register.',
+    ];
+    if (parsed.invalidPhones > 0) {
+      notes.add(
+        '${parsed.invalidPhones} phone number${parsed.invalidPhones == 1 ? '' : 's'} must be 10 digits.',
+      );
+    }
+    if (parsed.invalidDates > 0) {
+      notes.add(
+        '${parsed.invalidDates} date${parsed.invalidDates == 1 ? '' : 's'} of birth could not be read. Use dd/MM/yyyy.',
+      );
+    }
+    if (unmatchedRows > 0) {
+      notes.add(
+        '$unmatchedRows row${unmatchedRows == 1 ? '' : 's'} ${unmatchedRows == 1 ? 'has' : 'have'} a missing or unknown sex, category, or group. Set those columns to values from this competition.',
+      );
+    }
+    SnackbarHelper.showSuccessMessage(notes.join(' '));
+    return true;
+  }
+
+  ({
+    String sex,
+    String categoryName,
+    String categoryMode,
+    String groupName,
+    String stageName,
+    bool complete,
+  })
+  _resolveBulkTemplateFields(
+    CompetitionModel competition,
+    CompetitionController competitionController,
+    ParsedBulkParticipant participant,
+  ) {
+    final category = _matchTemplateCategory(
+      buildRegistrationCategoryOptions(
+        configs: competition.categoryConfigs,
+        categoryNames: competition.categories,
+        competitionMode: competition.competitionMode,
+      ),
+      participant.categoryName,
+      participant.categoryMode,
+    );
+    final sexOptions = bulkSexOptions(
+      competition,
+      categoryName: category?.categoryName ?? participant.categoryName,
+      categoryMode: category?.mode ?? participant.categoryMode,
+    );
+    final sex = _matchTemplateLabel(sexOptions, participant.sex);
+    final categoryGroupName =
+        category?.categoryName ?? participant.categoryName;
+    final categoryGroupMode = category?.mode ?? participant.categoryMode;
+    final group =
+        _matchTemplateGroup(
+          groupStageEntriesForBulk(
+            competition,
+            competitionController,
+            categoryName: categoryGroupName,
+            categoryMode: categoryGroupMode,
+          ),
+          participant.groupName,
+          participant.stageName,
+        ) ??
+        _matchTemplateGroup(
+          groupStageEntriesForBulk(competition, competitionController),
+          participant.groupName,
+          participant.stageName,
+        );
+    final sexValue = sex ?? participant.sex.trim();
+    final categoryName = category?.categoryName ?? participant.categoryName.trim();
+    final categoryMode = category?.mode ??
+        (participant.categoryMode.trim().isEmpty
+            ? ''
+            : RegistrationCategoryOption.normalizeMode(participant.categoryMode));
+    final parsedGroup = _splitGroupStageLabel(
+      participant.groupName,
+      participant.stageName,
+    );
+    final groupName = group?.groupName ?? parsedGroup.groupName;
+    final stageName = group?.stageName ?? parsedGroup.stageName;
+    final complete = participant.sex.trim().isNotEmpty &&
+        sex != null &&
+        category != null &&
+        group != null;
+    return (
+      sex: sexValue,
+      categoryName: categoryName,
+      categoryMode: categoryMode,
+      groupName: groupName,
+      stageName: stageName,
+      complete: complete,
+    );
+  }
+
+  RegistrationCategoryOption? _matchTemplateCategory(
+    List<RegistrationCategoryOption> options,
+    String categoryRaw,
+    String modeRaw,
+  ) {
+    final raw = categoryRaw.trim();
+    if (raw.isEmpty) return null;
+    var name = raw;
+    var modeText = modeRaw.trim();
+    final labeled = RegExp(
+      r'^(.*?)\s*\((online|offline)\)\s*$',
+      caseSensitive: false,
+    ).firstMatch(raw);
+    if (labeled != null) {
+      name = labeled.group(1)!.trim();
+      if (modeText.isEmpty) modeText = labeled.group(2)!;
+    }
+    final mode = modeText.isEmpty
+        ? null
+        : RegistrationCategoryOption.normalizeMode(modeText);
+    final matches = options
+        .where(
+          (option) => option.categoryName.toLowerCase() == name.toLowerCase(),
+        )
+        .where((option) => mode == null || option.mode == mode)
+        .toList();
+    if (mode != null) return matches.isEmpty ? null : matches.first;
+    if (matches.length == 1) return matches.first;
+    return null;
+  }
+
+  String? _matchTemplateLabel(List<String> options, String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+    for (final option in options) {
+      if (option.toLowerCase() == text.toLowerCase()) return option;
+    }
+    return null;
+  }
+
+  ({String groupName, String stageName}) _splitGroupStageLabel(
+    String groupRaw,
+    String stageRaw,
+  ) {
+    var group = groupRaw.replaceAll('\u00a0', ' ').trim();
+    var stage = stageRaw.replaceAll('\u00a0', ' ').trim();
+    final labeled = RegExp(
+      r'^(.*?)\s*\(\s*group\s+(.+?)\)\s*$',
+      caseSensitive: false,
+    ).firstMatch(group);
+    if (labeled != null) {
+      group = labeled.group(1)!.trim();
+      if (stage.isEmpty) stage = labeled.group(2)!.trim();
+    }
+    return (groupName: group, stageName: stage);
+  }
+
+  ({String groupName, String stageName})? _matchTemplateGroup(
+    List<({String groupName, String stageName})> entries,
+    String groupRaw,
+    String stageRaw,
+  ) {
+    final parsed = _splitGroupStageLabel(groupRaw, stageRaw);
+    final group = parsed.groupName;
+    final stage = parsed.stageName;
+    if (group.isEmpty) return null;
+    final matches = entries
+        .where(
+          (entry) =>
+              entry.groupName.toLowerCase() == group.toLowerCase() &&
+              (stage.isEmpty ||
+                  entry.stageName.toLowerCase() == stage.toLowerCase()),
+        )
+        .toList();
+    if (matches.length == 1) return matches.first;
+    if (stage.isNotEmpty && matches.isNotEmpty) return matches.first;
+    return null;
+  }
+
+  CompetitionModel? _competitionForBulkTemplate(
+    CompetitionController competitionController,
+    BulkRegistrationTemplateSelection selection,
+  ) {
+    final id = selection.competitionId.trim();
+    if (id.isNotEmpty) {
+      final byId = competitionController.competitions.firstWhereOrNull(
+        (competition) => competition.id == id,
+      );
+      if (byId != null) return byId;
+    }
+    final name = selection.competitionName.trim().toLowerCase();
+    if (name.isEmpty) return null;
+    return competitionController.competitions.firstWhereOrNull(
+      (competition) => competition.competitionName.trim().toLowerCase() == name,
+    );
+  }
+
+  String _bulkTemplateFilename(String competitionName) {
+    final safe = competitionName
+        .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (safe.isEmpty) return 'bulk_registration_template.xlsx';
+    return 'bulk_registration_$safe.xlsx';
   }
 
   void resetBulkRegistrationForm() {
     bulkYogaTeacherNameController.clear();
     bulkYogaTeacherCellController.clear();
     bulkInstitutionNameController.clear();
-    bulkCategory.value = '';
-    bulkCategoryMode.value = '';
     isSpotRegistration.value = false;
-    optForECertificate.value = false;
+    optForECertificate.value = true;
     for (final row in bulkRegistrationRows) {
       row.dispose();
     }
@@ -971,6 +1562,7 @@ class ParticipantController extends GetxController {
     required CompetitionController competitionController,
   }) async {
     if (!formKey.currentState!.validate()) {
+      scrollToFirstInvalidFormField();
       return false;
     }
 
@@ -979,65 +1571,47 @@ class ParticipantController extends GetxController {
       return false;
     }
 
-    if (bulkCategory.value.isEmpty) {
-      errorMessage.value = 'Please select a category';
-      return false;
-    }
+    if (isInstitutionalRegistrationCategory) {
+      if (bulkYogaTeacherNameController.text.trim().isEmpty) {
+        errorMessage.value = 'Please enter yoga teacher name';
+        return false;
+      }
 
-    if (bulkYogaTeacherNameController.text.trim().isEmpty) {
-      errorMessage.value = 'Please enter yoga teacher name';
-      return false;
-    }
-
-    if (bulkYogaTeacherCellController.text.trim().isEmpty) {
-      errorMessage.value = 'Please enter yoga teacher cell number';
-      return false;
+      if (bulkYogaTeacherCellController.text.trim().isEmpty) {
+        errorMessage.value = 'Please enter yoga teacher cell number';
+        return false;
+      }
+    } else {
+      final teacherCell = bulkYogaTeacherCellController.text.trim();
+      if (teacherCell.isNotEmpty && teacherCell.length != 10) {
+        errorMessage.value = 'Cell number must be 10 digits';
+        return false;
+      }
     }
 
     if (bulkRegistrationRows.isEmpty) {
       addBulkRegistrationRow();
     }
 
-    BulkRegistrationRow? row;
-    for (var i = bulkRegistrationRows.length - 1; i >= 0; i--) {
-      if (!bulkRegistrationRows[i].isRegistered.value) {
-        row = bulkRegistrationRows[i];
-        break;
+    final pendingRows = bulkRegistrationRows.where((candidate) {
+      if (candidate.isRegistered.value) return false;
+      return _bulkRowHasEntry(candidate);
+    }).toList();
+    if (pendingRows.isEmpty) {
+      errorMessage.value = 'Please enter at least one participant';
+      return false;
+    }
+
+    int? institutionId;
+    if (isInstitutionalRegistrationCategory) {
+      if (!await _resolveBulkInstitutionId()) {
+        return false;
       }
-    }
-    row ??= bulkRegistrationRows.last;
-
-    if (row.isRegistered.value) {
-      errorMessage.value = 'This participant is already registered';
-      return false;
-    }
-
-    if (!row.isValid) {
-      errorMessage.value =
-          'Please fill name, date of birth, sex, and group for the participant';
-      return false;
-    }
-
-    if (!await _resolveBulkInstitutionId()) {
-      return false;
-    }
-
-    final selectedCompetition = competitionController.competitions
-        .firstWhereOrNull((c) => c.id == selectedEventId.value);
-
-    final stageName = row.stage.value.isNotEmpty
-        ? row.stage.value
-        : (selectedStage.value.isNotEmpty
-              ? selectedStage.value
-              : resolveStageNameForGroup(
-                  groupName: row.group.value,
-                  competition: selectedCompetition,
-                  competitionController: competitionController,
-                ));
-
-    if (stageName == null || stageName.isEmpty) {
-      errorMessage.value = 'Could not determine stage for the selected group';
-      return false;
+      institutionId = int.tryParse(selectedInstitutionId.value ?? '');
+      if (institutionId == null) {
+        errorMessage.value = 'Invalid institution selected';
+        return false;
+      }
     }
 
     final competitionId = int.tryParse(selectedEventId.value);
@@ -1046,115 +1620,278 @@ class ParticipantController extends GetxController {
       return false;
     }
 
-    final categoryId = competitionController.getCategoryIdByName(
-      bulkCategory.value,
+    final selectedCompetition = competitionController.competitions
+        .firstWhereOrNull((c) => c.id == selectedEventId.value);
+    final payOnline = _bulkPaysOnline(competitionController);
+    final paymentMode = payOnline
+        ? 'ONLINE'
+        : (selectedPaymentMode.value.trim().isEmpty
+              ? 'GPAY'
+              : selectedPaymentMode.value);
+
+    final prepared = <({
+      BulkRegistrationRow row,
+      Map<String, dynamic> data,
+      int categoryId,
+      String mode,
+      int bulkCount,
+      String stageName,
+      double payableRupees,
+    })>[];
+
+    for (final row in pendingRows) {
+      if (row.category.value.trim().isEmpty) {
+        errorMessage.value = 'Please select a category';
+        return false;
+      }
+
+      if (!row.isValid) {
+        final phoneMessage = row.phoneValidationMessage;
+        final otherFieldsFilled = row.nameController.text.trim().isNotEmpty &&
+            row.dateOfBirth.value != null &&
+            row.gender.value.isNotEmpty &&
+            row.category.value.trim().isNotEmpty &&
+            row.group.value.isNotEmpty &&
+            row.hasPhoto;
+        errorMessage.value = phoneMessage != null && otherFieldsFilled
+            ? phoneMessage
+            : 'Please fill name, phone, date of birth, sex, category, group, and photo for the participant';
+        return false;
+      }
+
+      final stageName = row.stage.value.isNotEmpty
+          ? row.stage.value
+          : (selectedStage.value.isNotEmpty
+                ? selectedStage.value
+                : resolveStageNameForGroup(
+                    groupName: row.group.value,
+                    competition: selectedCompetition,
+                    competitionController: competitionController,
+                  ));
+
+      if (stageName == null || stageName.isEmpty) {
+        errorMessage.value = 'Could not determine stage for the selected group';
+        return false;
+      }
+
+      final categoryId = competitionController.getCategoryIdByName(
+        row.category.value,
+      );
+      if (categoryId == null) {
+        errorMessage.value = 'Invalid category selected';
+        return false;
+      }
+
+      final groupId = competitionController.getGroupIdByName(row.group.value);
+      if (groupId == null) {
+        errorMessage.value = 'Invalid group selected';
+        return false;
+      }
+
+      final stageId = competitionController.getStageIdByName(stageName);
+      if (stageId == null) {
+        errorMessage.value = 'Invalid stage for the selected group';
+        return false;
+      }
+
+      final age = app_date_utils.AppDateUtils.calculateAge(
+        row.dateOfBirth.value!,
+      );
+      final dobString =
+          '${row.dateOfBirth.value!.year}-'
+          '${row.dateOfBirth.value!.month.toString().padLeft(2, '0')}-'
+          '${row.dateOfBirth.value!.day.toString().padLeft(2, '0')}';
+      final bulkCount = filledBulkCountForCategory(row);
+      final mode = row.categoryMode.value.trim().isEmpty
+          ? ''
+          : RegistrationCategoryOption.normalizeMode(row.categoryMode.value);
+      final payableRupees = payOnline
+          ? competitionController.resolveCategoryPayableFeeRupees(
+              selectedEventId.value,
+              categoryId,
+              spotRegistration: isSpotRegistration.value,
+              bulkCategoryCount: bulkCount,
+              categoryMode: mode,
+            )
+          : 0.0;
+
+      final registrationData = <String, dynamic>{
+        'competitionId': competitionId,
+        'dateOfBirth': dobString,
+        'age': age,
+        'categoryId': categoryId,
+        'stageId': stageId,
+        'registrationCategory': registrationCategory.value,
+        'participantName': row.nameController.text.trim().toUpperCase(),
+        'participantPhone': row.phoneController.text.trim(),
+        'sex': row.gender.value,
+        'groupId': groupId,
+        'paymentMode': paymentMode,
+        'isSpotRegistration': isSpotRegistration.value,
+        'optForECertificate': true,
+        'bulkCategoryCount': bulkCount,
+      };
+      if (mode.isNotEmpty) {
+        registrationData['categoryMode'] = mode;
+      }
+      if (isInstitutionalRegistrationCategory) {
+        registrationData['yogaTeacherName'] =
+            bulkYogaTeacherNameController.text.trim();
+        registrationData['institutionId'] = institutionId;
+        registrationData['yogaTeacherCell'] =
+            bulkYogaTeacherCellController.text.trim();
+      } else {
+        final yogaName = bulkYogaTeacherNameController.text.trim();
+        final yogaCell = bulkYogaTeacherCellController.text.trim();
+        if (yogaName.isNotEmpty) {
+          registrationData['yogaTeacherName'] = yogaName;
+        }
+        if (yogaCell.isNotEmpty) {
+          registrationData['yogaTeacherCell'] = yogaCell;
+        }
+      }
+      prepared.add((
+        row: row,
+        data: registrationData,
+        categoryId: categoryId,
+        mode: mode,
+        bulkCount: bulkCount,
+        stageName: stageName,
+        payableRupees: payableRupees,
+      ));
+    }
+
+    final totalPaise = prepared.fold<int>(
+      0,
+      (sum, item) => sum + (item.payableRupees * 100).round(),
     );
-    if (categoryId == null) {
-      errorMessage.value = 'Invalid category selected';
-      return false;
+    if (payOnline && totalPaise >= 100) {
+      isLoading.value = true;
+      errorMessage.value = '';
+      try {
+        for (final item in prepared) {
+          final validation = await _participantRepository
+              .validateParticipantRegistration(registrationData: item.data);
+          if (!validation.success) {
+            isLoading.value = false;
+            errorMessage.value = validation.message ??
+                'Please fix the registration details before payment.';
+            return false;
+          }
+        }
+      } catch (e) {
+        isLoading.value = false;
+        errorMessage.value = 'Unable to validate registration: ${e.toString()}';
+        return false;
+      }
+      isLoading.value = false;
+
+      final lines = <Map<String, dynamic>>[];
+      final grouped = <String, Map<String, dynamic>>{};
+      for (final item in prepared) {
+        if ((item.payableRupees * 100).round() < 100) continue;
+        final key = '${item.categoryId}|${item.mode}|${item.bulkCount}';
+        final existing = grouped[key];
+        if (existing == null) {
+          grouped[key] = {
+            'categoryId': item.categoryId,
+            'categoryMode': item.mode,
+            'bulkCategoryCount': item.bulkCount,
+            'participantCount': 1,
+          };
+        } else {
+          existing['participantCount'] =
+              (existing['participantCount'] as int) + 1;
+        }
+      }
+      lines.addAll(grouped.values);
+      if (lines.isNotEmpty) {
+        final prepaid = await registrationPaymentController
+            .collectRegistrationPayment(
+              competitionId: competitionId,
+              categoryId: prepared.first.categoryId,
+              description:
+                  'Competition registration fee for ${prepared.length} participant(s)',
+              spotRegistration: isSpotRegistration.value,
+              lines: lines,
+            );
+        if (prepaid == null) {
+          final paymentErr = registrationPaymentController.paymentError.value;
+          errorMessage.value = paymentErr.isNotEmpty
+              ? paymentErr
+              : 'Payment failed. Registration was not saved.';
+          return false;
+        }
+        final orderId = prepaid['razorpay_order_id'];
+        final paymentId = prepaid['razorpay_payment_id'];
+        for (final item in prepared) {
+          if (orderId != null && orderId.isNotEmpty) {
+            item.data['razorpayOrderId'] = orderId;
+          }
+          if (paymentId != null && paymentId.isNotEmpty) {
+            item.data['razorpayPaymentId'] = paymentId;
+          }
+        }
+      }
     }
 
-    final institutionId = int.tryParse(selectedInstitutionId.value!);
-    if (institutionId == null) {
-      errorMessage.value = 'Invalid institution selected';
-      return false;
-    }
-
-    final groupId = competitionController.getGroupIdByName(row.group.value);
-    if (groupId == null) {
-      errorMessage.value = 'Invalid group selected';
-      return false;
-    }
-
-    final stageId = competitionController.getStageIdByName(stageName);
-    if (stageId == null) {
-      errorMessage.value = 'Invalid stage for the selected group';
-      return false;
-    }
-
-    final age = app_date_utils.AppDateUtils.calculateAge(
-      row.dateOfBirth.value!,
-    );
-    final dobString =
-        '${row.dateOfBirth.value!.year}-'
-        '${row.dateOfBirth.value!.month.toString().padLeft(2, '0')}-'
-        '${row.dateOfBirth.value!.day.toString().padLeft(2, '0')}';
-
-    final registrationData = <String, dynamic>{
-      'competitionId': competitionId,
-      'dateOfBirth': dobString,
-      'age': age,
-      'categoryId': categoryId,
-      'stageId': stageId,
-      'yogaTeacherName': bulkYogaTeacherNameController.text.trim(),
-      'institutionId': institutionId,
-      'participantName': row.nameController.text.trim().toUpperCase(),
-      'sex': row.gender.value,
-      'groupId': groupId,
-      'yogaTeacherCell': bulkYogaTeacherCellController.text.trim(),
-      'paymentMode': selectedPaymentMode.value,
-      'isSpotRegistration': isSpotRegistration.value,
-      'optForECertificate': optForECertificate.value,
-    };
-    if (bulkCategoryMode.value.trim().isNotEmpty) {
-      registrationData['categoryMode'] =
-          RegistrationCategoryOption.normalizeMode(bulkCategoryMode.value);
-    }
-
+    var savedCount = 0;
     try {
       isLoading.value = true;
       errorMessage.value = '';
 
-      final response = await _participantRepository
-          .createParticipantRegistration(
-            registrationData: registrationData,
-            photoFile: row.photoFile.value,
-            photoXFile: row.photoXFile.value,
-          );
-
-      isLoading.value = false;
-
-      if (response.success) {
-        row.isRegistered.value = true;
-        if (row.stage.value.isEmpty && stageName.isNotEmpty) {
-          row.stage.value = stageName;
+      for (final item in prepared) {
+        final response = await _participantRepository
+            .createParticipantRegistration(
+              registrationData: item.data,
+              photoFile: item.row.photoFile.value,
+              photoXFile: item.row.photoXFile.value,
+            );
+        if (!response.success) {
+          isLoading.value = false;
+          errorMessage.value = savedCount == 0
+              ? (response.message ?? 'Failed to register participant')
+              : 'Payment succeeded. $savedCount of ${prepared.length} participants were saved. ${response.message ?? ''}';
+          SnackbarHelper.showErrorMessage(errorMessage.value);
+          return false;
         }
-        addBulkRegistrationRow();
-        errorMessage.value = '';
-        Get.snackbar(
-          'Success',
-          response.message ?? 'Participant registered successfully',
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-        );
-        if (selectedEventId.value.isNotEmpty) {
-          await loadParticipantsByEventId(
-            selectedEventId.value,
-            resetPage: true,
-          );
+        item.row.isRegistered.value = true;
+        if (item.row.stage.value.isEmpty && item.stageName.isNotEmpty) {
+          item.row.stage.value = item.stageName;
         }
-        return true;
+        savedCount++;
       }
 
-      errorMessage.value = response.message ?? 'Failed to register participant';
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-      return false;
+      isLoading.value = false;
+      errorMessage.value = '';
+      if (selectedEventId.value.isNotEmpty) {
+        await loadParticipantsByEventId(
+          selectedEventId.value,
+          resetPage: true,
+        );
+      }
+      await _showBulkRegistrationCompletedDialog(savedCount);
+      resetBulkRegistrationForm();
+      return true;
     } catch (e) {
       isLoading.value = false;
       errorMessage.value = 'Error registering participant: ${e.toString()}';
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      SnackbarHelper.showErrorMessage(errorMessage.value);
       return false;
     }
+  }
+
+  /// GetX dialogs need [GetMaterialApp]. This app uses GoRouter, so a missing
+  /// overlay throws "Unexpected null value" after a successful save.
+  Future<void> _showBulkRegistrationCompletedDialog(int savedCount) async {
+    final context = rootNavigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    await AppDialog.show(
+      context,
+      title: 'Registration completed',
+      message: '$savedCount participant(s) registered successfully.',
+      confirmText: 'OK',
+    );
   }
 
   Future<void> submitBulkRegistration() async {
@@ -1163,30 +1900,37 @@ class ParticipantController extends GetxController {
       return;
     }
 
-    if (bulkYogaTeacherNameController.text.trim().isEmpty) {
-      errorMessage.value = 'Please enter yoga teacher name';
-      return;
-    }
+    if (isInstitutionalRegistrationCategory) {
+      if (bulkYogaTeacherNameController.text.trim().isEmpty) {
+        errorMessage.value = 'Please enter yoga teacher name';
+        return;
+      }
 
-    if (bulkYogaTeacherCellController.text.trim().isEmpty) {
-      errorMessage.value = 'Please enter yoga teacher cell number';
-      return;
-    }
+      if (bulkYogaTeacherCellController.text.trim().isEmpty) {
+        errorMessage.value = 'Please enter yoga teacher cell number';
+        return;
+      }
 
-    if (bulkInstitutionNameController.text.trim().isEmpty) {
-      errorMessage.value = 'Please enter institution name';
-      return;
-    }
-
-    if (bulkCategory.value.isEmpty) {
-      errorMessage.value = 'Please select a category';
-      return;
+      if (bulkInstitutionNameController.text.trim().isEmpty) {
+        errorMessage.value = 'Please enter institution name';
+        return;
+      }
     }
 
     // Validate at least one row has data
     final validRows = bulkRegistrationRows.where((row) => row.isValid).toList();
     if (validRows.isEmpty) {
-      errorMessage.value = 'Please enter at least one participant';
+      final missingPhoto = bulkRegistrationRows.any(
+        (row) =>
+            !row.hasPhoto &&
+            (row.nameController.text.trim().isNotEmpty ||
+                row.dateOfBirth.value != null ||
+                row.gender.value.isNotEmpty ||
+                row.group.value.isNotEmpty),
+      );
+      errorMessage.value = missingPhoto
+          ? "Participant's photo is required"
+          : 'Please enter at least one participant';
       return;
     }
 
@@ -1204,15 +1948,17 @@ class ParticipantController extends GetxController {
 
         final participant = ParticipantModel(
           participantName: row.nameController.text.trim().toUpperCase(),
+          participantPhone: row.phoneController.text.trim(),
           dateOfBirth: row.dateOfBirth.value!,
           age: age,
           gender: row.gender.value,
-          category: bulkCategory.value,
+          category: row.category.value,
           standard: row.group.value,
           schoolName: bulkInstitutionNameController.text.trim(),
           address: '', // Not required in bulk registration
           yogaMasterName: bulkYogaTeacherNameController.text.trim(),
           yogaMasterContact: bulkYogaTeacherCellController.text.trim(),
+          registrationCategory: registrationCategory.value,
         );
 
         final success = await createParticipant(
@@ -1528,6 +2274,10 @@ class ParticipantController extends GetxController {
           reg['yogaTeacherCell'] as String? ??
           reg['yogaMasterContact'] as String? ??
           '',
+      participantPhone:
+          reg['participantPhone']?.toString() ??
+          reg['participant_phone']?.toString() ??
+          '',
       photoUrl: reg['photo'] as String?,
       bonafiedCertificate:
           reg['bonafiedCertificate'] as String? ??
@@ -1540,6 +2290,8 @@ class ParticipantController extends GetxController {
           reg['registration_no'] as String? ??
           reg['registrationNumber'] as String? ??
           reg['registration_number'] as String?,
+      paymentCode:
+          reg['paymentCode'] as String? ?? reg['payment_code'] as String?,
       status: reg['status'] as String?,
       createdAt: createdAt,
       updatedAt: updatedAt,
@@ -1971,6 +2723,7 @@ class ParticipantController extends GetxController {
         photoFile.value = null;
       }
       existingPhotoUrl.value = '';
+      showPhotoError.value = false;
       errorMessage.value = '';
     } on PhotoUploadException catch (e) {
       final message = e.message;
@@ -2045,6 +2798,17 @@ class ParticipantController extends GetxController {
 
   void _renewRegistrationFormKey() {
     formKey = GlobalKey<FormState>();
+    nameFieldKey = GlobalKey();
+    phoneFieldKey = GlobalKey();
+    dateOfBirthFieldKey = GlobalKey();
+    genderFieldKey = GlobalKey();
+    photoFieldKey = GlobalKey();
+    categoryFieldKey = GlobalKey();
+    groupFieldKey = GlobalKey();
+    institutionFieldKey = GlobalKey();
+    yogaTeacherNameFieldKey = GlobalKey();
+    yogaTeacherCellFieldKey = GlobalKey();
+    termsFieldKey = GlobalKey();
     formResetTrigger.value = formResetTrigger.value + 1;
   }
 
@@ -2057,9 +2821,10 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     registrationCategory.value = 'INSTITUTIONAL';
-    optForECertificate.value = false;
+    optForECertificate.value = true;
     termsAccepted.value = false;
     showTermsError.value = false;
+    showPhotoError.value = false;
     selectedCategories.clear();
     selectedCategoryMode.value = '';
     selectedStage.value = '';
@@ -2079,6 +2844,7 @@ class ParticipantController extends GetxController {
 
     // Clear all text controllers - set to empty string explicitly
     nameController.text = '';
+    participantPhoneController.text = '';
     schoolNameController.text = '';
     addressController.text = '';
     yogaMasterNameController.text = '';
@@ -2154,6 +2920,7 @@ class ParticipantController extends GetxController {
   /// Clear all form controllers and reactive values
   void _clearFormData() {
     nameController.clear();
+    participantPhoneController.clear();
     schoolNameController.clear();
     addressController.clear();
     yogaMasterNameController.clear();
@@ -2162,9 +2929,10 @@ class ParticipantController extends GetxController {
     dateOfBirth.value = null;
     gender.value = '';
     registrationCategory.value = 'INSTITUTIONAL';
-    optForECertificate.value = false;
+    optForECertificate.value = true;
     termsAccepted.value = false;
     showTermsError.value = false;
+    showPhotoError.value = false;
     isSpotRegistration.value = false;
     selectedCategories.clear();
     selectedCategoryMode.value = '';
@@ -2301,6 +3069,7 @@ class ParticipantController extends GetxController {
 
       // Set form fields
       nameController.text = participant.participantName;
+      participantPhoneController.text = participant.participantPhone;
       final viewInstitutionName = participant.schoolName.trim();
       if (viewInstitutionName.isNotEmpty) {
         schoolNameController.text = viewInstitutionName;
@@ -2319,7 +3088,7 @@ class ParticipantController extends GetxController {
           ? 'OPEN'
           : 'INSTITUTIONAL';
       isSpotRegistration.value = participant.isSpotRegistration;
-      optForECertificate.value = participant.optForECertificate;
+      optForECertificate.value = true;
       dateOfBirth.value = participant.dateOfBirth;
 
       // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
@@ -2444,6 +3213,7 @@ class ParticipantController extends GetxController {
 
     // Set form fields
     nameController.text = participant.participantName;
+    participantPhoneController.text = participant.participantPhone;
     final institutionName = participant.schoolName.trim();
     if (institutionName.isNotEmpty) {
       schoolNameController.text = institutionName;
@@ -2505,7 +3275,7 @@ class ParticipantController extends GetxController {
         ? 'OPEN'
         : 'INSTITUTIONAL';
     isSpotRegistration.value = participant.isSpotRegistration;
-    optForECertificate.value = participant.optForECertificate;
+    optForECertificate.value = true;
     dateOfBirth.value = participant.dateOfBirth;
     // Extract stage from group value if it's in the format "GroupName (GROUP StageName)"
     // Otherwise, try to find the stage from competition data
@@ -2601,6 +3371,7 @@ class ParticipantController extends GetxController {
       address: addressController.text.trim(),
       yogaMasterName: yogaMasterNameController.text.trim(),
       yogaMasterContact: yogaMasterContactController.text.trim(),
+      participantPhone: participantPhoneController.text.trim(),
       registrationCategory: registrationCategory.value,
     );
   }
@@ -2621,26 +3392,36 @@ class ParticipantController extends GetxController {
   /// Submit update form for existing participant
   Future<bool> submitUpdateForm(String participantId) async {
     if (!formKey.currentState!.validate()) {
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (dateOfBirth.value == null) {
       errorMessage.value = 'Please select date of birth';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (gender.value.isEmpty) {
       errorMessage.value = 'Please select gender';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (selectedCategories.isEmpty) {
       errorMessage.value = 'Please select at least one category';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (standard.value.isEmpty) {
       errorMessage.value = 'Please select standard/group';
+      scrollToFirstMissingRegistrationField();
+      return false;
+    }
+
+    if (!validateParticipantPhotoBeforeSave()) {
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
@@ -2811,12 +3592,14 @@ class ParticipantController extends GetxController {
     CompetitionController? competitionController,
   }) async {
     if (!formKey.currentState!.validate()) {
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (!isEditMode && !termsAccepted.value) {
       showTermsError.value = true;
       errorMessage.value = 'Please accept the terms & conditions to continue';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
     showTermsError.value = false;
@@ -2826,26 +3609,36 @@ class ParticipantController extends GetxController {
 
     if (dateOfBirth.value == null) {
       errorMessage.value = 'Please select date of birth';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (gender.value.isEmpty) {
       errorMessage.value = 'Please select gender';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (selectedCategories.isEmpty) {
       errorMessage.value = 'Please select at least one category';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (standard.value.isEmpty) {
       errorMessage.value = 'Please select standard/group';
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
     if (selectedStage.value.isEmpty) {
       errorMessage.value = 'Please select a stage';
+      scrollToFirstMissingRegistrationField();
+      return false;
+    }
+
+    if (!validateParticipantPhotoBeforeSave()) {
+      scrollToFirstMissingRegistrationField();
       return false;
     }
 
@@ -2885,11 +3678,13 @@ class ParticipantController extends GetxController {
               selectedInstitutionId.value = participantInstitutionId.value;
             } else {
               errorMessage.value = 'Please select an institution from the list';
+              scrollToFirstMissingRegistrationField();
               return false;
             }
           }
         } else {
           errorMessage.value = 'Please select an institution from the list';
+          scrollToFirstMissingRegistrationField();
           return false;
         }
       }
@@ -2898,6 +3693,8 @@ class ParticipantController extends GetxController {
     if (!await validateBonafideBeforeSave()) {
       if (!identical(_registrationSubmitOwner, submitOwner)) {
         errorMessage.value = '';
+      } else {
+        scrollToFirstMissingRegistrationField();
       }
       return false;
     }
@@ -2977,7 +3774,6 @@ class ParticipantController extends GetxController {
       categoryId,
     );
 
-    Map<String, String>? prepaidCheckout;
     if (payBeforeSave) {
       var amountPaise = _resolveRegistrationFeePaise(
         compController,
@@ -2996,27 +3792,9 @@ class ParticipantController extends GetxController {
         errorMessage.value = 'Invalid fee for selected category';
         return false;
       }
-
-      isLoading.value = true;
-      errorMessage.value = '';
-      isLoading.value = false;
-
-      prepaidCheckout = await registrationPaymentController
-          .collectRegistrationPayment(
-            competitionId: competitionId,
-            categoryId: categoryId,
-            description: 'Competition registration fee',
-          );
-      if (prepaidCheckout == null) {
-        final paymentErr = registrationPaymentController.paymentError.value;
-        errorMessage.value = paymentErr.isNotEmpty
-            ? paymentErr
-            : 'Payment failed. Registration was not saved.';
-        return false;
-      }
     }
 
-    // Prepare registration data
+    // Prepare registration data before payment so server validation can run first.
     final registrationData = <String, dynamic>{
       'competitionId': competitionId,
       'dateOfBirth': dobString,
@@ -3025,13 +3803,14 @@ class ParticipantController extends GetxController {
       'stageId': stageId,
       'registrationCategory': registrationCategory.value,
       'participantName': nameController.text.trim().toUpperCase(),
+      'participantPhone': participantPhoneController.text.trim(),
       'sex': gender.value,
       'groupId': groupId,
-      'paymentMode': payBeforeSave || prepaidCheckout != null
+      'paymentMode': payBeforeSave
           ? 'ONLINE'
           : _resolvePaymentModeForSubmit(compController, eventId),
       'isSpotRegistration': isSpotRegistration.value,
-      'optForECertificate': optForECertificate.value,
+      'optForECertificate': true,
       // Registration number will be auto-generated by backend based on competition, category, gender, and stage
     };
     if (selectedCategoryMode.value.trim().isNotEmpty) {
@@ -3054,6 +3833,56 @@ class ParticipantController extends GetxController {
         registrationData['yogaTeacherCell'] = yogaCell;
       }
     }
+
+    if (!isEditMode) {
+      isLoading.value = true;
+      errorMessage.value = '';
+      try {
+        final validation = await _participantRepository
+            .validateParticipantRegistration(registrationData: registrationData);
+        if (!identical(_registrationSubmitOwner, submitOwner)) {
+          isLoading.value = false;
+          errorMessage.value = '';
+          return false;
+        }
+        if (!validation.success) {
+          isLoading.value = false;
+          errorMessage.value = validation.message ??
+              'Please fix the registration details before payment.';
+          return false;
+        }
+      } catch (e) {
+        isLoading.value = false;
+        if (identical(_registrationSubmitOwner, submitOwner)) {
+          errorMessage.value =
+              'Unable to validate registration: ${e.toString()}';
+        }
+        return false;
+      }
+      isLoading.value = false;
+    }
+
+    Map<String, String>? prepaidCheckout;
+    if (payBeforeSave) {
+      errorMessage.value = '';
+
+      prepaidCheckout = await registrationPaymentController
+          .collectRegistrationPayment(
+            competitionId: competitionId,
+            categoryId: categoryId,
+            description: 'Competition registration fee',
+            spotRegistration: isSpotRegistration.value,
+            categoryMode: selectedCategoryMode.value,
+          );
+      if (prepaidCheckout == null) {
+        final paymentErr = registrationPaymentController.paymentError.value;
+        errorMessage.value = paymentErr.isNotEmpty
+            ? paymentErr
+            : 'Payment failed. Registration was not saved.';
+        return false;
+      }
+    }
+
     if (prepaidCheckout != null) {
       final orderId = prepaidCheckout['razorpay_order_id'];
       final paymentId = prepaidCheckout['razorpay_payment_id'];
@@ -3104,11 +3933,9 @@ class ParticipantController extends GetxController {
             );
           }
 
-          // Store the latest registered/updated participant for UI flows.
-          if (participants.isNotEmpty) {
-            lastRegisteredParticipant.value = participants.first;
-          }
-          registrationSaved.value = true;
+          // Payment receipt is only for new registrations, not updates.
+          registrationSaved.value = false;
+          lastRegisteredParticipant.value = null;
 
           // Reset form immediately after successful update (clears validators)
           resetForm();
@@ -3386,6 +4213,7 @@ class ParticipantController extends GetxController {
       eventId,
       categoryId,
       spotRegistration: isSpotRegistration.value,
+      categoryMode: selectedCategoryMode.value,
     );
     return (fee * 100).round();
   }

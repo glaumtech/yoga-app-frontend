@@ -28,6 +28,7 @@ class ReportsRepository {
     bool? hasInstitution,
     String? yogaTeacherName,
     String? yogaTeacherCell,
+    String? feeType,
     String? search,
   }) {
     final segments = <String>[];
@@ -105,6 +106,11 @@ class ReportsRepository {
         'yogaTeacherCell=${Uri.encodeQueryComponent(yogaTeacherCell.trim())}',
       );
     }
+    if (feeType != null && feeType.trim().isNotEmpty) {
+      segments.add(
+        'feeType=${Uri.encodeQueryComponent(feeType.trim().toUpperCase())}',
+      );
+    }
     if (search != null && search.trim().isNotEmpty) {
       segments.add('search=${Uri.encodeQueryComponent(search.trim())}');
     }
@@ -133,6 +139,7 @@ class ReportsRepository {
     bool? hasInstitution,
     String? yogaTeacherName,
     String? yogaTeacherCell,
+    String? feeType,
   }) {
     final segments = <String>[];
     final filter = participantReportQuery(
@@ -152,6 +159,7 @@ class ReportsRepository {
       hasInstitution: hasInstitution,
       yogaTeacherName: yogaTeacherName,
       yogaTeacherCell: yogaTeacherCell,
+      feeType: feeType,
     );
     if (filter.isNotEmpty) {
       segments.add(filter.substring(1));
@@ -203,7 +211,7 @@ class ReportsRepository {
   /// Report filters + row bucket ids for participant score details API.
   static String participantScoreDetailsQuery({
     required int participantRegistrationId,
-    required int rowStageId,
+    int? rowStageId,
     required int rowCategoryId,
     int? rowGroupId,
     List<int>? stageIds,
@@ -232,11 +240,44 @@ class ReportsRepository {
     segments.add(
       'participantRegistrationId=${Uri.encodeQueryComponent(participantRegistrationId.toString())}',
     );
-    segments.add('rowStageId=${Uri.encodeQueryComponent(rowStageId.toString())}');
+    if (rowStageId != null) {
+      segments.add('rowStageId=${Uri.encodeQueryComponent(rowStageId.toString())}');
+    }
     segments.add('rowCategoryId=${Uri.encodeQueryComponent(rowCategoryId.toString())}');
     if (rowGroupId != null) {
       segments.add('rowGroupId=${Uri.encodeQueryComponent(rowGroupId.toString())}');
     }
+    return '?${segments.join('&')}';
+  }
+
+  static String participantCountStatusQuery({
+    required String from,
+    required String to,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    int? districtId,
+    List<String>? genders,
+  }) {
+    final segments = <String>[];
+    final filter = participantReportQuery(
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      districtId: districtId,
+      genders: genders,
+    );
+    if (filter.isNotEmpty) {
+      segments.add(filter.substring(1));
+    }
+    segments.add('from=${Uri.encodeQueryComponent(from)}');
+    segments.add('to=${Uri.encodeQueryComponent(to)}');
     return '?${segments.join('&')}';
   }
 
@@ -367,6 +408,7 @@ class ReportsRepository {
     bool? hasInstitution,
     String? yogaTeacherName,
     String? yogaTeacherCell,
+    String? feeType,
   }) async {
     final q = participantsTableQuery(
       page: page,
@@ -388,6 +430,7 @@ class ReportsRepository {
       hasInstitution: hasInstitution,
       yogaTeacherName: yogaTeacherName,
       yogaTeacherCell: yogaTeacherCell,
+      feeType: feeType,
     );
 
     final response = await _apiService.getResponse<Map<String, dynamic>>(
@@ -410,7 +453,7 @@ class ReportsRepository {
   Future<ApiResponse<Map<String, dynamic>>> getParticipantScoreDetails(
     int competitionId, {
     required int participantRegistrationId,
-    required int rowStageId,
+    int? rowStageId,
     required int rowCategoryId,
     int? rowGroupId,
     List<int>? stageIds,
@@ -450,6 +493,49 @@ class ReportsRepository {
     return ApiResponse(
       success: false,
       message: response.message ?? 'Failed to load participant score details',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> getCountSubmissionStatus(
+    int competitionId, {
+    required String from,
+    required String to,
+    List<int>? stageIds,
+    List<int>? categoryIds,
+    List<int>? groupIds,
+    int? stateId,
+    int? cityId,
+    int? institutionId,
+    int? districtId,
+    List<String>? genders,
+  }) async {
+    final q = participantCountStatusQuery(
+      from: from,
+      to: to,
+      stageIds: stageIds,
+      categoryIds: categoryIds,
+      groupIds: groupIds,
+      stateId: stateId,
+      cityId: cityId,
+      institutionId: institutionId,
+      districtId: districtId,
+      genders: genders,
+    );
+
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: '${EndPoints.competitionParticipantCountStatus(competitionId)}$q',
+      apiType: APIType.aGet,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load count status',
       statusCode: response.statusCode,
     );
   }
@@ -1025,6 +1111,69 @@ class ReportsRepository {
     }
   }
 
+  Future<ApiResponse<Map<String, dynamic>>> getOrganizationReport(
+    int organizationId,
+  ) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.organizationReport(organizationId),
+      apiType: APIType.aGet,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load organization report',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Uint8List>> getOrganizationReportExcel(
+    int organizationId,
+  ) async {
+    try {
+      final path = EndPoints.organizationReportExcel(organizationId);
+      final uri = Uri.parse(BaseUrl.baseUrl + path);
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept':
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to generate organization Excel (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error generating organization Excel: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> getCompetitionFinancialReport(
     int competitionId,
   ) async {
@@ -1041,6 +1190,27 @@ class ReportsRepository {
     return ApiResponse(
       success: false,
       message: response.message ?? 'Failed to load financial report',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> getOrganizerAmountRequests(
+    int competitionId,
+  ) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionAmountRequests(competitionId),
+      apiType: APIType.aGet,
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load amount requests',
       statusCode: response.statusCode,
     );
   }
@@ -1096,6 +1266,7 @@ class ReportsRepository {
     String? transferDate,
     Uint8List? screenshotBytes,
     String? screenshotFilename,
+    int? amountRequestId,
   }) async {
     final fields = <String, String>{
       'amount': amount.toStringAsFixed(2),
@@ -1103,6 +1274,7 @@ class ReportsRepository {
         'referenceNumber': referenceNumber.trim(),
       if (transferDate != null && transferDate.trim().isNotEmpty)
         'transferDate': transferDate.trim(),
+      if (amountRequestId != null) 'amountRequestId': '$amountRequestId',
     };
     http.MultipartFile? file;
     if (screenshotBytes != null && screenshotBytes.isNotEmpty) {
@@ -1200,6 +1372,318 @@ class ReportsRepository {
   String cysTransferScreenshotUrl(int competitionId, int transferId) {
     return BaseUrl.baseUrl +
         EndPoints.competitionCysTransferScreenshot(competitionId, transferId);
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> createAmountRequest({
+    required int competitionId,
+    required String fromParty,
+    required String toParty,
+    required double totalAmount,
+    required double requestAmount,
+    String? requestDate,
+  }) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionAmountRequests(competitionId),
+      apiType: APIType.aPost,
+      body: {
+        'fromParty': fromParty.trim(),
+        'toParty': toParty.trim(),
+        'totalAmount': totalAmount,
+        'requestAmount': requestAmount,
+        if (requestDate != null && requestDate.trim().isNotEmpty)
+          'requestDate': requestDate.trim(),
+      },
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success) {
+      return ApiResponse(
+        success: true,
+        data: response.data,
+        message: response.message,
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to save amount request',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> updateAmountRequest({
+    required int competitionId,
+    required int requestId,
+    required String fromParty,
+    required String toParty,
+    required double totalAmount,
+    required double requestAmount,
+    String? requestDate,
+  }) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionAmountRequestById(competitionId, requestId),
+      apiType: APIType.aPut,
+      body: {
+        'fromParty': fromParty.trim(),
+        'toParty': toParty.trim(),
+        'totalAmount': totalAmount,
+        'requestAmount': requestAmount,
+        if (requestDate != null && requestDate.trim().isNotEmpty)
+          'requestDate': requestDate.trim(),
+      },
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success) {
+      return ApiResponse(
+        success: true,
+        data: response.data,
+        message: response.message,
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to update amount request',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<void>> deleteAmountRequest({
+    required int competitionId,
+    required int requestId,
+  }) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionAmountRequestById(competitionId, requestId),
+      apiType: APIType.aDelete,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+    if (response.success) {
+      return ApiResponse(success: true, message: response.message);
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to delete amount request',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getPendingAmountRequests() async {
+    final response = await _apiService.getResponse<List<Map<String, dynamic>>>(
+      url: EndPoints.pendingAmountRequests,
+      apiType: APIType.aGet,
+      fromJson: (json) {
+        if (json is List) {
+          return json
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+        }
+        return <Map<String, dynamic>>[];
+      },
+    );
+    if (response.success) {
+      return ApiResponse(
+        success: true,
+        message: response.message,
+        data: response.data ?? <Map<String, dynamic>>[],
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load amount requests',
+      statusCode: response.statusCode,
+      data: const [],
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> markAmountRequestViewed({
+    required int competitionId,
+    required int requestId,
+  }) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionAmountRequestView(competitionId, requestId),
+      apiType: APIType.aPost,
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success) {
+      return ApiResponse(
+        success: true,
+        data: response.data,
+        message: response.message,
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to mark amount request as viewed',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> getFeedbacks({
+    int? competitionId,
+    int? organizationId,
+  }) async {
+    final params = <String>[
+      if (competitionId != null) 'competitionId=$competitionId',
+      if (organizationId != null) 'organizationId=$organizationId',
+    ];
+    final query = params.isEmpty ? '' : '?${params.join('&')}';
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: '${EndPoints.competitionFeedbacks}$query',
+      apiType: APIType.aGet,
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load feedback',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Uint8List>> getFeedbacksExcel({
+    int? competitionId,
+    int? organizationId,
+    String? type,
+  }) async {
+    try {
+      final params = <String>[
+        if (competitionId != null) 'competitionId=$competitionId',
+        if (organizationId != null) 'organizationId=$organizationId',
+        if (type != null && type.trim().isNotEmpty)
+          'type=${Uri.encodeQueryComponent(type.trim())}',
+      ];
+      final query = params.isEmpty ? '' : '?${params.join('&')}';
+      final uri = Uri.parse(
+        BaseUrl.baseUrl + EndPoints.competitionFeedbacksExcel + query,
+      );
+
+      final token = StorageService.getString(AppConstants.tokenKey);
+      final headers = <String, String>{
+        'Accept':
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(BaseUrl.apiTimeout);
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(
+          success: true,
+          data: response.bodyBytes,
+          statusCode: response.statusCode,
+        );
+      }
+
+      return ApiResponse(
+        success: false,
+        message:
+            'Failed to generate feedback Excel (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error generating feedback Excel: ${e.toString()}',
+        statusCode: 0,
+      );
+    }
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> createFeedback({
+    required int competitionId,
+    required String type,
+    required String message,
+  }) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionFeedbacks,
+      apiType: APIType.aPost,
+      body: {
+        'competitionId': competitionId,
+        'type': type,
+        'message': message.trim(),
+      },
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success) {
+      return ApiResponse(
+        success: true,
+        data: response.data,
+        message: response.message,
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to save feedback',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> updateFeedback({
+    required int feedbackId,
+    required int competitionId,
+    required String type,
+    required String message,
+  }) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionFeedbackById(feedbackId),
+      apiType: APIType.aPut,
+      body: {
+        'competitionId': competitionId,
+        'type': type,
+        'message': message.trim(),
+      },
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success) {
+      return ApiResponse(
+        success: true,
+        data: response.data,
+        message: response.message,
+      );
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to update feedback',
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<ApiResponse<void>> deleteFeedback(int feedbackId) async {
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionFeedbackById(feedbackId),
+      apiType: APIType.aDelete,
+      fromJson: (json) => json as Map<String, dynamic>,
+    );
+    if (response.success) {
+      return ApiResponse(success: true, message: response.message);
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to delete feedback',
+      statusCode: response.statusCode,
+    );
   }
 
   MediaType _imageMediaType(String filename) {

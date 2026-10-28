@@ -182,7 +182,8 @@ class RegistrationCategoryCards extends StatelessWidget {
       );
       if (cfg != null) {
         if (option.isOnline) {
-          if (cfg.feeAmount > 0) return cfg.feeAmount;
+          final fee = cfg.resolveDiscountedOnlineFee(cfg.feeAmount);
+          if (fee > 0 || fee != cfg.feeAmount) return fee;
         } else {
           final spot =
               cfg.spotFeeAmount > 0 ? cfg.spotFeeAmount : cfg.feeAmount;
@@ -471,12 +472,15 @@ class RegistrationEventSidebar extends StatelessWidget {
   }
 
   Future<void> _copyLink(BuildContext context) async {
-    final id = competition.id?.toString() ?? '';
-    if (id.isEmpty) return;
+    final code = competition.registrationCode?.trim() ??
+        fullCompetition?.registrationCode?.trim() ??
+        '';
     final url = registrationShareUrlForCompetition(
-      registrationUrl: competition.registrationUrl,
-      competitionId: id,
+      registrationUrl:
+          competition.registrationUrl ?? fullCompetition?.registrationUrl,
+      registrationCode: code,
     );
+    if (url.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: url));
     if (!context.mounted) return;
     ScaffoldMessenger.of(
@@ -484,11 +488,28 @@ class RegistrationEventSidebar extends StatelessWidget {
     ).showSnackBar(const SnackBar(content: Text('Registration link copied')));
   }
 
+  bool _hasOfflineCategory() {
+    final options = buildRegistrationCategoryOptions(
+      configs: fullCompetition?.categoryConfigs,
+      categoryModes: competition.categoryModes,
+      categoryNames: competition.categories,
+      competitionMode: fullCompetition?.competitionMode,
+    );
+    if (options.isNotEmpty) {
+      return options.any((option) => !option.isOnline);
+    }
+    return RegistrationCategoryOption.normalizeMode(
+          fullCompetition?.competitionMode,
+        ) !=
+        'ONLINE';
+  }
+
   @override
   Widget build(BuildContext context) {
     final date = _eventDateDisplay();
     final time = _eventTimeDisplay();
     final address = competition.address.trim();
+    final showVenueMap = address.isNotEmpty && _hasOfflineCategory();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -527,7 +548,7 @@ class RegistrationEventSidebar extends StatelessWidget {
               ),
             ),
           ),
-          if (address.isNotEmpty) ...[
+          if (showVenueMap) ...[
             const SizedBox(height: 20),
             VenueMapPreview(address: address, height: 200),
             Align(
@@ -568,8 +589,8 @@ class RegistrationEventSidebar extends StatelessWidget {
           _SidebarRow(
             icon: Icons.email_outlined,
             title: 'Registration Support',
-            value: 'praveen.sekar@glaum.in',
-            onTap: () => launchUrl(Uri.parse('mailto:praveen.sekar@glaum.in')),
+            value: 'praveen@glaum.in',
+            onTap: () => launchUrl(Uri.parse('mailto:praveen@glaum.in')),
           ),
           _SidebarRow(
             icon: Icons.phone_outlined,
@@ -595,7 +616,7 @@ class RegistrationEventSidebar extends StatelessWidget {
                 icon: Icons.email_outlined,
                 color: Colors.red.shade600,
                 onTap: () =>
-                    launchUrl(Uri.parse('mailto:praveen.sekar@glaum.in')),
+                    launchUrl(Uri.parse('mailto:praveen@glaum.in')),
               ),
             ],
           ),

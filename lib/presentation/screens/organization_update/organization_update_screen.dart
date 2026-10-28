@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 
@@ -758,7 +759,7 @@ class OrganizationUpdateScreen extends StatelessWidget {
                             const SizedBox(height: 16),
                             TextFormField(
                               controller: c.addressController,
-                              textInputAction: TextInputAction.done,
+                              textInputAction: TextInputAction.next,
                               maxLines: 3,
                               validator: (v) =>
                                   c.requiredValidator(v, fieldName: 'Address'),
@@ -766,6 +767,55 @@ class OrganizationUpdateScreen extends StatelessWidget {
                                 label: 'Address',
                                 icon: Icons.home_outlined,
                               ),
+                            ),
+                            const SizedBox(height: 16),
+                            gridOrColumn(
+                              desktopColumns: 2,
+                              tabletColumns: 2,
+                              children: [
+                                TextFormField(
+                                  controller: c.participantCodePrefixController,
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  textInputAction: TextInputAction.next,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'[A-Za-z0-9]'),
+                                    ),
+                                    LengthLimitingTextInputFormatter(10),
+                                  ],
+                                  validator: (v) => c.codePrefixValidator(
+                                    v,
+                                    fieldName: 'Participant code',
+                                  ),
+                                  decoration: deco(
+                                    label: 'Participant code',
+                                    icon: Icons.badge_outlined,
+                                    hint: 'e.g. CON — CBC002 becomes CONCBC002',
+                                  ),
+                                ),
+                                TextFormField(
+                                  controller: c.paymentCodePrefixController,
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  textInputAction: TextInputAction.done,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'[A-Za-z0-9]'),
+                                    ),
+                                    LengthLimitingTextInputFormatter(10),
+                                  ],
+                                  validator: (v) => c.codePrefixValidator(
+                                    v,
+                                    fieldName: 'Payment code',
+                                  ),
+                                  decoration: deco(
+                                    label: 'Payment code',
+                                    icon: Icons.payments_outlined,
+                                    hint: 'e.g. PAY — CBC002 becomes PAYCBC002',
+                                  ),
+                                ),
+                              ],
                             ),
                               ] else
                                 buildDocumentStepPanel(),

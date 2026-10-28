@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/storage_service.dart';
 import '../models/competition_model.dart';
 import '../models/category_config_model.dart';
 import '../models/competition_option_model.dart';
@@ -38,6 +39,53 @@ class CompetitionRepository {
     );
   }
 
+  Future<ApiResponse<bool>> isCompetitionNameAvailable({
+    required String name,
+    int? excludeId,
+  }) async {
+    final params = <String, String>{'name': name.trim()};
+    if (excludeId != null && excludeId > 0) {
+      params['excludeId'] = '$excludeId';
+    }
+    final query = Uri(queryParameters: params).query;
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: '${EndPoints.competitionNameAvailable}?$query',
+        apiType: APIType.aGet,
+      );
+      if (!response.success) {
+        return ApiResponse<bool>(
+          success: false,
+          message: response.message ?? 'Failed to check competition name',
+          statusCode: response.statusCode,
+        );
+      }
+      final raw = response.data;
+      bool available = false;
+      if (raw is Map) {
+        if (raw['available'] == true) {
+          available = true;
+        } else {
+          final inner = raw['data'];
+          if (inner is Map && inner['available'] == true) {
+            available = true;
+          }
+        }
+      }
+      return ApiResponse<bool>(
+        success: true,
+        data: available,
+        message: response.message,
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse<bool>(
+        success: false,
+        message: 'Error checking competition name: ${e.toString()}',
+      );
+    }
+  }
+
   Future<ApiResponse<CreateCompetitionResult>> createCompetition({
     required CompetitionModel competition,
     String? maintenancePaymentOrderId,
@@ -59,7 +107,7 @@ class CompetitionRepository {
       // Prepare brochure file (if provided)
       http.MultipartFile multipartFile;
 
-      if (kIsWeb && brochureBytes != null) {
+      if (brochureBytes != null && brochureBytes.isNotEmpty) {
         final filename =
             (brochureFilename != null && brochureFilename.trim().isNotEmpty)
             ? brochureFilename.trim()
@@ -144,6 +192,7 @@ class CompetitionRepository {
 
   Future<ApiResponse<CompetitionModel>> updateCompetition({
     required CompetitionModel competition,
+    String? maintenancePaymentOrderId,
     XFile? brochureFile,
     File? brochureFileLocal,
     Uint8List? brochureBytes,
@@ -160,6 +209,11 @@ class CompetitionRepository {
       // Prepare competition data as JSON string
       // For update, don't include metadata (id, createdAt, updatedAt) in the data field
       final competitionJson = competition.toJson(includeMetadata: false);
+      if (maintenancePaymentOrderId != null &&
+          maintenancePaymentOrderId.trim().isNotEmpty) {
+        competitionJson['maintenancePaymentOrderId'] =
+            maintenancePaymentOrderId.trim();
+      }
       final dataJsonString = jsonEncode(competitionJson);
 
       print('Update competition request data: $dataJsonString');
@@ -343,6 +397,47 @@ class CompetitionRepository {
     } catch (e, stackTrace) {
       print('Error in getCompetitionsPublic: $e');
       print('Stack trace: $stackTrace');
+      return ApiResponse(
+        success: false,
+        message: 'Error loading competitions: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<ApiResponse<List<Map<String, String>>>> listCompetitionOptions(
+    int organizationId,
+  ) async {
+    try {
+      final response = await _apiService.getResponse<Map<String, dynamic>>(
+        url: '${EndPoints.competitionOptions}?organizationId=$organizationId',
+        apiType: APIType.aGet,
+        fromJson: (json) => json is Map<String, dynamic>
+            ? json
+            : Map<String, dynamic>.from(json as Map),
+      );
+      if (!response.success || response.data == null) {
+        return ApiResponse(
+          success: false,
+          message: response.message ?? 'Failed to load competitions',
+          statusCode: response.statusCode,
+        );
+      }
+      final raw = response.data!['competitions'];
+      if (raw is! List) {
+        return ApiResponse(
+          success: false,
+          message: 'Invalid competitions response',
+        );
+      }
+      final items = raw.whereType<Map>().map((item) {
+        final map = Map<String, dynamic>.from(item);
+        return {
+          'id': (map['id'] ?? '').toString(),
+          'name': (map['name'] ?? '').toString(),
+        };
+      }).where((item) => item['id']!.isNotEmpty).toList();
+      return ApiResponse(success: true, data: items, message: response.message);
+    } catch (e) {
       return ApiResponse(
         success: false,
         message: 'Error loading competitions: ${e.toString()}',
@@ -836,12 +931,16 @@ class CompetitionRepository {
   Future<ApiResponse<CompetitionOptionModel>> createCategory({
     required String name,
     String? description,
+    double? amount,
+    double? spotAmount,
   }) async {
     try {
       final requestBody = <String, dynamic>{
         'name': name,
         if (description != null && description.isNotEmpty)
           'description': description,
+        if (amount != null) 'amount': amount,
+        if (spotAmount != null) 'spotAmount': spotAmount,
       };
 
       final response = await _apiService.getResponse<dynamic>(
@@ -1254,6 +1353,37 @@ class CompetitionRepository {
     return null;
   }
 
+  /// GET /competition/{id}/brochure — original brochure file bytes.
+  Future<ApiResponse<Uint8List>> downloadBrochureBytes(String id) async {
+    try {
+      final headers = <String, String>{};
+      final token = StorageService.getString(AppConstants.tokenKey);
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+      final base = BaseUrl.baseUrl.replaceAll(RegExp(r'/$'), '');
+      final response = await http
+          .get(
+            Uri.parse('$base${EndPoints.competitionBrochure(id)}'),
+            headers: headers,
+          )
+          .timeout(BaseUrl.apiTimeout);
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return ApiResponse(success: true, data: response.bodyBytes);
+      }
+      return ApiResponse(
+        success: false,
+        message: 'Failed to download brochure (status ${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error downloading brochure: ${e.toString()}',
+      );
+    }
+  }
+
   /// GET /competition/{id}/registration-qr — PNG bytes for wall print.
   Future<ApiResponse<Uint8List>> downloadRegistrationQrPng(String id) async {
     try {
@@ -1301,6 +1431,44 @@ class CompetitionRepository {
       );
     } catch (e) {
       print('Error in getCompetitionById: $e');
+      return ApiResponse(
+        success: false,
+        message: 'Error fetching competition: ${e.toString()}',
+      );
+    }
+  }
+
+  /// Public registration lookup by opaque registration code.
+  Future<ApiResponse<CompetitionModel>> getCompetitionByRegistrationCode(
+    String registrationCode,
+  ) async {
+    try {
+      final code = registrationCode.trim();
+      if (code.isEmpty) {
+        return ApiResponse(
+          success: false,
+          message: 'Registration code is required',
+        );
+      }
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.competitionByRegistrationCode(code),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+
+      if (response.success && response.data != null) {
+        final competition = parseCompetitionFromDetailResponse(response.data);
+        if (competition != null) {
+          return ApiResponse(success: true, data: competition);
+        }
+      }
+
+      return ApiResponse(
+        success: false,
+        message: response.message ?? 'Failed to fetch competition',
+      );
+    } catch (e) {
+      print('Error in getCompetitionByRegistrationCode: $e');
       return ApiResponse(
         success: false,
         message: 'Error fetching competition: ${e.toString()}',
