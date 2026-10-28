@@ -190,6 +190,7 @@ class AdaptivePaymentSection extends StatelessWidget {
             subtitle: Text('Pay after submitting the registration form'),
           ),
           const PaymentInrOnlyNotice(margin: EdgeInsets.only(top: 4)),
+          const PaymentOnlineModeNotice(),
         ],
       ],
     );

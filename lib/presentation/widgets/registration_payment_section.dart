@@ -62,6 +62,7 @@ class RegistrationPaymentSection extends StatelessWidget {
             style: TextStyle(fontSize: 13, color: Colors.black87),
           ),
           const PaymentInrOnlyNotice(),
+          const PaymentOnlineModeNotice(),
         ],
       ],
     );

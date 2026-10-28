@@ -10,6 +10,7 @@ import '../../widgets/custom_loader.dart';
 import '../../widgets/form_title.dart';
 import '../../widgets/searchable_dropdown_field.dart';
 import '../../widgets/form_label_with_hint.dart';
+import '../../widgets/payment_inr_only_notice.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../widgets/location/district_search_field.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
@@ -1161,7 +1162,7 @@ class BulkRegistrationScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            if (payOnline)
+            if (payOnline) ...[
               const ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.payment, color: Colors.green),
@@ -1169,7 +1170,9 @@ class BulkRegistrationScreen extends StatelessWidget {
                 subtitle: Text(
                   'This competition accepts online payment only. Pay & Register collects the total for every pending participant.',
                 ),
-              )
+              ),
+              const PaymentOnlineModeNotice(margin: EdgeInsets.only(top: 4)),
+            ]
             else
               Row(
                 children: [

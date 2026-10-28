@@ -39,6 +39,10 @@ class AppConstants {
 
   /// Shown on all payment method / checkout UIs.
   static const String paymentInrOnlyMessage = 'Only INR accepted';
+
+  /// Shown beside participant registration payment.
+  static const String paymentOnlineModeNote =
+      'The fees can be paid only through online mode using Net Banking, Credit Card, Debit Card and UPI. Processing charges and GST as applicable are chargeable to the candidates (in addition to the participation fees) by the concerned Bank/Payment Gateway Integrator.';
 }
 
 class BaseUrl {
