@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
@@ -11,6 +12,7 @@ import '../../../data/models/participant_model.dart';
 import '../../../data/repositories/competition_repository.dart';
 import '../../../data/repositories/participant_feedback_repository.dart';
 import '../../../data/repositories/participant_repository.dart';
+import '../../../routes/app_routes.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import 'home_landing_sections.dart';
@@ -51,6 +53,7 @@ class _PublicCompetitionParticipantsScreenState
   int? _downloadingCertId;
   int? _downloadingDetailsId;
   bool _certificatesReleased = false;
+  String? _registrationCode;
 
   int _currentPage = 1;
   int _totalPages = 1;
@@ -94,6 +97,7 @@ class _PublicCompetitionParticipantsScreenState
     if (response.success && response.data != null) {
       setState(() {
         _certificatesReleased = response.data!.areCertificatesAvailable;
+        _registrationCode = response.data!.registrationCode;
       });
     }
   }
@@ -209,7 +213,12 @@ class _PublicCompetitionParticipantsScreenState
       address: '',
       yogaMasterName: reg['yogaTeacherName']?.toString() ?? '',
       yogaMasterContact: reg['yogaTeacherCell']?.toString() ?? '',
+      participantPhone:
+          reg['participantPhone']?.toString() ??
+          reg['participant_phone']?.toString() ??
+          '',
       registrationNo: reg['registrationNo']?.toString(),
+      categoryMode: reg['categoryMode']?.toString(),
       optForECertificate:
           parseBool(reg['optForECertificate']) ||
           parseBool(reg['opt_for_e_certificate']),
@@ -256,6 +265,29 @@ class _PublicCompetitionParticipantsScreenState
     );
 
     if (mounted) setState(() => _downloadingDetailsId = null);
+  }
+
+  bool _canOpenOnlineLogin(ParticipantModel p) {
+    final regNo = p.registrationNo?.trim() ?? '';
+    return regNo.isNotEmpty && p.isOnlineCategory;
+  }
+
+  void _onOpenOnlineLogin(ParticipantModel p) {
+    final regNo = p.registrationNo?.trim() ?? '';
+    if (regNo.isEmpty) return;
+    context.push(AppRoutes.participantVideoUploadPath(registrationNo: regNo));
+  }
+
+  void _onOpenPublicEdit(ParticipantModel p) {
+    final registrationId = p.id?.trim() ?? '';
+    final code = _registrationCode?.trim() ?? '';
+    if (registrationId.isEmpty || code.isEmpty) return;
+    context.push(
+      AppRoutes.registerCompetitionEditPath(
+        code,
+        registrationId: registrationId,
+      ),
+    );
   }
 
   bool _canDownloadCert(ParticipantModel p) {
@@ -593,6 +625,14 @@ class _PublicCompetitionParticipantsScreenState
           onDownloadDetails: p.id != null && p.id!.trim().isNotEmpty
               ? () => _onDownloadDetails(p)
               : null,
+          onLogin: _canOpenOnlineLogin(p)
+              ? () => _onOpenOnlineLogin(p)
+              : null,
+          onEdit: (_registrationCode?.trim().isNotEmpty == true &&
+                  p.id != null &&
+                  p.id!.trim().isNotEmpty)
+              ? () => _onOpenPublicEdit(p)
+              : null,
         );
       },
     );
@@ -607,6 +647,8 @@ class _ParticipantTile extends StatelessWidget {
   final bool downloadingDetails;
   final VoidCallback? onDownloadCert;
   final VoidCallback? onDownloadDetails;
+  final VoidCallback? onLogin;
+  final VoidCallback? onEdit;
 
   const _ParticipantTile({
     required this.participant,
@@ -616,6 +658,8 @@ class _ParticipantTile extends StatelessWidget {
     required this.downloadingDetails,
     this.onDownloadCert,
     this.onDownloadDetails,
+    this.onLogin,
+    this.onEdit,
   });
 
   @override
@@ -626,88 +670,150 @@ class _ParticipantTile extends StatelessWidget {
         feedbackText.isNotEmpty || (feedbackImageUrl?.isNotEmpty ?? false);
     final isNarrow = MediaQuery.sizeOf(context).width < 720;
 
-    final identity = Expanded(
-      flex: 2,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            participant.participantName,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
-            ),
+    final identityColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          participant.participantName,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppTheme.primaryColor,
           ),
-          if (participant.registrationNo != null &&
-              participant.registrationNo!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Reg: ${participant.registrationNo}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+        ),
+        if (participant.registrationNo != null &&
+            participant.registrationNo!.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
-            [
-              if (participant.category.isNotEmpty) participant.category,
-              if (participant.standard.isNotEmpty) participant.standard,
-              if (participant.schoolName.isNotEmpty) participant.schoolName,
-            ].join(' · '),
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+            'Reg: ${participant.registrationNo}',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          if (hasFeedback && isNarrow) ...[
-            const SizedBox(height: 10),
-            _PublicFeedbackPreview(
-              participantName: participant.participantName,
-              reviewText: feedbackText,
-              imageUrl: feedbackImageUrl,
-              compact: true,
-            ),
-          ],
         ],
-      ),
+        const SizedBox(height: 4),
+        Text(
+          [
+            if (participant.category.isNotEmpty) participant.category,
+            if (participant.standard.isNotEmpty) participant.standard,
+            if (participant.schoolName.isNotEmpty) participant.schoolName,
+          ].join(' · '),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+        ),
+        if (hasFeedback && isNarrow) ...[
+          const SizedBox(height: 10),
+          _PublicFeedbackPreview(
+            participantName: participant.participantName,
+            reviewText: feedbackText,
+            imageUrl: feedbackImageUrl,
+            compact: true,
+          ),
+        ],
+      ],
     );
+
+    final identity = Expanded(
+      flex: 2,
+      child: onEdit == null
+          ? identityColumn
+          : Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onEdit,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 2,
+                    horizontal: 2,
+                  ),
+                  child: identityColumn,
+                ),
+              ),
+            ),
+    );
+
+    final avatar = onEdit == null
+        ? CircleAvatar(
+            backgroundColor: AppTheme.primaryColor,
+            child: Text(
+              participant.participantName.isNotEmpty
+                  ? participant.participantName[0].toUpperCase()
+                  : '?',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          )
+        : Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onEdit,
+              customBorder: const CircleBorder(),
+              child: CircleAvatar(
+                backgroundColor: AppTheme.primaryColor,
+                child: Text(
+                  participant.participantName.isNotEmpty
+                      ? participant.participantName[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          );
+
+    final actionWidgets = <Widget>[
+      if (onDownloadDetails != null)
+        downloadingDetails
+            ? const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : _buildAction(
+                label: 'Download receipt',
+                icon: Icons.download_outlined,
+                color: Colors.blue.shade800,
+                onPressed: onDownloadDetails!,
+              ),
+      if (showCertificateDownload && onDownloadCert != null)
+        downloadingCert
+            ? const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : _buildAction(
+                label: 'Certificate',
+                icon: Icons.download_outlined,
+                color: AppTheme.primaryColor,
+                onPressed: onDownloadCert!,
+              ),
+      if (onLogin != null)
+        _buildAction(
+          label: 'Login',
+          icon: Icons.login,
+          color: AppTheme.primaryColor,
+          onPressed: onLogin!,
+        ),
+    ];
 
     final actions = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        if (onDownloadDetails != null)
-          downloadingDetails
-              ? const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : _buildDownloadAction(
-                  label: 'Download receipt',
-                  color: Colors.blue.shade800,
-                  onPressed: onDownloadDetails!,
-                ),
-        if (onDownloadDetails != null &&
-            showCertificateDownload &&
-            onDownloadCert != null)
-          const SizedBox(height: 8),
-        if (showCertificateDownload && onDownloadCert != null)
-          downloadingCert
-              ? const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : _buildDownloadAction(
-                  label: 'Certificate',
-                  color: AppTheme.primaryColor,
-                  onPressed: onDownloadCert!,
-                ),
+        for (var i = 0; i < actionWidgets.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          actionWidgets[i],
+        ],
       ],
     );
 
@@ -719,18 +825,7 @@ class _ParticipantTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: AppTheme.primaryColor,
-              child: Text(
-                participant.participantName.isNotEmpty
-                    ? participant.participantName[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            avatar,
             const SizedBox(width: 12),
             identity,
             if (hasFeedback && !isNarrow) ...[
@@ -753,14 +848,15 @@ class _ParticipantTile extends StatelessWidget {
     );
   }
 
-  Widget _buildDownloadAction({
+  Widget _buildAction({
     required String label,
+    required IconData icon,
     required Color color,
     required VoidCallback onPressed,
   }) {
     return TextButton.icon(
       onPressed: onPressed,
-      icon: Icon(Icons.download_outlined, size: 16, color: color),
+      icon: Icon(icon, size: 16, color: color),
       label: Text(
         label,
         style: TextStyle(

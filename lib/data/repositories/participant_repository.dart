@@ -10,6 +10,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/utils/storage_service.dart';
 import '../../core/utils/upload_filename_helper.dart';
 import '../models/participant_model.dart';
+import '../models/jury_participant_video_model.dart';
 import '../models/api_response.dart';
 import '../models/score_response_model.dart';
 
@@ -18,10 +19,42 @@ class ParticipantsForScoringResponse {
   final List<ParticipantModel> participants;
   final int? remainingCount;
 
+  /// When the selected stage/group is empty: where matching participants wait.
+  final List<ScoringQueueSlot> waitingElsewhere;
+
   ParticipantsForScoringResponse({
     required this.participants,
     this.remainingCount,
+    this.waitingElsewhere = const [],
   });
+}
+
+/// A stage/group that has participants waiting for the selected category/mode.
+class ScoringQueueSlot {
+  final int? stageId;
+  final String stageName;
+  final int? groupId;
+  final String groupName;
+  final int count;
+
+  const ScoringQueueSlot({
+    this.stageId,
+    required this.stageName,
+    this.groupId,
+    required this.groupName,
+    required this.count,
+  });
+
+  factory ScoringQueueSlot.fromJson(Map<String, dynamic> json) {
+    int? asInt(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '');
+    return ScoringQueueSlot(
+      stageId: asInt(json['stageId']),
+      stageName: json['stageName']?.toString() ?? '',
+      groupId: asInt(json['groupId']),
+      groupName: json['groupName']?.toString() ?? '',
+      count: asInt(json['count']) ?? 0,
+    );
+  }
 }
 
 class ParticipantRepository {
@@ -508,6 +541,24 @@ class ParticipantRepository {
   }
 
   // Create participant registration (new API)
+  Future<ApiResponse<Map<String, dynamic>>> validateParticipantRegistration({
+    required Map<String, dynamic> registrationData,
+  }) async {
+    try {
+      return await _apiService.getResponse<Map<String, dynamic>>(
+        url: EndPoints.participantRegistrationValidate,
+        apiType: APIType.aPost,
+        body: registrationData,
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+    } catch (e) {
+      return ApiResponse<Map<String, dynamic>>(
+        success: false,
+        message: 'Error validating registration: ${e.toString()}',
+      );
+    }
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> createParticipantRegistration({
     required Map<String, dynamic> registrationData,
     dynamic photoFile,
@@ -525,7 +576,7 @@ class ParticipantRepository {
       print('Registration Data: $dataJsonString');
       print('Has Photo: ${photoXFile != null || photoFile != null}');
       print(
-        'Has Bonafied Certificate: ${bonafiedCertificateXFile != null || bonafiedCertificateFile != null}',
+        'Has Bonafide Certificate: ${bonafiedCertificateXFile != null || bonafiedCertificateFile != null}',
       );
 
       final fullUrl = BaseUrl.baseUrl + EndPoints.participantRegistrationCreate;
@@ -842,6 +893,48 @@ class ParticipantRepository {
     }
   }
 
+  /// Online submissions (uploaded videos / links) of a participant for the
+  /// jury scoring screen, with preview and download URLs ready to use.
+  Future<ApiResponse<List<JuryParticipantVideo>>> getParticipantVideosForJury(
+    int registrationId,
+  ) async {
+    try {
+      final response = await _apiService.getResponse<dynamic>(
+        url: EndPoints.juryParticipantVideos(registrationId),
+        apiType: APIType.aGet,
+        fromJson: (json) => json,
+      );
+      if (!response.success || response.data == null) {
+        return ApiResponse(
+          success: false,
+          message: response.message ?? 'Could not load participant videos.',
+        );
+      }
+      dynamic list = response.data;
+      if (list is Map) {
+        list = list['data']?['videos'] ?? list['videos'];
+      }
+      final fileUrlBase = '${BaseUrl.baseUrl}${EndPoints.participantVideoFile}';
+      final videos = list is List
+          ? list
+                .whereType<Map>()
+                .map(
+                  (v) => JuryParticipantVideo.fromJson(
+                    Map<String, dynamic>.from(v),
+                    fileUrlBase: fileUrlBase,
+                  ),
+                )
+                .toList()
+          : <JuryParticipantVideo>[];
+      return ApiResponse(success: true, data: videos);
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Could not load participant videos: $e',
+      );
+    }
+  }
+
   /// Get participants for scoring based on filters
   Future<ApiResponse<ParticipantsForScoringResponse>>
   getParticipantsForScoring({
@@ -849,6 +942,7 @@ class ParticipantRepository {
     required int juryId,
     int? stageId,
     int? categoryId,
+    String? categoryMode,
     int? groupId,
     String? institutionId,
     bool? male,
@@ -867,6 +961,9 @@ class ParticipantRepository {
       }
       if (categoryId != null) {
         requestBody['categoryId'] = categoryId;
+      }
+      if (categoryMode != null && categoryMode.trim().isNotEmpty) {
+        requestBody['categoryMode'] = categoryMode.trim().toUpperCase();
       }
       if (groupId != null) {
         requestBody['groupId'] = groupId;
@@ -895,6 +992,7 @@ class ParticipantRepository {
       if (response.success && response.data != null) {
         List<ParticipantModel> participants = [];
         int? remainingCount;
+        var waitingElsewhere = <ScoringQueueSlot>[];
 
         // Handle different response structures
         if (response.data is List) {
@@ -910,6 +1008,15 @@ class ParticipantRepository {
           // Extract remainingCount if available
           if (dataMap.containsKey('remainingCount')) {
             remainingCount = dataMap['remainingCount'] as int?;
+          }
+          final waitingRaw = dataMap['waitingElsewhere'] ??
+              (dataMap['data'] is Map ? dataMap['data']['waitingElsewhere'] : null);
+          if (waitingRaw is List) {
+            waitingElsewhere = waitingRaw
+                .whereType<Map>()
+                .map((m) => ScoringQueueSlot.fromJson(Map<String, dynamic>.from(m)))
+                .where((slot) => slot.count > 0 && slot.stageName.isNotEmpty)
+                .toList();
           }
 
           // Check for 'participants' or 'data' field
@@ -931,6 +1038,7 @@ class ParticipantRepository {
           data: ParticipantsForScoringResponse(
             participants: participants,
             remainingCount: remainingCount,
+            waitingElsewhere: waitingElsewhere,
           ),
           message: response.message ?? 'Participants retrieved successfully',
         );

@@ -103,7 +103,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 return HomeCompetitionSections(
-                  competitions: competitionController.homeCompetitions.toList(),
+                  competitions: competitionController.homeCompetitions
+                      .where((c) => c.isVisibleOnPublicListing)
+                      .toList(),
                 );
               }),
               const HomeLandingFooter(),

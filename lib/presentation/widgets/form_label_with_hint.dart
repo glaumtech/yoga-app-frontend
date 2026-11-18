@@ -59,7 +59,8 @@ class FormLabelWithHint extends StatelessWidget {
         if ((hintText != null && hintText!.isNotEmpty) || reserveHintSpace) ...[
           SizedBox(height: hintSpacing ?? (isMobile ? 4 : 3)),
           Text(
-            hintText != null && hintText!.isNotEmpty ? hintText! : '',
+            // A blank hint still needs a real line box so sibling fields stay aligned.
+            hintText != null && hintText!.isNotEmpty ? hintText! : '\u00A0',
             style:
                 hintStyle ??
                 TextStyle(

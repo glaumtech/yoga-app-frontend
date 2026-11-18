@@ -43,6 +43,8 @@ class CompetitionModel {
   /// Display map from API `stageGroups`: stage name -> group names.
   final Map<String, List<String>>? stageGroupLabels;
   final String? brochureUrl;
+  /// Opaque public registration code used in share/QR URLs (not sequential id).
+  final String? registrationCode;
   final String? registrationUrl;
   /// SEPARATE_CATEGORY or FROM_FIRST_PLACE_WINNERS
   final String? championshipStyle;
@@ -53,8 +55,33 @@ class CompetitionModel {
   final String? googleDriveFolderId;
   final String? googleDriveServiceAccountEmail;
   final bool googleDriveConfigured;
+
+  /// Google OAuth client ID used for this competition's Drive uploads.
+  final String? googleDriveOauthClientId;
+
+  /// Write-only: sent on save when the organizer types a new value, never
+  /// returned by the API.
+  final String? googleDriveOauthClientSecret;
+
+  /// Write-only: sent on save when the organizer types a new value, never
+  /// returned by the API.
+  final String? googleDriveOauthRefreshToken;
+
+  /// Write-only: completed "Connect Google Drive" sign-in to save on submit.
+  final String? googleDriveOauthConnectionId;
+
+  /// True when the server already stores a client secret for this competition.
+  final bool googleDriveOauthClientSecretSet;
+
+  /// True when the server already stores a refresh token for this competition.
+  final bool googleDriveOauthRefreshTokenSet;
+
+  /// Google account verified for these credentials.
+  final String? googleDriveAccountEmail;
   final List<CompetitionCategoryConfigModel>? categoryConfigs;
   final List<CompetitionGradeModel>? grades;
+  final bool maintenancePaidAsanas;
+  final bool maintenancePaidChallenge;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -91,6 +118,7 @@ class CompetitionModel {
     this.stageGroups,
     this.stageGroupLabels,
     this.brochureUrl,
+    this.registrationCode,
     this.registrationUrl,
     this.championshipStyle,
     this.competitionMode,
@@ -98,8 +126,17 @@ class CompetitionModel {
     this.googleDriveFolderId,
     this.googleDriveServiceAccountEmail,
     this.googleDriveConfigured = false,
+    this.googleDriveOauthClientId,
+    this.googleDriveOauthClientSecret,
+    this.googleDriveOauthRefreshToken,
+    this.googleDriveOauthConnectionId,
+    this.googleDriveOauthClientSecretSet = false,
+    this.googleDriveOauthRefreshTokenSet = false,
+    this.googleDriveAccountEmail,
     this.categoryConfigs,
     this.grades,
+    this.maintenancePaidAsanas = false,
+    this.maintenancePaidChallenge = false,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -450,6 +487,8 @@ class CompetitionModel {
             ),
       brochureUrl:
           json['brochureUrl']?.toString() ?? json['brochure_url']?.toString(),
+      registrationCode: json['registrationCode']?.toString() ??
+          json['registration_code']?.toString(),
       registrationUrl: json['registrationUrl']?.toString(),
       championshipStyle:
           json['championshipStyle']?.toString() ??
@@ -467,6 +506,12 @@ class CompetitionModel {
       googleDriveServiceAccountEmail:
           json['googleDriveServiceAccountEmail']?.toString(),
       googleDriveConfigured: parseBool(json['googleDriveConfigured']),
+      googleDriveOauthClientId: json['googleDriveOauthClientId']?.toString(),
+      googleDriveOauthClientSecretSet:
+          parseBool(json['googleDriveOauthClientSecretSet']),
+      googleDriveOauthRefreshTokenSet:
+          parseBool(json['googleDriveOauthRefreshTokenSet']),
+      googleDriveAccountEmail: json['googleDriveAccountEmail']?.toString(),
       categoryConfigs: json['categoryConfigs'] != null
           ? (json['categoryConfigs'] as List)
                 .whereType<Map>()
@@ -487,6 +532,8 @@ class CompetitionModel {
                 )
                 .toList()
           : null,
+      maintenancePaidAsanas: parseBool(json['maintenancePaidAsanas']),
+      maintenancePaidChallenge: parseBool(json['maintenancePaidChallenge']),
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is String
                 ? DateTime.parse(json['createdAt'])
@@ -554,6 +601,15 @@ class CompetitionModel {
       if (competitionMode != null && competitionMode!.trim().isNotEmpty)
         'competitionMode': competitionMode!.trim(),
       'googleDriveFolderUrl': googleDriveFolderUrl?.trim() ?? '',
+      // Blank client ID removes stored credentials; blank secret/token keep
+      // the stored (encrypted) values, so they are only sent when typed.
+      'googleDriveOauthClientId': googleDriveOauthClientId?.trim() ?? '',
+      if ((googleDriveOauthClientSecret ?? '').trim().isNotEmpty)
+        'googleDriveOauthClientSecret': googleDriveOauthClientSecret!.trim(),
+      if ((googleDriveOauthRefreshToken ?? '').trim().isNotEmpty)
+        'googleDriveOauthRefreshToken': googleDriveOauthRefreshToken!.trim(),
+      if ((googleDriveOauthConnectionId ?? '').trim().isNotEmpty)
+        'googleDriveOauthConnectionId': googleDriveOauthConnectionId!.trim(),
       if (categoryConfigs != null && categoryConfigs!.isNotEmpty)
         'categoryConfigs':
             categoryConfigs!.map((c) => c.toJson()).toList(),
@@ -606,6 +662,7 @@ class CompetitionModel {
     Map<String, List<int>>? stageGroups,
     Map<String, List<String>>? stageGroupLabels,
     String? brochureUrl,
+    String? registrationCode,
     String? registrationUrl,
     String? championshipStyle,
     String? competitionMode,
@@ -613,6 +670,13 @@ class CompetitionModel {
     String? googleDriveFolderId,
     String? googleDriveServiceAccountEmail,
     bool? googleDriveConfigured,
+    String? googleDriveOauthClientId,
+    String? googleDriveOauthClientSecret,
+    String? googleDriveOauthRefreshToken,
+    String? googleDriveOauthConnectionId,
+    bool? googleDriveOauthClientSecretSet,
+    bool? googleDriveOauthRefreshTokenSet,
+    String? googleDriveAccountEmail,
     List<CompetitionCategoryConfigModel>? categoryConfigs,
     List<CompetitionGradeModel>? grades,
     DateTime? createdAt,
@@ -653,6 +717,7 @@ class CompetitionModel {
       stageGroups: stageGroups ?? this.stageGroups,
       stageGroupLabels: stageGroupLabels ?? this.stageGroupLabels,
       brochureUrl: brochureUrl ?? this.brochureUrl,
+      registrationCode: registrationCode ?? this.registrationCode,
       registrationUrl: registrationUrl ?? this.registrationUrl,
       championshipStyle: championshipStyle ?? this.championshipStyle,
       competitionMode: competitionMode ?? this.competitionMode,
@@ -662,6 +727,20 @@ class CompetitionModel {
           googleDriveServiceAccountEmail ?? this.googleDriveServiceAccountEmail,
       googleDriveConfigured:
           googleDriveConfigured ?? this.googleDriveConfigured,
+      googleDriveOauthClientId:
+          googleDriveOauthClientId ?? this.googleDriveOauthClientId,
+      googleDriveOauthClientSecret:
+          googleDriveOauthClientSecret ?? this.googleDriveOauthClientSecret,
+      googleDriveOauthRefreshToken:
+          googleDriveOauthRefreshToken ?? this.googleDriveOauthRefreshToken,
+      googleDriveOauthConnectionId:
+          googleDriveOauthConnectionId ?? this.googleDriveOauthConnectionId,
+      googleDriveOauthClientSecretSet: googleDriveOauthClientSecretSet ??
+          this.googleDriveOauthClientSecretSet,
+      googleDriveOauthRefreshTokenSet: googleDriveOauthRefreshTokenSet ??
+          this.googleDriveOauthRefreshTokenSet,
+      googleDriveAccountEmail:
+          googleDriveAccountEmail ?? this.googleDriveAccountEmail,
       categoryConfigs: categoryConfigs ?? this.categoryConfigs,
       grades: grades ?? this.grades,
       createdAt: createdAt ?? this.createdAt,
@@ -760,6 +839,8 @@ class HomeCompetitionModel {
   final String? brochureUrl;
   final String? brochureFilePath;
   final String status;
+  /// Opaque public registration code used in share/QR URLs (not sequential id).
+  final String? registrationCode;
   final String? registrationUrl;
   final String? participantsUrl;
   final String? paymentModel;
@@ -768,6 +849,7 @@ class HomeCompetitionModel {
   final String? manualPaymentQrUrl;
   final bool maintenanceFeePaid;
   final bool registrationOpen;
+  final bool hasPublicFeedback;
 
   HomeCompetitionModel({
     this.id,
@@ -788,6 +870,7 @@ class HomeCompetitionModel {
     this.brochureUrl,
     this.brochureFilePath,
     this.status = 'upcoming',
+    this.registrationCode,
     this.registrationUrl,
     this.participantsUrl,
     this.paymentModel,
@@ -796,6 +879,7 @@ class HomeCompetitionModel {
     this.manualPaymentQrUrl,
     this.maintenanceFeePaid = true,
     this.registrationOpen = true,
+    this.hasPublicFeedback = false,
   });
 
   bool get isPayPerParticipant => paymentModel == 'PAY_PER_PARTICIPANT';
@@ -845,6 +929,8 @@ class HomeCompetitionModel {
       brochureUrl: json['brochureUrl']?.toString(),
       brochureFilePath: json['brochureFilePath']?.toString(),
       status: json['status']?.toString() ?? 'upcoming',
+      registrationCode: json['registrationCode']?.toString() ??
+          json['registration_code']?.toString(),
       registrationUrl: json['registrationUrl']?.toString(),
       participantsUrl: json['participantsUrl']?.toString(),
       paymentModel: json['paymentModel']?.toString(),
@@ -855,10 +941,23 @@ class HomeCompetitionModel {
       manualPaymentQrUrl: json['manualPaymentQrUrl']?.toString(),
       maintenanceFeePaid: json['maintenanceFeePaid'] == true,
       registrationOpen: json['registrationOpen'] != false,
+      hasPublicFeedback: json['hasPublicFeedback'] == true,
     );
   }
 
   String? get idStr => id?.toString();
+
+  /// True when Display Ad From is unset or today's date is on/after that day.
+  bool get isVisibleOnPublicListing {
+    final raw = displayAdFrom?.trim();
+    if (raw == null || raw.isEmpty) return true;
+    final ad = DateTime.tryParse(raw);
+    if (ad == null) return true;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final adDay = DateTime(ad.year, ad.month, ad.day);
+    return !adDay.isAfter(today);
+  }
 
   DateTime? get eventEndDateTime {
     final endDateRaw = eventEndDate?.trim();

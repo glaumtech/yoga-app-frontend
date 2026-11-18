@@ -6,6 +6,18 @@ import 'reports_participants_tab_controller.dart';
 /// Registered participants table (no jury scores) for Reports.
 class ReportsRegisteredParticipantsTabController
     extends ReportsParticipantsTabController {
+  ReportsRegisteredParticipantsTabController({this.initialPreset});
+
+  /// Preset owned by this instance (dashboard popup). When set, the shared
+  /// [ReportsController.pendingParticipantsPreset] is ignored so another
+  /// registered-participants controller can't consume or override it.
+  final ReportsParticipantsListPreset? initialPreset;
+
+  bool get _ownsPreset => initialPreset != null;
+
+  /// Drops responses from older [load] calls that finish after a newer one.
+  int _loadSeq = 0;
+
   final RxList<String> selectedCategoryTypes = <String>[].obs;
   final RxnBool spotRegistrationFilter = RxnBool();
   final RxnInt filterAge = RxnInt();
@@ -16,6 +28,7 @@ class ReportsRegisteredParticipantsTabController
   final RxnString yogaTeacherNameFilter = RxnString();
   final RxnString yogaTeacherCellFilter = RxnString();
   final RxnString yogaTeacherDisplayName = RxnString();
+  final RxnString feeTypeFilter = RxnString();
 
   Worker? _presetWatcher;
 
@@ -39,6 +52,13 @@ class ReportsRegisteredParticipantsTabController
           final generation = ++_competitionLoadGeneration;
           Future.microtask(() async {
             if (generation != _competitionLoadGeneration) return;
+
+            if (_ownsPreset) {
+              if (competitionChanged) {
+                applyDashboardPreset(initialPreset!, refreshOptions: true);
+              }
+              return;
+            }
 
             final pending =
                 reportsController.pendingParticipantsPreset.value;
@@ -79,9 +99,14 @@ class ReportsRegisteredParticipantsTabController
           yogaTeacherNameFilter.value = null;
           yogaTeacherCellFilter.value = null;
           yogaTeacherDisplayName.value = null;
+          feeTypeFilter.value = null;
         }
       },
     );
+    if (_ownsPreset) {
+      _lastCompetitionId = reportsController.selectedCompetitionId.value;
+      return;
+    }
     _presetWatcher = ever<ReportsParticipantsListPreset?>(
       reportsController.pendingParticipantsPreset,
       (preset) {
@@ -94,6 +119,10 @@ class ReportsRegisteredParticipantsTabController
 
   @override
   void onReady() {
+    if (_ownsPreset) {
+      applyDashboardPreset(initialPreset!, refreshOptions: true);
+      return;
+    }
     final preset = reportsController.pendingParticipantsPreset.value;
     if (preset != null) {
       applyDashboardPreset(preset);
@@ -109,7 +138,10 @@ class ReportsRegisteredParticipantsTabController
     super.onClose();
   }
 
-  void applyDashboardPreset(ReportsParticipantsListPreset preset) {
+  void applyDashboardPreset(
+    ReportsParticipantsListPreset preset, {
+    bool refreshOptions = false,
+  }) {
     _competitionLoadGeneration++;
     clearFilters();
     if (preset.genders != null && preset.genders!.isNotEmpty) {
@@ -152,12 +184,16 @@ class ReportsRegisteredParticipantsTabController
           ? preset.label!.trim()
           : preset.yogaTeacherName!.trim();
     }
+    final feeType = preset.feeType?.trim().toUpperCase() ?? '';
+    if (feeType.isNotEmpty) {
+      feeTypeFilter.value = feeType;
+    }
     tablePage.value = 0;
     final id = int.tryParse(
       reportsController.selectedCompetitionId.value ?? '',
     );
     if (id != null) {
-      load(id);
+      load(id, refreshOptions: refreshOptions);
     }
   }
 
@@ -174,6 +210,7 @@ class ReportsRegisteredParticipantsTabController
     yogaTeacherNameFilter.value = null;
     yogaTeacherCellFilter.value = null;
     yogaTeacherDisplayName.value = null;
+    feeTypeFilter.value = null;
   }
 
   @override
@@ -189,6 +226,7 @@ class ReportsRegisteredParticipantsTabController
     yogaTeacherNameFilter.value = null;
     yogaTeacherCellFilter.value = null;
     yogaTeacherDisplayName.value = null;
+    feeTypeFilter.value = null;
     _lastCompetitionId = null;
     _competitionLoadGeneration = 0;
   }
@@ -207,6 +245,9 @@ class ReportsRegisteredParticipantsTabController
     if (requireInstitutionFilter.value) n++;
     if (yogaTeacherNameFilter.value != null &&
         yogaTeacherNameFilter.value!.trim().isNotEmpty) {
+      n++;
+    }
+    if (feeTypeFilter.value != null && feeTypeFilter.value!.trim().isNotEmpty) {
       n++;
     }
     return n;
@@ -228,6 +269,18 @@ class ReportsRegisteredParticipantsTabController
       chips.add(ReportsActiveFilterChip(
         key: 'spotRegistration',
         label: spot ? 'Spot registration' : 'Online registration',
+      ));
+    }
+
+    final feeType = feeTypeFilter.value?.trim().toUpperCase() ?? '';
+    if (feeType.isNotEmpty) {
+      chips.add(ReportsActiveFilterChip(
+        key: 'feeType',
+        label: feeType == 'EARLY_BIRD'
+            ? 'Early Bird'
+            : feeType == 'BULK_DISCOUNT'
+                ? 'Group discount'
+                : feeType,
       ));
     }
 
@@ -305,6 +358,8 @@ class ReportsRegisteredParticipantsTabController
       selectedCategoryTypes.remove(key.substring('categoryType:'.length));
     } else if (key == 'spotRegistration') {
       spotRegistrationFilter.value = null;
+    } else if (key == 'feeType') {
+      feeTypeFilter.value = null;
     } else if (key == 'agePrefix') {
       filterAge.value = null;
       registrationPrefix.value = '';
@@ -334,12 +389,14 @@ class ReportsRegisteredParticipantsTabController
 
   @override
   Future<void> load(int competitionId, {bool refreshOptions = false}) async {
+    final seq = ++_loadSeq;
     try {
       isLoading.value = true;
       errorMessage.value = '';
 
       if (refreshOptions) {
         await loadStageAndCategoryOptions(competitionId);
+        if (seq != _loadSeq) return;
       }
 
       final prefix = registrationPrefix.value.trim();
@@ -375,7 +432,11 @@ class ReportsRegisteredParticipantsTabController
             requireInstitutionFilter.value ? true : null,
         yogaTeacherName: yogaTeacherNameFilter.value,
         yogaTeacherCell: yogaTeacherCellFilter.value,
+        feeType: feeTypeFilter.value,
       );
+
+      // A newer load (e.g. the preset's filtered request) superseded this one.
+      if (seq != _loadSeq) return;
 
       if (!resp.success || resp.data == null) {
         errorMessage.value =
@@ -396,13 +457,14 @@ class ReportsRegisteredParticipantsTabController
       tablePage.value = (d['page'] as num?)?.toInt() ?? 0;
       tableCompetitionName.value = (d['competitionName'] ?? '').toString();
     } catch (e) {
+      if (seq != _loadSeq) return;
       errorMessage.value =
           'Error loading registered participants: ${e.toString()}';
       tableItems.clear();
       tableTotalElements.value = 0;
       tableTotalPages.value = 0;
     } finally {
-      isLoading.value = false;
+      if (seq == _loadSeq) isLoading.value = false;
     }
   }
 }

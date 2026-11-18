@@ -12,11 +12,13 @@ import '../../widgets/primary_button.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/responsive_admin_table.dart';
 import '../../widgets/form_title.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../widgets/toggle_button_group.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/photo_source_buttons.dart';
 import '../../../data/models/user_management_model.dart';
+import '../../../data/models/competition_option_model.dart';
 import 'users_list_screen.dart';
 import 'dart:async' show unawaited;
 import 'dart:io';
@@ -412,40 +414,28 @@ class UserManagementScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Obx(
-          () => DropdownButtonFormField<String>(
-            value: controller.selectedEventId.value.isNotEmpty
+          () => SearchableDropdownField(
+            selectedValue: controller.selectedEventId.value.isNotEmpty
                 ? controller.selectedEventId.value
                 : null,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: 12,
-              ),
-              isDense: isMobile,
+            hintText: 'Select Competition',
+            fillColor: Colors.white,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 16,
+              vertical: 12,
             ),
-            hint: Text(
-              'Select Competition',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-            style: TextStyle(fontSize: isMobile ? 14 : 16),
+            isDense: isMobile,
             items: competitionController.competitions
                 .where((c) => c.id != null)
-                .map((competition) {
-                  return DropdownMenuItem<String>(
-                    value: competition.id,
-                    child: Text(
-                      competition.competitionName,
-                      style: TextStyle(fontSize: isMobile ? 14 : 16),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                })
+                .map(
+                  (competition) => SearchableDropdownItem(
+                    value: competition.id!,
+                    label: competition.competitionName,
+                  ),
+                )
                 .toList(),
             onChanged: (value) async {
-              if (value != null) {
+              if (value.isNotEmpty) {
                 controller.selectedEventId.value = value;
                 controller.errorMessage.value = '';
                 final match = competitionController.competitions
@@ -463,6 +453,7 @@ class UserManagementScreen extends StatelessWidget {
                   await controller.prepareVolunteerEntry();
                 }
               } else {
+                controller.selectedEventId.value = '';
                 controller.selectedEventName.value = '';
                 controller.availableStages.clear();
                 controller.availableCategories.clear();
@@ -472,13 +463,11 @@ class UserManagementScreen extends StatelessWidget {
               }
             },
             validator: (_) {
-              // Read controller so validation stays correct when Obx rebuilds the dropdown.
               if (controller.selectedEventId.value.isEmpty) {
                 return 'Please select a competition';
               }
               return null;
             },
-            isExpanded: true,
           ),
         ),
       ],
@@ -1162,9 +1151,8 @@ class UserManagementScreen extends StatelessWidget {
                                             {
                                               controller
                                                   .selectedCategories
-                                                  .value = controller.categories
-                                                  .map((category) => category)
-                                                  .toList(),
+                                                  .value = controller
+                                                  .categoryKeys,
                                             }
                                           else
                                             {
@@ -1179,35 +1167,34 @@ class UserManagementScreen extends StatelessWidget {
                                 ],
                               ),
                               Obx(() {
-                                final categoryLabels = controller
-                                    .availableCategories
-                                    .map((c) => c.name)
-                                    .toList();
+                                // One option per (category, mode): e.g. COMMON
+                                // Offline and COMMON Online/Video are separate.
+                                final options =
+                                    controller.availableCategories.toList();
                                 return Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: categoryLabels.map((category) {
+                                  children: options.map((option) {
+                                    final key = option.key;
                                     return InkWell(
                                       onTap: () =>
-                                          controller.toggleCategory(category),
+                                          controller.toggleCategory(key),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Checkbox(
                                             value: controller.selectedCategories
-                                                .contains(category),
+                                                .contains(key),
                                             onChanged: (value) => controller
-                                                .toggleCategory(category),
+                                                .toggleCategory(key),
                                             materialTapTargetSize:
                                                 MaterialTapTargetSize
                                                     .shrinkWrap,
                                           ),
                                           const SizedBox(width: 4),
-                                          Text(
-                                            category,
-                                            style: TextStyle(
-                                              fontSize: isTablet ? 12 : 14,
-                                            ),
+                                          _buildCategoryOptionLabel(
+                                            option,
+                                            fontSize: isTablet ? 12 : 14,
                                           ),
                                         ],
                                       ),
@@ -1432,32 +1419,30 @@ class UserManagementScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Obx(() {
-                final categoryLabels = controller.availableCategories
-                    .map((c) => c.name)
-                    .toList();
+                final options = controller.availableCategories.toList();
                 return Column(
-                  children: categoryLabels.map((category) {
+                  children: options.map((option) {
+                    final key = option.key;
                     return InkWell(
-                      onTap: () => controller.toggleCategory(category),
+                      onTap: () => controller.toggleCategory(key),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: [
                             Checkbox(
                               value: controller.selectedCategories.contains(
-                                category,
+                                key,
                               ),
                               onChanged: (value) =>
-                                  controller.toggleCategory(category),
+                                  controller.toggleCategory(key),
                               materialTapTargetSize:
                                   MaterialTapTargetSize.shrinkWrap,
                             ),
                             const SizedBox(width: 4),
                             Expanded(
-                              child: Text(
-                                category,
-                                style: const TextStyle(fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
+                              child: _buildCategoryOptionLabel(
+                                option,
+                                fontSize: 14,
                               ),
                             ),
                           ],
@@ -2134,51 +2119,27 @@ class UserManagementScreen extends StatelessWidget {
             SizedBox(
               width: isMobile ? double.infinity : (isTablet ? 160 : 180),
               child: Obx(
-                () => DropdownButtonFormField<int?>(
-                  value: userController.selectedEventId.value.isNotEmpty
-                      ? int.tryParse(userController.selectedEventId.value)
+                () => SearchableDropdownField(
+                  selectedValue: userController.selectedEventId.value.isNotEmpty
+                      ? userController.selectedEventId.value
                       : null,
-                  decoration: InputDecoration(
-                    labelText: 'Filter by Competition',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 16,
-                    ),
-                    isDense: true,
-                  ),
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text(
-                        'All Competitions',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    ...competitionController.competitions
-                        .where((competition) => competition.id != null)
-                        .map((competition) {
-                          return DropdownMenuItem<int?>(
-                            value: int.tryParse(competition.id!),
-                            child: Text(
-                              competition.competitionName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }),
-                  ],
+                  labelText: 'Filter by Competition',
+                  hintText: 'All Competitions',
+                  emptyOptionLabel: 'All Competitions',
+                  items: competitionController.competitions
+                      .where((competition) => competition.id != null)
+                      .map(
+                        (competition) => SearchableDropdownItem(
+                          value: competition.id!,
+                          label: competition.competitionName,
+                        ),
+                      )
+                      .toList(),
                   onChanged: (value) {
-                    if (value != null) {
-                      userController.selectedEventId.value = value.toString();
-                    } else {
-                      userController.selectedEventId.value = '';
-                    }
-                    userController.loadUsers(eventId: value);
+                    userController.selectedEventId.value = value;
+                    userController.loadUsers(
+                      eventId: value.isEmpty ? null : int.tryParse(value),
+                    );
                   },
                 ),
               ),
@@ -2690,42 +2651,27 @@ Widget _buildListSearchAndFilter(
         children: [
           Expanded(
             child: Obx(
-              () => DropdownButtonFormField<int?>(
-                value: userController.selectedEventId.value.isNotEmpty
-                    ? int.tryParse(userController.selectedEventId.value)
+              () => SearchableDropdownField(
+                selectedValue: userController.selectedEventId.value.isNotEmpty
+                    ? userController.selectedEventId.value
                     : null,
-                decoration: InputDecoration(
-                  labelText: 'Filter by Competition',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                ),
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('All Competitions'),
-                  ),
-                  ...competitionController.competitions
-                      .where((competition) => competition.id != null)
-                      .map((competition) {
-                        return DropdownMenuItem<int?>(
-                          value: int.tryParse(competition.id!),
-                          child: Text(
-                            competition.competitionName,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }),
-                ],
+                labelText: 'Filter by Competition',
+                hintText: 'All Competitions',
+                emptyOptionLabel: 'All Competitions',
+                items: competitionController.competitions
+                    .where((competition) => competition.id != null)
+                    .map(
+                      (competition) => SearchableDropdownItem(
+                        value: competition.id!,
+                        label: competition.competitionName,
+                      ),
+                    )
+                    .toList(),
                 onChanged: (value) {
-                  if (value != null) {
-                    userController.selectedEventId.value = value.toString();
-                  } else {
-                    userController.selectedEventId.value = '';
-                  }
-                  userController.loadUsers(eventId: value);
+                  userController.selectedEventId.value = value;
+                  userController.loadUsers(
+                    eventId: value.isEmpty ? null : int.tryParse(value),
+                  );
                 },
               ),
             ),
@@ -3037,5 +2983,62 @@ Widget _buildUserInfoRow(String label, String value) {
         Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
       ],
     ),
+  );
+}
+
+/// Category allotment option label: name plus a mode chip, so the same category
+/// configured both Offline and Online (e.g. two "COMMON" cards) is distinguishable.
+Widget _buildCategoryOptionLabel(
+  CompetitionOptionModel option, {
+  double fontSize = 14,
+}) {
+  final modeLabel = option.modeLabel;
+  final isOnline = option.isOnline;
+  final chipColor = isOnline ? const Color(0xFF2563EB) : const Color(0xFF475569);
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(
+        child: Text(
+          option.name,
+          style: TextStyle(fontSize: fontSize),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      if (modeLabel != null) ...[
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: chipColor.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: chipColor.withOpacity(0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                option.isVideo
+                    ? Icons.videocam_outlined
+                    : isOnline
+                    ? Icons.cloud_outlined
+                    : Icons.storefront_outlined,
+                size: fontSize - 1,
+                color: chipColor,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                modeLabel,
+                style: TextStyle(
+                  fontSize: fontSize - 3,
+                  color: chipColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ],
   );
 }

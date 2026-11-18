@@ -11,6 +11,7 @@ import '../../routes/app_routes.dart';
 import 'competition_participants_qr_image.dart';
 import 'competition_registration_qr_image.dart';
 import 'primary_button.dart';
+import 'public_feedback_list_dialog.dart';
 
 /// Compact competition card for horizontal carousels (public competitions list).
 class PublicCompetitionHorizontalCard extends StatelessWidget {
@@ -100,9 +101,17 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           _buildDateAddressQrSection(context, id),
-                          if (competition.categories.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Wrap(
+                        ],
+                      ),
+                    ),
+                    if (competition.categories.isNotEmpty ||
+                        competition.hasPublicFeedback) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Wrap(
                               spacing: 6,
                               runSpacing: 4,
                               children: competition.categories
@@ -110,10 +119,14 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
                                   .map((c) => _tag(context, c))
                                   .toList(),
                             ),
+                          ),
+                          if (competition.hasPublicFeedback) ...[
+                            const SizedBox(width: 8),
+                            _buildReviewButton(context, id),
                           ],
                         ],
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 8),
                     _buildActions(context, id),
                     if (showResultsButton &&
@@ -348,15 +361,41 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
         side: BorderSide(color: AppTheme.primaryColor.withOpacity(0.5)),
       );
 
+  Widget _buildReviewButton(BuildContext context, String id) {
+    return TextButton.icon(
+      onPressed: id.isEmpty
+          ? null
+          : () => showPublicFeedbackListDialog(
+              context: context,
+              competitionId: id,
+              competitionName: competition.competitionName,
+            ),
+      icon: const Icon(Icons.rate_review_outlined, size: 16),
+      label: const Text(
+        'Review',
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+      style: TextButton.styleFrom(
+        foregroundColor: AppTheme.primaryColor,
+        backgroundColor: AppTheme.primaryColor.withOpacity(0.08),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   void _navigateToParticipants(BuildContext context) {
     onViewParticipants();
   }
 
   void _navigateToRegister(BuildContext context, String id) {
-    if (id.isEmpty) return;
+    final code = competition.registrationCode?.trim() ?? '';
+    if (code.isEmpty) return;
     context.pushNamed(
       'register-competition',
-      pathParameters: {'competitionId': id},
+      pathParameters: {'registrationCode': code},
     );
   }
 
@@ -426,11 +465,12 @@ class PublicCompetitionHorizontalCard extends StatelessWidget {
   }
 
   void _copyLink(BuildContext context) {
-    final id = competition.idStr ?? '${competition.id}';
+    final code = competition.registrationCode?.trim() ?? '';
     final link = registrationShareUrlForCompetition(
       registrationUrl: competition.registrationUrl,
-      competitionId: id,
+      registrationCode: code,
     );
+    if (link.isEmpty) return;
     Clipboard.setData(ClipboardData(text: link));
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(

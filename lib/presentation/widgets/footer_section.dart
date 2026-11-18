@@ -9,7 +9,7 @@ import '../../routes/app_routes.dart';
 class FooterSection extends StatelessWidget {
   const FooterSection({super.key});
 
-  static const String _contactEmail = 'praveen.sekar@glaum.in';
+  static const String _contactEmail = 'praveen@glaum.in';
   static const String _companyName = 'Glaum Technologies';
 
   static const _navLinks = [
@@ -69,7 +69,7 @@ class FooterSection extends StatelessWidget {
   Widget _buildDesktopBottomSection(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _copyrightText()),
+        Expanded(child: _copyrightText(context)),
         _socialIcons(context),
         const SizedBox(width: 12),
         _backToTopButton(context),
@@ -81,7 +81,7 @@ class FooterSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _copyrightText(),
+        _copyrightText(context),
         const SizedBox(height: 16),
         Row(
           children: [
@@ -94,13 +94,31 @@ class FooterSection extends StatelessWidget {
     );
   }
 
-  Widget _copyrightText() {
-    return Text(
-      '© ${DateTime.now().year} $_companyName. All Rights Reserved',
-      style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.75),
-        fontSize: 12,
-      ),
+  Widget _copyrightText(BuildContext context) {
+    final muted = TextStyle(
+      color: Colors.white.withValues(alpha: 0.75),
+      fontSize: 12,
+    );
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('© ${DateTime.now().year} ', style: muted),
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: () => _launchExternal(context, 'https://glaum.in'),
+            child: Text(
+              _companyName,
+              style: muted.copyWith(
+                decoration: TextDecoration.underline,
+                decorationColor: Colors.white.withValues(alpha: 0.5),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        Text('. All Rights Reserved', style: muted),
+      ],
     );
   }
 

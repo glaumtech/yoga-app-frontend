@@ -84,9 +84,16 @@ class MastersRepository {
     required MasterTableType type,
     required String name,
     String? description,
+    double? amount,
+    double? spotAmount,
   }) async {
     try {
-      final body = _buildBody(name: name, description: description);
+      final body = _buildBody(
+        name: name,
+        description: description,
+        amount: amount,
+        spotAmount: spotAmount,
+      );
 
       final response = await _api.getResponse<dynamic>(
         url: _listUrl(type),
@@ -125,9 +132,16 @@ class MastersRepository {
     required int id,
     required String name,
     String? description,
+    double? amount,
+    double? spotAmount,
   }) async {
     try {
-      final body = _buildBody(name: name, description: description);
+      final body = _buildBody(
+        name: name,
+        description: description,
+        amount: amount,
+        spotAmount: spotAmount,
+      );
 
       final response = await _api.getResponse<dynamic>(
         url: _byIdUrl(type, id),
@@ -192,14 +206,59 @@ class MastersRepository {
     }
   }
 
+  Future<ApiResponse<List<MasterRecordModel>>> updateCategoryAmounts(
+    List<MasterRecordModel> items,
+  ) async {
+    try {
+      final body = {
+        'categories': items
+            .map(
+              (item) => {
+                'id': item.id,
+                'amount': item.amount,
+                'spotAmount': item.spotAmount > 0 ? item.spotAmount : item.amount,
+              },
+            )
+            .toList(),
+      };
+
+      final response = await _api.getResponse<dynamic>(
+        url: EndPoints.categoryAmountConfig,
+        apiType: APIType.aPut,
+        body: body,
+        fromJson: (json) => json,
+      );
+
+      if (!response.success || response.data == null) {
+        return ApiResponse(
+          success: false,
+          message: response.message ?? 'Failed to save category amounts',
+          statusCode: response.statusCode,
+        );
+      }
+
+      final itemsOut = _extractList(response.data, 'categories');
+      return ApiResponse(success: true, data: itemsOut);
+    } catch (e) {
+      return ApiResponse(
+        success: false,
+        message: 'Error saving category amounts: $e',
+      );
+    }
+  }
+
   Map<String, dynamic> _buildBody({
     required String name,
     String? description,
+    double? amount,
+    double? spotAmount,
   }) {
     return {
       'name': name.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
+      if (amount != null) 'amount': amount,
+      if (spotAmount != null) 'spotAmount': spotAmount,
     };
   }
 
@@ -248,7 +307,12 @@ class MastersRepository {
 
     final option = CompetitionRepository.parseCreatedOption(raw, entityKey: entityKey);
     if (option != null) {
-      return MasterRecordModel(id: option.id, name: option.name);
+      return MasterRecordModel(
+        id: option.id,
+        name: option.name,
+        amount: option.amount,
+        spotAmount: option.spotAmount,
+      );
     }
 
     return null;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -13,6 +14,7 @@ import '../../widgets/location/district_search_field.dart';
 import '../../widgets/location/state_search_field.dart';
 import '../../widgets/organization/organization_proof_image_upload.dart';
 import '../../widgets/pinned_scroll_views.dart';
+import '../../widgets/payment_inr_only_notice.dart';
 
 class OrganizationSetupScreen extends StatelessWidget {
   const OrganizationSetupScreen({super.key});
@@ -703,6 +705,7 @@ class OrganizationSetupScreen extends StatelessWidget {
               enabled: !c.isLoading.value && !c.isProcessingPayment.value,
               onSelected: (value) => c.selectedCheckoutMethod.value = value,
             ),
+            const PaymentInrOnlyNotice(),
             if (c.selectedCheckoutMethod.value == 'CASH')
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -1473,6 +1476,47 @@ class OrganizationSetupScreen extends StatelessWidget {
                                   label: 'Address (optional)',
                                   icon: Icons.home_outlined,
                                 ),
+                              ),
+                              const SizedBox(height: 16),
+                              gridOrColumn(
+                                desktopColumns: 2,
+                                tabletColumns: 2,
+                                children: [
+                                  TextFormField(
+                                    controller: c.participantCodePrefixController,
+                                    textCapitalization:
+                                        TextCapitalization.characters,
+                                    textInputAction: TextInputAction.next,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[A-Za-z0-9]'),
+                                      ),
+                                      LengthLimitingTextInputFormatter(10),
+                                    ],
+                                    decoration: deco(
+                                      label: 'Participant code (optional)',
+                                      icon: Icons.badge_outlined,
+                                      hint: 'e.g. CON — CBC002 becomes CONCBC002',
+                                    ),
+                                  ),
+                                  TextFormField(
+                                    controller: c.paymentCodePrefixController,
+                                    textCapitalization:
+                                        TextCapitalization.characters,
+                                    textInputAction: TextInputAction.done,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[A-Za-z0-9]'),
+                                      ),
+                                      LengthLimitingTextInputFormatter(10),
+                                    ],
+                                    decoration: deco(
+                                      label: 'Payment code (optional)',
+                                      icon: Icons.payments_outlined,
+                                      hint: 'e.g. PAY — CBC002 becomes PAYCBC002',
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           );

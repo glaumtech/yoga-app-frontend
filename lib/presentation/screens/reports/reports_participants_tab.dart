@@ -198,7 +198,10 @@ class ReportsParticipantsTab extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             if (!hasCompetition)
-              _infoCard('Select a competition to view participant scores.')
+              _infoCard(
+                context,
+                'Select a competition to view participant scores.',
+              )
             else
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -266,9 +269,13 @@ class ReportsParticipantsTab extends StatelessWidget {
     }
     if (items.isEmpty) {
       return _infoCard(
+        context,
         q.isNotEmpty
             ? 'No participants match your search.'
             : 'No participant scores found yet.',
+        scored: tabController.scoredParticipants.value,
+        total: tabController.totalParticipants.value,
+        controller: tabController,
       );
     }
     return Column(
@@ -300,7 +307,13 @@ class ReportsParticipantsTab extends StatelessWidget {
     );
   }
 
-  Widget _infoCard(String message) {
+  Widget _infoCard(
+    BuildContext context,
+    String message, {
+    int scored = 0,
+    int total = 0,
+    ReportsParticipantsTabController? controller,
+  }) {
     return Card(
       elevation: 2,
       color: Colors.blueGrey[50],
@@ -320,11 +333,93 @@ class ReportsParticipantsTab extends StatelessWidget {
                 ),
               ),
             ),
+            if (controller != null && (total > 0 || scored > 0)) ...[
+              const SizedBox(width: 12),
+              _scoredTotalBadge(
+                scored,
+                total,
+                onTap: () => unawaited(
+                  ReportsParticipantsTabLogic.openCountStatusDialog(
+                    context,
+                    controller,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+/// Compact "65 / 120" scored vs registered badge.
+Widget _scoredTotalBadge(
+  int scored,
+  int total, {
+  VoidCallback? onTap,
+}) {
+  final badge = Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.35)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: '$scored',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+              TextSpan(
+                text: ' / $total',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          'scored / registered',
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  return Tooltip(
+    message: onTap == null
+        ? 'Scored participants / total registered participants'
+        : 'View count updated vs not updated by date',
+    child: onTap == null
+        ? badge
+        : Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(10),
+              child: badge,
+            ),
+          ),
+  );
 }
 
 /// Dashboard-style grid table with themed header and numbered pagination.
@@ -517,11 +612,23 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           return Obx(() {
+            final countOnly =
+                controller.hasCountScores.value &&
+                !controller.hasJuryScores.value;
             final showGrades =
-                controller.hasGrades.value ||
-                controller.competitionGrades.isNotEmpty;
+                !countOnly &&
+                (controller.hasGrades.value ||
+                    controller.competitionGrades.isNotEmpty);
             final minTableWidth =
                 _kMinParticipantTableWidth + (showGrades ? 76.0 : 0.0);
+            final scoreHeader = countOnly
+                ? 'COUNT'
+                : (controller.hasCountScores.value
+                      ? 'SCORE / COUNT'
+                      : 'TOTAL SCORE');
+            final juriesHeader = countOnly
+                ? 'DAYS'
+                : (controller.hasCountScores.value ? 'JURIES / DAYS' : 'JURIES');
 
             return Material(
               color: Colors.white,
@@ -570,7 +677,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                 _headerCell(
                                   width: 92,
                                   child: _headerLabel(
-                                    'TOTAL SCORE',
+                                    scoreHeader,
                                     align: TextAlign.right,
                                     sort: _ParticipantHeaderSort.active,
                                   ),
@@ -587,7 +694,7 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                   width: 72,
                                   last: true,
                                   child: _headerLabel(
-                                    'JURIES',
+                                    juriesHeader,
                                     align: TextAlign.right,
                                     sort: _ParticipantHeaderSort.inactive,
                                   ),
@@ -789,14 +896,9 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                     child: Align(
                                       alignment: Alignment.centerRight,
                                       child: Text(
-                                        (double.tryParse(
-                                                  (row['totalGrandTotal'] ??
-                                                          row['avgGrandTotal'] ??
-                                                          0)
-                                                      .toString(),
-                                                ) ??
-                                                0.0)
-                                            .toStringAsFixed(2),
+                                        ReportsParticipantsTabLogic.formatScoreValue(
+                                          row,
+                                        ),
                                         style: TextStyle(
                                           fontWeight: FontWeight.w900,
                                           fontSize: 13,
@@ -827,12 +929,10 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                                     last: true,
                                     child: Align(
                                       alignment: Alignment.centerRight,
-                                      child: Text(
-                                        (row['juryCount'] ?? 0).toString(),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 12,
-                                        ),
+                                      child: _clickableDaysOrJuries(
+                                        hostContext: hostContext,
+                                        controller: controller,
+                                        row: row,
                                       ),
                                     ),
                                   ),
@@ -883,7 +983,9 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Total: $te participants',
+                                te == controller.scoredParticipants.value
+                                    ? 'Total: $te participants'
+                                    : 'Showing $te of ${controller.scoredParticipants.value} scored',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
@@ -893,6 +995,17 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
                             ],
                           ),
                         ),
+                        _scoredTotalBadge(
+                          controller.scoredParticipants.value,
+                          controller.totalParticipants.value,
+                          onTap: () => unawaited(
+                            ReportsParticipantsTabLogic.openCountStatusDialog(
+                              hostContext,
+                              controller,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         IconButton(
                           tooltip: 'Previous page',
                           visualDensity: VisualDensity.compact,
@@ -957,6 +1070,46 @@ class _ReportsParticipantScoresTable extends StatelessWidget {
           );
           });
         },
+      ),
+    );
+  }
+
+  Widget _clickableDaysOrJuries({
+    required BuildContext hostContext,
+    required ReportsParticipantsTabController controller,
+    required Map<String, dynamic> row,
+  }) {
+    final isCount = ReportsParticipantsTabLogic.isCountScoreRow(row);
+    final label = (row['juryCount'] ?? 0).toString();
+    return Tooltip(
+      message: isCount ? 'View daily counts' : 'View jury scores',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            unawaited(
+              ReportsParticipantsTabLogic.openParticipantScoreDetails(
+                hostContext,
+                controller,
+                Map<String, dynamic>.from(row),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                color: isCount ? AppTheme.primaryColor : const Color(0xFF212121),
+                decoration: isCount ? TextDecoration.underline : null,
+                decorationColor: AppTheme.primaryColor,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

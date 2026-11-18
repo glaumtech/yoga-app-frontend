@@ -8,6 +8,7 @@ import '../../../core/utils/role_display_name.dart';
 import '../../../routes/app_routes.dart';
 import '../controllers/user_management_controller.dart';
 import 'admin_sidebar.dart';
+import 'amount_request_notification_button.dart';
 import 'change_password_dialog.dart';
 
 /// Layout wrapper for admin screens with persistent sidebar
@@ -21,6 +22,7 @@ class AdminSidebarLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
+    final isPhoneNarrow = screenWidth < 400;
     final userController = Get.isRegistered<UserManagementController>()
         ? Get.find<UserManagementController>()
         : Get.put(UserManagementController());
@@ -125,42 +127,45 @@ class AdminSidebarLayout extends StatelessWidget {
                               return Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: isMobile ? 140 : 220,
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        if (name.isNotEmpty)
-                                          Text(
-                                            name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        if (type.isNotEmpty)
-                                          Text(
-                                            displayRoleName(type),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: Colors.white.withOpacity(
-                                                0.9,
+                                  const AmountRequestNotificationButton(),
+                                  if (!isPhoneNarrow)
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: isMobile ? 110 : 220,
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          if (name.isNotEmpty)
+                                            Text(
+                                              name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13,
                                               ),
-                                              fontWeight: FontWeight.w500,
-                                              fontSize: 11,
                                             ),
-                                          ),
-                                      ],
+                                          if (type.isNotEmpty)
+                                            Text(
+                                              displayRoleName(type),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: Colors.white.withOpacity(
+                                                  0.9,
+                                                ),
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                  if (isPhoneNarrow) const SizedBox(width: 4),
 
                                   const SizedBox(width: 10),
                                   PopupMenuButton<String>(

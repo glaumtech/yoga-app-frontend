@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 
-class StaticLegalScreen extends StatelessWidget {
+import '../../../data/repositories/legal_document_repository.dart';
+
+class StaticLegalScreen extends StatefulWidget {
   final String title;
   final List<String> paragraphs;
+  final String? docType;
 
   const StaticLegalScreen({
     super.key,
     required this.title,
     required this.paragraphs,
+    this.docType,
   });
 
   static StaticLegalScreen? forDocType(String docType) {
@@ -16,6 +20,7 @@ class StaticLegalScreen extends StatelessWidget {
         return const StaticLegalScreen(
           title: 'Privacy Policy',
           paragraphs: _privacyPolicy,
+          docType: 'privacy',
         );
       case 'refund':
         return const StaticLegalScreen(
@@ -26,6 +31,7 @@ class StaticLegalScreen extends StatelessWidget {
         return const StaticLegalScreen(
           title: 'Terms and Conditions',
           paragraphs: _termsAndConditions,
+          docType: 'terms',
         );
       default:
         return null;
@@ -40,7 +46,7 @@ class StaticLegalScreen extends StatelessWidget {
         'organizers, jury members, and payment processors strictly for competition operations.',
     'You may contact us to request correction or deletion of your registration data, '
         'subject to legal and operational requirements.',
-    'For privacy-related queries, email praveen.sekar@glaum.in.',
+    'For privacy-related queries, email praveen@glaum.in.',
   ];
 
   static const _refundPolicy = [
@@ -61,10 +67,59 @@ class StaticLegalScreen extends StatelessWidget {
     'Certificates, results, and awards are issued as per organizer policies. Glaum '
         'Technologies provides the platform and is not liable for on-ground event incidents '
         'beyond applicable law.',
-    'For questions about terms, contact praveen.sekar@glaum.in.',
+    'For questions about terms, contact praveen@glaum.in.',
   ];
 
   static const _refundBoldPhrase = 'contact the Competition Organizer';
+
+  @override
+  State<StaticLegalScreen> createState() => _StaticLegalScreenState();
+}
+
+class _StaticLegalScreenState extends State<StaticLegalScreen> {
+  late String _title;
+  late List<String> _paragraphs;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = widget.title;
+    _paragraphs = List<String>.from(widget.paragraphs);
+    final docType = widget.docType;
+    if (docType != null && (docType == 'terms' || docType == 'privacy')) {
+      _loadFromApi(docType);
+    }
+  }
+
+  Future<void> _loadFromApi(String docType) async {
+    setState(() => _loading = true);
+    try {
+      final resp = await LegalDocumentRepository().getLegalDocument(docType);
+      if (!mounted) return;
+      if (resp.success && resp.data != null) {
+        final data = resp.data!;
+        final title = data['title']?.toString();
+        final paragraphs = (data['paragraphs'] as List?)
+                ?.map((e) => e.toString())
+                .where((e) => e.trim().isNotEmpty)
+                .toList() ??
+            const <String>[];
+        if (title != null && title.trim().isNotEmpty) {
+          _title = title.trim();
+        }
+        if (paragraphs.isNotEmpty) {
+          _paragraphs = paragraphs;
+        }
+      }
+    } catch (_) {
+      // Keep hardcoded fallback content.
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,33 +130,35 @@ class StaticLegalScreen extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          for (final paragraph in paragraphs)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _buildParagraph(paragraph, textStyle),
+      appBar: AppBar(title: Text(_title)),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                for (final paragraph in _paragraphs)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildParagraph(paragraph, textStyle),
+                  ),
+              ],
             ),
-        ],
-      ),
     );
   }
 
   Widget _buildParagraph(String paragraph, TextStyle textStyle) {
-    if (!paragraph.contains(_refundBoldPhrase)) {
+    if (!paragraph.contains(StaticLegalScreen._refundBoldPhrase)) {
       return Text(paragraph, style: textStyle);
     }
 
-    final parts = paragraph.split(_refundBoldPhrase);
+    final parts = paragraph.split(StaticLegalScreen._refundBoldPhrase);
     return Text.rich(
       TextSpan(
         style: textStyle,
         children: [
           TextSpan(text: parts[0]),
           TextSpan(
-            text: _refundBoldPhrase,
+            text: StaticLegalScreen._refundBoldPhrase,
             style: textStyle.copyWith(fontWeight: FontWeight.bold),
           ),
           if (parts.length > 1) TextSpan(text: parts[1]),

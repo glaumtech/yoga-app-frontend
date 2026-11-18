@@ -185,11 +185,16 @@ class AppRouter {
           }
 
           // Super admin with incomplete organization details: lock to org complete only.
+          // Public registration deep links stay reachable (share / QR / new tab).
           final isOrgCompleteRoute = location == AppRoutes.organizationComplete ||
               location.startsWith(AppRoutes.organizationComplete);
           if (_requiresMandatoryOrganizationUpdate() &&
               _isBranchAdminFromStorage() &&
-              !isOrgCompleteRoute) {
+              !isOrgCompleteRoute &&
+              !isRegister &&
+              !isLegal &&
+              !isPublicCompetitions &&
+              !isHomeRoute) {
             return AppRoutes.organizationComplete;
           }
 
@@ -200,7 +205,11 @@ class AppRouter {
           if (!_requiresMandatoryOrganizationUpdate() &&
               _requiresFirstCompetition() &&
               _isBranchAdminFromStorage() &&
-              !isCompetitionCreateRoute) {
+              !isCompetitionCreateRoute &&
+              !isRegister &&
+              !isLegal &&
+              !isPublicCompetitions &&
+              !isHomeRoute) {
             return AppRoutes.createCompetition;
           }
 
@@ -348,17 +357,24 @@ class AppRouter {
         },
       ),
 
-      // User-facing participant registration by competition (anyone can access)
+      // User-facing participant registration by opaque registration code
       GoRoute(
         path: AppRoutes.registerCompetition,
         name: 'register-competition',
         builder: (context, state) {
-          final competitionId = state.pathParameters['competitionId'] ?? '';
-          if (competitionId.isEmpty) {
+          final registrationCode =
+              state.pathParameters['registrationCode'] ?? '';
+          if (registrationCode.isEmpty) {
             return const HomeScreen();
           }
+          final editRegistrationId =
+              state.uri.queryParameters['edit']?.trim();
           return UserCompetitionRegistrationScreen(
-            competitionId: competitionId,
+            registrationCode: registrationCode,
+            editRegistrationId: (editRegistrationId != null &&
+                    editRegistrationId.isNotEmpty)
+                ? editRegistrationId
+                : null,
           );
         },
       ),
@@ -377,79 +393,126 @@ class AppRouter {
         ),
       ),
 
-      // Admin
-      GoRoute(
-        path: AppRoutes.adminDashboard,
-        name: 'admin-dashboard',
-        builder: (context, state) => const AdminDashboardScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.userManagement,
-        name: 'user-management',
-        pageBuilder: (context, state) =>
-            _noTransitionPage(state, const UserManagementScreen()),
+      // Admin sidebar destinations stay mounted (IndexedStack) so typed text and
+      // the caret survive switching left-menu tabs.
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) => navigationShell,
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.adminDashboard,
+                name: 'admin-dashboard',
+                pageBuilder: (context, state) =>
+                    _noTransitionPage(state, const AdminDashboardScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.createCompetition,
+                name: 'create-competition',
+                pageBuilder: (context, state) =>
+                    _noTransitionPage(state, const CreateCompetitionScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.userManagement,
+                name: 'user-management',
+                pageBuilder: (context, state) =>
+                    _noTransitionPage(state, const UserManagementScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.participantManagement,
+                name: 'participant-management',
+                pageBuilder: (context, state) => _noTransitionPage(
+                  state,
+                  const ParticipantManagementScreen(),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.schoolsList,
+                name: 'schools-list',
+                pageBuilder: (context, state) =>
+                    _noTransitionPage(state, const SchoolsScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.reports,
+                name: 'reports',
+                pageBuilder: (context, state) =>
+                    _noTransitionPage(state, const ReportsScreen()),
+                routes: [
+                  GoRoute(
+                    path: 'registration/:registrationId',
+                    name: 'participant-registration-details',
+                    pageBuilder: (context, state) {
+                      final registrationId =
+                          state.pathParameters['registrationId'] ?? '';
+                      final participantName =
+                          state.uri.queryParameters['name'];
+                      final competitionName =
+                          state.uri.queryParameters['competition'];
+                      final registrationNo =
+                          state.uri.queryParameters['regNo'];
+                      return _noTransitionPage(
+                        state,
+                        ParticipantRegistrationDetailsScreen(
+                          registrationId: registrationId,
+                          participantName: participantName,
+                          competitionName: competitionName,
+                          registrationNo: registrationNo,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.settings,
+                name: 'settings',
+                pageBuilder: (context, state) => _noTransitionPage(
+                  state,
+                  SettingsScreen(initialTab: state.uri.queryParameters['tab']),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.sponsors,
+                name: 'sponsors',
+                pageBuilder: (context, state) =>
+                    _noTransitionPage(state, const SponsorsScreen()),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoutes.usersList,
         name: 'users-list',
         builder: (context, state) => const UsersListScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.createCompetition,
-        name: 'create-competition',
-        pageBuilder: (context, state) =>
-            _noTransitionPage(state, const CreateCompetitionScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.participantManagement,
-        name: 'participant-management',
-        pageBuilder: (context, state) =>
-            _noTransitionPage(state, const ParticipantManagementScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.schoolsList,
-        name: 'schools-list',
-        pageBuilder: (context, state) =>
-            _noTransitionPage(state, const SchoolsScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.reports,
-        name: 'reports',
-        pageBuilder: (context, state) =>
-            _noTransitionPage(state, const ReportsScreen()),
-        routes: [
-          GoRoute(
-            path: 'registration/:registrationId',
-            name: 'participant-registration-details',
-            pageBuilder: (context, state) {
-              final registrationId =
-                  state.pathParameters['registrationId'] ?? '';
-              final participantName = state.uri.queryParameters['name'];
-              final competitionName = state.uri.queryParameters['competition'];
-              final registrationNo = state.uri.queryParameters['regNo'];
-              return _noTransitionPage(
-                state,
-                ParticipantRegistrationDetailsScreen(
-                  registrationId: registrationId,
-                  participantName: participantName,
-                  competitionName: competitionName,
-                  registrationNo: registrationNo,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      GoRoute(
-        path: AppRoutes.settings,
-        name: 'settings',
-        pageBuilder: (context, state) =>
-            _noTransitionPage(state, const SettingsScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.sponsors,
-        name: 'sponsors',
-        builder: (context, state) => const SponsorsScreen(),
       ),
 
       GoRoute(

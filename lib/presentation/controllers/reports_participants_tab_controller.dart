@@ -47,6 +47,10 @@ class ReportsParticipantsTabController extends GetxController {
   final RxInt tableTotalPages = 0.obs;
   final RxString tableCompetitionName = ''.obs;
   final RxBool hasGrades = false.obs;
+  final RxBool hasCountScores = false.obs;
+  final RxBool hasJuryScores = false.obs;
+  final RxInt scoredParticipants = 0.obs;
+  final RxInt totalParticipants = 0.obs;
   final RxList<CompetitionGradeModel> competitionGrades =
       <CompetitionGradeModel>[].obs;
 
@@ -103,6 +107,10 @@ class ReportsParticipantsTabController extends GetxController {
           tableTotalElements.value = 0;
           tableTotalPages.value = 0;
           tableCompetitionName.value = '';
+          hasCountScores.value = false;
+          hasJuryScores.value = false;
+          scoredParticipants.value = 0;
+          totalParticipants.value = 0;
           participantSearchQuery.value = '';
           participantSearchFieldController.clear();
           stageOptions.clear();
@@ -167,6 +175,10 @@ class ReportsParticipantsTabController extends GetxController {
     tableTotalPages.value = 0;
     tableCompetitionName.value = '';
     hasGrades.value = false;
+    hasCountScores.value = false;
+    hasJuryScores.value = false;
+    scoredParticipants.value = 0;
+    totalParticipants.value = 0;
     competitionGrades.clear();
     stageOptions.clear();
     categoryOptions.clear();
@@ -601,6 +613,10 @@ class ReportsParticipantsTabController extends GetxController {
         tableTotalElements.value = 0;
         tableTotalPages.value = 0;
         hasGrades.value = false;
+        hasCountScores.value = false;
+        hasJuryScores.value = false;
+        scoredParticipants.value = 0;
+        totalParticipants.value = 0;
         competitionGrades.clear();
         return;
       }
@@ -619,7 +635,9 @@ class ReportsParticipantsTabController extends GetxController {
       tableItems.assignAll(
         rawItems.map((e) {
           final row = Map<String, dynamic>.from(e as Map);
-          CompetitionGradeResolver.applyGradeToRow(row, grades);
+          if (!_isCountScoreRow(row)) {
+            CompetitionGradeResolver.applyGradeToRow(row, grades);
+          }
           return row;
         }).toList(),
       );
@@ -627,12 +645,24 @@ class ReportsParticipantsTabController extends GetxController {
       tableTotalPages.value = (d['totalPages'] as num?)?.toInt() ?? 0;
       tablePage.value = (d['page'] as num?)?.toInt() ?? 0;
       tableCompetitionName.value = (d['competitionName'] ?? '').toString();
+      hasCountScores.value = d['hasCountScores'] == true ||
+          tableItems.any(_isCountScoreRow);
+      hasJuryScores.value = d['hasJuryScores'] == true ||
+          tableItems.any((row) => !_isCountScoreRow(row));
+      scoredParticipants.value =
+          (d['scoredParticipants'] as num?)?.toInt() ?? tableTotalElements.value;
+      totalParticipants.value =
+          (d['totalParticipants'] as num?)?.toInt() ?? scoredParticipants.value;
     } catch (e) {
       errorMessage.value = 'Error loading participant scores: ${e.toString()}';
       tableItems.clear();
       tableTotalElements.value = 0;
       tableTotalPages.value = 0;
       hasGrades.value = false;
+      hasCountScores.value = false;
+      hasJuryScores.value = false;
+      scoredParticipants.value = 0;
+      totalParticipants.value = 0;
       competitionGrades.clear();
     } finally {
       isLoading.value = false;
@@ -672,7 +702,7 @@ class ReportsParticipantsTabController extends GetxController {
     final rowGroupId = row['groupId'] != null
         ? (row['groupId'] as num?)?.toInt()
         : null;
-    if (pid == null || rowStageId == null || rowCategoryId == null) {
+    if (pid == null || rowCategoryId == null) {
       return ApiResponse(
         success: false,
         message: 'Invalid row data',
@@ -748,5 +778,52 @@ class ReportsParticipantsTabController extends GetxController {
           ? null
           : List<String>.from(selectedGenders),
     );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> fetchCountSubmissionStatus({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final competitionId = int.tryParse(
+      reportsController.selectedCompetitionId.value ?? '',
+    );
+    if (competitionId == null) {
+      return ApiResponse(
+        success: false,
+        message: 'Select a competition first',
+        statusCode: 0,
+      );
+    }
+
+    String ymd(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-'
+        '${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
+
+    return reportsRepository.getCountSubmissionStatus(
+      competitionId,
+      from: ymd(from),
+      to: ymd(to),
+      stageIds: selectedStageIds.isEmpty
+          ? null
+          : List<int>.from(selectedStageIds),
+      categoryIds: selectedCategoryIds.isEmpty
+          ? null
+          : List<int>.from(selectedCategoryIds),
+      groupIds: selectedGroupIds.isEmpty
+          ? null
+          : List<int>.from(selectedGroupIds),
+      stateId: selectedStateId.value,
+      cityId: null,
+      institutionId: selectedInstitutionId.value,
+      districtId: districtQueryParam(),
+      genders: selectedGenders.isEmpty
+          ? null
+          : List<String>.from(selectedGenders),
+    );
+  }
+
+  static bool _isCountScoreRow(Map<String, dynamic> row) {
+    return (row['scoreType'] ?? '').toString().toUpperCase() == 'COUNT';
   }
 }

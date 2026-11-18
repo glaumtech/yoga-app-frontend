@@ -10,6 +10,8 @@ class ParticipantModel {
   final String address;
   final String yogaMasterName;
   final String yogaMasterContact;
+  /// Participant mobile without +91.
+  final String participantPhone;
   final String? photoUrl;
 
   /// Server storage path for bonafied certificate (e.g. certificates/abc.pdf).
@@ -52,6 +54,8 @@ class ParticipantModel {
   final double? amount;
   final String? razorpayOrderId;
   final String? razorpayPaymentId;
+  /// Assigned after payment, for example PAYCBC002.
+  final String? paymentCode;
   final String? competitionName;
   final String? competitionAddress;
   final String? competitionEventDateDisplay;
@@ -71,6 +75,7 @@ class ParticipantModel {
     required this.address,
     required this.yogaMasterName,
     required this.yogaMasterContact,
+    this.participantPhone = '',
     this.photoUrl,
     this.bonafiedCertificate,
     this.participantCode,
@@ -103,6 +108,7 @@ class ParticipantModel {
     this.amount,
     this.razorpayOrderId,
     this.razorpayPaymentId,
+    this.paymentCode,
     this.competitionName,
     this.competitionAddress,
     this.competitionEventDateDisplay,
@@ -148,6 +154,10 @@ class ParticipantModel {
       yogaMasterContact: (json['yogaMasterContact'] ??
               json['yoga_master_contact'] ??
               json['yogaTeacherCell'])
+          ?.toString() ??
+          '',
+      participantPhone: (json['participantPhone'] ??
+              json['participant_phone'])
           ?.toString() ??
           '',
       photoUrl: (json['photoUrl'] ?? json['photo_url'] ?? json['photo'])
@@ -266,6 +276,7 @@ class ParticipantModel {
       razorpayPaymentId:
           (json['razorpayPaymentId'] ?? json['razorpay_payment_id'])
               ?.toString(),
+      paymentCode: (json['paymentCode'] ?? json['payment_code'])?.toString(),
       competitionName: json['competitionName']?.toString(),
       competitionAddress: json['competitionAddress']?.toString(),
       competitionEventDateDisplay:
@@ -329,11 +340,13 @@ class ParticipantModel {
       'address': address,
       'yogaMasterName': yogaMasterName,
       'yogaMasterContact': yogaMasterContact,
+      'participantPhone': participantPhone,
       if (photoUrl != null) 'photoUrl': photoUrl,
       if (bonafiedCertificate != null)
         'bonafiedCertificate': bonafiedCertificate,
       if (participantCode != null) 'participantCode': participantCode,
       if (registrationNo != null) 'registrationNo': registrationNo,
+      if (paymentCode != null) 'paymentCode': paymentCode,
       if (includeCreatedAt) 'createdAt': createdAt.toIso8601String(),
       if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       if (juryScores != null) 'juryScores': juryScores,
@@ -369,6 +382,7 @@ class ParticipantModel {
     String? address,
     String? yogaMasterName,
     String? yogaMasterContact,
+    String? participantPhone,
     String? photoUrl,
     String? bonafiedCertificate,
     String? participantCode,
@@ -398,6 +412,7 @@ class ParticipantModel {
     double? amount,
     String? razorpayOrderId,
     String? razorpayPaymentId,
+    String? paymentCode,
   }) {
     return ParticipantModel(
       id: id ?? this.id,
@@ -411,6 +426,7 @@ class ParticipantModel {
       address: address ?? this.address,
       yogaMasterName: yogaMasterName ?? this.yogaMasterName,
       yogaMasterContact: yogaMasterContact ?? this.yogaMasterContact,
+      participantPhone: participantPhone ?? this.participantPhone,
       photoUrl: photoUrl ?? this.photoUrl,
       bonafiedCertificate: bonafiedCertificate ?? this.bonafiedCertificate,
       participantCode: participantCode ?? this.participantCode,
@@ -442,6 +458,7 @@ class ParticipantModel {
       amount: amount ?? this.amount,
       razorpayOrderId: razorpayOrderId ?? this.razorpayOrderId,
       razorpayPaymentId: razorpayPaymentId ?? this.razorpayPaymentId,
+      paymentCode: paymentCode ?? this.paymentCode,
     );
   }
 

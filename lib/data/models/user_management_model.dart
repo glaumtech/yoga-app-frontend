@@ -1,4 +1,5 @@
 import '../../core/utils/role_display_name.dart';
+import 'competition_option_model.dart';
 
 class UserManagementModel {
   final String? id;
@@ -158,8 +159,17 @@ class UserManagementModel {
         categoriesObj = categoriesList
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
+        // Same category may be allotted per mode (COMMON Offline / Online),
+        // so the display label carries the mode when present.
         categories = categoriesObj
-            .map((e) => e['categoryName']?.toString() ?? '')
+            .map((e) {
+              final name = e['categoryName']?.toString() ?? '';
+              final mode = CompetitionOptionModel.describeMode(
+                e['mode']?.toString(),
+                null,
+              );
+              return name.isEmpty || mode == null ? name : '$name ($mode)';
+            })
             .where((s) => s.isNotEmpty)
             .toList();
       } else {
@@ -278,6 +288,18 @@ class UserManagementModel {
         json['categories'] = categoriesObj!
             .map((c) => c['id'])
             .whereType<int>()
+            .toSet()
+            .toList();
+        // Per-mode allotment (backend prefers this over `categories`).
+        json['categoryAllotments'] = categoriesObj!
+            .where((c) => c['id'] is int)
+            .map(
+              (c) => {
+                'categoryId': c['id'],
+                if (CompetitionOptionModel.normalizeMode(c['mode']) != null)
+                  'mode': CompetitionOptionModel.normalizeMode(c['mode']),
+              },
+            )
             .toList();
       } else if (categories.isNotEmpty) {
         // For now, we'll need to map category names to IDs in the controller

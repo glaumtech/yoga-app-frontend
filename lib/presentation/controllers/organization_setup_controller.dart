@@ -76,6 +76,10 @@ class OrganizationSetupController extends GetxController {
   final TextEditingController branchCodeController = TextEditingController();
   final TextEditingController commencingYearController =
       TextEditingController();
+  final TextEditingController participantCodePrefixController =
+      TextEditingController();
+  final TextEditingController paymentCodePrefixController =
+      TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneNoController = TextEditingController();
   final TextEditingController mobileNoController = TextEditingController();
@@ -154,6 +158,8 @@ class OrganizationSetupController extends GetxController {
     branchNameController.dispose();
     branchCodeController.dispose();
     commencingYearController.dispose();
+    participantCodePrefixController.dispose();
+    paymentCodePrefixController.dispose();
     emailController.dispose();
     phoneNoController.dispose();
     mobileNoController.dispose();
@@ -365,6 +371,8 @@ class OrganizationSetupController extends GetxController {
     branchNameController.clear();
     branchCodeController.clear();
     commencingYearController.clear();
+    participantCodePrefixController.clear();
+    paymentCodePrefixController.clear();
     emailController.clear();
     phoneNoController.clear();
     mobileNoController.clear();
@@ -783,6 +791,10 @@ class OrganizationSetupController extends GetxController {
       gstNumber: gstNumberController.text.trim().isEmpty
           ? null
           : gstNumberController.text.trim().toUpperCase(),
+      participantCodePrefix: _normalizedCodePrefix(
+        participantCodePrefixController.text,
+      ),
+      paymentCodePrefix: _normalizedCodePrefix(paymentCodePrefixController.text),
     );
 
     return OrganizationSetupFoundationRequestModel(
@@ -838,7 +850,45 @@ class OrganizationSetupController extends GetxController {
       errorMessage.value = orgName;
       return false;
     }
+    final participantCodeErr = _codePrefixValidator(
+      participantCodePrefixController.text,
+      fieldName: 'Participant code',
+      required: false,
+    );
+    if (participantCodeErr != null) {
+      errorMessage.value = participantCodeErr;
+      return false;
+    }
+    final paymentCodeErr = _codePrefixValidator(
+      paymentCodePrefixController.text,
+      fieldName: 'Payment code',
+      required: false,
+    );
+    if (paymentCodeErr != null) {
+      errorMessage.value = paymentCodeErr;
+      return false;
+    }
     return true;
+  }
+
+  String? _codePrefixValidator(
+    String? value, {
+    required String fieldName,
+    bool required = false,
+  }) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return required ? '$fieldName is required' : null;
+    }
+    if (!RegExp(r'^[A-Za-z0-9]{1,10}$').hasMatch(text)) {
+      return '$fieldName must be 1–10 letters or digits';
+    }
+    return null;
+  }
+
+  String? _normalizedCodePrefix(String raw) {
+    final text = raw.trim().toUpperCase();
+    return text.isEmpty ? null : text;
   }
 
   bool validateDocumentStep() {

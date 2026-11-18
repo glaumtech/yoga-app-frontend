@@ -8,6 +8,9 @@ String displayRoleName(String? typeName) {
     case 'ORG_ADMIN':
     case 'ORG ADMIN':
       return 'Organization Admin';
+    case 'APPLICATION_ADMIN':
+    case 'APPLICATION ADMIN':
+      return 'Application Admin';
     case 'SUB_ADMIN':
     case 'SUB ADMIN':
       return 'Sub Admin';

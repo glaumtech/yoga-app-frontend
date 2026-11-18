@@ -59,8 +59,9 @@ dependencies:
   # Storage
   get_storage: ^2.1.1
   
-  # CSV Export
+  # CSV export and Excel template (dropdowns need xlsx)
   csv: ^5.0.2
+  archive: ^4.0.7
   path_provider: ^2.1.1
   
   # UI Components

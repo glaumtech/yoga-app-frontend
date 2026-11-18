@@ -114,6 +114,15 @@ class ParticipantPaymentReceiptView extends StatelessWidget {
         ),
       );
     }
+    if (_text(participant!.paymentCode).isNotEmpty) {
+      items.add(
+        _DetailItem(
+          label: 'Payment code',
+          value: _text(participant!.paymentCode),
+          emphasize: true,
+        ),
+      );
+    }
     if (_text(participant!.competitionName).isNotEmpty) {
       items.add(
         _DetailItem(

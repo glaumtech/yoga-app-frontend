@@ -26,10 +26,10 @@ class CompetitionRegistrationQrPanel extends StatelessWidget {
   String? get _competitionId => competition.id;
 
   String get _shareUrl {
-    final id = _competitionId ?? '';
+    final code = competition.registrationCode?.trim() ?? '';
     return registrationShareUrlForCompetition(
       registrationUrl: competition.registrationUrl,
-      competitionId: id,
+      registrationCode: code,
     );
   }
 

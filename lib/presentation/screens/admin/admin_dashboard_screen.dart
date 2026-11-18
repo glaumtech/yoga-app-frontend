@@ -7,6 +7,7 @@ import '../../controllers/competition_controller.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/admin_sidebar_layout.dart';
 import '../../widgets/pinned_scroll_views.dart';
+import 'widgets/analyze_locations_card.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -177,6 +178,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   Icons.event_available,
                                   AppTheme.secondaryColor,
                                 ),
+                                const AnalyzeLocationsCard(),
                               ],
                             );
                           }),

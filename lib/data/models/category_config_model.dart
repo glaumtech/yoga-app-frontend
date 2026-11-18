@@ -79,6 +79,19 @@ class CompetitionCategoryConfigModel {
   double spotFeeAmount;
   bool includeFeeInRegistration;
 
+  bool earlyBirdEnabled;
+  /// Inclusive start date, yyyy-MM-dd.
+  String? earlyBirdFrom;
+  /// Inclusive end date, yyyy-MM-dd.
+  String? earlyBirdTo;
+  double earlyBirdFeeAmount;
+
+  bool bulkDiscountEnabled;
+  String? bulkDiscountFrom;
+  String? bulkDiscountTo;
+  int bulkDiscountMinCount;
+  double bulkDiscountFeeAmount;
+
   /// When true, prize ties can be resolved via a one-asana tie-breaker round.
   bool tieBreakerEnabled;
 
@@ -138,6 +151,15 @@ class CompetitionCategoryConfigModel {
     this.feeAmount = 0,
     this.spotFeeAmount = 0,
     this.includeFeeInRegistration = true,
+    this.earlyBirdEnabled = false,
+    this.earlyBirdFrom,
+    this.earlyBirdTo,
+    this.earlyBirdFeeAmount = 0,
+    this.bulkDiscountEnabled = false,
+    this.bulkDiscountFrom,
+    this.bulkDiscountTo,
+    this.bulkDiscountMinCount = 0,
+    this.bulkDiscountFeeAmount = 0,
   })  : draftId = draftId ??
             'draft-${DateTime.now().microsecondsSinceEpoch}-'
                 '${identityHashCode(categoryName)}',
@@ -226,6 +248,11 @@ class CompetitionCategoryConfigModel {
       feeAmount: 0,
       spotFeeAmount: 0,
       includeFeeInRegistration: true,
+      earlyBirdEnabled: false,
+      earlyBirdFeeAmount: 0,
+      bulkDiscountEnabled: false,
+      bulkDiscountMinCount: 0,
+      bulkDiscountFeeAmount: 0,
       tieBreakerEnabled: false,
     );
     draft.syncGeneratedStages();
@@ -289,6 +316,15 @@ class CompetitionCategoryConfigModel {
     feeAmount = 0;
     spotFeeAmount = 0;
     includeFeeInRegistration = true;
+    earlyBirdEnabled = false;
+    earlyBirdFrom = null;
+    earlyBirdTo = null;
+    earlyBirdFeeAmount = 0;
+    bulkDiscountEnabled = false;
+    bulkDiscountFrom = null;
+    bulkDiscountTo = null;
+    bulkDiscountMinCount = 0;
+    bulkDiscountFeeAmount = 0;
     tieBreakerEnabled = false;
     summary = null;
     syncGeneratedStages();
@@ -695,6 +731,17 @@ class CompetitionCategoryConfigModel {
         return spot ?? online;
       }(),
       includeFeeInRegistration: json['includeFeeInRegistration'] != false,
+      earlyBirdEnabled: json['earlyBirdEnabled'] == true,
+      earlyBirdFrom: _isoDate(json['earlyBirdFrom']),
+      earlyBirdTo: _isoDate(json['earlyBirdTo']),
+      earlyBirdFeeAmount: _money(json['earlyBirdFeeAmount']),
+      bulkDiscountEnabled: json['bulkDiscountEnabled'] == true,
+      bulkDiscountFrom: _isoDate(json['bulkDiscountFrom']),
+      bulkDiscountTo: _isoDate(json['bulkDiscountTo']),
+      bulkDiscountMinCount: json['bulkDiscountMinCount'] is int
+          ? json['bulkDiscountMinCount'] as int
+          : int.tryParse(json['bulkDiscountMinCount']?.toString() ?? '') ?? 0,
+      bulkDiscountFeeAmount: _money(json['bulkDiscountFeeAmount']),
       tieBreakerEnabled: json['tieBreakerEnabled'] == true,
     );
   }
@@ -762,8 +809,45 @@ class CompetitionCategoryConfigModel {
       'feeAmount': feeAmount,
       'spotFeeAmount': spotFeeAmount > 0 ? spotFeeAmount : feeAmount,
       'includeFeeInRegistration': includeFeeInRegistration,
+      'earlyBirdEnabled': earlyBirdEnabled,
+      'earlyBirdFrom': earlyBirdFrom,
+      'earlyBirdTo': earlyBirdTo,
+      'earlyBirdFeeAmount': earlyBirdFeeAmount,
+      'bulkDiscountEnabled': bulkDiscountEnabled,
+      'bulkDiscountFrom': bulkDiscountFrom,
+      'bulkDiscountTo': bulkDiscountTo,
+      'bulkDiscountMinCount': bulkDiscountMinCount,
+      'bulkDiscountFeeAmount': bulkDiscountFeeAmount,
       'tieBreakerEnabled': tieBreakerEnabled,
     };
+  }
+
+  /// Online base after Early Bird and an optional bulk-registration count.
+  /// Spot registration does not use this. When both offers match, the lower
+  /// amount is returned.
+  double resolveDiscountedOnlineFee(
+    double onlineFee, {
+    DateTime? onDate,
+    int? bulkCategoryCount,
+  }) {
+    final day = onDate ?? DateTime.now();
+    double? early;
+    if (earlyBirdEnabled && _dateInRange(earlyBirdFrom, earlyBirdTo, day)) {
+      early = earlyBirdFeeAmount;
+    }
+    double? bulk;
+    if (bulkCategoryCount != null &&
+        bulkCategoryCount > 0 &&
+        bulkDiscountEnabled &&
+        bulkDiscountMinCount >= 1 &&
+        bulkCategoryCount >= bulkDiscountMinCount &&
+        _dateInRange(bulkDiscountFrom, bulkDiscountTo, day)) {
+      bulk = bulkDiscountFeeAmount;
+    }
+    if (early != null && bulk != null) {
+      return early <= bulk ? early : bulk;
+    }
+    return early ?? bulk ?? onlineFee;
   }
 
   CompetitionCategoryConfigModel clone({String? newDraftId}) {
@@ -846,4 +930,35 @@ class VivaQuestionModel {
         'minMarks': minMarks,
         'maxMarks': maxMarks,
       };
+}
+
+String? _isoDate(dynamic value) {
+  if (value == null) return null;
+  final text = value.toString().trim();
+  if (text.isEmpty) return null;
+  return text.length >= 10 ? text.substring(0, 10) : text;
+}
+
+double _money(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+bool _dateInRange(String? from, String? to, DateTime day) {
+  final start = _parseIsoDate(from);
+  final end = _parseIsoDate(to);
+  if (start == null || end == null) return false;
+  final current = DateTime(day.year, day.month, day.day);
+  return !current.isBefore(start) && !current.isAfter(end);
+}
+
+DateTime? _parseIsoDate(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return null;
+  final parts = raw.trim().split('-');
+  if (parts.length < 3) return null;
+  final year = int.tryParse(parts[0]);
+  final month = int.tryParse(parts[1]);
+  final date = int.tryParse(parts[2]);
+  if (year == null || month == null || date == null) return null;
+  return DateTime(year, month, date);
 }

@@ -19,6 +19,63 @@ class PaymentRepository {
     return _mapDataResponse(response);
   }
 
+  Future<ApiResponse<Map<String, dynamic>>> getPaymentSettings() async {
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.paymentSettings,
+      apiType: APIType.aGet,
+    );
+    return _mapDataResponse(response);
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> updatePaymentSettings({
+    required double asanasMaintenanceFee,
+    required double challengeMaintenanceFee,
+    required bool extraFeeIncludedForCompetition,
+    required double paymentGatewayFeePercent,
+    required double platformFeePercent,
+  }) async {
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.paymentSettings,
+      apiType: APIType.aPut,
+      body: {
+        'asanasMaintenanceFee': asanasMaintenanceFee,
+        'challengeMaintenanceFee': challengeMaintenanceFee,
+        'extraFeeIncludedForCompetition': extraFeeIncludedForCompetition,
+        'paymentGatewayFeePercent': paymentGatewayFeePercent,
+        'platformFeePercent': platformFeePercent,
+      },
+    );
+    return _mapDataResponse(response);
+  }
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getPaymentSettingsHistory() async {
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.paymentSettingsHistory,
+      apiType: APIType.aGet,
+    );
+    if (!response.success) {
+      return ApiResponse<List<Map<String, dynamic>>>(
+        success: false,
+        message: response.message,
+        statusCode: response.statusCode,
+      );
+    }
+    final items = <Map<String, dynamic>>[];
+    final raw = response.data;
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is Map) {
+          items.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
+    return ApiResponse<List<Map<String, dynamic>>>(
+      success: true,
+      data: items,
+      statusCode: response.statusCode,
+    );
+  }
+
   Future<ApiResponse<List<SubscriptionModeModel>>> listSubscriptionModes({
     bool includeInactive = false,
   }) async {
@@ -192,11 +249,36 @@ class PaymentRepository {
   Future<PaymentOrderModel> createRegistrationCheckoutOrder({
     required int competitionId,
     required int categoryId,
+    bool spotRegistration = false,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    int? participantCount,
   }) async {
     final response = await createApiOrder(
       purpose: registrationTicketPurpose,
       competitionId: competitionId,
       categoryId: categoryId,
+      spotRegistration: spotRegistration,
+      bulkCategoryCount: bulkCategoryCount,
+      categoryMode: categoryMode,
+      participantCount: participantCount,
+    );
+    if (!response.success || response.data == null) {
+      throw Exception(response.message ?? 'Failed to create registration payment order');
+    }
+    return PaymentOrderModel.fromJson(response.data!);
+  }
+
+  Future<PaymentOrderModel> createBulkRegistrationCheckoutOrder({
+    required int competitionId,
+    required List<Map<String, dynamic>> lines,
+    bool spotRegistration = false,
+  }) async {
+    final response = await createApiOrder(
+      purpose: registrationTicketPurpose,
+      competitionId: competitionId,
+      spotRegistration: spotRegistration,
+      lines: lines,
     );
     if (!response.success || response.data == null) {
       throw Exception(response.message ?? 'Failed to create registration payment order');
@@ -324,14 +406,36 @@ class PaymentRepository {
     String? purpose,
     String? currency,
     String? receipt,
+    bool? hasAsanas,
+    bool? hasChallenge,
+    bool? spotRegistration,
+    int? bulkCategoryCount,
+    String? categoryMode,
+    int? participantCount,
+    List<Map<String, dynamic>>? lines,
   }) async {
     final body = <String, dynamic>{};
     if (amountPaise != null) body['amount'] = amountPaise;
     if (competitionId != null) body['competitionId'] = competitionId;
     if (categoryId != null) body['categoryId'] = categoryId;
+    if (spotRegistration != null) body['spotRegistration'] = spotRegistration;
+    if (bulkCategoryCount != null) {
+      body['bulkCategoryCount'] = bulkCategoryCount;
+    }
+    if (participantCount != null && participantCount > 1) {
+      body['participantCount'] = participantCount;
+    }
+    if (lines != null && lines.isNotEmpty) {
+      body['lines'] = lines;
+    }
+    if (categoryMode != null && categoryMode.trim().isNotEmpty) {
+      body['categoryMode'] = categoryMode.trim();
+    }
     if (purpose != null && purpose.trim().isNotEmpty) {
       body['purpose'] = purpose.trim();
     }
+    if (hasAsanas != null) body['hasAsanas'] = hasAsanas;
+    if (hasChallenge != null) body['hasChallenge'] = hasChallenge;
     if (currency != null && currency.trim().isNotEmpty) {
       body['currency'] = currency.trim();
     }

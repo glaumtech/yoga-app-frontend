@@ -1,11 +1,11 @@
 {
-    "name": "Yoga Competition Application",
-    "short_name": "Yoga Comp App",
+    "name": "Yogasana Championship",
+    "short_name": "Yogasana",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "Yogo competition Application",
+    "background_color": "#4CAF50",
+    "theme_color": "#4CAF50",
+    "description": "Join yogasana competitions — register online and showcase your talent.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

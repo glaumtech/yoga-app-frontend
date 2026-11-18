@@ -49,6 +49,143 @@ class ParticipantVideoModel {
   }
 }
 
+class ParticipantVideoLoginPreview {
+  final String? registrationNo;
+  final String? participantName;
+  final int? competitionId;
+  final String? competitionName;
+  final String? categoryName;
+
+  const ParticipantVideoLoginPreview({
+    this.registrationNo,
+    this.participantName,
+    this.competitionId,
+    this.competitionName,
+    this.categoryName,
+  });
+
+  factory ParticipantVideoLoginPreview.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const ParticipantVideoLoginPreview();
+    }
+    return ParticipantVideoLoginPreview(
+      registrationNo: json['registrationNo']?.toString(),
+      participantName: json['participantName']?.toString(),
+      competitionId: json['competitionId'] is int
+          ? json['competitionId'] as int
+          : int.tryParse(json['competitionId']?.toString() ?? ''),
+      competitionName: json['competitionName']?.toString(),
+      categoryName: json['categoryName']?.toString(),
+    );
+  }
+}
+
+class ParticipantVideoTopperEntry {
+  final int rank;
+  final String? participantName;
+  final String? registrationNo;
+  final int score;
+
+  const ParticipantVideoTopperEntry({
+    required this.rank,
+    this.participantName,
+    this.registrationNo,
+    required this.score,
+  });
+
+  factory ParticipantVideoTopperEntry.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const ParticipantVideoTopperEntry(rank: 0, score: 0);
+    }
+    return ParticipantVideoTopperEntry(
+      rank: json['rank'] is int
+          ? json['rank'] as int
+          : int.tryParse(json['rank']?.toString() ?? '') ?? 0,
+      participantName: json['participantName']?.toString(),
+      registrationNo: json['registrationNo']?.toString(),
+      score: json['score'] is int
+          ? json['score'] as int
+          : int.tryParse(json['score']?.toString() ?? '') ?? 0,
+    );
+  }
+}
+
+class ParticipantVideoToppersBoard {
+  final List<ParticipantVideoTopperEntry> top10;
+  final ParticipantVideoTopperEntry? me;
+  final int totalParticipants;
+
+  const ParticipantVideoToppersBoard({
+    this.top10 = const [],
+    this.me,
+    this.totalParticipants = 0,
+  });
+
+  factory ParticipantVideoToppersBoard.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const ParticipantVideoToppersBoard();
+    }
+    final rawTop = json['top10'];
+    final top10 = rawTop is List
+        ? rawTop
+              .whereType<Map>()
+              .map(
+                (e) => ParticipantVideoTopperEntry.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .toList()
+        : const <ParticipantVideoTopperEntry>[];
+    final meJson = json['me'];
+    return ParticipantVideoToppersBoard(
+      top10: top10,
+      me: meJson is Map
+          ? ParticipantVideoTopperEntry.fromJson(
+              Map<String, dynamic>.from(meJson),
+            )
+          : null,
+      totalParticipants: json['totalParticipants'] is int
+          ? json['totalParticipants'] as int
+          : int.tryParse(json['totalParticipants']?.toString() ?? '') ?? 0,
+    );
+  }
+}
+
+class ParticipantVideoToppers {
+  final ParticipantVideoToppersBoard today;
+  final ParticipantVideoToppersBoard week;
+  final ParticipantVideoToppersBoard total;
+
+  const ParticipantVideoToppers({
+    this.today = const ParticipantVideoToppersBoard(),
+    this.week = const ParticipantVideoToppersBoard(),
+    this.total = const ParticipantVideoToppersBoard(),
+  });
+
+  factory ParticipantVideoToppers.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const ParticipantVideoToppers();
+    }
+    return ParticipantVideoToppers(
+      today: ParticipantVideoToppersBoard.fromJson(
+        json['today'] is Map
+            ? Map<String, dynamic>.from(json['today'] as Map)
+            : null,
+      ),
+      week: ParticipantVideoToppersBoard.fromJson(
+        json['week'] is Map
+            ? Map<String, dynamic>.from(json['week'] as Map)
+            : null,
+      ),
+      total: ParticipantVideoToppersBoard.fromJson(
+        json['total'] is Map
+            ? Map<String, dynamic>.from(json['total'] as Map)
+            : null,
+      ),
+    );
+  }
+}
+
 class ParticipantVideoSession {
   final String? token;
   final int? registrationId;
@@ -126,6 +263,104 @@ class ParticipantVideoSession {
       }
     }
     return null;
+  }
+
+  ParticipantVideoSession copyWith({
+    String? token,
+    bool clearToken = false,
+    int? registrationId,
+    String? registrationNo,
+    String? participantName,
+    String? competitionName,
+    String? categoryName,
+    String? sex,
+    bool? driveUploadEnabled,
+    String? driveUploadDisabledReason,
+    DateTime? today,
+    DateTime? startedOn,
+    String? lockedMode,
+    String? configuredType,
+    int? competitionId,
+    int? categoryId,
+    int? stageId,
+    int? groupId,
+    bool? optForECertificate,
+    bool? certificateAvailable,
+    int? durationDays,
+    DateTime? certificateAvailableOn,
+    List<ParticipantVideoModel>? entries,
+    ParticipantVideoModel? video,
+  }) {
+    return ParticipantVideoSession(
+      token: clearToken ? null : (token ?? this.token),
+      registrationId: registrationId ?? this.registrationId,
+      registrationNo: registrationNo ?? this.registrationNo,
+      participantName: participantName ?? this.participantName,
+      competitionName: competitionName ?? this.competitionName,
+      categoryName: categoryName ?? this.categoryName,
+      sex: sex ?? this.sex,
+      driveUploadEnabled: driveUploadEnabled ?? this.driveUploadEnabled,
+      driveUploadDisabledReason:
+          driveUploadDisabledReason ?? this.driveUploadDisabledReason,
+      today: today ?? this.today,
+      startedOn: startedOn ?? this.startedOn,
+      lockedMode: lockedMode ?? this.lockedMode,
+      configuredType: configuredType ?? this.configuredType,
+      competitionId: competitionId ?? this.competitionId,
+      categoryId: categoryId ?? this.categoryId,
+      stageId: stageId ?? this.stageId,
+      groupId: groupId ?? this.groupId,
+      optForECertificate: optForECertificate ?? this.optForECertificate,
+      certificateAvailable: certificateAvailable ?? this.certificateAvailable,
+      durationDays: durationDays ?? this.durationDays,
+      certificateAvailableOn:
+          certificateAvailableOn ?? this.certificateAvailableOn,
+      entries: entries ?? this.entries,
+      video: video ?? this.video,
+    );
+  }
+
+  /// Replace or insert a count entry for [date], keeping other days unchanged.
+  ParticipantVideoSession withCountEntry({
+    required DateTime date,
+    required int count,
+  }) {
+    final day = DateTime(date.year, date.month, date.day);
+    final next = <ParticipantVideoModel>[];
+    var replaced = false;
+    for (final entry in entries) {
+      final entryDate = entry.entryDate;
+      if (entryDate != null &&
+          entryDate.year == day.year &&
+          entryDate.month == day.month &&
+          entryDate.day == day.day) {
+        next.add(
+          ParticipantVideoModel(
+            entryDate: day,
+            submissionType: 'COUNT',
+            countValue: count,
+          ),
+        );
+        replaced = true;
+      } else {
+        next.add(entry);
+      }
+    }
+    if (!replaced) {
+      next.add(
+        ParticipantVideoModel(
+          entryDate: day,
+          submissionType: 'COUNT',
+          countValue: count,
+        ),
+      );
+      next.sort((a, b) {
+        final left = a.entryDate ?? DateTime(0);
+        final right = b.entryDate ?? DateTime(0);
+        return left.compareTo(right);
+      });
+    }
+    return copyWith(entries: next, video: next.isEmpty ? null : next.last);
   }
 
   factory ParticipantVideoSession.fromJson(Map<String, dynamic> json) {

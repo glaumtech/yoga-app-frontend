@@ -51,7 +51,14 @@ bool hasOrganizationStepMissing(BranchDtoModel branch) {
 
   if (!_hasValidPincode(branch.pincode)) return true;
   if (_isBlank(branch.address)) return true;
+  if (!_hasValidCodePrefix(branch.participantCodePrefix)) return true;
+  if (!_hasValidCodePrefix(branch.paymentCodePrefix)) return true;
   return false;
+}
+
+bool _hasValidCodePrefix(String? value) {
+  if (_isBlank(value)) return false;
+  return RegExp(r'^[A-Za-z0-9]{1,10}$').hasMatch(value!.trim());
 }
 
 bool hasDocumentStepMissing(BranchDtoModel branch) {

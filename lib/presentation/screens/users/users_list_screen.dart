@@ -10,6 +10,7 @@ import '../../controllers/competition_controller.dart';
 import '../../../core/utils/recent_competition_store.dart';
 import '../../controllers/users_list_controller.dart';
 import '../../widgets/custom_loader.dart';
+import '../../widgets/searchable_dropdown_field.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/jury_login_qr_dialog.dart';
 import '../../widgets/responsive_admin_table.dart';
@@ -255,87 +256,31 @@ class UsersListScreen extends StatelessWidget {
                       .toList();
                   final currentValue = _selectedCompetitionId(controller);
 
-                  return isMobile
-                      ? Expanded(
-                          child: DropdownButtonFormField<int?>(
-                            value: currentValue,
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 16,
-                              ),
-                              isDense: true,
-                            ),
-                            isExpanded: true,
-                            hint: const Text('Select competition'),
-                            items: [
-                              const DropdownMenuItem<int?>(
-                                value: null,
-                                child: Text('Select competition'),
-                              ),
-                              ...competitions.map((competition) {
-                                return DropdownMenuItem<int?>(
-                                  value: int.tryParse(competition.id!),
-                                  child: Text(
-                                    competition.competitionName,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }),
-                            ],
-                            onChanged: (value) => _onCompetitionChanged(
-                              controller,
-                              competitionController,
-                              usersListController,
-                              value,
-                            ),
+                  final dropdown = SearchableDropdownField(
+                    selectedValue: currentValue?.toString(),
+                    hintText: 'Select competition',
+                    emptyOptionLabel: 'Select competition',
+                    items: competitions
+                        .map(
+                          (competition) => SearchableDropdownItem(
+                            value: competition.id!,
+                            label: competition.competitionName,
                           ),
                         )
+                        .toList(),
+                    onChanged: (value) => _onCompetitionChanged(
+                      controller,
+                      competitionController,
+                      usersListController,
+                      int.tryParse(value),
+                    ),
+                  );
+
+                  return isMobile
+                      ? Expanded(child: dropdown)
                       : SizedBox(
                           width: isTablet ? 320 : 360,
-                          child: DropdownButtonFormField<int?>(
-                            value: currentValue,
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 16,
-                              ),
-                              isDense: true,
-                            ),
-                            isExpanded: true,
-                            hint: const Text('Select competition'),
-                            items: [
-                              const DropdownMenuItem<int?>(
-                                value: null,
-                                child: Text('Select competition'),
-                              ),
-                              ...competitions.map((competition) {
-                                return DropdownMenuItem<int?>(
-                                  value: int.tryParse(competition.id!),
-                                  child: Text(
-                                    competition.competitionName,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }),
-                            ],
-                            onChanged: (value) => _onCompetitionChanged(
-                              controller,
-                              competitionController,
-                              usersListController,
-                              value,
-                            ),
-                          ),
+                          child: dropdown,
                         );
                 }),
                 SizedBox(width: isMobile ? 8 : 12),

@@ -27,6 +27,47 @@ class ParticipantVideoRepository {
     return headers;
   }
 
+  Future<ApiResponse<ParticipantVideoLoginPreview>> loginPreview({
+    required String registrationNo,
+  }) {
+    final encoded = Uri.encodeQueryComponent(registrationNo.trim());
+    return _apiService.getResponse<ParticipantVideoLoginPreview>(
+      url: '${EndPoints.participantVideoLoginPreview}?registrationNo=$encoded',
+      apiType: APIType.aGet,
+      header: {'Content-Type': 'application/json'},
+      fromJson: (json) => ParticipantVideoLoginPreview.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      ),
+    );
+  }
+
+  Future<ApiResponse<ParticipantVideoToppers>> toppers({
+    required int competitionId,
+    String? registrationNo,
+  }) {
+    final params = <String, String>{
+      'competitionId': '$competitionId',
+    };
+    final reg = registrationNo?.trim() ?? '';
+    if (reg.isNotEmpty) {
+      params['registrationNo'] = reg;
+    }
+    final query = params.entries
+        .map(
+          (e) =>
+              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+        )
+        .join('&');
+    return _apiService.getResponse<ParticipantVideoToppers>(
+      url: '${EndPoints.participantVideoToppers}?$query',
+      apiType: APIType.aGet,
+      header: {'Content-Type': 'application/json'},
+      fromJson: (json) => ParticipantVideoToppers.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      ),
+    );
+  }
+
   Future<ApiResponse<ParticipantVideoSession>> login({
     required String registrationNo,
     required String dateOfBirth,
@@ -143,6 +184,36 @@ class ParticipantVideoRepository {
       );
     }
   }
+
+  /// Asks for a short-lived link to the participant's own uploaded MP4 for
+  /// [entryDate] (yyyy-MM-dd). The browser streams/saves it from that URL
+  /// directly, so nothing is buffered in the app.
+  Future<ApiResponse<String>> createVideoFileUrl({
+    required String entryDate,
+    bool download = false,
+  }) async {
+    final resp = await _apiService.getResponse<Map<String, dynamic>>(
+      url:
+          '${EndPoints.participantVideoFileLink}?entryDate=${Uri.encodeQueryComponent(entryDate)}',
+      apiType: APIType.aPost,
+      header: _authHeaders(),
+      body: <String, dynamic>{},
+      fromJson: (json) => Map<String, dynamic>.from(json as Map),
+    );
+    final token = resp.data?['token']?.toString() ?? '';
+    if (!resp.success || token.isEmpty) {
+      return ApiResponse(
+        success: false,
+        message: resp.message ?? 'Could not open the video.',
+        statusCode: resp.statusCode,
+      );
+    }
+    final url = '${BaseUrl.baseUrl}${EndPoints.participantVideoFile}'
+        '?token=${Uri.encodeQueryComponent(token)}'
+        '${download ? '&download=true' : ''}';
+    return ApiResponse(success: true, data: url, statusCode: resp.statusCode);
+  }
+
 
   ApiResponse<ParticipantVideoSession> _parseUploadResponse(
     UploadResponse response,
