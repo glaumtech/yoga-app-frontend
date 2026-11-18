@@ -31,8 +31,46 @@ class RegistrationSuccessPanel extends StatefulWidget {
 
 class _RegistrationSuccessPanelState extends State<RegistrationSuccessPanel> {
   final GlobalKey _receiptCaptureKey = GlobalKey();
+  bool _autoDownloadStarted = false;
 
   ParticipantModel? get participant => widget.participant;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleReceiptAutoDownload();
+  }
+
+  @override
+  void didUpdateWidget(RegistrationSuccessPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final previousId = oldWidget.participant?.id?.trim();
+    final nextId = widget.participant?.id?.trim();
+    if (nextId != null && nextId.isNotEmpty && nextId != previousId) {
+      _autoDownloadStarted = false;
+      _scheduleReceiptAutoDownload();
+    }
+  }
+
+  void _scheduleReceiptAutoDownload() {
+    final current = participant;
+    final registrationId = current?.id?.trim();
+    if (registrationId == null ||
+        registrationId.isEmpty ||
+        _autoDownloadStarted) {
+      return;
+    }
+    _autoDownloadStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      downloadParticipantReceiptImage(
+        context,
+        _receiptCaptureKey,
+        registrationId: registrationId,
+        registrationNo: current?.registrationNo,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

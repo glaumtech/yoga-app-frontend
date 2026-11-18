@@ -1948,10 +1948,18 @@ class _ParticipantRegistrationFormScreenState
           // Find current value - match by formatted string or group name
           String? currentValue;
           if (controller.standard.value.isNotEmpty) {
-            final match = allGroupsWithStage.firstWhereOrNull(
-              (formatted) =>
-                  formatted.startsWith('${controller.standard.value} (GROUP'),
-            );
+            // The same group (e.g. "V") can exist in several stages — prefer
+            // the entry for the registration's own stage.
+            final exact = controller.selectedStage.value.isNotEmpty
+                ? '${controller.standard.value} (GROUP ${controller.selectedStage.value})'
+                : null;
+            final match = (exact != null && allGroupsWithStage.contains(exact))
+                ? exact
+                : allGroupsWithStage.firstWhereOrNull(
+                    (formatted) => formatted.startsWith(
+                      '${controller.standard.value} (GROUP',
+                    ),
+                  );
             if (match != null) {
               currentValue = match;
             } else {
@@ -1995,9 +2003,16 @@ class _ParticipantRegistrationFormScreenState
                         : 'Select Group'),
               ),
               items: allGroupsWithStage.map((formattedGroup) {
+                // Online challenges have no physical stage — show group only.
+                final isOnline =
+                    selectedCategoryMode.trim().toUpperCase() == 'ONLINE';
                 return DropdownMenuItem<String>(
                   value: formattedGroup,
-                  child: Text(formattedGroup),
+                  child: Text(
+                    isOnline
+                        ? formattedGroup.split(' (GROUP').first.trim()
+                        : formattedGroup,
+                  ),
                 );
               }).toList(),
               onChanged: locked || allGroupsWithStage.isEmpty
@@ -2394,7 +2409,7 @@ class _ParticipantRegistrationFormScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FormLabelWithHint(
-            label: 'Bonafied Certificate :',
+            label: 'Bonafide Certificate / ID Card:',
             hintText: '(Applicable only for Govt / Govt Aided School)',
             bottomSpacing: 8,
           ),
@@ -2505,7 +2520,7 @@ class _ParticipantRegistrationFormScreenState
       width,
       height,
       defaultIcon: Icons.description,
-      defaultText: 'No Certificate',
+      defaultText: 'No Certificate or ID Card',
       memoryBytes: controller.bonafideBytes.value,
       previewKey:
           controller.bonafideImage.value?.path ??
@@ -2621,7 +2636,10 @@ class _ParticipantRegistrationFormScreenState
     if (!context.mounted) return;
 
     if (picked) {
-      SnackbarHelper.showSuccess(context, 'Bonafide certificate selected');
+      SnackbarHelper.showSuccess(
+        context,
+        'Bonafide certificate or ID card selected',
+      );
     } else if (controller.errorMessage.value.isNotEmpty) {
       SnackbarHelper.showError(context, controller.errorMessage.value);
     }
@@ -2733,7 +2751,14 @@ class _ParticipantRegistrationFormScreenState
         children: [
           Icon(icon, color: Colors.grey[400], size: 40),
           const SizedBox(height: 8),
-          Text(text, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+          ),
         ],
       ),
     );

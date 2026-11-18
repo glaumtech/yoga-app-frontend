@@ -6,6 +6,18 @@ import 'reports_participants_tab_controller.dart';
 /// Registered participants table (no jury scores) for Reports.
 class ReportsRegisteredParticipantsTabController
     extends ReportsParticipantsTabController {
+  ReportsRegisteredParticipantsTabController({this.initialPreset});
+
+  /// Preset owned by this instance (dashboard popup). When set, the shared
+  /// [ReportsController.pendingParticipantsPreset] is ignored so another
+  /// registered-participants controller can't consume or override it.
+  final ReportsParticipantsListPreset? initialPreset;
+
+  bool get _ownsPreset => initialPreset != null;
+
+  /// Drops responses from older [load] calls that finish after a newer one.
+  int _loadSeq = 0;
+
   final RxList<String> selectedCategoryTypes = <String>[].obs;
   final RxnBool spotRegistrationFilter = RxnBool();
   final RxnInt filterAge = RxnInt();
@@ -40,6 +52,13 @@ class ReportsRegisteredParticipantsTabController
           final generation = ++_competitionLoadGeneration;
           Future.microtask(() async {
             if (generation != _competitionLoadGeneration) return;
+
+            if (_ownsPreset) {
+              if (competitionChanged) {
+                applyDashboardPreset(initialPreset!, refreshOptions: true);
+              }
+              return;
+            }
 
             final pending =
                 reportsController.pendingParticipantsPreset.value;
@@ -84,6 +103,10 @@ class ReportsRegisteredParticipantsTabController
         }
       },
     );
+    if (_ownsPreset) {
+      _lastCompetitionId = reportsController.selectedCompetitionId.value;
+      return;
+    }
     _presetWatcher = ever<ReportsParticipantsListPreset?>(
       reportsController.pendingParticipantsPreset,
       (preset) {
@@ -96,6 +119,10 @@ class ReportsRegisteredParticipantsTabController
 
   @override
   void onReady() {
+    if (_ownsPreset) {
+      applyDashboardPreset(initialPreset!, refreshOptions: true);
+      return;
+    }
     final preset = reportsController.pendingParticipantsPreset.value;
     if (preset != null) {
       applyDashboardPreset(preset);
@@ -111,7 +138,10 @@ class ReportsRegisteredParticipantsTabController
     super.onClose();
   }
 
-  void applyDashboardPreset(ReportsParticipantsListPreset preset) {
+  void applyDashboardPreset(
+    ReportsParticipantsListPreset preset, {
+    bool refreshOptions = false,
+  }) {
     _competitionLoadGeneration++;
     clearFilters();
     if (preset.genders != null && preset.genders!.isNotEmpty) {
@@ -163,7 +193,7 @@ class ReportsRegisteredParticipantsTabController
       reportsController.selectedCompetitionId.value ?? '',
     );
     if (id != null) {
-      load(id);
+      load(id, refreshOptions: refreshOptions);
     }
   }
 
@@ -359,12 +389,14 @@ class ReportsRegisteredParticipantsTabController
 
   @override
   Future<void> load(int competitionId, {bool refreshOptions = false}) async {
+    final seq = ++_loadSeq;
     try {
       isLoading.value = true;
       errorMessage.value = '';
 
       if (refreshOptions) {
         await loadStageAndCategoryOptions(competitionId);
+        if (seq != _loadSeq) return;
       }
 
       final prefix = registrationPrefix.value.trim();
@@ -403,6 +435,9 @@ class ReportsRegisteredParticipantsTabController
         feeType: feeTypeFilter.value,
       );
 
+      // A newer load (e.g. the preset's filtered request) superseded this one.
+      if (seq != _loadSeq) return;
+
       if (!resp.success || resp.data == null) {
         errorMessage.value =
             resp.message ?? 'Failed to load registered participants';
@@ -422,13 +457,14 @@ class ReportsRegisteredParticipantsTabController
       tablePage.value = (d['page'] as num?)?.toInt() ?? 0;
       tableCompetitionName.value = (d['competitionName'] ?? '').toString();
     } catch (e) {
+      if (seq != _loadSeq) return;
       errorMessage.value =
           'Error loading registered participants: ${e.toString()}';
       tableItems.clear();
       tableTotalElements.value = 0;
       tableTotalPages.value = 0;
     } finally {
-      isLoading.value = false;
+      if (seq == _loadSeq) isLoading.value = false;
     }
   }
 }

@@ -48,6 +48,34 @@ class PaymentRepository {
     return _mapDataResponse(response);
   }
 
+  Future<ApiResponse<List<Map<String, dynamic>>>> getPaymentSettingsHistory() async {
+    final response = await _apiService.getResponse<dynamic>(
+      url: EndPoints.paymentSettingsHistory,
+      apiType: APIType.aGet,
+    );
+    if (!response.success) {
+      return ApiResponse<List<Map<String, dynamic>>>(
+        success: false,
+        message: response.message,
+        statusCode: response.statusCode,
+      );
+    }
+    final items = <Map<String, dynamic>>[];
+    final raw = response.data;
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is Map) {
+          items.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
+    return ApiResponse<List<Map<String, dynamic>>>(
+      success: true,
+      data: items,
+      statusCode: response.statusCode,
+    );
+  }
+
   Future<ApiResponse<List<SubscriptionModeModel>>> listSubscriptionModes({
     bool includeInactive = false,
   }) async {

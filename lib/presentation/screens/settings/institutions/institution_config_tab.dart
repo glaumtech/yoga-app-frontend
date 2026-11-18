@@ -9,26 +9,44 @@ import '../../../widgets/pinned_scroll_views.dart';
 import '../location/location_masters_tab.dart';
 
 class InstitutionConfigTab extends StatefulWidget {
-  const InstitutionConfigTab({super.key});
+  const InstitutionConfigTab({super.key, this.initialIndex = 0});
+
+  /// Inner tab: 0 Types, 1 Categories, 2 States, 3 Districts, 4 Cities.
+  final int initialIndex;
 
   @override
   State<InstitutionConfigTab> createState() => _InstitutionConfigTabState();
 }
 
 class _InstitutionConfigTabState extends State<InstitutionConfigTab> {
+  static int _configUsers = 0;
+  static int _locationUsers = 0;
+
   @override
   void initState() {
     super.initState();
+    _configUsers++;
+    _locationUsers++;
     Get.put(InstitutionConfigController(), permanent: false);
-    Get.put(LocationMastersController(), permanent: false);
+    final locations = Get.put(LocationMastersController(), permanent: false);
+    final section = widget.initialIndex.clamp(0, 4);
+    if (section == 2) {
+      locations.startCreateState();
+    } else if (section == 3) {
+      locations.startCreateDistrict();
+    } else if (section == 4) {
+      locations.startCreateCity();
+    }
   }
 
   @override
   void dispose() {
-    if (Get.isRegistered<LocationMastersController>()) {
+    _configUsers--;
+    _locationUsers--;
+    if (_locationUsers == 0 && Get.isRegistered<LocationMastersController>()) {
       Get.delete<LocationMastersController>(force: true);
     }
-    if (Get.isRegistered<InstitutionConfigController>()) {
+    if (_configUsers == 0 && Get.isRegistered<InstitutionConfigController>()) {
       Get.delete<InstitutionConfigController>(force: true);
     }
     super.dispose();
@@ -40,8 +58,11 @@ class _InstitutionConfigTabState extends State<InstitutionConfigTab> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
+    final initialIndex = widget.initialIndex.clamp(0, 4);
     return DefaultTabController(
+      key: ValueKey('institution-config-$initialIndex'),
       length: 5,
+      initialIndex: initialIndex,
       child: Column(
         children: [
           Padding(

@@ -1,8 +1,14 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/snackbar_helper.dart';
+import '../../../data/models/jury_participant_video_model.dart';
+import '../../../data/models/participant_model.dart';
 import '../../controllers/jury_scoring_controller.dart';
+import '../../widgets/saved_video_preview_dialog.dart';
 import '../../controllers/user_management_controller.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/institution/institution_name_autocomplete_field.dart';
@@ -53,6 +59,257 @@ class JuryScoringScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Online category: participant's submitted video(s) — preview & download.
+  // ---------------------------------------------------------------------------
+
+  bool _showOnlineSubmission(
+    JuryScoringController controller,
+    ParticipantModel participant,
+  ) {
+    final hasId = int.tryParse(participant.id ?? '') != null;
+    return hasId &&
+        (participant.isOnlineCategory || controller.isOnlineCategorySelected);
+  }
+
+  Widget _buildOnlineSubmissionBar(
+    BuildContext context,
+    JuryScoringController controller,
+    ParticipantModel participant, {
+    required bool isMobile,
+  }) {
+    final registrationId = int.parse(participant.id!);
+    const accent = Color(0xFF2563EB);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 2, bottom: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 8 : 10,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: accent.withOpacity(0.25)),
+      ),
+      child: Obx(() {
+        final loading =
+            controller.isLoadingParticipantVideos.value &&
+            controller.loadingVideosParticipantId.value == registrationId;
+        return Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.videocam_outlined, size: 16, color: accent),
+                const SizedBox(width: 6),
+                Text(
+                  'Online submission',
+                  style: TextStyle(
+                    fontSize: isMobile ? 11.5 : 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: accent,
+                  ),
+                ),
+              ],
+            ),
+            if (loading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _openParticipantVideos(
+                      context,
+                      controller,
+                      participant,
+                      download: false,
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: accent,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    icon: const Icon(Icons.play_circle_outline, size: 18),
+                    label: const Text('Preview'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _openParticipantVideos(
+                      context,
+                      controller,
+                      participant,
+                      download: true,
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: accent,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    icon: const Icon(Icons.download_rounded, size: 18),
+                    label: const Text('Download'),
+                  ),
+                ],
+              ),
+          ],
+        );
+      }),
+    );
+  }
+
+  Future<void> _openParticipantVideos(
+    BuildContext context,
+    JuryScoringController controller,
+    ParticipantModel participant, {
+    required bool download,
+  }) async {
+    final registrationId = int.tryParse(participant.id ?? '');
+    if (registrationId == null) return;
+    final videos = await controller.loadParticipantVideos(registrationId);
+    if (!context.mounted) return;
+    if (videos.isEmpty) {
+      SnackbarHelper.showInfo(
+        context,
+        '${participant.participantName} has not submitted a video yet.',
+      );
+      return;
+    }
+    if (videos.length == 1) {
+      await _openVideo(context, participant, videos.first, download: download);
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${participant.participantName} — submissions'),
+        content: SizedBox(
+          width: 480,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: videos.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, index) {
+              final video = videos[index];
+              final subtitle = [
+                if (video.fileName != null) video.fileName!,
+                if (video.countValue != null) 'Count: ${video.countValue}',
+                if (video.resolution != null) video.resolution!,
+              ].join(' · ');
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.videocam_outlined),
+                title: Text(video.entryDate ?? 'Submission ${index + 1}'),
+                subtitle: subtitle.isEmpty ? null : Text(subtitle),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Preview',
+                      icon: const Icon(Icons.play_circle_outline),
+                      onPressed: () =>
+                          _openVideo(context, participant, video),
+                    ),
+                    IconButton(
+                      tooltip: 'Download',
+                      icon: const Icon(Icons.download_rounded),
+                      onPressed: () => _openVideo(
+                        context,
+                        participant,
+                        video,
+                        download: true,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openVideo(
+    BuildContext context,
+    ParticipantModel participant,
+    JuryParticipantVideo video, {
+    bool download = false,
+  }) async {
+    // Submitted as a link (no uploaded file): open it in a new tab.
+    if (!video.hasFile) {
+      final url = video.externalUrl;
+      if (url == null || !await _launchExternal(url, newTab: true)) {
+        if (context.mounted) {
+          SnackbarHelper.showError(context, 'Could not open the video link.');
+        }
+      }
+      return;
+    }
+    if (download) {
+      await _downloadVideo(context, video);
+      return;
+    }
+    final title = [
+      participant.participantName,
+      if (video.entryDate != null) video.entryDate!,
+    ].join(' · ');
+    await SavedVideoPreviewDialog.show(
+      context,
+      url: video.previewUrl!,
+      title: title,
+      onDownload: () => _downloadVideo(context, video),
+    );
+  }
+
+  Future<void> _downloadVideo(
+    BuildContext context,
+    JuryParticipantVideo video,
+  ) async {
+    final url = video.downloadUrl;
+    // Content-Disposition: attachment — the browser downloads without
+    // navigating away from the scoring screen.
+    final ok = url != null && await _launchExternal(url, newTab: false);
+    if (!context.mounted) return;
+    if (ok) {
+      SnackbarHelper.showInfo(
+        context,
+        'Download started. Check your browser downloads.',
+      );
+    } else {
+      SnackbarHelper.showError(context, 'Could not start the download.');
+    }
+  }
+
+  Future<bool> _launchExternal(String url, {required bool newTab}) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return false;
+    try {
+      return await launchUrl(
+        uri,
+        mode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
+        webOnlyWindowName: newTab ? '_blank' : '_self',
+      );
+    } catch (_) {
+      return false;
+    }
   }
 
   Widget _buildParticipantHeaderRow({
@@ -621,9 +878,9 @@ class JuryScoringScreen extends StatelessWidget {
                   final stageItems = controller.availableStages
                       .map((s) => s.stageName)
                       .toList();
-                  final categoryItems = controller.availableCategories
-                      .map((c) => c.categoryName)
-                      .toList();
+                  // One entry per (category, mode), e.g. "COMMON (Offline)" and
+                  // "COMMON (Online · Video)" — the queue is filtered by that mode.
+                  final categoryItems = controller.getAvailableCategories();
                   final groupItems = controller.availableGroups
                       .map((g) => g.groupName)
                       .toList();
@@ -1060,6 +1317,53 @@ class JuryScoringScreen extends StatelessWidget {
                             child: const Text('Retry'),
                           ),
                         ],
+                        if (controller.errorMessage.value.isEmpty &&
+                            controller.waitingElsewhere.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Text(
+                            'Participants of ${controller.selectedCategory.value} '
+                            'are waiting in:',
+                            style: TextStyle(
+                              fontSize: isMobile ? 13 : 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[800],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: controller.waitingElsewhere.map((slot) {
+                              final allotted = controller.canOpenQueueSlot(slot);
+                              final label =
+                                  '${slot.stageName} · ${slot.groupName} (${slot.count})';
+                              return Tooltip(
+                                message: allotted
+                                    ? 'Open this queue'
+                                    : 'This stage is not allotted to you',
+                                child: ActionChip(
+                                  avatar: Icon(
+                                    allotted
+                                        ? Icons.arrow_forward_rounded
+                                        : Icons.lock_outline,
+                                    size: 16,
+                                    color: allotted
+                                        ? AppTheme.primaryColor
+                                        : Colors.grey,
+                                  ),
+                                  label: Text(
+                                    allotted ? label : '$label · not allotted',
+                                  ),
+                                  onPressed: allotted
+                                      ? () => controller.openQueueSlot(slot)
+                                      : null,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1146,6 +1450,13 @@ class JuryScoringScreen extends StatelessWidget {
                               ),
                             );
                           }),
+                          if (_showOnlineSubmission(controller, participant))
+                            _buildOnlineSubmissionBar(
+                              context,
+                              controller,
+                              participant,
+                              isMobile: true,
+                            ),
                           const SizedBox(height: 6),
                           // Score selectors (mobile: whole on first row, decimal on next row)
                           Obx(() {
@@ -1297,6 +1608,13 @@ class JuryScoringScreen extends StatelessWidget {
                                 ),
                               );
                             }),
+                            if (_showOnlineSubmission(controller, participant))
+                              _buildOnlineSubmissionBar(
+                                context,
+                                controller,
+                                participant,
+                                isMobile: false,
+                              ),
                             const SizedBox(height: 10),
                             // Score selectors (whole then decimal)
                             Obx(() {

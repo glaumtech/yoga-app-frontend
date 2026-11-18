@@ -55,6 +55,7 @@ class AdaptivePaymentSection extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         const PaymentInrOnlyNotice(margin: EdgeInsets.only(top: 8, bottom: 4)),
+        const PaymentPrePayNotes(margin: EdgeInsets.only(top: 4, bottom: 4)),
         const SizedBox(height: 12),
         Obx(
           () {
@@ -191,6 +192,7 @@ class AdaptivePaymentSection extends StatelessWidget {
           ),
           const PaymentInrOnlyNotice(margin: EdgeInsets.only(top: 4)),
           const PaymentOnlineModeNotice(),
+          const PaymentPrePayNotes(),
         ],
       ],
     );

@@ -52,6 +52,79 @@ class PaymentInrOnlyNotice extends StatelessWidget {
   }
 }
 
+/// Pre-payment notes: particulars editable until paid; fees non-transferable / non-refundable.
+class PaymentPrePayNotes extends StatelessWidget {
+  const PaymentPrePayNotes({
+    super.key,
+    this.margin = const EdgeInsets.only(top: 10),
+  });
+
+  final EdgeInsetsGeometry margin;
+
+  @override
+  Widget build(BuildContext context) {
+    final notes = AppConstants.paymentPrePayNotes;
+    return Padding(
+      padding: margin,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'NOTE',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+                color: Colors.grey.shade800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (var i = 0; i < notes.length; i++) ...[
+              if (i > 0) const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 18,
+                    child: Text(
+                      '${i + 1}.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        height: 1.4,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      notes[i],
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Note that participation fees are collected online, with gateway charges extra.
 class PaymentOnlineModeNotice extends StatelessWidget {
   const PaymentOnlineModeNotice({

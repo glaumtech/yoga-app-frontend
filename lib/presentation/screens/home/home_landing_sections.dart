@@ -2998,7 +2998,16 @@ class HomeCompetitionSections extends StatelessWidget {
   const HomeCompetitionSections({super.key, required this.competitions});
 
   List<HomeCompetitionModel> _byStatus(String status, {int limit = 4}) {
-    return competitions.where((c) => c.status == status).take(limit).toList();
+    final list = competitions.where((c) => c.status == status).toList();
+    // Latest event dates first, then highest id (most recently created).
+    list.sort((a, b) {
+      final startA = DateTime.tryParse(a.eventStartDate ?? '') ?? DateTime(1970);
+      final startB = DateTime.tryParse(b.eventStartDate ?? '') ?? DateTime(1970);
+      final byStart = startB.compareTo(startA);
+      if (byStart != 0) return byStart;
+      return (b.id ?? 0).compareTo(a.id ?? 0);
+    });
+    return list.take(limit).toList();
   }
 
   List<HomeCompetitionModel> _pastSorted({int limit = 4}) {
@@ -3006,7 +3015,9 @@ class HomeCompetitionSections extends StatelessWidget {
     past.sort((a, b) {
       final endA = DateTime.tryParse(a.eventEndDate ?? '') ?? DateTime(1970);
       final endB = DateTime.tryParse(b.eventEndDate ?? '') ?? DateTime(1970);
-      return endB.compareTo(endA);
+      final byEnd = endB.compareTo(endA);
+      if (byEnd != 0) return byEnd;
+      return (b.id ?? 0).compareTo(a.id ?? 0);
     });
     return past.take(limit).toList();
   }

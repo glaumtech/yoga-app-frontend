@@ -185,6 +185,36 @@ class ParticipantVideoRepository {
     }
   }
 
+  /// Asks for a short-lived link to the participant's own uploaded MP4 for
+  /// [entryDate] (yyyy-MM-dd). The browser streams/saves it from that URL
+  /// directly, so nothing is buffered in the app.
+  Future<ApiResponse<String>> createVideoFileUrl({
+    required String entryDate,
+    bool download = false,
+  }) async {
+    final resp = await _apiService.getResponse<Map<String, dynamic>>(
+      url:
+          '${EndPoints.participantVideoFileLink}?entryDate=${Uri.encodeQueryComponent(entryDate)}',
+      apiType: APIType.aPost,
+      header: _authHeaders(),
+      body: <String, dynamic>{},
+      fromJson: (json) => Map<String, dynamic>.from(json as Map),
+    );
+    final token = resp.data?['token']?.toString() ?? '';
+    if (!resp.success || token.isEmpty) {
+      return ApiResponse(
+        success: false,
+        message: resp.message ?? 'Could not open the video.',
+        statusCode: resp.statusCode,
+      );
+    }
+    final url = '${BaseUrl.baseUrl}${EndPoints.participantVideoFile}'
+        '?token=${Uri.encodeQueryComponent(token)}'
+        '${download ? '&download=true' : ''}';
+    return ApiResponse(success: true, data: url, statusCode: resp.statusCode);
+  }
+
+
   ApiResponse<ParticipantVideoSession> _parseUploadResponse(
     UploadResponse response,
   ) {

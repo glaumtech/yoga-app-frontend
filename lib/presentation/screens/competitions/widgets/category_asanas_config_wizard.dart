@@ -83,6 +83,8 @@ class _WizardStepMeta {
   final String short;
 }
 
+enum _FeePanel { online, spot, earlyBird, bulk }
+
 class _CategoryAsanasConfigWizardState
     extends State<CategoryAsanasConfigWizard> {
   static const List<_WizardStepMeta> _offlineSteps = [
@@ -117,8 +119,8 @@ class _CategoryAsanasConfigWizardState
       _WizardStepMeta(_WizardStepId.groups, 'Group Types', 'Groups'),
       _WizardStepMeta(
         _WizardStepId.submissionType,
-        'Daily Count',
-        'Count',
+        'Submission',
+        'Submission',
       ),
       if (_config.isVideoSubmission)
         _WizardStepMeta(_WizardStepId.scoring, 'Scoring', 'Scoring'),
@@ -199,6 +201,7 @@ class _CategoryAsanasConfigWizardState
 
   late CompetitionCategoryConfigModel _config;
   int _currentStep = 1;
+  _FeePanel _selectedFeePanel = _FeePanel.online;
 
   late List<String> _studyOptions;
   late List<String> _ageOptions;
@@ -287,10 +290,15 @@ class _CategoryAsanasConfigWizardState
     _refreshGroupTypeFromSelection();
     if (_config.isOnlineMode) {
       _applyImplicitOnlineStage();
-      // Temporarily Count-only: hide Video and default Count as selected.
-      if (!_config.isCountSubmission) {
-        _config.submissionType = 'COUNT';
+      if (_config.isCountSubmission) {
         _config.scoringMethod = 'NONE';
+      } else if (_config.isVideoSubmission) {
+        if (_config.scoringMethodNormalized == 'NONE') {
+          _config.scoringMethod = 'MARKS';
+        }
+        _config.howManyTimes = null;
+        _config.increaseCountEnabled = false;
+        _config.increaseCountRanges = <IncreaseCountRangeModel>[];
       }
     }
 
@@ -661,7 +669,9 @@ class _CategoryAsanasConfigWizardState
     if (current.id == _WizardStepId.submissionType &&
         !_config.hasSubmissionType) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select Count to continue.')),
+        const SnackBar(
+          content: Text('Select Video or Count to continue.'),
+        ),
       );
       return;
     }
@@ -695,7 +705,9 @@ class _CategoryAsanasConfigWizardState
       if (typeIndex >= 0) _goToStep(typeIndex + 1);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Select Count to continue.')),
+          const SnackBar(
+            content: Text('Select Video or Count to continue.'),
+          ),
         );
       }
       return;
@@ -708,6 +720,11 @@ class _CategoryAsanasConfigWizardState
     if (_config.isOnlineMode && _config.isCountSubmission) {
       _config.scoringMethod = 'NONE';
     }
+    if (_config.isOnlineMode && _config.isVideoSubmission) {
+      _config.howManyTimes = null;
+      _config.increaseCountEnabled = false;
+      _config.increaseCountRanges = <IncreaseCountRangeModel>[];
+    }
     _config.grades = _gradeEntries
         .map((e) => e.toModel())
         .whereType<CompetitionGradeModel>()
@@ -719,7 +736,11 @@ class _CategoryAsanasConfigWizardState
       _config.increaseCountRanges = <IncreaseCountRangeModel>[];
     } else {
       _config.durationDays = int.tryParse(_durationDaysController.text.trim());
-      if (_config.durationDays == 1) {
+      if (_config.isOnlineMode && _config.isVideoSubmission) {
+        _config.howManyTimes = null;
+        _config.increaseCountEnabled = false;
+        _config.increaseCountRanges = <IncreaseCountRangeModel>[];
+      } else if (_config.durationDays == 1) {
         _config.howManyTimes =
             int.tryParse(_howManyTimesController.text.trim());
         _config.increaseCountEnabled = false;
@@ -894,6 +915,20 @@ class _CategoryAsanasConfigWizardState
                                   : const Color(0xFF0F766E))
                               .withValues(alpha: 0.35),
                         ),
+                        if (_config.isOnlineMode && _config.hasSubmissionType)
+                          _badge(
+                            _config.isVideoSubmission ? 'Video' : 'Count',
+                            bg: _config.isVideoSubmission
+                                ? const Color(0xFFFEF3C7)
+                                : primary.withValues(alpha: 0.12),
+                            fg: _config.isVideoSubmission
+                                ? const Color(0xFFB45309)
+                                : primary,
+                            border: (_config.isVideoSubmission
+                                    ? const Color(0xFFF59E0B)
+                                    : primary)
+                                .withValues(alpha: 0.35),
+                          ),
                         _badge(
                           'Step $_currentStep of $_totalSteps',
                           bg: Colors.white,
@@ -1812,109 +1847,266 @@ class _CategoryAsanasConfigWizardState
     );
   }
 
-  // ─── Step: Select Type (online) ───────────────────────────────────────────
+  // ─── Step: Submission (online Video / Count) ──────────────────────────────
+
+  void _selectSubmissionType(String type) {
+    if (_readOnly) return;
+    final normalized = type.trim().toUpperCase();
+    if (normalized != 'VIDEO' && normalized != 'COUNT') return;
+    setState(() {
+      _config.submissionType = normalized;
+      if (_config.isCountSubmission) {
+        _config.scoringMethod = 'NONE';
+      } else {
+        if (_config.scoringMethodNormalized == 'NONE') {
+          _config.scoringMethod = 'MARKS';
+        }
+        // Count-only challenge rules do not apply to Video.
+        _config.howManyTimes = null;
+        _config.increaseCountEnabled = false;
+        _config.increaseCountRanges = <IncreaseCountRangeModel>[];
+        _howManyTimesController.clear();
+        for (final entry in _increaseCountEntries) {
+          entry.dispose();
+        }
+        _increaseCountEntries = <IncreaseCountRangeEntry>[];
+      }
+      if (_currentStep > _totalSteps) {
+        _currentStep = _totalSteps;
+      }
+    });
+  }
 
   Widget _buildSubmissionTypeStep(Color primary) {
+    final selectedCount = _config.isCountSubmission;
+    final selectedVideo = _config.isVideoSubmission;
     return _stepCard(
       primary: primary,
       title: _numberedTitle('PARTICIPANT SUBMISSION'),
-      icon: Icons.numbers_rounded,
+      icon: Icons.cloud_upload_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Participants submit a daily count for this online challenge.',
+            'Choose how participants submit for this online category.',
             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: primary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: primary.withValues(alpha: 0.22)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: primary.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.numbers_rounded, color: primary, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Daily Count',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: primary,
-                              ),
-                            ),
-                          ),
-                          _badge(
-                            'Active',
-                            bg: primary.withValues(alpha: 0.14),
-                            fg: primary,
-                            border: primary.withValues(alpha: 0.3),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Participants enter their count each day. Jury scoring is not used.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.4,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 560;
+              final videoCard = _buildSubmissionOptionCard(
+                primary: primary,
+                value: 'VIDEO',
+                selected: selectedVideo,
+                icon: Icons.videocam_outlined,
+                title: 'Video',
+                description:
+                    'Participants upload MP4 videos. Files are saved to the mapped Google Drive folder.',
+              );
+              final countCard = _buildSubmissionOptionCard(
+                primary: primary,
+                value: 'COUNT',
+                selected: selectedCount,
+                icon: Icons.numbers_rounded,
+                title: 'Count',
+                description:
+                    'Participants enter their count each day. Jury scoring is not used.',
+              );
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    videoCard,
+                    const SizedBox(height: 12),
+                    countCard,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: videoCard),
+                  const SizedBox(width: 12),
+                  Expanded(child: countCard),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 14),
-          ...[
-            'Participants log count during the challenge period',
-            'Daily entries are tracked automatically',
-            'No video upload or jury scoring required',
-          ].map(
-            (line) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+          if (selectedVideo) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF59E0B)),
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle_outline, size: 16, color: primary),
+                  const Icon(
+                    Icons.folder_shared_outlined,
+                    size: 18,
+                    color: Color(0xFFB45309),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      line,
+                      'Google Drive folder URL is mandatory on the competition form when Video is selected. Share that folder with the app Google Drive account as Editor.',
                       style: TextStyle(
                         fontSize: 12,
-                        height: 1.35,
-                        color: Colors.grey.shade700,
+                        height: 1.4,
+                        color: Colors.brown.shade800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 14),
+            ...[
+              'Participants upload videos during the challenge period',
+              'Uploads are stored under the competition Google Drive folder',
+              'Scoring and jury steps are available after this step',
+            ].map((line) => _submissionBullet(primary, line)),
+          ] else if (selectedCount) ...[
+            const SizedBox(height: 14),
+            ...[
+              'Participants log count during the challenge period',
+              'Daily entries are tracked automatically',
+              'No video upload or jury scoring required',
+            ].map((line) => _submissionBullet(primary, line)),
+          ] else ...[
+            const SizedBox(height: 12),
+            Text(
+              'Select Video or Count to continue.',
+              style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _submissionBullet(Color primary, String line) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.check_circle_outline, size: 16, color: primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              line,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                color: Colors.grey.shade700,
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSubmissionOptionCard({
+    required Color primary,
+    required String value,
+    required bool selected,
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return Material(
+      color: selected
+          ? primary.withValues(alpha: 0.06)
+          : Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: _readOnly ? null : () => _selectSubmissionType(value),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? primary.withValues(alpha: 0.55)
+                  : Colors.grey.shade300,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? primary.withValues(alpha: 0.14)
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  color: selected ? primary : Colors.grey.shade600,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: selected ? primary : Colors.grey.shade800,
+                            ),
+                          ),
+                        ),
+                        if (selected)
+                          _badge(
+                            'Active',
+                            bg: primary.withValues(alpha: 0.14),
+                            fg: primary,
+                            border: primary.withValues(alpha: 0.3),
+                          )
+                        else
+                          Icon(
+                            Icons.radio_button_unchecked,
+                            size: 18,
+                            color: Colors.grey.shade400,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1953,286 +2145,387 @@ class _CategoryAsanasConfigWizardState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Main fields — Scoring + Participants (+ Upgrade when enabled)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _labeledField(
-                  label: 'Scoring Method',
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('scoring-$scoringValue'),
-                    initialValue: scoringValue,
-                    isExpanded: true,
-                    decoration: _compactDecoration(),
-                    items: _scoringMethods
-                        .map(
-                          (m) => DropdownMenuItem(
-                            value: m.value,
-                            child: Text(
-                              m.label,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
+          // Text(
+          //   'Set how this category is scored, then turn on any optional rules.',
+          //   style: TextStyle(
+          //     fontSize: 12,
+          //     height: 1.4,
+          //     color: Colors.grey.shade600,
+          //   ),
+          // ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 480;
+              final scoringField = _labeledField(
+                label: 'Scoring Method',
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('scoring-$scoringValue'),
+                  initialValue: scoringValue,
+                  isExpanded: true,
+                  decoration: _compactDecoration(),
+                  items: _scoringMethods
+                      .map(
+                        (m) => DropdownMenuItem(
+                          value: m.value,
+                          child: Text(
+                            m.label,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
                             ),
                           ),
-                        )
-                        .toList(),
-                    onChanged: _readOnly
-                        ? null
-                        : (v) {
-                            if (v == null) return;
-                            setState(() => _config.scoringMethod = v);
-                          },
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _readOnly
+                      ? null
+                      : (v) {
+                          if (v == null) return;
+                          setState(() => _config.scoringMethod = v);
+                        },
+                ),
+              );
+              final participantsField = _intDropdown(
+                label: 'Participants / Stage',
+                value: _config.participantsPerStage ?? 5,
+                items: List.generate(10, (i) => i + 1),
+                onChanged: (v) => setState(
+                  () => _config.participantsPerStage = v,
+                ),
+              );
+              if (wide) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: scoringField),
+                    const SizedBox(width: 12),
+                    Expanded(child: participantsField),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  scoringField,
+                  const SizedBox(height: 12),
+                  participantsField,
+                ],
+              );
+            },
+          ),
+          if (_showsMarksLimits || _isTimedScoring) ...[
+            const SizedBox(height: 18),
+            _scoringSectionLabel('Score limits'),
+            const SizedBox(height: 10),
+            if (_showsMarksLimits)
+              Row(
+                children: [
+                  Expanded(
+                    child: _intDropdown(
+                      label: 'Min Marks',
+                      value: _config.minimumMarks ?? 1,
+                      items: const [1, 2, 3, 4, 5, 10, 20],
+                      onChanged: (v) =>
+                          setState(() => _config.minimumMarks = v),
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _intDropdown(
+                      label: 'Max Marks',
+                      value: _config.maximumMarks ?? 10,
+                      items: const [10, 20, 50, 100],
+                      onChanged: (v) =>
+                          setState(() => _config.maximumMarks = v),
+                    ),
+                  ),
+                ],
+              ),
+            if (_showsMarksLimits && _isTimedScoring) const SizedBox(height: 12),
+            if (_isTimedScoring)
+              Row(
+                children: [
+                  Expanded(
+                    child: _timePickerField(
+                      label: 'Min Time',
+                      value: _parseHhMm(
+                        _config.minTime ?? _minTimeController.text,
+                      ),
+                      onPicked: (t) {
+                        final formatted = _formatHhMm(t);
+                        setState(() {
+                          _config.minTime = formatted;
+                          _minTimeController.text = formatted;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _timePickerField(
+                      label: 'Max Time',
+                      value: _parseHhMm(
+                        _config.maxTime ?? _maxTimeController.text,
+                      ),
+                      onPicked: (t) {
+                        final formatted = _formatHhMm(t);
+                        setState(() {
+                          _config.maxTime = formatted;
+                          _maxTimeController.text = formatted;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+          ],
+          const SizedBox(height: 20),
+          _scoringSectionLabel('Optional rules'),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final sideBySide = constraints.maxWidth >= 640;
+              final upgradePanel = _scoringRulePanel(
+                primary: primary,
+                title: 'Upgrade',
+                subtitle: 'Promote top performers into another category.',
+                enabled: _upgradeEnabled,
+                onChanged: (enabled) {
+                  setState(() {
+                    _upgradeEnabled = enabled;
+                    if (enabled) {
+                      _config.upgradeTop ??= 3;
+                    } else {
+                      _config.upgradeTop = null;
+                      _config.upgradeToCategoryId = null;
+                      _config.upgradeToCategoryName = null;
+                    }
+                  });
+                },
+                child: _upgradeEnabled
+                    ? LayoutBuilder(
+                        builder: (context, constraints) {
+                          final wide = constraints.maxWidth >= 420;
+                          final topField = _intDropdown(
+                            label: 'Upgrade Top',
+                            value: (_config.upgradeTop ?? 3).clamp(1, 10),
+                            items: List.generate(10, (i) => i + 1),
+                            onChanged: (v) =>
+                                setState(() => _config.upgradeTop = v),
+                          );
+                          final categoryField = _labeledField(
+                            label: 'Upgrade To Category',
+                            child: DropdownButtonFormField<String?>(
+                              // Use `value` (controlled) — `initialValue` only applies on
+                              // first mount, so changing selection never updated the UI.
+                              value: currentUpgrade != null &&
+                                      currentUpgrade.isNotEmpty &&
+                                      upgradeItems.contains(currentUpgrade)
+                                  ? currentUpgrade
+                                  : null,
+                              isExpanded: true,
+                              decoration: _compactDecoration(),
+                              items: upgradeItems
+                                  .map(
+                                    (name) => DropdownMenuItem<String?>(
+                                      value: name,
+                                      child: Text(
+                                        name ?? '— None —',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _readOnly
+                                  ? null
+                                  : (v) {
+                                      setState(() {
+                                        _config.upgradeToCategoryName = v;
+                                        // Always clear id when target changes so a stale
+                                        // id cannot keep pointing at the previous category.
+                                        _config.upgradeToCategoryId = null;
+                                      });
+                                    },
+                            ),
+                          );
+                          if (wide) {
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: topField),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 2, child: categoryField),
+                              ],
+                            );
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              topField,
+                              const SizedBox(height: 12),
+                              categoryField,
+                            ],
+                          );
+                        },
+                      )
+                    : null,
+              );
+              final tiePanel = _scoringRulePanel(
+                primary: primary,
+                title: 'Tie Breaker',
+                subtitle:
+                    'Resolve equal scores with a defined tie-break rule.',
+                enabled: _config.tieBreakerEnabled,
+                onChanged: (enabled) {
+                  setState(() => _config.tieBreakerEnabled = enabled);
+                },
+              );
+              if (!sideBySide) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    upgradePanel,
+                    const SizedBox(height: 10),
+                    tiePanel,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: upgradePanel),
+                  const SizedBox(width: 10),
+                  Expanded(child: tiePanel),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          _scoringRulePanel(
+            primary: primary,
+            title: 'Skipped Asana',
+            subtitle: 'Allow a limited number of skipped asanas in scoring.',
+            enabled: _config.skippedAsanaEnabled,
+            onChanged: (enabled) {
+              setState(() => _config.skippedAsanaEnabled = enabled);
+            },
+            child: _config.skippedAsanaEnabled
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: _intDropdown(
+                          label: 'Skipped Count',
+                          value: _config.skippedAsanaCount.clamp(1, 10),
+                          items: List.generate(10, (i) => i + 1),
+                          onChanged: (v) =>
+                              setState(() => _config.skippedAsanaCount = v),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _intDropdown(
+                          label: 'Skipped Marks',
+                          value: _config.skippedAsanaMarks,
+                          items: const [0, 1, 2, 3, 4, 5, 10],
+                          onChanged: (v) =>
+                              setState(() => _config.skippedAsanaMarks = v),
+                        ),
+                      ),
+                    ],
+                  )
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scoringSectionLabel(String label) {
+    return Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.7,
+        color: Colors.grey.shade500,
+      ),
+    );
+  }
+
+  Widget _scoringRulePanel({
+    required Color primary,
+    required String title,
+    required String subtitle,
+    required bool enabled,
+    required ValueChanged<bool> onChanged,
+    Widget? child,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: enabled ? primary.withValues(alpha: 0.04) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: enabled
+              ? primary.withValues(alpha: 0.28)
+              : Colors.grey.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: enabled ? primary : const Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.35,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: _intDropdown(
-                  label: 'Participants / Stage',
-                  value: _config.participantsPerStage ?? 5,
-                  items: List.generate(10, (i) => i + 1),
-                  onChanged: (v) => setState(
-                    () => _config.participantsPerStage = v,
-                  ),
-                ),
-              ),
-              if (_upgradeEnabled) ...[
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _intDropdown(
-                    label: 'Upgrade Top',
-                    value: (_config.upgradeTop ?? 3).clamp(1, 10),
-                    items: List.generate(10, (i) => i + 1),
-                    onChanged: (v) => setState(() => _config.upgradeTop = v),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _labeledField(
-                    label: 'Upgrade To Category',
-                    child: DropdownButtonFormField<String?>(
-                      // Use `value` (controlled) — `initialValue` only applies on
-                      // first mount, so changing selection never updated the UI.
-                      value: currentUpgrade != null &&
-                              currentUpgrade.isNotEmpty &&
-                              upgradeItems.contains(currentUpgrade)
-                          ? currentUpgrade
-                          : null,
-                      isExpanded: true,
-                      decoration: _compactDecoration(),
-                      items: upgradeItems
-                          .map(
-                            (name) => DropdownMenuItem<String?>(
-                              value: name,
-                              child: Text(
-                                name ?? '— None —',
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: _readOnly
-                          ? null
-                          : (v) {
-                              setState(() {
-                                _config.upgradeToCategoryName = v;
-                                // Always clear id when target changes so a stale
-                                // id cannot keep pointing at the previous category.
-                                _config.upgradeToCategoryId = null;
-                              });
-                            },
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Checkbox(
-                value: _upgradeEnabled,
-                onChanged: _readOnly
-                    ? null
-                    : (v) {
-                        final enabled = v ?? false;
-                        setState(() {
-                          _upgradeEnabled = enabled;
-                          if (enabled) {
-                            _config.upgradeTop ??= 3;
-                          } else {
-                            _config.upgradeTop = null;
-                            _config.upgradeToCategoryId = null;
-                            _config.upgradeToCategoryName = null;
-                          }
-                        });
-                      },
-                activeColor: primary,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-              ),
-              const Text(
-                'Enable Upgrade',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Checkbox(
-                value: _config.tieBreakerEnabled,
-                onChanged: _readOnly
-                    ? null
-                    : (v) {
-                        setState(() {
-                          _config.tieBreakerEnabled = v ?? false;
-                        });
-                      },
-                activeColor: primary,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-              ),
-              const Text(
-                'Enable Tie Breaker',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+              Transform.scale(
+                scale: 0.82,
+                child: Switch(
+                  value: enabled,
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: primary,
+                  onChanged: _readOnly ? null : onChanged,
                 ),
               ),
             ],
           ),
-          if (_showsMarksLimits) ...[
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _intDropdown(
-                    label: 'Min Marks',
-                    value: _config.minimumMarks ?? 1,
-                    items: const [1, 2, 3, 4, 5, 10, 20],
-                    onChanged: (v) =>
-                        setState(() => _config.minimumMarks = v),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _intDropdown(
-                    label: 'Max Marks',
-                    value: _config.maximumMarks ?? 10,
-                    items: const [10, 20, 50, 100],
-                    onChanged: (v) =>
-                        setState(() => _config.maximumMarks = v),
-                  ),
-                ),
-              ],
-            ),
+          if (child != null) ...[
+            const SizedBox(height: 12),
+            child,
           ],
-          if (_isTimedScoring) ...[
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _timePickerField(
-                    label: 'Min Time',
-                    value: _parseHhMm(_config.minTime ?? _minTimeController.text),
-                    onPicked: (t) {
-                      final formatted = _formatHhMm(t);
-                      setState(() {
-                        _config.minTime = formatted;
-                        _minTimeController.text = formatted;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _timePickerField(
-                    label: 'Max Time',
-                    value: _parseHhMm(_config.maxTime ?? _maxTimeController.text),
-                    onPicked: (t) {
-                      final formatted = _formatHhMm(t);
-                      setState(() {
-                        _config.maxTime = formatted;
-                        _maxTimeController.text = formatted;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 12),
-          Divider(color: Colors.grey.shade100),
-          const SizedBox(height: 8),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 16,
-            runSpacing: 10,
-            children: [
-              FilterChip(
-                label: Text(
-                  'Enable Skipped Asana',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    color: _config.skippedAsanaEnabled
-                        ? Colors.white
-                        : Colors.grey.shade800,
-                  ),
-                ),
-                selected: _config.skippedAsanaEnabled,
-                showCheckmark: true,
-                checkmarkColor: Colors.white,
-                backgroundColor: Colors.white,
-                selectedColor: primary,
-                color: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) return primary;
-                  return Colors.white;
-                }),
-                side: BorderSide(
-                  color: _config.skippedAsanaEnabled
-                      ? primary
-                      : Colors.grey.shade300,
-                ),
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-                pressElevation: 0,
-                onSelected: _readOnly
-                    ? null
-                    : (v) => setState(() => _config.skippedAsanaEnabled = v),
-              ),
-              if (_config.skippedAsanaEnabled) ...[
-                SizedBox(
-                  width: 140,
-                  child: _intDropdown(
-                    label: 'Skipped Count',
-                    value: _config.skippedAsanaCount.clamp(1, 10),
-                    items: List.generate(10, (i) => i + 1),
-                    onChanged: (v) =>
-                        setState(() => _config.skippedAsanaCount = v),
-                  ),
-                ),
-                SizedBox(
-                  width: 140,
-                  child: _intDropdown(
-                    label: 'Skipped Marks',
-                    value: _config.skippedAsanaMarks,
-                    items: const [0, 1, 2, 3, 4, 5, 10],
-                    onChanged: (v) =>
-                        setState(() => _config.skippedAsanaMarks = v),
-                  ),
-                ),
-              ],
-            ],
-          ),
         ],
       ),
     );
@@ -2537,6 +2830,7 @@ class _CategoryAsanasConfigWizardState
                     },
                   ),
                 );
+                final showCountRules = !_config.isVideoSubmission;
                 final timesField = _labeledField(
                   label: 'How many times',
                   child: TextFormField(
@@ -2612,6 +2906,9 @@ class _CategoryAsanasConfigWizardState
                     ],
                   ),
                 );
+                if (!showCountRules) {
+                  return daysField;
+                }
                 if (wide) {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2640,7 +2937,9 @@ class _CategoryAsanasConfigWizardState
                 );
               },
             ),
-            if (!_isSingleDayDuration && _config.increaseCountEnabled) ...[
+            if (!_config.isVideoSubmission &&
+                !_isSingleDayDuration &&
+                _config.increaseCountEnabled) ...[
               const SizedBox(height: 14),
               _buildIncreaseCountRanges(primary),
             ],
@@ -3560,7 +3859,6 @@ class _CategoryAsanasConfigWizardState
     required CompetitionController feeCtrl,
     required double storedAmount,
     required bool includePlatformFee,
-    required String title,
   }) {
     if (storedAmount <= 0) return const SizedBox.shrink();
     final breakdown = feeCtrl.breakdownCategoryAmount(
@@ -3568,60 +3866,62 @@ class _CategoryAsanasConfigWizardState
       includePlatformFee: includePlatformFee,
       categoryId: _config.categoryId,
     );
+    final cells = includePlatformFee
+        ? <(String, double, bool)>[
+            ('Amount', breakdown.baseAmount, false),
+            ('Fee', breakdown.totalFee, false),
+            ('Total', breakdown.totalAmount, true),
+          ]
+        : <(String, double, bool)>[
+            ('Fee', breakdown.totalFee, false),
+            ('Total payable', breakdown.totalAmount, true),
+          ];
 
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: Colors.grey.shade700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          if (includePlatformFee) ...[
-            Text(
-              'Amount: ₹${breakdown.baseAmount.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Fee: ₹${breakdown.totalFee.toStringAsFixed(2)}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: primary,
+      padding: const EdgeInsets.only(top: 14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F8F8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            for (var i = 0; i < cells.length; i++) ...[
+              if (i > 0)
+                Container(width: 1, height: 32, color: Colors.grey.shade200),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        cells[i].$1,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '₹${cells[i].$2.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: cells[i].$3 ? 16 : 14,
+                          fontWeight: FontWeight.w800,
+                          color: cells[i].$3 ? primary : const Color(0xFF1F2937),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Total: ₹${breakdown.totalAmount.toStringAsFixed(2)}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: primary,
-              ),
-            ),
-          ] else ...[
-            Text(
-              'Total payable: ₹${breakdown.totalAmount.toStringAsFixed(2)}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: primary,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Fee: ₹${breakdown.totalFee.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -3636,119 +3936,407 @@ class _CategoryAsanasConfigWizardState
     final includePlatformFee = _config.includeFeeInRegistration;
     final showBreakdown = isOnDemand && ctrl != null;
 
-    final standardFees = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _labeledField(
-          label: 'Online fee per participant',
-          child: TextFormField(
-            controller: _feeController,
-            enabled: !_readOnly,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-            ],
-            decoration: _compactDecoration(prefixText: '₹ '),
-            style: const TextStyle(fontWeight: FontWeight.w900),
-            onChanged: (v) {
-              setState(() {
-                _config.feeAmount = double.tryParse(v.trim()) ?? 0;
-              });
-            },
+    final earlyBirdAmount =
+        double.tryParse(_earlyBirdFeeController.text.trim()) ??
+            _config.earlyBirdFeeAmount;
+    final bulkAmount =
+        double.tryParse(_bulkDiscountFeeController.text.trim()) ??
+            _config.bulkDiscountFeeAmount;
+
+    return _stepCard(
+      primary: primary,
+      title: _numberedTitle('CATEGORY REGISTRATION FEES'),
+      icon: Icons.currency_rupee_rounded,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 760;
+          final nav = _buildFeeOptionNav(primary, compact: stacked);
+          final detail = _buildFeeDetailPanel(
+            primary: primary,
+            showBreakdown: showBreakdown,
+            feeCtrl: ctrl,
+            includePlatformFee: includePlatformFee,
+            onlineAmount: onlineAmount,
+            spotAmount: spotAmount,
+            earlyBirdAmount: earlyBirdAmount,
+            bulkAmount: bulkAmount,
+          );
+          final footer = _buildSharedFeeFooter(
+            primary: primary,
+            isOnDemand: isOnDemand,
+            showBreakdown: showBreakdown,
+            feeCtrl: ctrl,
+            includePlatformFee: includePlatformFee,
+          );
+
+          return Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              children: [
+                if (stacked) ...[
+                  ColoredBox(
+                    color: const Color(0xFFF7F8F8),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                      child: nav,
+                    ),
+                  ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    child: detail,
+                  ),
+                ] else
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          width: 250,
+                          color: const Color(0xFFF7F8F8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          child: nav,
+                        ),
+                        Container(width: 1, color: Colors.grey.shade200),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                            child: detail,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (footer != null) footer,
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFeeOptionNav(Color primary, {required bool compact}) {
+    final tiles = [
+      _feeOptionTile(
+        panel: _FeePanel.online,
+        title: 'Online Fee',
+        subtitle: _feeNavAmount(
+          double.tryParse(_feeController.text.trim()) ?? _config.feeAmount,
+        ),
+        primary: primary,
+        compact: compact,
+      ),
+      _feeOptionTile(
+        panel: _FeePanel.spot,
+        title: 'Spot Fee',
+        subtitle: _config.isOnlineMode
+            ? 'Uses online fee'
+            : _feeNavAmount(
+                double.tryParse(_spotFeeController.text.trim()) ??
+                    _config.spotFeeAmount,
+              ),
+        primary: primary,
+        compact: compact,
+      ),
+      _feeOptionTile(
+        panel: _FeePanel.earlyBird,
+        title: 'Early Bird',
+        subtitle: _config.earlyBirdEnabled
+            ? _offerRangeLabel(_config.earlyBirdFrom, _config.earlyBirdTo)
+            : 'Off',
+        primary: primary,
+        compact: compact,
+      ),
+      _feeOptionTile(
+        panel: _FeePanel.bulk,
+        title: 'Bulk Discount',
+        subtitle: _config.bulkDiscountEnabled ? _bulkNavSubtitle() : 'Off',
+        primary: primary,
+        compact: compact,
+      ),
+    ];
+
+    if (!compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: tiles,
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: tiles),
+    );
+  }
+
+  Widget _feeOptionTile({
+    required _FeePanel panel,
+    required String title,
+    required String subtitle,
+    required Color primary,
+    required bool compact,
+  }) {
+    final selected = _selectedFeePanel == panel;
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: compact ? 0 : 4,
+        right: compact ? 8 : 0,
+      ),
+      child: Material(
+        color: selected ? primary.withValues(alpha: 0.1) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => _selectedFeePanel = panel),
+          child: Container(
+            width: compact ? 168 : null,
+            padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected
+                    ? primary.withValues(alpha: 0.35)
+                    : Colors.grey.shade200,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.2,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? primary : const Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? primary : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        if (showBreakdown)
-          _buildFeeBreakdown(
-            primary: primary,
-            feeCtrl: ctrl,
-            storedAmount: onlineAmount,
-            includePlatformFee: includePlatformFee,
-            title: 'Online calculation',
-          ),
-        if (!_config.isOnlineMode) ...[
-          const SizedBox(height: 12),
-          _labeledField(
-            label: 'Spot fee per participant',
-            child: TextFormField(
-              controller: _spotFeeController,
-              enabled: !_readOnly,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
-              decoration: _compactDecoration(prefixText: '₹ '),
-              style: const TextStyle(fontWeight: FontWeight.w900),
-              onChanged: (v) {
-                setState(() {
-                  _config.spotFeeAmount = double.tryParse(v.trim()) ?? 0;
-                });
-              },
-            ),
-          ),
-          if (showBreakdown)
-            _buildFeeBreakdown(
-              primary: primary,
-              feeCtrl: ctrl,
-              storedAmount: spotAmount,
-              includePlatformFee: includePlatformFee,
-              title: 'Spot calculation',
-            ),
-        ],
-        if (isOnDemand) ...[
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Checkbox(
-                value: includePlatformFee,
-                onChanged: _readOnly
-                    ? null
-                    : (value) => _toggleIncludePlatformFee(value ?? false),
-                activeColor: primary,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-              ),
-              const Text(
-                'INCLUDE FEE',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ],
-        if (showBreakdown) ...[
-          const SizedBox(height: 4),
-          Obx(() {
-            final gatewayPct = ctrl.onDemandPaymentGatewayFeePercent.value;
-            final platformPct = ctrl.onDemandPlatformFeePercent.value;
-            return Text(
-              'Platform ${platformPct.toStringAsFixed(1)}% + Gateway ${gatewayPct.toStringAsFixed(1)}%',
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey.shade500,
-              ),
-            );
-          }),
-        ],
-      ],
+      ),
     );
+  }
 
-    final offers = Column(
+  Widget _buildFeeDetailPanel({
+    required Color primary,
+    required bool showBreakdown,
+    required CompetitionController? feeCtrl,
+    required bool includePlatformFee,
+    required double onlineAmount,
+    required double spotAmount,
+    required double earlyBirdAmount,
+    required double bulkAmount,
+  }) {
+    final Widget body = switch (_selectedFeePanel) {
+      _FeePanel.online => _buildOnlineFeeDetails(
+          primary: primary,
+          showBreakdown: showBreakdown,
+          feeCtrl: feeCtrl,
+          includePlatformFee: includePlatformFee,
+          amount: onlineAmount,
+        ),
+      _FeePanel.spot => _buildSpotFeeDetails(
+          primary: primary,
+          showBreakdown: showBreakdown,
+          feeCtrl: feeCtrl,
+          includePlatformFee: includePlatformFee,
+          amount: spotAmount,
+        ),
+      _FeePanel.earlyBird => _buildEarlyBirdDetails(
+          primary: primary,
+          showBreakdown: showBreakdown,
+          feeCtrl: feeCtrl,
+          includePlatformFee: includePlatformFee,
+          amount: earlyBirdAmount,
+        ),
+      _FeePanel.bulk => _buildBulkDiscountDetails(
+          primary: primary,
+          showBreakdown: showBreakdown,
+          feeCtrl: feeCtrl,
+          includePlatformFee: includePlatformFee,
+          amount: bulkAmount,
+        ),
+    };
+
+    return body;
+  }
+
+  Widget _feeDetailHeading({
+    required String title,
+    required String hint,
+    required Color primary,
+    bool? enabled,
+    ValueChanged<bool>? onEnabled,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    height: 1.2,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hint,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onEnabled != null) ...[
+            const SizedBox(width: 12),
+            Transform.scale(
+              scale: 0.82,
+              child: Switch(
+                value: enabled ?? false,
+                activeThumbColor: Colors.white,
+                activeTrackColor: primary,
+                onChanged: _readOnly ? null : onEnabled,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOnlineFeeDetails({
+    required Color primary,
+    required bool showBreakdown,
+    required CompetitionController? feeCtrl,
+    required bool includePlatformFee,
+    required double amount,
+  }) {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _feeOfferToggle(
-          label: 'Early Bird',
-          value: _config.earlyBirdEnabled,
+        _feeDetailHeading(
+          title: 'Online Fee',
+          hint: 'Charged when a participant registers online.',
           primary: primary,
-          onChanged: (value) {
+        ),
+        _feeMoneyField(
+          label: 'Fee per participant',
+          controller: _feeController,
+          onAmount: (value) => _config.feeAmount = value,
+        ),
+        if (showBreakdown && feeCtrl != null)
+          _buildFeeBreakdown(
+            primary: primary,
+            feeCtrl: feeCtrl,
+            storedAmount: amount,
+            includePlatformFee: includePlatformFee,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSpotFeeDetails({
+    required Color primary,
+    required bool showBreakdown,
+    required CompetitionController? feeCtrl,
+    required bool includePlatformFee,
+    required double amount,
+  }) {
+    if (_config.isOnlineMode) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _feeDetailHeading(
+            title: 'Spot Fee',
+            hint:
+                'This category is online, so registration uses the online fee. Switch it to offline to set a separate on-the-day amount.',
+            primary: primary,
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _feeDetailHeading(
+          title: 'Spot Fee',
+          hint: 'Charged for on-the-day registration.',
+          primary: primary,
+        ),
+        _feeMoneyField(
+          label: 'Fee per participant',
+          controller: _spotFeeController,
+          onAmount: (value) => _config.spotFeeAmount = value,
+        ),
+        if (showBreakdown && feeCtrl != null)
+          _buildFeeBreakdown(
+            primary: primary,
+            feeCtrl: feeCtrl,
+            storedAmount: amount,
+            includePlatformFee: includePlatformFee,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildEarlyBirdDetails({
+    required Color primary,
+    required bool showBreakdown,
+    required CompetitionController? feeCtrl,
+    required bool includePlatformFee,
+    required double amount,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _feeDetailHeading(
+          title: 'Early Bird',
+          hint: 'A lower fee that applies only between these dates.',
+          primary: primary,
+          enabled: _config.earlyBirdEnabled,
+          onEnabled: (value) {
             setState(() => _config.earlyBirdEnabled = value);
           },
         ),
         if (_config.earlyBirdEnabled) ...[
-          const SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: _offerDateField(
@@ -3759,7 +4347,7 @@ class _CategoryAsanasConfigWizardState
                   },
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: _offerDateField(
                   label: 'To',
@@ -3769,50 +4357,55 @@ class _CategoryAsanasConfigWizardState
                   },
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _feeMoneyField(
+                  label: 'Fee per participant',
+                  controller: _earlyBirdFeeController,
+                  onAmount: (value) => _config.earlyBirdFeeAmount = value,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 10),
-          _labeledField(
-            label: 'Early bird fee per participant',
-            child: TextFormField(
-              controller: _earlyBirdFeeController,
-              enabled: !_readOnly,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
-              decoration: _compactDecoration(prefixText: '₹ '),
-              style: const TextStyle(fontWeight: FontWeight.w900),
-              onChanged: (v) {
-                setState(() {
-                  _config.earlyBirdFeeAmount = double.tryParse(v.trim()) ?? 0;
-                });
-              },
-            ),
-          ),
-          if (showBreakdown)
+          if (showBreakdown && feeCtrl != null)
             _buildFeeBreakdown(
               primary: primary,
-              feeCtrl: ctrl,
-              storedAmount: double.tryParse(_earlyBirdFeeController.text.trim()) ??
-                  _config.earlyBirdFeeAmount,
+              feeCtrl: feeCtrl,
+              storedAmount: amount,
               includePlatformFee: includePlatformFee,
-              title: 'Early bird calculation',
             ),
-        ],
-        const SizedBox(height: 12),
-        _feeOfferToggle(
-          label: 'Bulk registration discount',
-          value: _config.bulkDiscountEnabled,
+        ] else
+          Text(
+            'Turn this on to set the dates and the discounted fee.',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBulkDiscountDetails({
+    required Color primary,
+    required bool showBreakdown,
+    required CompetitionController? feeCtrl,
+    required bool includePlatformFee,
+    required double amount,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _feeDetailHeading(
+          title: 'Bulk Registration Discount',
+          hint:
+              'A lower fee when one registration includes at least this many participants.',
           primary: primary,
-          onChanged: (value) {
+          enabled: _config.bulkDiscountEnabled,
+          onEnabled: (value) {
             setState(() => _config.bulkDiscountEnabled = value);
           },
         ),
         if (_config.bulkDiscountEnabled) ...[
-          const SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: _offerDateField(
@@ -3823,7 +4416,7 @@ class _CategoryAsanasConfigWizardState
                   },
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: _offerDateField(
                   label: 'To',
@@ -3835,114 +4428,155 @@ class _CategoryAsanasConfigWizardState
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          _labeledField(
-            label: 'Minimum participants',
-            child: TextFormField(
-              controller: _bulkDiscountCountController,
-              enabled: !_readOnly,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: _compactDecoration(hint: 'Count'),
-              style: const TextStyle(fontWeight: FontWeight.w900),
-              onChanged: (v) {
-                setState(() {
-                  _config.bulkDiscountMinCount = int.tryParse(v.trim()) ?? 0;
-                });
-              },
-            ),
-          ),
-          const SizedBox(height: 10),
-          _labeledField(
-            label: 'Bulk fee per participant',
-            child: TextFormField(
-              controller: _bulkDiscountFeeController,
-              enabled: !_readOnly,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
-              decoration: _compactDecoration(prefixText: '₹ '),
-              style: const TextStyle(fontWeight: FontWeight.w900),
-              onChanged: (v) {
-                setState(() {
-                  _config.bulkDiscountFeeAmount =
-                      double.tryParse(v.trim()) ?? 0;
-                });
-              },
-            ),
-          ),
-          if (showBreakdown)
-            _buildFeeBreakdown(
-              primary: primary,
-              feeCtrl: ctrl,
-              storedAmount:
-                  double.tryParse(_bulkDiscountFeeController.text.trim()) ??
-                      _config.bulkDiscountFeeAmount,
-              includePlatformFee: includePlatformFee,
-              title: 'Bulk calculation',
-            ),
-        ],
-      ],
-    );
-
-    return _stepCard(
-      primary: primary,
-      title: _numberedTitle('CATEGORY REGISTRATION FEES'),
-      icon: Icons.currency_rupee_rounded,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final sideBySide = constraints.maxWidth >= 760;
-          if (!sideBySide) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                standardFees,
-                const SizedBox(height: 16),
-                offers,
-              ],
-            );
-          }
-          return Row(
+          const SizedBox(height: 12),
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 360, child: standardFees),
-              const SizedBox(width: 28),
-              Expanded(child: offers),
+              Expanded(
+                child: _labeledField(
+                  label: 'Minimum participants',
+                  child: TextFormField(
+                    controller: _bulkDiscountCountController,
+                    enabled: !_readOnly,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: _compactDecoration(hint: 'Count'),
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    onChanged: (v) {
+                      setState(() {
+                        _config.bulkDiscountMinCount =
+                            int.tryParse(v.trim()) ?? 0;
+                      });
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _feeMoneyField(
+                  label: 'Fee per participant',
+                  controller: _bulkDiscountFeeController,
+                  onAmount: (value) => _config.bulkDiscountFeeAmount = value,
+                ),
+              ),
             ],
-          );
+          ),
+          if (showBreakdown && feeCtrl != null)
+            _buildFeeBreakdown(
+              primary: primary,
+              feeCtrl: feeCtrl,
+              storedAmount: amount,
+              includePlatformFee: includePlatformFee,
+            ),
+        ] else
+          Text(
+            'Turn this on to set the dates, minimum count, and discounted fee.',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+      ],
+    );
+  }
+
+  Widget? _buildSharedFeeFooter({
+    required Color primary,
+    required bool isOnDemand,
+    required bool showBreakdown,
+    required CompetitionController? feeCtrl,
+    required bool includePlatformFee,
+  }) {
+    if (!isOnDemand || feeCtrl == null) return null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(8, 2, 16, 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8F8),
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            value: includePlatformFee,
+            onChanged: _readOnly
+                ? null
+                : (value) => _toggleIncludePlatformFee(value ?? false),
+            activeColor: primary,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          const Text(
+            'Include fee',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          const Spacer(),
+          if (showBreakdown)
+            Obx(() {
+              final gatewayPct =
+                  feeCtrl.onDemandPaymentGatewayFeePercent.value;
+              final platformPct = feeCtrl.onDemandPlatformFeePercent.value;
+              return Text(
+                'Platform ${platformPct.toStringAsFixed(1)}%  ·  Gateway ${gatewayPct.toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600,
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _feeMoneyField({
+    required String label,
+    required TextEditingController controller,
+    required ValueChanged<double> onAmount,
+  }) {
+    return _labeledField(
+      label: label,
+      child: TextFormField(
+        controller: controller,
+        enabled: !_readOnly,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+        ],
+        decoration: _compactDecoration(prefixText: '₹ '),
+        style: const TextStyle(fontWeight: FontWeight.w900),
+        onChanged: (v) {
+          setState(() => onAmount(double.tryParse(v.trim()) ?? 0));
         },
       ),
     );
   }
 
-  Widget _feeOfferToggle({
-    required String label,
-    required bool value,
-    required Color primary,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Row(
-      children: [
-        Checkbox(
-          value: value,
-          onChanged: _readOnly ? null : (next) => onChanged(next ?? false),
-          activeColor: primary,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
-        ),
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
+  String _feeNavAmount(double value) {
+    if (value <= 0) return 'Not set';
+    return '₹${_moneyFieldText(value)}';
+  }
+
+  String _offerRangeLabel(String? from, String? to) {
+    final hasFrom = from != null && from.isNotEmpty;
+    final hasTo = to != null && to.isNotEmpty;
+    if (!hasFrom && !hasTo) return 'Set dates';
+    if (!hasFrom) return 'To ${_displayOfferDate(to)}';
+    if (!hasTo) return 'From ${_displayOfferDate(from)}';
+    return '${_displayOfferDate(from)} – ${_displayOfferDate(to)}';
+  }
+
+  String _bulkNavSubtitle() {
+    final count = int.tryParse(_bulkDiscountCountController.text.trim()) ??
+        _config.bulkDiscountMinCount;
+    final amount = _feeNavAmount(
+      double.tryParse(_bulkDiscountFeeController.text.trim()) ??
+          _config.bulkDiscountFeeAmount,
     );
+    if (count > 0) return 'Min $count · $amount';
+    return amount;
   }
 
   Widget _offerDateField({
@@ -3994,13 +4628,19 @@ class _CategoryAsanasConfigWizardState
         _config.earlyBirdFrom,
         _config.earlyBirdTo,
       );
-      if (dates != null) return dates;
+      if (dates != null) {
+        _selectedFeePanel = _FeePanel.earlyBird;
+        return dates;
+      }
       final amountError = _readOfferAmount(
         'Early bird fee',
         _earlyBirdFeeController.text,
         (value) => _config.earlyBirdFeeAmount = value,
       );
-      if (amountError != null) return amountError;
+      if (amountError != null) {
+        _selectedFeePanel = _FeePanel.earlyBird;
+        return amountError;
+      }
     } else {
       _config.earlyBirdFeeAmount =
           double.tryParse(_earlyBirdFeeController.text.trim()) ??
@@ -4013,10 +4653,14 @@ class _CategoryAsanasConfigWizardState
         _config.bulkDiscountFrom,
         _config.bulkDiscountTo,
       );
-      if (dates != null) return dates;
+      if (dates != null) {
+        _selectedFeePanel = _FeePanel.bulk;
+        return dates;
+      }
       final count =
           int.tryParse(_bulkDiscountCountController.text.trim());
       if (count == null || count < 1) {
+        _selectedFeePanel = _FeePanel.bulk;
         return 'Bulk registration discount count must be at least 1';
       }
       _config.bulkDiscountMinCount = count;
@@ -4025,7 +4669,10 @@ class _CategoryAsanasConfigWizardState
         _bulkDiscountFeeController.text,
         (value) => _config.bulkDiscountFeeAmount = value,
       );
-      if (amountError != null) return amountError;
+      if (amountError != null) {
+        _selectedFeePanel = _FeePanel.bulk;
+        return amountError;
+      }
     } else {
       _config.bulkDiscountMinCount =
           int.tryParse(_bulkDiscountCountController.text.trim()) ??

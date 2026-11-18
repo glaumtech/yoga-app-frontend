@@ -1,3 +1,5 @@
+import 'competition_option_model.dart';
+
 class JuryAssignmentModel {
   final int juryId;
   final List<StageAssignment> stages;
@@ -136,6 +138,11 @@ class GroupAssignment {
 class CategoryAssignment {
   final int id;
   final String categoryName;
+  /// `ONLINE` / `OFFLINE` (null = legacy / not mode specific). A category can be
+  /// configured once per mode, so (id, mode) identifies a scoring option.
+  final String? mode;
+  /// `VIDEO` / `COUNT` for online categories.
+  final String? submissionType;
   /// Compulsory / from-chart asanas from category config.
   final int compulsoryAsanas;
   /// Own-choice asanas from category config.
@@ -146,6 +153,8 @@ class CategoryAssignment {
   CategoryAssignment({
     required this.id,
     required this.categoryName,
+    this.mode,
+    this.submissionType,
     this.compulsoryAsanas = 4,
     this.ownChoiceAsanas = 2,
     int? numberOfAsanas,
@@ -158,6 +167,17 @@ class CategoryAssignment {
   bool get isChampions =>
       categoryName.trim().toUpperCase() == 'CHAMPIONS';
 
+  bool get isOnline => mode == 'ONLINE';
+
+  /// Unique key for this scoring option, e.g. `12|ONLINE`.
+  String get key => CompetitionOptionModel.categoryKey(id, mode);
+
+  /// `COMMON (Online · Video)`; plain name when not mode specific.
+  String get displayName {
+    final m = CompetitionOptionModel.describeMode(mode, submissionType);
+    return m == null ? categoryName : '$categoryName ($m)';
+  }
+
   factory CategoryAssignment.fromJson(Map<String, dynamic> json) {
     final compulsory = json['compulsoryAsanas'] as int? ?? 4;
     final ownChoice = json['ownChoiceAsanas'] as int? ?? 2;
@@ -168,6 +188,8 @@ class CategoryAssignment {
     return CategoryAssignment(
       id: json['id'] as int? ?? 0,
       categoryName: json['categoryName'] as String? ?? '',
+      mode: CompetitionOptionModel.normalizeMode(json['mode']),
+      submissionType: json['submissionType']?.toString(),
       compulsoryAsanas: compulsory,
       ownChoiceAsanas: ownChoice,
       numberOfAsanas: total,
@@ -178,6 +200,8 @@ class CategoryAssignment {
     return {
       'id': id,
       'categoryName': categoryName,
+      if (mode != null) 'mode': mode,
+      if (submissionType != null) 'submissionType': submissionType,
       'compulsoryAsanas': compulsoryAsanas,
       'ownChoiceAsanas': ownChoiceAsanas,
       'numberOfAsanas': numberOfAsanas,

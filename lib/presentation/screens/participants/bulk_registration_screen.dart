@@ -1172,6 +1172,7 @@ class BulkRegistrationScreen extends StatelessWidget {
                 ),
               ),
               const PaymentOnlineModeNotice(margin: EdgeInsets.only(top: 4)),
+              const PaymentPrePayNotes(margin: EdgeInsets.only(top: 8)),
             ]
             else
               Row(

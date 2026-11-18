@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -14,6 +15,7 @@ import '../../../core/utils/storage_service.dart';
 import '../../../data/models/competition_model.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/first_competition_gate_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../controllers/auth_controller.dart';
@@ -35,6 +37,8 @@ import 'widgets/category_asanas_config_wizard.dart';
 import 'widgets/tie_breaker_dialog.dart';
 import 'widgets/apply_upgrade_dialog.dart';
 import '../../../data/models/category_config_model.dart';
+
+enum _InlineNoticeTone { error, warning, success }
 
 class CreateCompetitionScreen extends StatefulWidget {
   const CreateCompetitionScreen({super.key});
@@ -533,9 +537,13 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                     return const SizedBox.shrink();
                   }
 
-                  return const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: PaymentInrOnlyNotice(margin: EdgeInsets.zero),
+                  return const Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      PaymentInrOnlyNotice(margin: EdgeInsets.zero),
+                      PaymentPrePayNotes(margin: EdgeInsets.only(top: 10)),
+                      SizedBox(height: 12),
+                    ],
                   );
                 }),
                 _buildFormActions(context, controller, isMobile),
@@ -1394,6 +1402,19 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
                               background: modeBg,
                               foreground: modeFg,
                             ),
+                            if (cat.isOnlineMode && cat.hasSubmissionType)
+                              _categoryMetaChip(
+                                icon: cat.isVideoSubmission
+                                    ? Icons.videocam_outlined
+                                    : Icons.numbers_rounded,
+                                label: cat.isVideoSubmission ? 'Video' : 'Count',
+                                background: cat.isVideoSubmission
+                                    ? const Color(0xFFFEF3C7)
+                                    : const Color(0xFFECFDF5),
+                                foreground: cat.isVideoSubmission
+                                    ? const Color(0xFFB45309)
+                                    : const Color(0xFF047857),
+                              ),
                             _categoryMetaChip(
                               icon: Icons.payments_outlined,
                               label: cat.feeSummaryLabel,
@@ -1958,7 +1979,8 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const PaymentInrOnlyNotice(margin: EdgeInsets.only(bottom: 12)),
+                const PaymentInrOnlyNotice(margin: EdgeInsets.only(bottom: 10)),
+                const PaymentPrePayNotes(margin: EdgeInsets.only(bottom: 12)),
                 if (isMobile)
                   Column(
                     children: [
@@ -2191,24 +2213,58 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
   }
 
   Widget _buildInlineFieldWarning(String message) {
+    return _buildInlineFieldNotice(
+      message,
+      tone: _InlineNoticeTone.error,
+    );
+  }
+
+  Widget _buildInlineFieldNotice(
+    String message, {
+    _InlineNoticeTone tone = _InlineNoticeTone.error,
+  }) {
+    final Color bg;
+    final Color border;
+    final Color fg;
+    final IconData icon;
+    switch (tone) {
+      case _InlineNoticeTone.warning:
+        bg = const Color(0xFFFEF3C7);
+        border = const Color(0xFFF59E0B);
+        fg = const Color(0xFF92400E);
+        icon = Icons.warning_amber_rounded;
+        break;
+      case _InlineNoticeTone.success:
+        bg = const Color(0xFFDCFCE7);
+        border = const Color(0xFF22C55E);
+        fg = const Color(0xFF166534);
+        icon = Icons.check_circle_outline;
+        break;
+      case _InlineNoticeTone.error:
+        bg = Colors.red.withOpacity(0.1);
+        border = Colors.red.withOpacity(0.3);
+        fg = Colors.red[700]!;
+        icon = Icons.error_outline;
+        break;
+    }
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.1),
+          color: bg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.red.withOpacity(0.3)),
+          border: Border.all(color: border),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+            Icon(icon, color: fg, size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 message,
-                style: TextStyle(color: Colors.red[700], fontSize: 13),
+                style: TextStyle(color: fg, fontSize: 13, height: 1.35),
               ),
             ),
           ],
@@ -2280,50 +2336,480 @@ class _CreateCompetitionScreenState extends State<CreateCompetitionScreen> {
     CompetitionController controller,
     bool isMobile,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Obx(() {
-          final email = controller.googleDriveServiceAccountEmail.value.trim();
-          final serverReason = controller.googleDriveServerReason.value.trim();
-          final String hint;
-          if (!controller.googleDriveServerConfigured.value &&
-              serverReason.isNotEmpty) {
-            hint = serverReason;
-          } else if (email.isEmpty) {
-            hint =
-                'Share this folder with the app Google service account as Editor, then paste the folder link.';
-          } else {
-            hint =
-                'Share this folder with $email as Editor, then paste the folder link.';
-          }
-          return FormLabelWithHint(
-            label: 'Google Drive folder URL',
-            hintText: hint,
+    return Obx(() {
+      // Touch list so GetX rebuilds when a Video/Count category is saved.
+      controller.categoryConfigDrafts.length;
+      controller.categoryConfigDrafts.toList();
+      final requiredForVideo = controller.requiresGoogleDriveFolder;
+      final setupWarning = controller.googleDriveServerSetupWarning;
+      final folderError = requiredForVideo &&
+              !controller.isViewMode.value &&
+              controller.hasAttemptedSubmit.value
+          ? controller.validateGoogleDriveFolderFieldForSubmit()
+          : null;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FormLabelWithHint(
+            label: requiredForVideo
+                ? 'Google Drive folder URL *'
+                : 'Google Drive folder URL',
             labelStyle: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: isMobile ? 13 : 13.5,
               height: 1.2,
               color: AppColors.textSecondary,
             ),
-            hintStyle: TextStyle(
-              fontSize: isMobile ? 11 : 12,
-              color: AppColors.textMuted,
-              height: 1.35,
-            ),
             bottomSpacing: 8,
-          );
-        }),
-        _StableCompetitionTextFormField(
-          label: 'Google Drive folder URL',
-          textController: controller.googleDriveFolderUrlController,
-          competitionController: controller,
-          isMobile: isMobile,
-          decorationHint: 'https://drive.google.com/drive/folders/...',
-          onChanged: controller.captureGoogleDriveFolderUrlDraft,
-        ),
-      ],
+          ),
+          _StableCompetitionTextFormField(
+            label: 'Google Drive folder URL',
+            textController: controller.googleDriveFolderUrlController,
+            competitionController: controller,
+            isMobile: isMobile,
+            isRequired: requiredForVideo,
+            minLengthMessage:
+                'Google Drive folder URL is required for online Video categories',
+            decorationHint: 'https://drive.google.com/drive/folders/...',
+            onChanged: controller.captureGoogleDriveFolderUrlDraft,
+          ),
+          if (folderError != null) _buildInlineFieldWarning(folderError),
+          if (setupWarning != null &&
+              !controller.isViewMode.value &&
+              folderError == null) ...[
+            const SizedBox(height: 8),
+            _buildInlineFieldNotice(
+              setupWarning,
+              tone: _InlineNoticeTone.warning,
+            ),
+          ],
+          const SizedBox(height: 16),
+          _buildGoogleDriveCredentialsFields(controller, isMobile),
+        ],
+      );
+    });
+  }
+
+  /// Per-competition Google OAuth credentials used for participant MP4
+  /// uploads. Secret and refresh token are write-only: when already stored,
+  /// the field stays empty and blank means "keep the saved value".
+  Widget _buildGoogleDriveCredentialsFields(
+    CompetitionController controller,
+    bool isMobile,
+  ) {
+    return Obx(() {
+      controller.googleDriveCredentialsRevision.value;
+      final readOnly = controller.isViewMode.value;
+      final secretSaved = controller.googleDriveOauthClientSecretSaved.value;
+      final tokenSaved = controller.googleDriveOauthRefreshTokenSaved.value;
+      final authorized = controller.hasGoogleDriveAuthorization;
+      final accountEmail = controller.googleDriveAccountEmail.value.trim();
+      final credentialError = !readOnly && controller.hasAttemptedSubmit.value
+          ? controller.validateGoogleDriveCredentialsForSubmit()
+          : null;
+      final labelStyle = TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: isMobile ? 13 : 13.5,
+        height: 1.2,
+        color: AppColors.textSecondary,
+      );
+      final hintStyle = TextStyle(
+        fontSize: isMobile ? 11 : 12,
+        color: AppColors.textMuted,
+        height: 1.35,
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FormLabelWithHint(
+            label: 'Google Drive access (OAuth)',
+            labelStyle: labelStyle,
+            bottomSpacing: 0,
+          ),
+          if (!readOnly)
+            TextButton.icon(
+              onPressed: () => _showGoogleDriveHowTo(controller),
+              icon: const Icon(Icons.help_outline_rounded, size: 18),
+              label: const Text('How to connect Google Drive'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          const SizedBox(height: 6),
+          _StableCompetitionTextFormField(
+            label: 'Google OAuth client ID',
+            textController: controller.googleDriveOauthClientIdController,
+            competitionController: controller,
+            isMobile: isMobile,
+            decorationHint: 'OAuth client ID (…apps.googleusercontent.com)',
+            onChanged: controller.onGoogleDriveCredentialsChanged,
+          ),
+          const SizedBox(height: 10),
+          _SecretCompetitionField(
+            textController: controller.googleDriveOauthClientSecretController,
+            readOnly: readOnly,
+            hint: secretSaved
+                ? 'Client secret saved (leave blank to keep)'
+                : 'OAuth client secret',
+            onChanged: controller.onGoogleDriveCredentialsChanged,
+          ),
+          if (!readOnly && (secretSaved || tokenSaved))
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'To remove the saved credentials, clear the client ID and save.',
+                style: hintStyle,
+              ),
+            ),
+          if (authorized &&
+              accountEmail.isNotEmpty &&
+              controller.googleDriveConnectionMessage.value.trim().isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 16,
+                    color: Color(0xFF16A34A),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Connected as $accountEmail',
+                      style: TextStyle(
+                        fontSize: isMobile ? 12 : 13,
+                        color: const Color(0xFF166534),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (credentialError != null) _buildInlineFieldWarning(credentialError),
+          if (!readOnly) ...[
+            const SizedBox(height: 12),
+            _buildGoogleDriveConnectionTest(controller, isMobile),
+          ],
+        ],
+      );
+    });
+  }
+
+  /// Step-by-step guide for creating the OAuth client and connecting Drive.
+  void _showGoogleDriveHowTo(CompetitionController controller) {
+    final redirectUri = controller.googleDriveOauthRedirectUri;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final isMobile = MediaQuery.of(dialogContext).size.width < 600;
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 16 : 40,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.add_to_drive_outlined,
+                          color: AppTheme.primaryColor),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'How to connect Google Drive',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _howToStep(
+                          1,
+                          'Enable the Google Drive API',
+                          'Sign in to Google Cloud Console with the Google account that owns the Drive folder. Create a project, then go to APIs & Services > Library, search "Google Drive API" and click Enable.',
+                          action: _howToLink(
+                            'Open Google Drive API',
+                            'https://console.cloud.google.com/apis/library/drive.googleapis.com',
+                          ),
+                        ),
+                        _howToStep(
+                          2,
+                          'Set up the consent screen',
+                          'Go to OAuth consent screen (or Google Auth Platform). Choose External and fill in the app name and emails. Add the scope below, then click Publish app so the status is "In production". In Testing, uploads stop after 7 days.',
+                          extra: const _CopyableValue(
+                            value: 'https://www.googleapis.com/auth/drive',
+                            copiedLabel: 'Scope copied',
+                          ),
+                          action: _howToLink(
+                            'Open OAuth consent screen',
+                            'https://console.cloud.google.com/apis/credentials/consent',
+                          ),
+                        ),
+                        _howToStep(
+                          3,
+                          'Create the OAuth client',
+                          'Go to Credentials > Create credentials > OAuth client ID (or Clients > Create client). Choose Web application. Under Authorized redirect URIs click Add URI and paste:',
+                          extra: _CopyableValue(
+                            value: redirectUri,
+                            copiedLabel: 'Redirect URI copied',
+                          ),
+                          action: _howToLink(
+                            'Open Credentials',
+                            'https://console.cloud.google.com/apis/credentials',
+                          ),
+                        ),
+                        _howToStep(
+                          4,
+                          'Paste the client ID and secret',
+                          'Click Create, then copy the Client ID and Client secret into this form.',
+                        ),
+                        _howToStep(
+                          5,
+                          'Connect and save',
+                          'Click Connect Google Drive and sign in with the folder owner account. If Google shows "Google hasn\u2019t verified this app", click Advanced > Go to (app). Click Allow, come back here and save the competition.',
+                          isLast: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
+  }
+
+  Widget _howToStep(
+    int number,
+    String title,
+    String body, {
+    Widget? extra,
+    Widget? action,
+    bool isLast = false,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$number',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: AppTheme.primaryColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                if (extra != null) ...[
+                  const SizedBox(height: 8),
+                  extra,
+                ],
+                if (action != null) action,
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _howToLink(String label, String url) {
+    return TextButton.icon(
+      onPressed: () => launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      ),
+      icon: const Icon(Icons.open_in_new_rounded, size: 16),
+      label: Text(label),
+      style: TextButton.styleFrom(
+        foregroundColor: AppTheme.primaryColor,
+        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  /// "Connect Google Drive" (in-app Google sign-in) and "Test Drive
+  /// connection", with the result shown inline.
+  Widget _buildGoogleDriveConnectionTest(
+    CompetitionController controller,
+    bool isMobile,
+  ) {
+    return Obx(() {
+      controller.googleDriveCredentialsRevision.value;
+      final testing = controller.isTestingGoogleDriveConnection.value;
+      final connecting = controller.isConnectingGoogleDrive.value;
+      final authorized = controller.hasGoogleDriveAuthorization;
+      final ok = controller.googleDriveConnectionOk.value;
+      final message = controller.googleDriveConnectionMessage.value.trim();
+      final buttonPadding = EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: isMobile ? 10 : 12,
+      );
+      final buttonShape = RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton.icon(
+                onPressed: connecting || testing
+                    ? null
+                    : controller.connectGoogleDrive,
+                icon: connecting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.add_to_drive_outlined, size: 18),
+                label: Text(
+                  connecting
+                      ? 'Waiting for Google sign-in...'
+                      : (authorized
+                          ? 'Reconnect Google Drive'
+                          : 'Connect Google Drive'),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  padding: buttonPadding,
+                  shape: buttonShape,
+                ),
+              ),
+              if (authorized && !connecting) _buildTestDriveButton(
+                controller,
+                testing,
+                buttonPadding,
+                buttonShape,
+              ),
+            ],
+          ),
+          if (connecting)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                spacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    'Sign in and choose Allow in the Google tab.',
+                    style: TextStyle(
+                      fontSize: isMobile ? 12 : 13,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: controller.openGoogleDriveSignIn,
+                    child: const Text('Open Google sign-in'),
+                  ),
+                  TextButton(
+                    onPressed: controller.cancelGoogleDriveConnect,
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ),
+          if (!testing && !connecting && ok != null && message.isNotEmpty)
+            _buildInlineFieldNotice(
+              message,
+              tone: ok ? _InlineNoticeTone.success : _InlineNoticeTone.error,
+            ),
+        ],
+      );
+    });
+  }
+
+  Widget _buildTestDriveButton(
+    CompetitionController controller,
+    bool testing,
+    EdgeInsets padding,
+    OutlinedBorder shape,
+  ) {
+    return OutlinedButton.icon(
+            onPressed: testing ? null : controller.testGoogleDriveConnection,
+            icon: testing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cloud_sync_outlined, size: 18),
+            label: Text(testing ? 'Testing connection...' : 'Test Drive connection'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primaryColor,
+              side: BorderSide(color: AppTheme.primaryColor),
+              padding: padding,
+              shape: shape,
+            ),
+          );
   }
 
   Widget _buildBrochureUpload(
@@ -5361,6 +5847,142 @@ class _CompetitionDescriptionInputState
 
 /// Text field that reads view-mode outside the parent Form [Obx], so typing
 /// and tab-switch hover rebuilds do not remount the input on Flutter web.
+/// Monospace value with a copy button (used in the Drive how-to dialog).
+class _CopyableValue extends StatefulWidget {
+  const _CopyableValue({required this.value, required this.copiedLabel});
+
+  final String value;
+  final String copiedLabel;
+
+  @override
+  State<_CopyableValue> createState() => _CopyableValueState();
+}
+
+class _CopyableValueState extends State<_CopyableValue> {
+  bool _copied = false;
+  Timer? _reset;
+
+  @override
+  void dispose() {
+    _reset?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.value));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    _reset?.cancel();
+    _reset = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SelectableText(
+              widget.value,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontFamily: 'monospace',
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: _copied ? widget.copiedLabel : 'Copy',
+            icon: Icon(
+              _copied ? Icons.check_rounded : Icons.copy_rounded,
+              size: 18,
+              color: _copied ? const Color(0xFF16A34A) : null,
+            ),
+            onPressed: _copy,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Masked input for write-only secrets (client secret, refresh token).
+class _SecretCompetitionField extends StatefulWidget {
+  const _SecretCompetitionField({
+    required this.textController,
+    required this.readOnly,
+    required this.hint,
+    this.onChanged,
+  });
+
+  final TextEditingController textController;
+  final bool readOnly;
+  final String hint;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  State<_SecretCompetitionField> createState() =>
+      _SecretCompetitionFieldState();
+}
+
+class _SecretCompetitionFieldState extends State<_SecretCompetitionField> {
+  bool _obscured = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: widget.textController,
+      readOnly: widget.readOnly,
+      obscureText: _obscured,
+      enableSuggestions: false,
+      autocorrect: false,
+      cursorOpacityAnimates: false,
+      keyboardType: TextInputType.visiblePassword,
+      onChanged: widget.onChanged,
+      decoration: InputDecoration(
+        hintText: widget.hint,
+        hintStyle: TextStyle(
+          fontSize: 13,
+          color: AppColors.textMuted.withValues(alpha: 0.8),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
+        ),
+        filled: true,
+        fillColor: widget.readOnly ? Colors.grey[200] : Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        suffixIcon: widget.readOnly
+            ? null
+            : IconButton(
+                tooltip: _obscured ? 'Show' : 'Hide',
+                icon: Icon(
+                  _obscured
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 20,
+                ),
+                onPressed: () => setState(() => _obscured = !_obscured),
+              ),
+      ),
+    );
+  }
+}
+
 class _StableCompetitionTextFormField extends StatefulWidget {
   const _StableCompetitionTextFormField({
     required this.label,

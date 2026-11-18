@@ -79,6 +79,9 @@ class UserManagementController extends GetxController {
   final RxString selectedEventName = ''.obs;
   final RxList<String> selectedPermissions = <String>[].obs;
   final RxList<String> selectedStages = <String>[].obs;
+  /// Selected category allotment keys (see [CompetitionOptionModel.key]),
+  /// e.g. `12|OFFLINE`, `12|ONLINE`. The same category can be configured once
+  /// per mode, so names / IDs alone are not unique.
   final RxList<String> selectedCategories = <String>[].obs;
   final RxBool selectedMale = false.obs;
   final RxBool selectedFemale = false.obs;
@@ -128,7 +131,22 @@ class UserManagementController extends GetxController {
 
   // Get categories as display strings (loaded from API)
   List<String> get categories {
-    return availableCategories.map((category) => category.name).toList();
+    return availableCategories.map(categoryOptionLabel).toList();
+  }
+
+  /// Allotment keys for every available category option (used by "select all").
+  List<String> get categoryKeys =>
+      availableCategories.map((category) => category.key).toList();
+
+  /// `COMMON (Offline)`, `COMMON (Online · Video)`; plain name when not mode specific.
+  String categoryOptionLabel(CompetitionOptionModel category) {
+    final mode = category.modeLabel;
+    return mode == null ? category.name : '${category.name} ($mode)';
+  }
+
+  String categoryLabelForKey(String key) {
+    final option = availableCategories.firstWhereOrNull((c) => c.key == key);
+    return option != null ? categoryOptionLabel(option) : key;
   }
 
   @override
@@ -312,18 +330,53 @@ class UserManagementController extends GetxController {
     return ids;
   }
 
-  // Helper method to map category names to IDs
-  List<int> getCategoryIds(List<String> categoryNames) {
-    final ids = <int>[];
-    for (final categoryName in categoryNames) {
-      final category = availableCategories.firstWhereOrNull(
-        (c) => c.name.toUpperCase() == categoryName.toUpperCase(),
-      );
-      if (category != null) {
-        ids.add(category.id);
+  /// Maps selected allotment keys (or legacy names) to `{id, categoryName, mode}`
+  /// entries sent as the jury's per-mode category allotment.
+  List<Map<String, dynamic>> getCategoryAllotments(List<String> selectedKeys) {
+    final result = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final selected in selectedKeys) {
+      final category =
+          availableCategories.firstWhereOrNull((c) => c.key == selected) ??
+          availableCategories.firstWhereOrNull(
+            (c) => c.name.toUpperCase() == selected.toUpperCase(),
+          );
+      if (category == null || !seen.add(category.key)) continue;
+      result.add({
+        'id': category.id,
+        'categoryName': category.name,
+        if (category.mode != null) 'mode': category.mode,
+      });
+    }
+    return result;
+  }
+
+  /// Legacy jury allotments have no mode (= every mode of that category).
+  /// Once per-mode options are loaded, expand such keys to every matching option.
+  void _expandLegacyCategorySelections() {
+    if (selectedCategories.isEmpty || availableCategories.isEmpty) return;
+    final expanded = <String>[];
+    for (final key in selectedCategories) {
+      if (availableCategories.any((c) => c.key == key)) {
+        expanded.add(key);
+        continue;
+      }
+      final id = int.tryParse(key);
+      final matches = id == null
+          ? availableCategories.where(
+              (c) => c.name.toUpperCase() == key.toUpperCase(),
+            )
+          : availableCategories.where((c) => c.id == id);
+      if (matches.isEmpty) {
+        expanded.add(key);
+      } else {
+        expanded.addAll(matches.map((c) => c.key));
       }
     }
-    return ids;
+    selectedCategories.assignAll(expanded.toSet().toList());
+    selectedAllCategory.value =
+        categoryKeys.isNotEmpty &&
+        categoryKeys.every(selectedCategories.contains);
   }
 
   static const String _championsCategoryName = 'CHAMPIONS';
@@ -398,7 +451,12 @@ class UserManagementController extends GetxController {
       // Fetch stages and categories for the competition in parallel
       final results = await Future.wait([
         _competitionRepository.getStagesByCompetition(competitionIdInt),
-        _competitionRepository.getCategoriesByCompetition(competitionIdInt),
+        // Per (category, mode): a category configured both Offline and Online
+        // must be allotted separately, so it appears once per mode.
+        _competitionRepository.getCategoriesByCompetition(
+          competitionIdInt,
+          perMode: true,
+        ),
       ]);
 
       // Update stages
@@ -413,6 +471,7 @@ class UserManagementController extends GetxController {
       if (results[1].success && results[1].data != null) {
         availableCategories.value = results[1].data!;
         await _appendChampionsCategoryForWinnerStyle(competitionIdInt);
+        _expandLegacyCategorySelections();
       } else {
         print('Failed to load categories: ${results[1].message}');
         availableCategories.clear();
@@ -816,7 +875,9 @@ class UserManagementController extends GetxController {
       // Convert stages and categories to IDs
       // TODO: Get actual IDs from CompetitionController
       final stageIds = getStageIds(selectedStages.toList());
-      final categoryIds = getCategoryIds(selectedCategories.toList());
+      final categoryAllotments = getCategoryAllotments(
+        selectedCategories.toList(),
+      );
 
       final user = UserManagementModel(
         name: nameController.text.trim(),
@@ -833,13 +894,13 @@ class UserManagementController extends GetxController {
             : null,
         permissions: selectedPermissions.toList(), // For backward compatibility
         stages: selectedStages.toList(), // For backward compatibility
-        categories: selectedCategories.toList(), // For backward compatibility
+        categories: selectedCategories
+            .map(categoryLabelForKey)
+            .toList(), // For display / backward compatibility
         stagesObj: stageIds.isNotEmpty
             ? stageIds.map((id) => {'id': id}).toList()
             : null,
-        categoriesObj: categoryIds.isNotEmpty
-            ? categoryIds.map((id) => {'id': id}).toList()
-            : null,
+        categoriesObj: categoryAllotments.isNotEmpty ? categoryAllotments : null,
         male: selectedType.value == 'JURY(S)' ? selectedMale.value : null,
         female: selectedType.value == 'JURY(S)' ? selectedFemale.value : null,
         cell: cellController.text.trim().isNotEmpty
@@ -1008,7 +1069,21 @@ class UserManagementController extends GetxController {
     selectedEventName.value = user.displayEventName ?? '';
     selectedPermissions.value = user.permissions.toList();
     selectedStages.value = user.stages.toList();
-    selectedCategories.value = user.categories.toList();
+    // Per-mode allotment keys; legacy (no mode) entries are expanded to every
+    // configured mode once the competition's options load.
+    selectedCategories.value = (user.categoriesObj ?? const [])
+        .where((c) => c['id'] != null)
+        .map(
+          (c) => CompetitionOptionModel.categoryKey(
+            c['id'] is int ? c['id'] as int : int.parse(c['id'].toString()),
+            c['mode']?.toString(),
+          ),
+        )
+        .toSet()
+        .toList();
+    if (selectedCategories.isEmpty) {
+      selectedCategories.value = user.categories.toList();
+    }
     selectedMale.value = user.male ?? false;
     selectedFemale.value = user.female ?? false;
     if (user.cell != null) {
@@ -1172,7 +1247,9 @@ class UserManagementController extends GetxController {
 
       // Convert stages and categories to IDs
       final stageIds = getStageIds(selectedStages.toList());
-      final categoryIds = getCategoryIds(selectedCategories.toList());
+      final categoryAllotments = getCategoryAllotments(
+        selectedCategories.toList(),
+      );
 
       // In edit mode, only include password if it's been changed (not empty and not placeholder)
       // Since password field is disabled, we don't send password unless explicitly provided
@@ -1198,13 +1275,11 @@ class UserManagementController extends GetxController {
             : null,
         permissions: selectedPermissions.toList(),
         stages: selectedStages.toList(),
-        categories: selectedCategories.toList(),
+        categories: selectedCategories.map(categoryLabelForKey).toList(),
         stagesObj: stageIds.isNotEmpty
             ? stageIds.map((id) => {'id': id}).toList()
             : null,
-        categoriesObj: categoryIds.isNotEmpty
-            ? categoryIds.map((id) => {'id': id}).toList()
-            : null,
+        categoriesObj: categoryAllotments.isNotEmpty ? categoryAllotments : null,
         male: selectedType.value == 'JURY(S)' ? selectedMale.value : null,
         female: selectedType.value == 'JURY(S)' ? selectedFemale.value : null,
         cell: cellController.text.trim().isNotEmpty

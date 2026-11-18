@@ -587,7 +587,7 @@ class ParticipantController extends GetxController {
       const validExtensions = ['.jpg', '.jpeg', '.png', '.pdf'];
       if (!validExtensions.any(lowerName.endsWith)) {
         errorMessage.value =
-            'Bonafied certificate must be an image (JPG, PNG) or PDF';
+            'Bonafide certificate or ID card must be an image (JPG, PNG) or PDF';
         return false;
       }
 
@@ -949,7 +949,7 @@ class ParticipantController extends GetxController {
     final hasCertificate = hasBonafideCertificateSelected;
     if (!hasCertificate) {
       errorMessage.value =
-          'Bonafied certificate is required for Govt / Govt Aided School';
+          'Bonafide certificate or ID card is required for Govt / Govt Aided School';
       return false;
     }
 
@@ -1669,11 +1669,6 @@ class ParticipantController extends GetxController {
                     competitionController: competitionController,
                   ));
 
-      if (stageName == null || stageName.isEmpty) {
-        errorMessage.value = 'Could not determine stage for the selected group';
-        return false;
-      }
-
       final categoryId = competitionController.getCategoryIdByName(
         row.category.value,
       );
@@ -1682,17 +1677,18 @@ class ParticipantController extends GetxController {
         return false;
       }
 
-      final groupId = competitionController.getGroupIdByName(row.group.value);
+      final groupId =
+          await competitionController.resolveGroupIdByName(row.group.value);
       if (groupId == null) {
         errorMessage.value = 'Invalid group selected';
         return false;
       }
 
-      final stageId = competitionController.getStageIdByName(stageName);
-      if (stageId == null) {
-        errorMessage.value = 'Invalid stage for the selected group';
-        return false;
-      }
+      // Stage is optional (e.g. online challenges): null lets the backend
+      // derive it from the competition's stage–group mapping.
+      final stageId = (stageName == null || stageName.isEmpty)
+          ? null
+          : competitionController.getStageIdByName(stageName);
 
       final age = app_date_utils.AppDateUtils.calculateAge(
         row.dateOfBirth.value!,
@@ -1756,7 +1752,7 @@ class ParticipantController extends GetxController {
         categoryId: categoryId,
         mode: mode,
         bulkCount: bulkCount,
-        stageName: stageName,
+        stageName: stageName ?? '',
         payableRupees: payableRupees,
       ));
     }
@@ -2331,6 +2327,13 @@ class ParticipantController extends GetxController {
       groupId: reg['groupId'] is int
           ? reg['groupId'] as int
           : int.tryParse(reg['groupId']?.toString() ?? ''),
+      categoryMode: () {
+        final raw = (reg['categoryMode'] ?? reg['category_mode'])
+            ?.toString()
+            .trim()
+            .toUpperCase();
+        return raw == 'ONLINE' || raw == 'OFFLINE' ? raw : null;
+      }(),
       paymentMode: reg['paymentMode']?.toString(),
       paymentProofPath: reg['paymentProofPath']?.toString(),
       paymentStatus:
@@ -3019,6 +3022,42 @@ class ParticipantController extends GetxController {
   }
 
   /// Initialize form with participant data for viewing (non-editable)
+  /// Restores the category dropdown (name + Online/Offline mode) for edit/view.
+  /// The same category can be configured both Offline and Online, so the mode
+  /// must be restored too — otherwise the dropdown falls back to the first
+  /// option with that name (Offline) and saving would switch the registration.
+  void _restoreCategorySelection(ParticipantModel participant) {
+    selectedCategories.clear();
+    selectedCategoryMode.value = '';
+    var name = participant.category.trim();
+    String? mode = participant.categoryMode?.trim().toUpperCase();
+    // Tolerate display labels such as "COMMON (Online)".
+    final suffix = RegExp(r'\s*\((online|offline)\)\s*$', caseSensitive: false)
+        .firstMatch(name);
+    if (suffix != null) {
+      mode ??= suffix.group(1)!.toUpperCase();
+      name = name.substring(0, suffix.start).trim();
+    }
+    if (name.isNotEmpty) {
+      selectedCategories.add(name);
+    }
+    if (mode == 'ONLINE' || mode == 'OFFLINE') {
+      selectedCategoryMode.value = mode!;
+    }
+  }
+
+  /// Stage name from the registration's stored stageId, when known.
+  String? _stageNameFromParticipant(ParticipantModel participant) {
+    final stageId = participant.stageId;
+    if (stageId == null) return null;
+    try {
+      final name = Get.find<CompetitionController>().getStageNameById(stageId);
+      return name != null && name.trim().isNotEmpty ? name : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void initializeFormForView(ParticipantModel participant) {
     isBulkMode.value = false;
     // Clear all form data first
@@ -3109,6 +3148,8 @@ class ParticipantController extends GetxController {
           // Extract just the group name (before " (GROUP")
           final groupName = standardValue.split(' (GROUP').first.trim();
           standard.value = groupName;
+        } else if (_stageNameFromParticipant(participant) != null) {
+          selectedStage.value = _stageNameFromParticipant(participant)!;
         } else {
           // Standard is just the group name, need to find which stage contains this group
           // Get CompetitionController to find the stage
@@ -3152,12 +3193,7 @@ class ParticipantController extends GetxController {
       }
 
       // Set category - use the category name directly from participant
-      selectedCategories.clear();
-      selectedCategoryMode.value = '';
-      if (participant.category.isNotEmpty) {
-        // Use the category name as-is (it should match competition categories)
-        selectedCategories.add(participant.category.trim());
-      }
+      _restoreCategorySelection(participant);
 
       // Set yoga master info
       yogaMasterNameController.text = participant.yogaMasterName;
@@ -3295,6 +3331,8 @@ class ParticipantController extends GetxController {
         // Extract just the group name (before " (GROUP")
         final groupName = standardValue.split(' (GROUP').first.trim();
         standard.value = groupName;
+      } else if (_stageNameFromParticipant(participant) != null) {
+        selectedStage.value = _stageNameFromParticipant(participant)!;
       } else {
         // Standard is just the group name, need to find which stage contains this group
         // Get CompetitionController to find the stage
@@ -3336,12 +3374,7 @@ class ParticipantController extends GetxController {
     }
 
     // Set category - use the category name directly from participant
-    selectedCategories.clear();
-    selectedCategoryMode.value = '';
-    if (participant.category.isNotEmpty) {
-      // Use the category name as-is (it should match competition categories)
-      selectedCategories.add(participant.category.trim());
-    }
+    _restoreCategorySelection(participant);
 
     // Set yoga master info
     yogaMasterNameController.text = participant.yogaMasterName;
@@ -3741,18 +3774,18 @@ class ParticipantController extends GetxController {
       }
     }
 
-    final groupId = compController.getGroupIdByName(standard.value);
+    final groupId = await compController.resolveGroupIdByName(standard.value);
     if (groupId == null) {
       errorMessage.value = 'Invalid group selected';
       return false;
     }
 
-    // Get stage ID from stage name
-    final stageId = compController.getStageIdByName(selectedStage.value);
-    if (stageId == null) {
-      errorMessage.value = 'Invalid stage selected';
-      return false;
-    }
+    // Stage is optional (e.g. online challenges): when it can't be resolved,
+    // send null and the backend derives it from the competition's
+    // stage–group mapping.
+    final stageId = selectedStage.value.trim().isEmpty
+        ? null
+        : compController.getStageIdByName(selectedStage.value);
 
     // Format date as YYYY-MM-DD
     final dobString =

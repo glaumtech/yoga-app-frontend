@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../data/models/participant_model.dart';
 import '../../data/models/jury_assignment_model.dart';
+import '../../data/models/jury_participant_video_model.dart';
 import '../../data/repositories/user_management_repository.dart';
 import '../../data/repositories/participant_repository.dart';
 import '../../data/repositories/school_repository.dart';
@@ -58,7 +59,7 @@ class JuryScoringController extends GetxController {
       return defaultNumberOfAsanas;
     }
     final match = assignment.categories.where(
-      (c) => c.categoryName == categoryName,
+      (c) => c.displayName == categoryName,
     );
     if (match.isEmpty) return defaultNumberOfAsanas;
     final count = match.first.numberOfAsanas;
@@ -360,8 +361,26 @@ class JuryScoringController extends GetxController {
     }
   }
 
+  /// Filled when the selected stage/group has nobody to score: stages/groups
+  /// where participants of the selected category (and mode) are waiting.
+  final RxList<ScoringQueueSlot> waitingElsewhere = <ScoringQueueSlot>[].obs;
+
+  /// Whether this jury is allotted the slot's stage (and so can switch to it).
+  bool canOpenQueueSlot(ScoringQueueSlot slot) =>
+      availableStages.any((s) => s.stageName == slot.stageName);
+
+  /// Switches Stage + Group to [slot] and loads its queue.
+  void openQueueSlot(ScoringQueueSlot slot) {
+    if (!canOpenQueueSlot(slot) || hasScoresEntered.value) return;
+    setSelectedStage(slot.stageName);
+    if (availableGroups.any((g) => g.groupName == slot.groupName)) {
+      setSelectedGroup(slot.groupName);
+    }
+  }
+
   // Set selected stage
   void setSelectedStage(String stage) {
+    waitingElsewhere.clear();
     selectedStage.value = stage;
 
     // Clear group when stage changes — options come from the new stage.
@@ -384,6 +403,7 @@ class JuryScoringController extends GetxController {
 
   // Set selected category
   void setSelectedCategory(String category) {
+    waitingElsewhere.clear();
     final wasChampions =
         selectedCategory.value.trim().toUpperCase() == 'CHAMPIONS';
     selectedCategory.value = category;
@@ -437,6 +457,7 @@ class JuryScoringController extends GetxController {
 
   // Set selected group
   void setSelectedGroup(String group) {
+    waitingElsewhere.clear();
     selectedGroup.value = group;
 
     // Clear participants if group is cleared
@@ -518,9 +539,7 @@ class JuryScoringController extends GetxController {
         'Available categories: ${availableCategories.map((c) => c.categoryName).toList()}',
       );
       print('Selected category: ${selectedCategory.value}');
-      final categoryAssignment = availableCategories.firstWhereOrNull(
-        (c) => c.categoryName == selectedCategory.value,
-      );
+      final categoryAssignment = selectedCategoryAssignment;
       categoryId = categoryAssignment?.id;
       print('Category ID found: $categoryId');
 
@@ -558,6 +577,8 @@ class JuryScoringController extends GetxController {
         juryId: juryId,
         stageId: stageId,
         categoryId: categoryId,
+        // Same category may run Offline and Online; score only the selected mode.
+        categoryMode: categoryAssignment?.mode,
         groupId: groupId,
         institutionId: selectedInstitutionId.value,
         male: assignment.male,
@@ -589,6 +610,8 @@ class JuryScoringController extends GetxController {
         currentParticipants.value = tieBreakerMode.value
             ? participants
             : participants.take(3).toList();
+
+        waitingElsewhere.assignAll(response.data!.waitingElsewhere);
 
         // Update remaining count if available
         if (response.data!.remainingCount != null) {
@@ -1092,9 +1115,7 @@ class JuryScoringController extends GetxController {
         return;
       }
 
-      final categoryAssignment = availableCategories.firstWhereOrNull(
-        (c) => c.categoryName == selectedCategory.value,
-      );
+      final categoryAssignment = selectedCategoryAssignment;
 
       if (categoryAssignment == null) {
         isLoading.value = false;
@@ -1360,11 +1381,56 @@ class JuryScoringController extends GetxController {
     return availableStages.map((stage) => stage.stageName).toList();
   }
 
-  // Get available categories
+  // Get available categories (one per configured mode, e.g.
+  // "COMMON (Offline)" and "COMMON (Online · Video)").
   List<String> getAvailableCategories() {
     return availableCategories
-        .map((category) => category.categoryName)
+        .map((category) => category.displayName)
         .toList();
+  }
+
+  /// The assignment behind [selectedCategory] (matched by display name, which
+  /// is unique per (category, mode)).
+  CategoryAssignment? get selectedCategoryAssignment =>
+      availableCategories.firstWhereOrNull(
+        (c) => c.displayName == selectedCategory.value,
+      ) ??
+      availableCategories.firstWhereOrNull(
+        (c) => c.categoryName == selectedCategory.value,
+      );
+
+  /// True when the selected category is an online category — participants have
+  /// uploaded submissions that the jury can preview / download while scoring.
+  bool get isOnlineCategorySelected =>
+      selectedCategoryAssignment?.isOnline ?? false;
+
+  final RxBool isLoadingParticipantVideos = false.obs;
+  final RxInt loadingVideosParticipantId = 0.obs;
+
+  /// Online submissions of [participantId] with ready-to-use preview/download URLs.
+  Future<List<JuryParticipantVideo>> loadParticipantVideos(
+    int participantId,
+  ) async {
+    isLoadingParticipantVideos.value = true;
+    loadingVideosParticipantId.value = participantId;
+    try {
+      final response = await _participantRepository.getParticipantVideosForJury(
+        participantId,
+      );
+      if (!response.success || response.data == null) {
+        SnackbarHelper.showErrorMessage(
+          response.message ?? 'Could not load participant videos.',
+        );
+        return const [];
+      }
+      return response.data!;
+    } catch (e) {
+      SnackbarHelper.showErrorMessage('Could not load participant videos: $e');
+      return const [];
+    } finally {
+      isLoadingParticipantVideos.value = false;
+      loadingVideosParticipantId.value = 0;
+    }
   }
 
   // Get available groups (filtered by selected stage)

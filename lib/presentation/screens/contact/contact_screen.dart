@@ -419,7 +419,11 @@ class _ContactScreenState extends State<ContactScreen> {
               const SizedBox(height: 16),
               Obx(() {
                 final events = competitionController.homeCompetitions
-                    .where((c) => c.competitionName.trim().isNotEmpty)
+                    .where(
+                      (c) =>
+                          c.isVisibleOnPublicListing &&
+                          c.competitionName.trim().isNotEmpty,
+                    )
                     .toList();
                 return SearchableDropdownField(
                   selectedValue: _selectedEvent,

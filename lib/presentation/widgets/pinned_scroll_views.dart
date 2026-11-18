@@ -104,14 +104,18 @@ class _HoverPinnedVerticalOverlayState
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    // The MouseRegion must wrap the whole Stack (content + scrollbar).
+    // If it wraps only the content, moving the pointer onto the scrollbar
+    // fires onExit -> scrollbar hides -> pointer is over content again ->
+    // onEnter -> scrollbar shows ... which makes the scrollbar flicker/shake.
+    return MouseRegion(
+      opaque: false,
+      onEnter: (_) => _hovered.value = true,
+      onExit: (_) => _hovered.value = false,
+      child: Stack(
       clipBehavior: Clip.none,
       children: [
-        MouseRegion(
-          onEnter: (_) => _hovered.value = true,
-          onExit: (_) => _hovered.value = false,
-          child: widget.child,
-        ),
+        widget.child,
         Positioned(
           right: 0,
           top: 0,
@@ -129,8 +133,22 @@ class _HoverPinnedVerticalOverlayState
           ),
         ),
       ],
+      ),
     );
   }
+}
+
+/// Keeps a scrollbar laid out at a fixed size and only fades it in/out, so
+/// toggling visibility on hover never changes layout or hit-testing.
+Widget _fadeScrollbar({required bool visible, required Widget child}) {
+  return IgnorePointer(
+    ignoring: !visible,
+    child: AnimatedOpacity(
+      opacity: visible ? 1 : 0,
+      duration: const Duration(milliseconds: 150),
+      child: child,
+    ),
+  );
 }
 
 /// Vertical scrollbar with reliable click-and-drag on web.
@@ -208,7 +226,7 @@ class _PinnedVerticalScrollBarState extends State<PinnedVerticalScrollBar> {
     }
 
     final trackHeight = widget.viewportHeight;
-    if (!widget.visible || maxScroll <= 0 || trackHeight <= 0) {
+    if (maxScroll <= 0 || trackHeight <= 0) {
       return const SizedBox.shrink();
     }
 
@@ -237,7 +255,9 @@ class _PinnedVerticalScrollBarState extends State<PinnedVerticalScrollBar> {
       );
     }
 
-    return SizedBox(
+    return _fadeScrollbar(
+      visible: widget.visible,
+      child: SizedBox(
       width: trackWidth,
       height: trackHeight,
       child: Container(
@@ -278,6 +298,7 @@ class _PinnedVerticalScrollBarState extends State<PinnedVerticalScrollBar> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -358,7 +379,7 @@ class _PinnedHorizontalScrollBarState extends State<PinnedHorizontalScrollBar> {
     }
 
     final trackWidth = widget.viewportWidth;
-    if (!widget.visible || maxScroll <= 0 || trackWidth <= 0) {
+    if (maxScroll <= 0 || trackWidth <= 0) {
       return const SizedBox.shrink();
     }
 
@@ -387,7 +408,9 @@ class _PinnedHorizontalScrollBarState extends State<PinnedHorizontalScrollBar> {
       );
     }
 
-    return SizedBox(
+    return _fadeScrollbar(
+      visible: widget.visible,
+      child: SizedBox(
       height: trackHeight,
       child: Container(
         decoration: BoxDecoration(
@@ -427,6 +450,7 @@ class _PinnedHorizontalScrollBarState extends State<PinnedHorizontalScrollBar> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -39,6 +39,73 @@ class CompetitionRepository {
     );
   }
 
+  /// Checks Google Drive OAuth credentials + folder without saving. Blank
+  /// secret / token use the values stored for [competitionId].
+  Future<ApiResponse<Map<String, dynamic>>> testGoogleDriveConnection({
+    int? competitionId,
+    required String folderUrl,
+    required String clientId,
+    required String clientSecret,
+    String refreshToken = '',
+    String connectionId = '',
+  }) {
+    return _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionGoogleDriveTestConnection,
+      apiType: APIType.aPost,
+      body: {
+        if (competitionId != null && competitionId > 0)
+          'competitionId': competitionId,
+        'folderUrl': folderUrl,
+        'clientId': clientId,
+        if (clientSecret.isNotEmpty) 'clientSecret': clientSecret,
+        if (refreshToken.isNotEmpty) 'refreshToken': refreshToken,
+        if (connectionId.isNotEmpty) 'connectionId': connectionId,
+      },
+      fromJson: (json) => json is Map<String, dynamic>
+          ? json
+          : Map<String, dynamic>.from(json as Map),
+    );
+  }
+
+  /// "Connect Google Drive": returns the Google sign-in URL. A blank
+  /// [clientSecret] uses the one saved on [competitionId].
+  Future<ApiResponse<Map<String, dynamic>>> startGoogleDriveOAuth({
+    int? competitionId,
+    required String folderUrl,
+    required String clientId,
+    required String clientSecret,
+    required String apiBaseUrl,
+  }) {
+    return _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionGoogleDriveOAuthStart,
+      apiType: APIType.aPost,
+      body: {
+        if (competitionId != null && competitionId > 0)
+          'competitionId': competitionId,
+        'folderUrl': folderUrl,
+        'clientId': clientId,
+        if (clientSecret.isNotEmpty) 'clientSecret': clientSecret,
+        'apiBaseUrl': apiBaseUrl,
+      },
+      fromJson: (json) => json is Map<String, dynamic>
+          ? json
+          : Map<String, dynamic>.from(json as Map),
+    );
+  }
+
+  /// PENDING, CONNECTED or FAILED for a "Connect Google Drive" sign-in.
+  Future<ApiResponse<Map<String, dynamic>>> getGoogleDriveOAuthStatus(
+    String connectionId,
+  ) {
+    return _apiService.getResponse<Map<String, dynamic>>(
+      url: EndPoints.competitionGoogleDriveOAuthStatus(connectionId),
+      apiType: APIType.aGet,
+      fromJson: (json) => json is Map<String, dynamic>
+          ? json
+          : Map<String, dynamic>.from(json as Map),
+    );
+  }
+
   Future<ApiResponse<bool>> isCompetitionNameAvailable({
     required String name,
     int? excludeId,
@@ -633,13 +700,18 @@ class CompetitionRepository {
     }
   }
 
-  // Get categories by competition ID
+  // Get categories by competition ID.
+  // [perMode] returns one entry per configured (category, mode) — e.g. both
+  // "COMMON · Offline" and "COMMON · Online · Video" — for jury allotment.
   Future<ApiResponse<List<CompetitionOptionModel>>> getCategoriesByCompetition(
-    int competitionId,
-  ) async {
+    int competitionId, {
+    bool perMode = false,
+  }) async {
     try {
       final response = await _apiService.getResponse<dynamic>(
-        url: EndPoints.categoryByCompetition(competitionId),
+        url: perMode
+            ? EndPoints.categoryAllotmentOptionsByCompetition(competitionId)
+            : EndPoints.categoryByCompetition(competitionId),
         apiType: APIType.aGet,
         fromJson: (json) => json,
       );

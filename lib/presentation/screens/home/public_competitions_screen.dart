@@ -45,20 +45,29 @@ class PublicCompetitionsScreen extends StatelessWidget {
   }
 
   List<HomeCompetitionModel> _filteredList(List<HomeCompetitionModel> all) {
+    final visible = all.where((c) => c.isVisibleOnPublicListing).toList();
     final status = statusFilter?.trim().toLowerCase();
-    if (status == null || status.isEmpty) {
-      return List<HomeCompetitionModel>.from(all);
-    }
-    final filtered = all
-        .where((c) => c.status.toLowerCase() == status)
-        .toList();
-    if (status == 'completed') {
-      filtered.sort((a, b) {
+    final filtered = (status == null || status.isEmpty)
+        ? List<HomeCompetitionModel>.from(visible)
+        : visible.where((c) => c.status.toLowerCase() == status).toList();
+
+    // Latest first: completed by event end; others by event start, then id.
+    filtered.sort((a, b) {
+      if (status == 'completed') {
         final endA = DateTime.tryParse(a.eventEndDate ?? '') ?? DateTime(1970);
         final endB = DateTime.tryParse(b.eventEndDate ?? '') ?? DateTime(1970);
-        return endB.compareTo(endA);
-      });
-    }
+        final byEnd = endB.compareTo(endA);
+        if (byEnd != 0) return byEnd;
+      } else {
+        final startA =
+            DateTime.tryParse(a.eventStartDate ?? '') ?? DateTime(1970);
+        final startB =
+            DateTime.tryParse(b.eventStartDate ?? '') ?? DateTime(1970);
+        final byStart = startB.compareTo(startA);
+        if (byStart != 0) return byStart;
+      }
+      return (b.id ?? 0).compareTo(a.id ?? 0);
+    });
     return filtered;
   }
 

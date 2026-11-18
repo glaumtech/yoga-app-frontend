@@ -1525,6 +1525,33 @@ class ReportsRepository {
     );
   }
 
+  Future<ApiResponse<Map<String, dynamic>>> getParticipantFeedbacks({
+    int? competitionId,
+    int? organizationId,
+  }) async {
+    final params = <String>[
+      if (competitionId != null) 'competitionId=$competitionId',
+      if (organizationId != null) 'organizationId=$organizationId',
+    ];
+    final query = params.isEmpty ? '' : '?${params.join('&')}';
+    final response = await _apiService.getResponse<Map<String, dynamic>>(
+      url: '${EndPoints.participantReportFeedbacks}$query',
+      apiType: APIType.aGet,
+      fromJson: (json) =>
+          json is Map<String, dynamic>
+              ? json
+              : Map<String, dynamic>.from(json as Map),
+    );
+    if (response.success && response.data != null) {
+      return ApiResponse(success: true, data: response.data);
+    }
+    return ApiResponse(
+      success: false,
+      message: response.message ?? 'Failed to load participant feedback',
+      statusCode: response.statusCode,
+    );
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> getFeedbacks({
     int? competitionId,
     int? organizationId,

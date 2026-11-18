@@ -43,6 +43,12 @@ class AppConstants {
   /// Shown beside participant registration payment.
   static const String paymentOnlineModeNote =
       'The fees can be paid only through online mode using Net Banking, Credit Card, Debit Card and UPI. Processing charges and GST as applicable are chargeable to the candidates (in addition to the participation fees) by the concerned Bank/Payment Gateway Integrator.';
+
+  /// Shown above Pay / Finalize actions before payment is collected.
+  static const List<String> paymentPrePayNotes = [
+    'You will be able to modify/correct the particulars before the payment is made. Once the payment is made, candidate particulars cannot be edited.',
+    'I understand that once the fee is paid, it is neither transferrable nor refundable.',
+  ];
 }
 
 class BaseUrl {
@@ -171,6 +177,16 @@ class EndPoints {
   static String competitionByRegistrationCode(String registrationCode) =>
       '/competition/public/registration/$registrationCode';
   static String competitionGoogleDriveConfig = '/competition/google-drive-config';
+  static String competitionGoogleDriveTestConnection =
+      '/competition/google-drive/test-connection';
+  static String competitionGoogleDriveOAuthStart =
+      '/competition/google-drive/oauth/start';
+  static String competitionGoogleDriveOAuthStatus(String connectionId) =>
+      '/competition/google-drive/oauth/status/${Uri.encodeComponent(connectionId)}';
+
+  /// Google redirects here after "Connect Google Drive" (backend path).
+  static const String googleDriveOAuthCallbackPath =
+      '/api/google-drive/oauth/callback';
 
   /// Participant video upload (public)
   static String participantVideoLogin = '/participant-video/login';
@@ -181,6 +197,8 @@ class EndPoints {
   static String participantVideoCount = '/participant-video/count';
   static String participantVideoUrl = '/participant-video/url';
   static String participantVideoUpload = '/participant-video/upload';
+  static String participantVideoFile = '/participant-video/file';
+  static String participantVideoFileLink = '/participant-video/file-link';
 
   /// Participant feedback (public + participant-token auth)
   static String participantFeedback = '/participant-feedback';
@@ -206,6 +224,7 @@ class EndPoints {
   static String apiMarkPaymentFailed = '/api/mark-payment-failed';
   static String paymentOnDemandContext = '/payment/on-demand/context';
   static String paymentSettings = '/payment/settings';
+  static String paymentSettingsHistory = '/payment/settings/history';
   static String participantRegistrationPaymentVerify(String id) =>
       '/participant-registration/$id/payment/verify';
   static String participantRegistrationPaymentReject(String id) =>
@@ -218,6 +237,12 @@ class EndPoints {
   static String categoryById(int id) => '/category/$id';
   static String categoryByCompetition(int competitionId) =>
       '/category/competition/$competitionId';
+  /// One entry per configured (category, mode) — jury category allotment.
+  static String categoryAllotmentOptionsByCompetition(int competitionId) =>
+      '/category/competition/$competitionId/allotment-options';
+  /// Online submissions of a participant for the jury scoring screen.
+  static String juryParticipantVideos(int registrationId) =>
+      '/jury-scoring/participant-videos/$registrationId';
   static String prizeList = '/prize';
   static String prizeCreate = '/prize';
   static String prizeById(int id) => '/prize/$id';
@@ -351,6 +376,9 @@ class EndPoints {
   static const String pendingAmountRequests = '/reports/amount-requests/pending';
 
   static const String competitionFeedbacks = '/reports/feedbacks';
+
+  static const String participantReportFeedbacks =
+      '/reports/feedbacks/participants';
 
   static const String competitionFeedbacksExcel = '/reports/feedbacks/excel';
 

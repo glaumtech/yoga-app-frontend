@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/constants/app_constants.dart';
@@ -63,6 +64,12 @@ class ParticipantVideoController extends GetxController {
   final Rxn<Uint8List> pickedFileBytes = Rxn<Uint8List>();
   final RxDouble uploadProgress = 0.0.obs;
   final RxBool isSavingToDrive = false.obs;
+
+  /// Requesting a preview/download link for the already-uploaded video.
+  final RxBool isLoadingSavedVideo = false.obs;
+
+  /// 'preview' or 'download' while [isLoadingSavedVideo] is true.
+  final RxString savedVideoAction = ''.obs;
 
   /// false = URL form (default), true = MP4 upload form.
   final RxBool useFileUpload = false.obs;
@@ -203,6 +210,17 @@ class ParticipantVideoController extends GetxController {
   void showFileOption() {
     useFileUpload.value = true;
     errorMessage.value = '';
+    if (!canUploadFile) {
+      // Keep the tab selectable, but explain immediately why upload will fail.
+      errorMessage.value = uploadBlockedReason;
+    }
+  }
+
+  /// When Drive is not ready, send the participant to URL paste instead of a dead tap target.
+  void preferUrlWhenFileUploadBlocked() {
+    if (canUploadFile) return;
+    useFileUpload.value = false;
+    errorMessage.value = uploadBlockedReason;
   }
 
   void chooseCount() {
@@ -773,6 +791,67 @@ class ParticipantVideoController extends GetxController {
     }
   }
 
+  String savedVideoFileName(ParticipantVideoModel entry) {
+    final name = entry.originalFileName?.trim() ?? '';
+    if (name.isNotEmpty) return name;
+    final date = entry.entryDate;
+    return date == null
+        ? 'video.mp4'
+        : 'video_${DateFormat('yyyy-MM-dd').format(date)}.mp4';
+  }
+
+  /// Gets a short-lived streaming URL for the uploaded MP4 of [entry].
+  /// The browser plays/saves straight from it (with HTTP Range), so preview
+  /// starts immediately and downloads use the browser's own download manager.
+  Future<String?> savedVideoUrl(
+    ParticipantVideoModel entry, {
+    required String action,
+  }) async {
+    final date = entry.entryDate;
+    if (date == null || !entry.hasFile || isLoadingSavedVideo.value) {
+      return null;
+    }
+    isLoadingSavedVideo.value = true;
+    savedVideoAction.value = action;
+    errorMessage.value = '';
+    successMessage.value = '';
+    try {
+      final resp = await _repository.createVideoFileUrl(
+        entryDate: DateFormat('yyyy-MM-dd').format(date),
+        download: action == 'download',
+      );
+      if (!resp.success || resp.data == null) {
+        errorMessage.value = resp.message ?? 'Could not open the video.';
+        return null;
+      }
+      return resp.data;
+    } catch (e) {
+      errorMessage.value = 'Could not open the video: $e';
+      return null;
+    } finally {
+      isLoadingSavedVideo.value = false;
+      savedVideoAction.value = '';
+    }
+  }
+
+  Future<void> downloadSavedVideo(ParticipantVideoModel entry) async {
+    final url = await savedVideoUrl(entry, action: 'download');
+    if (url == null) return;
+    // The server replies with Content-Disposition: attachment, so on web the
+    // current page stays put and the browser shows its own download progress.
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      webOnlyWindowName: '_self',
+    );
+    if (ok) {
+      successMessage.value =
+          'Download started. Check your browser downloads for progress.';
+    } else {
+      errorMessage.value = 'Could not start the download.';
+    }
+  }
+
   Future<bool> startDailyLog() async {
     isStarting.value = true;
     errorMessage.value = '';
@@ -887,28 +966,47 @@ class ParticipantVideoController extends GetxController {
   }
 
   Future<bool> pickVideo() async {
+    if (!canUploadFile) {
+      preferUrlWhenFileUploadBlocked();
+      return false;
+    }
+    // On web, open the native picker before any Obx updates so the click
+    // gesture is still considered a valid user activation.
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['mp4'],
+        allowMultiple: false,
+        // Web must use bytes; mobile/desktop read from path when needed.
+        withData: kIsWeb,
+        withReadStream: !kIsWeb,
+      );
+    } catch (e) {
+      errorMessage.value = 'Could not open the file picker: $e';
+      successMessage.value = '';
+      return false;
+    }
     errorMessage.value = '';
     successMessage.value = '';
     uploadProgress.value = 0;
     isSavingToDrive.value = false;
-    if (!canUploadFile) {
-      errorMessage.value = uploadBlockedReason;
+    if (result == null || result.files.isEmpty) {
       return false;
     }
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['mp4'],
-        allowMultiple: false,
-        withData: true,
-      );
-      if (result == null || result.files.isEmpty) {
-        return false;
-      }
       final file = result.files.first;
-      final bytes = file.bytes;
+      Uint8List? bytes = file.bytes;
+      final path = file.path;
+      if ((bytes == null || bytes.isEmpty) &&
+          !kIsWeb &&
+          path != null &&
+          path.isNotEmpty) {
+        bytes = await File(path).readAsBytes();
+      }
       if (bytes == null || bytes.isEmpty) {
-        errorMessage.value = 'Could not read the selected video file.';
+        errorMessage.value =
+            'Could not read the selected video file. Try a smaller MP4 or use Paste video URL.';
         return false;
       }
       if (bytes.length > maxVideoBytes) {

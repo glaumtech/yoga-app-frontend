@@ -10,12 +10,18 @@ class AmountConfigController extends GetxController {
 
   final RxBool isLoading = false.obs;
   final RxBool isSaving = false.obs;
+  final RxBool isHistoryLoading = false.obs;
+  final RxString historyError = ''.obs;
+  final RxList<AmountConfigHistoryEntry> history =
+      <AmountConfigHistoryEntry>[].obs;
   final RxBool extraFeeIncludedForCompetition = true.obs;
 
   final TextEditingController asanasFeeController = TextEditingController();
   final TextEditingController challengeFeeController = TextEditingController();
   final TextEditingController gatewayPercentController = TextEditingController();
   final TextEditingController platformPercentController = TextEditingController();
+
+  int _historyRequest = 0;
 
   @override
   void onInit() {
@@ -80,6 +86,33 @@ class AmountConfigController extends GetxController {
       SnackbarHelper.showErrorMessage(e.toString());
     } finally {
       isLoading.value = false;
+      await loadHistory();
+    }
+  }
+
+  Future<void> loadHistory() async {
+    final requestId = ++_historyRequest;
+    try {
+      isHistoryLoading.value = true;
+      historyError.value = '';
+      final res = await _repo.getPaymentSettingsHistory();
+      if (requestId != _historyRequest) return;
+      if (!res.success) {
+        historyError.value = res.message ?? 'Failed to load amount history';
+        return;
+      }
+      history.assignAll(
+        (res.data ?? const <Map<String, dynamic>>[])
+            .map(AmountConfigHistoryEntry.fromJson)
+            .toList(),
+      );
+    } catch (e) {
+      if (requestId != _historyRequest) return;
+      historyError.value = e.toString();
+    } finally {
+      if (requestId == _historyRequest) {
+        isHistoryLoading.value = false;
+      }
     }
   }
 
@@ -132,6 +165,7 @@ class AmountConfigController extends GetxController {
       if (Get.isRegistered<CompetitionController>()) {
         await Get.find<CompetitionController>().loadOnDemandContext();
       }
+      await loadHistory();
       SnackbarHelper.showSuccessMessage('Payment settings saved');
     } catch (e) {
       SnackbarHelper.showErrorMessage(e.toString());
@@ -144,5 +178,48 @@ class AmountConfigController extends GetxController {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? fallback;
     return fallback;
+  }
+}
+
+class AmountConfigHistoryEntry {
+  AmountConfigHistoryEntry({
+    required this.asanasFee,
+    required this.challengeFee,
+    required this.extraFeeIncluded,
+    required this.gatewayPercent,
+    required this.platformPercent,
+    this.changedAt,
+    this.changedByName,
+  });
+
+  final double asanasFee;
+  final double challengeFee;
+  final bool extraFeeIncluded;
+  final double gatewayPercent;
+  final double platformPercent;
+  final DateTime? changedAt;
+  final String? changedByName;
+
+  factory AmountConfigHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return AmountConfigHistoryEntry(
+      asanasFee: AmountConfigController._toDouble(json['asanasMaintenanceFee']),
+      challengeFee: AmountConfigController._toDouble(
+        json['challengeMaintenanceFee'],
+      ),
+      extraFeeIncluded: json['extraFeeIncludedForCompetition'] == true,
+      gatewayPercent: AmountConfigController._toDouble(
+        json['paymentGatewayFeePercent'],
+      ),
+      platformPercent: AmountConfigController._toDouble(
+        json['platformFeePercent'],
+      ),
+      changedAt: _parseChangedAt(json['changedAt']),
+      changedByName: json['changedByName']?.toString(),
+    );
+  }
+
+  static DateTime? _parseChangedAt(dynamic value) {
+    if (value is! String || value.trim().isEmpty) return null;
+    return DateTime.tryParse(value.trim());
   }
 }

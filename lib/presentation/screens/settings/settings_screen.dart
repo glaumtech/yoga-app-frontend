@@ -65,6 +65,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? Get.find<PermissionStore>()
         : Get.put(PermissionStore());
     final isApplicationAdmin = _isApplicationAdmin;
+    final requestedTabRaw = widget.initialTab?.trim().toLowerCase() ?? '';
+    final locationInnerIndex = switch (requestedTabRaw) {
+      'state' || 'states' => 2,
+      'district' || 'districts' => 3,
+      'city' || 'cities' || 'pincode' => 4,
+      _ => 0,
+    };
 
     final tabs = <({String id, String label, Widget view, String requiredKey, bool applicationAdminOnly})>[
       (
@@ -77,7 +84,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       (
         id: 'institution',
         label: 'Institution Config',
-        view: const InstitutionConfigTab(),
+        view: InstitutionConfigTab(initialIndex: locationInnerIndex),
         requiredKey: 'SHOW_INSTITUTION_CONFIG_TAB',
         applicationAdminOnly: false,
       ),
@@ -136,7 +143,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return permissionStore.has(t.requiredKey);
     }).toList();
 
-    final requestedTabRaw = widget.initialTab?.trim().toLowerCase() ?? '';
     final requestedTab = switch (requestedTabRaw) {
       'master' || 'masters' => 'amount',
       'location' ||
@@ -164,6 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             )
           : DefaultTabController(
+              key: ValueKey('settings-tab-$requestedTabRaw'),
               length: tabs.length,
               initialIndex: initialIndex,
               child: Column(

@@ -16,6 +16,7 @@ import '../../widgets/custom_loader.dart';
 import '../../widgets/footer_section.dart';
 import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/primary_button.dart';
+import '../../widgets/saved_video_preview_dialog.dart';
 import '../home/home_landing_sections.dart';
 
 /// Dark gaming palette for the Online Participant arena (brand green + gold).
@@ -1262,6 +1263,11 @@ Future<void> _openDateLogDialog(
   required bool isMobile,
 }) async {
   controller.selectDate(date);
+  // File upload needs Drive; default participants to URL paste when Drive is down.
+  if (controller.activeMode == ParticipantVideoController.modeVideo &&
+      !controller.canUploadFile) {
+    controller.preferUrlWhenFileUploadBlocked();
+  }
   await showDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -1385,6 +1391,15 @@ class _DateLogDialog extends StatelessWidget {
                                       '${selectedEntry.resolution != null ? ' (${selectedEntry.resolution})' : ''}',
                             textColor: _ArenaTheme.text,
                           ),
+                        ),
+                      if (controller.showSavedEntryBanner &&
+                          selectedEntry != null &&
+                          !selectedEntry.isCount &&
+                          !hasUrl &&
+                          selectedEntry.hasFile)
+                        _SavedVideoActions(
+                          controller: controller,
+                          entry: selectedEntry,
                         ),
                       if (mode == null && controller.isStartDateSelected)
                         _CountOrVideoChoice(controller: controller)
@@ -1637,14 +1652,18 @@ class _FileForm extends StatelessWidget {
           ],
           const SizedBox(height: 16),
           Opacity(
-            opacity: canUpload ? 1 : 0.55,
+            opacity: controller.isUploading.value ? 0.7 : 1,
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: (controller.isUploading.value || !canUpload)
+                onTap: controller.isUploading.value
                     ? null
-                    : () {
-                        controller.pickVideo();
+                    : () async {
+                        if (!canUpload) {
+                          controller.preferUrlWhenFileUploadBlocked();
+                          return;
+                        }
+                        await controller.pickVideo();
                       },
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
@@ -1664,7 +1683,9 @@ class _FileForm extends StatelessWidget {
                   child: Column(
                     children: [
                       Icon(
-                        Icons.cloud_upload_outlined,
+                        canUpload
+                            ? Icons.cloud_upload_outlined
+                            : Icons.link_rounded,
                         size: 48,
                         color: AppTheme.primaryColor,
                       ),
@@ -1672,9 +1693,12 @@ class _FileForm extends StatelessWidget {
                       Text(
                         controller.isUploading.value
                             ? 'Uploading video...'
+                            : !canUpload
+                            ? 'Tap to paste a video URL instead'
                             : controller.pickedFileBytes.value != null
                             ? 'Tap to choose a different MP4'
                             : 'Tap to choose MP4 file',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           color: AppTheme.primaryColor,
@@ -1694,12 +1718,30 @@ class _FileForm extends StatelessWidget {
               ),
             ),
           ),
+          if (!canUpload) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: controller.preferUrlWhenFileUploadBlocked,
+              icon: const Icon(Icons.link),
+              label: const Text('Use Paste video URL'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primaryColor,
+                side: BorderSide(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.55),
+                ),
+              ),
+            ),
+          ],
           if (controller.pickedFileBytes.value != null) ...[
             const SizedBox(height: 14),
             PrimaryButton(
-              text: 'Upload Video',
+              text: controller.isSavingToDrive.value
+                  ? 'Saving to Drive...'
+                  : controller.isUploading.value
+                  ? 'Uploading...'
+                  : 'Upload Video',
               icon: Icons.cloud_upload_rounded,
-              isLoading: false,
+              isLoading: controller.isUploading.value,
               onPressed: controller.isUploading.value
                   ? null
                   : () async {
@@ -1714,6 +1756,17 @@ class _FileForm extends StatelessWidget {
             const SizedBox(height: 18),
             Row(
               children: [
+                if (controller.isSavingToDrive.value) ...[
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: AppTheme.primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Expanded(
                   child: Text(
                     controller.isSavingToDrive.value
@@ -1722,20 +1775,24 @@ class _FileForm extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
-                Text(
-                  '${(controller.uploadProgress.value * 100).round()}%',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.primaryColor,
+                if (!controller.isSavingToDrive.value)
+                  Text(
+                    '${(controller.uploadProgress.value * 100).round()}%',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primaryColor,
+                    ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: LinearProgressIndicator(
-                value: controller.uploadProgress.value,
+                // Indeterminate (animated) while waiting for Drive confirmation.
+                value: controller.isSavingToDrive.value
+                    ? null
+                    : controller.uploadProgress.value,
                 minHeight: 10,
                 backgroundColor: const Color(0xFF1E293B),
                 color: AppTheme.primaryColor,
@@ -1744,7 +1801,8 @@ class _FileForm extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               controller.isSavingToDrive.value
-                  ? 'Upload complete. Please wait while Google Drive confirms the file.'
+                  ? 'Upload complete. Checking video quality and saving to Google Drive. '
+                    'This can take up to a minute for large files — please keep this page open.'
                   : 'Do not close this page while the video is uploading.',
               style: const TextStyle(
                 color: _ArenaTheme.muted,
@@ -1798,6 +1856,97 @@ class _CountHighlightChip extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Preview / Download buttons for a video already saved to Google Drive.
+class _SavedVideoActions extends StatelessWidget {
+  final ParticipantVideoController controller;
+  final ParticipantVideoModel entry;
+
+  const _SavedVideoActions({required this.controller, required this.entry});
+
+  Future<void> _preview(BuildContext context) async {
+    final url = await controller.savedVideoUrl(entry, action: 'preview');
+    if (url == null || !context.mounted) return;
+    await SavedVideoPreviewDialog.show(
+      context,
+      url: url,
+      title: controller.savedVideoFileName(entry),
+      onDownload: () => controller.downloadSavedVideo(entry),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final loading = controller.isLoadingSavedVideo.value;
+      final action = controller.savedVideoAction.value;
+      final busy = loading || controller.isUploading.value;
+
+      Widget button({
+        required String label,
+        required IconData icon,
+        required bool active,
+        required VoidCallback onPressed,
+      }) {
+        return OutlinedButton.icon(
+          onPressed: busy ? null : onPressed,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.primaryColor,
+            disabledForegroundColor: AppTheme.primaryColor.withValues(
+              alpha: 0.5,
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            side: BorderSide(
+              color: AppTheme.primaryColor.withValues(alpha: 0.55),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          icon: active
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppTheme.primaryColor,
+                  ),
+                )
+              : Icon(icon, size: 20),
+          label: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        );
+      }
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: button(
+                label: 'Preview',
+                icon: Icons.play_circle_outline,
+                active: loading && action == 'preview',
+                onPressed: () => _preview(context),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: button(
+                label: 'Download',
+                icon: Icons.download_rounded,
+                active: loading && action == 'download',
+                onPressed: () => controller.downloadSavedVideo(entry),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 

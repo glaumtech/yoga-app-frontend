@@ -18,6 +18,7 @@ import '../../widgets/pinned_scroll_views.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/photo_source_buttons.dart';
 import '../../../data/models/user_management_model.dart';
+import '../../../data/models/competition_option_model.dart';
 import 'users_list_screen.dart';
 import 'dart:async' show unawaited;
 import 'dart:io';
@@ -1150,9 +1151,8 @@ class UserManagementScreen extends StatelessWidget {
                                             {
                                               controller
                                                   .selectedCategories
-                                                  .value = controller.categories
-                                                  .map((category) => category)
-                                                  .toList(),
+                                                  .value = controller
+                                                  .categoryKeys,
                                             }
                                           else
                                             {
@@ -1167,35 +1167,34 @@ class UserManagementScreen extends StatelessWidget {
                                 ],
                               ),
                               Obx(() {
-                                final categoryLabels = controller
-                                    .availableCategories
-                                    .map((c) => c.name)
-                                    .toList();
+                                // One option per (category, mode): e.g. COMMON
+                                // Offline and COMMON Online/Video are separate.
+                                final options =
+                                    controller.availableCategories.toList();
                                 return Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: categoryLabels.map((category) {
+                                  children: options.map((option) {
+                                    final key = option.key;
                                     return InkWell(
                                       onTap: () =>
-                                          controller.toggleCategory(category),
+                                          controller.toggleCategory(key),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Checkbox(
                                             value: controller.selectedCategories
-                                                .contains(category),
+                                                .contains(key),
                                             onChanged: (value) => controller
-                                                .toggleCategory(category),
+                                                .toggleCategory(key),
                                             materialTapTargetSize:
                                                 MaterialTapTargetSize
                                                     .shrinkWrap,
                                           ),
                                           const SizedBox(width: 4),
-                                          Text(
-                                            category,
-                                            style: TextStyle(
-                                              fontSize: isTablet ? 12 : 14,
-                                            ),
+                                          _buildCategoryOptionLabel(
+                                            option,
+                                            fontSize: isTablet ? 12 : 14,
                                           ),
                                         ],
                                       ),
@@ -1420,32 +1419,30 @@ class UserManagementScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Obx(() {
-                final categoryLabels = controller.availableCategories
-                    .map((c) => c.name)
-                    .toList();
+                final options = controller.availableCategories.toList();
                 return Column(
-                  children: categoryLabels.map((category) {
+                  children: options.map((option) {
+                    final key = option.key;
                     return InkWell(
-                      onTap: () => controller.toggleCategory(category),
+                      onTap: () => controller.toggleCategory(key),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: [
                             Checkbox(
                               value: controller.selectedCategories.contains(
-                                category,
+                                key,
                               ),
                               onChanged: (value) =>
-                                  controller.toggleCategory(category),
+                                  controller.toggleCategory(key),
                               materialTapTargetSize:
                                   MaterialTapTargetSize.shrinkWrap,
                             ),
                             const SizedBox(width: 4),
                             Expanded(
-                              child: Text(
-                                category,
-                                style: const TextStyle(fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
+                              child: _buildCategoryOptionLabel(
+                                option,
+                                fontSize: 14,
                               ),
                             ),
                           ],
@@ -2986,5 +2983,62 @@ Widget _buildUserInfoRow(String label, String value) {
         Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
       ],
     ),
+  );
+}
+
+/// Category allotment option label: name plus a mode chip, so the same category
+/// configured both Offline and Online (e.g. two "COMMON" cards) is distinguishable.
+Widget _buildCategoryOptionLabel(
+  CompetitionOptionModel option, {
+  double fontSize = 14,
+}) {
+  final modeLabel = option.modeLabel;
+  final isOnline = option.isOnline;
+  final chipColor = isOnline ? const Color(0xFF2563EB) : const Color(0xFF475569);
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(
+        child: Text(
+          option.name,
+          style: TextStyle(fontSize: fontSize),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      if (modeLabel != null) ...[
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: chipColor.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: chipColor.withOpacity(0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                option.isVideo
+                    ? Icons.videocam_outlined
+                    : isOnline
+                    ? Icons.cloud_outlined
+                    : Icons.storefront_outlined,
+                size: fontSize - 1,
+                color: chipColor,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                modeLabel,
+                style: TextStyle(
+                  fontSize: fontSize - 3,
+                  color: chipColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ],
   );
 }

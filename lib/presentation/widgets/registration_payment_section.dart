@@ -63,6 +63,7 @@ class RegistrationPaymentSection extends StatelessWidget {
           ),
           const PaymentInrOnlyNotice(),
           const PaymentOnlineModeNotice(),
+          const PaymentPrePayNotes(),
         ],
       ],
     );

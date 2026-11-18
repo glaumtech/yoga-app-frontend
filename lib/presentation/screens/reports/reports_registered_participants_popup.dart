@@ -24,7 +24,14 @@ class ReportsRegisteredParticipantsPopup {
 
     final controllerTag =
         'reports_registered_popup_${DateTime.now().millisecondsSinceEpoch}';
-    reportsController.pendingParticipantsPreset.value = preset;
+    // Give the preset directly to this popup's own controller. Going through
+    // the shared pendingParticipantsPreset let the Reports tab's controller
+    // grab it first, so the popup loaded with no filter.
+    Get.put(
+      ReportsRegisteredParticipantsTabController(initialPreset: preset),
+      tag: controllerTag,
+      permanent: false,
+    );
 
     await showDialog<void>(
       context: context,
@@ -47,7 +54,6 @@ class ReportsRegisteredParticipantsPopup {
         force: true,
       );
     }
-    reportsController.pendingParticipantsPreset.value = null;
   }
 }
 

@@ -17,6 +17,9 @@ class ReportsFeedbackTabController extends GetxController {
   final RxString typeFilter = ''.obs;
   final RxString competitionFilter = ''.obs;
 
+  /// `organizer` loads organizer feedback. `participant` loads participant reviews.
+  final RxString audience = 'organizer'.obs;
+
   /// Organization id whose feedback payload is currently in [data].
   final RxnString loadedOrganizationId = RxnString();
 
@@ -121,7 +124,10 @@ class ReportsFeedbackTabController extends GetxController {
   int? get competitionId =>
       int.tryParse(reportsController.selectedCompetitionId.value ?? '');
 
+  bool get isParticipantAudience => audience.value == 'participant';
+
   bool get canManage {
+    if (isParticipantAudience) return false;
     final value = data.value?['canManage'];
     if (value is bool) return value;
     return !isApplicationAdmin;
@@ -177,6 +183,22 @@ class ReportsFeedbackTabController extends GetxController {
     load();
   }
 
+  void selectAudience(String value) {
+    final next = value == 'participant' ? 'participant' : 'organizer';
+    if (audience.value == next) return;
+    audience.value = next;
+    typeFilter.value = '';
+    final current = data.value;
+    if (current != null) {
+      data.value = {
+        ...current,
+        'feedbacks': <dynamic>[],
+        'canManage': false,
+      };
+    }
+    load();
+  }
+
   Future<void> load() async {
     final requestId = ++_loadRequest;
     int? id;
@@ -222,10 +244,15 @@ class ReportsFeedbackTabController extends GetxController {
     isLoading.value = true;
     error.value = '';
     try {
-      final resp = await _repository.getFeedbacks(
-        competitionId: id,
-        organizationId: organizationId,
-      );
+      final resp = isParticipantAudience
+          ? await _repository.getParticipantFeedbacks(
+              competitionId: id,
+              organizationId: organizationId,
+            )
+          : await _repository.getFeedbacks(
+              competitionId: id,
+              organizationId: organizationId,
+            );
       if (requestId != _loadRequest) return;
       if (resp.success && resp.data != null) {
         data.value = resp.data;
